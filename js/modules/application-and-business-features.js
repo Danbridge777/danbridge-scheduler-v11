@@ -79,7 +79,7 @@ document.addEventListener('copy',e=>{
 
 function weekMonday(dateStr){const d=new Date(dateStr+'T00:00:00'),day=d.getDay();d.setDate(d.getDate()-((day+6)%7));return d}
 function copyVisibleWeekToNextWeek(){
-  const selected=db.lessons.filter(l=>selectedLessonIds.has(l.id)&&!['取消','停課'].includes(l.status));
+  const selected=calendarTeacherScopedLessons(db.lessons.filter(l=>selectedLessonIds.has(l.id)&&!['取消','停課'].includes(l.status)));
   let baseValue=$('calendarDate').value||todayStr();
   if(selected.length){
     const mondayKeys=[...new Set(selected.map(l=>localDate(weekMonday(l.date))))];
@@ -89,7 +89,7 @@ function copyVisibleWeekToNextWeek(){
   const monday=weekMonday(baseValue),sunday=new Date(monday);sunday.setDate(monday.getDate()+6);
   const nextMonday=new Date(monday);nextMonday.setDate(monday.getDate()+7);const nextSunday=new Date(sunday);nextSunday.setDate(sunday.getDate()+7);
   const from=localDate(monday),to=localDate(sunday),targetFrom=localDate(nextMonday),targetTo=localDate(nextSunday);
-  const source=(selected.length?selected:db.lessons.filter(l=>l.date>=from&&l.date<=to&&!['取消','停課'].includes(l.status))).sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start));
+  const source=(selected.length?selected:calendarTeacherScopedLessons(db.lessons.filter(l=>l.date>=from&&l.date<=to&&!['取消','停課'].includes(l.status)))).sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start));
   if(!source.length)return alert(`目前週（${from}～${to}）沒有可複製的課程。`);
   if(!confirm(`確定將${selected.length?'已選取的':'目前週的'} ${source.length} 堂課複製到下一週？\n\n${from}～${to}\n→ ${targetFrom}～${targetTo}\n\n原本課程會保留。`))return;
   snapshot();
@@ -107,9 +107,9 @@ function copyVisibleMonth(){const base=new Date($('calendarDate').value+'T00:00:
   const nm=mo===12?1:mo+1;
   const nextM=`${ny}-${String(nm).padStart(2,'0')}`;
 
-  const sourceLessons=db.lessons.filter(
+  const sourceLessons=calendarTeacherScopedLessons(db.lessons.filter(
     l=>l.date.startsWith(m)&&!['取消','停課'].includes(l.status)
-  );
+  ));
 
   // 完整防重複：同日期、時間、學生、老師、課名、教室皆相同就略過。
   const existingKeys=new Set(

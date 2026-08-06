@@ -5,6 +5,8 @@
  */
 
 function calendarFilterState(){return{teacher:$('calendarTeacherFilter')?.value||'',location:$('calendarLocationFilter')?.value||'',student:$('calendarStudentFilter')?.value||'',room:$('calendarRoomFilter')?.value||'',state:$('calendarStateFilter')?.value||'',search:($('calendarSearch')?.value||'').trim().toLowerCase()}}
+function currentCalendarTeacherId(){return $('calendarTeacherFilter')?.value||''}
+function calendarTeacherScopedLessons(rows){const teacherId=currentCalendarTeacherId();return teacherId?rows.filter(l=>lessonTeacherIds(l).includes(teacherId)):rows}
 function lessonMatchesCalendar(l,f=calendarFilterState()){if(f.teacher&&!lessonTeacherIds(l).includes(f.teacher))return false;if(f.location&&locationLabel(l)!==f.location)return false;if(f.student&&l.studentId!==f.student)return false;if(f.room&&(l.room||'')!==f.room)return false;if(f.state&&(l.lessonState||(l.isDraft?'draft':'active'))!==f.state)return false;if(f.search){const hay=[l.date,l.start,l.end,l.title,l.room,l.location,l.address,l.status,student(l.studentId).name,student(l.studentId).parent,lessonTeacherNames(l),effectiveCampId(l)].join(' ').toLowerCase();if(!hay.includes(f.search))return false}return true}
 function lessonHoverText(l){const s=student(l.studentId),teacherView=(window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role)==='teacher',parent=!teacherView&&s.parent?`\n家長：${s.parent}`:'',contact=!teacherView&&s.contact?`\n聯絡：${s.contact}`:'',addr=l.location==='到府'&&l.address?`\n地址：${l.address}`:'',payment=teacherView?'':`\n付款：${l.paymentStatus==='paid'?'已繳':l.paymentStatus==='waived'?'免收':'未繳'}`;return `${l.date} ${l.start}–${l.end}\n學生／班級：${s.name||'未命名'}${parent}${contact}\n老師：${lessonTeacherNames(l)||'未指定'}\n課程：${l.title||'未命名'}\n地點：${locationLabel(l)} ${l.room||''}${addr}\n狀態：${l.status||''}${payment}\n備註：${l.note||'—'}`}
 function visibleCalendarRange(){const mode=$('calendarMode').value,d=new Date(($('calendarDate').value||todayStr())+'T00:00:00');if(mode==='week'){const mon=new Date(d);mon.setDate(d.getDate()-((d.getDay()+6)%7));const sun=new Date(mon);sun.setDate(mon.getDate()+6);return{start:localDate(mon),end:localDate(sun),days:7}}const start=new Date(d.getFullYear(),d.getMonth(),1),end=new Date(d.getFullYear(),d.getMonth()+1,0);return{start:localDate(start),end:localDate(end),days:end.getDate()}}
@@ -75,7 +77,7 @@ function clearLessonSelection(){
   renderCalendar();
 }
 function copySelectedLessons(){
-  const source=db.lessons.filter(l=>selectedLessonIds.has(l.id)&&!['取消','停課'].includes(l.status));
+  const source=calendarTeacherScopedLessons(db.lessons.filter(l=>selectedLessonIds.has(l.id)&&!['取消','停課'].includes(l.status)));
   if(!source.length)return alert('請先框選或按住 Control／Command 點選要複製的課程。');
   const monthKeys=[...new Set(source.map(l=>l.date.slice(0,7)))];
   if(monthKeys.length!==1)return alert('請只選取同一個月份的課程後再複製到下個月。');
@@ -176,7 +178,7 @@ function cancelPasteClickMode(clearClipboard=false){
   }
 }
 function copyCurrentSelection(){
-  const rows=db.lessons.filter(l=>selectedLessonIds.has(l.id));
+  const rows=calendarTeacherScopedLessons(db.lessons.filter(l=>selectedLessonIds.has(l.id)));
   if(!rows.length)return false;
   /* 每次複製都完全覆蓋舊剪貼簿，第一次 Ctrl+C 也直接生效。 */
   lessonClipboard=[];

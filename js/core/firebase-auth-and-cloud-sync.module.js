@@ -1100,9 +1100,9 @@ function queueOwnerCloudSave(){
 }
 function installCloudSave(){
  window.__danbridgeQueueCloudSave=queueOwnerCloudSave;
- window.saveDB=function(){
+ window.saveDB=function(options={}){
    if(cloudRole==='teacher'||cloudRole==='branch_manager'){alert(cloudRole==='teacher'?'老師帳號目前為唯讀，只能查看自己的課表。':'校區管理者目前為唯讀，只能查看指定校區資料。');return}
-   return originalSaveDB?.();
+   return originalSaveDB?.(options);
  };
 }
 function subscribeOwner(){

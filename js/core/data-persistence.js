@@ -103,11 +103,11 @@ function normalizeBranchData(x){
 
 function loadDB(){try{const raw=localStorage.getItem(LS_KEY);const x=JSON.parse(raw||'{"students":[],"teachers":[],"lessons":[],"makeups":[],"changes":[],"teacherGroups":[],"winterTeacherGroups":[],"summerCampClasses":[],"summerCampRegistrations":[],"winterCampClasses":[],"settlementRecords":[],"fixedExpenses":[],"oneTimeExpenses":[]}');x.students||=[];x.teachers||=[];x.lessons||=[];x.makeups||=[];x.changes||=[];x.teacherGroups||=[];x.winterTeacherGroups||=[];x.summerCampClasses||=[];x.summerCampRegistrations||=[];x.winterCampClasses||=[];x.settlementRecords||=[];x.fixedExpenses||=[];x.oneTimeExpenses||=[];x.students=x.students.map(st=>({...st,homeAddress:st.homeAddress||''}));x.teachers=x.teachers.map(t=>({...t,minWeeklyHours:+t.minWeeklyHours||0,workDays:Array.isArray(t.workDays)&&t.workDays.length?[...new Set(t.workDays.map(Number))]:[1,2,3,4,5]}));x.lessons=x.lessons.map(l=>({...l,room:l.room||'',paymentStatus:l.paymentStatus||'unpaid',chargeStudent:l.chargeStudent||'yes',payTeacher:l.payTeacher||'yes',seriesId:l.seriesId||'',location:l.location||'美術東四路',address:l.address||'',campId:normalizeCampCode(l.campId||''),teacherIds:Array.isArray(l.teacherIds)&&l.teacherIds.length?[...new Set(l.teacherIds)]:[l.teacherId].filter(Boolean),lessonState:(l.lessonState||(l.isDraft?'draft':'active')),isDraft:(l.lessonState?l.lessonState==='draft':!!l.isDraft),draftOriginal:null}));return normalizeBranchData(x)}catch{return normalizeBranchData({students:[],teachers:[],lessons:[],makeups:[],changes:[],teacherGroups:[],winterTeacherGroups:[],summerCampClasses:[],summerCampRegistrations:[],winterCampClasses:[],settlementRecords:[],fixedExpenses:[],oneTimeExpenses:[]})}}
 function normalizeLessonStates(){db.lessons=(db.lessons||[]).map(l=>{const state=l.lessonState||(l.isDraft?'draft':'active');return{...l,lessonState:state,isDraft:state==='draft',draftOriginal:null}})}
-function saveDB(){
+function saveDB(options={}){
  let saveError=null;
  try{
   normalizeLessonStates();db=normalizeBranchData(db);localStorage.setItem(LS_KEY,JSON.stringify(db));
-  try{renderAll()}
+  try{options.calendarOnly?renderCalendar():renderAll()}
   catch(error){
    console.error('Saved data, but a view renderer failed:',error);
    try{renderCalendar()}catch(calendarError){console.error('Calendar rerender failed after save:',calendarError)}
