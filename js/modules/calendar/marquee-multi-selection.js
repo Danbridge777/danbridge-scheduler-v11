@@ -51,22 +51,35 @@
   function beginPointerDrag(event){
     const card=cardOf(event.target);
     if(!card||!canEdit()||event.pointerType==='touch'||event.button!==0||selectionMode||selectedLessonIds.size||pasteClickMode||isControl(event.target))return false;
-    controller.pointerDrag={pointerId:event.pointerId,id:card.dataset.id,card,startX:event.clientX,startY:event.clientY,moved:false};
+    const rect=card.getBoundingClientRect();
+    controller.pointerDrag={pointerId:event.pointerId,id:card.dataset.id,card,startX:event.clientX,startY:event.clientY,moved:false,grabX:event.clientX-rect.left,grabY:event.clientY-rect.top};
     try{controller.canvas.setPointerCapture(event.pointerId)}catch{}
     return true;
+  }
+
+  function copyRenderedStyle(source,target){
+    const style=getComputedStyle(source);
+    for(const property of style)target.style.setProperty(property,style.getPropertyValue(property),style.getPropertyPriority(property));
+    [...source.children].forEach((child,index)=>{if(target.children[index])copyRenderedStyle(child,target.children[index])});
   }
 
   function createDragGhost(state,event){
     const rect=state.card.getBoundingClientRect(),ghost=state.card.cloneNode(true);
     ghost.classList.remove('selected','marquee-hit','dragging','drop-target');
     ghost.classList.add('calendar-drag-ghost');ghost.removeAttribute('draggable');ghost.setAttribute('aria-hidden','true');
-    ghost.style.width=rect.width+'px';ghost.style.height=rect.height+'px';
+    copyRenderedStyle(state.card,ghost);
+    ghost.style.setProperty('position','fixed','important');
+    ghost.style.setProperty('left','0','important');ghost.style.setProperty('top','0','important');
+    ghost.style.setProperty('width',rect.width+'px','important');ghost.style.setProperty('min-width',rect.width+'px','important');ghost.style.setProperty('max-width',rect.width+'px','important');
+    ghost.style.setProperty('height',rect.height+'px','important');ghost.style.setProperty('min-height',rect.height+'px','important');ghost.style.setProperty('max-height',rect.height+'px','important');
+    ghost.style.setProperty('margin','0','important');ghost.style.setProperty('transform','none','important');
     document.body.appendChild(ghost);controller.dragGhost=ghost;moveDragGhost(event);
   }
 
   function moveDragGhost(event){
     if(!controller.dragGhost)return;
-    controller.dragGhost.style.transform=`translate3d(${event.clientX+14}px,${event.clientY+14}px,0)`;
+    const state=controller.pointerDrag;if(!state)return;
+    controller.dragGhost.style.setProperty('transform',`translate3d(${event.clientX-state.grabX}px,${event.clientY-state.grabY}px,0)`,'important');
   }
 
   function removeDragGhost(){controller.dragGhost?.remove();controller.dragGhost=null}
@@ -78,7 +91,7 @@
 
   function movePointerDrag(event){
     const state=controller.pointerDrag;if(!state||event.pointerId!==state.pointerId)return false;
-    if(!state.moved&&Math.hypot(event.clientX-state.startX,event.clientY-state.startY)>6){state.moved=true;dragState=state.id;state.card.classList.add('dragging');createDragGhost(state,event)}
+    if(!state.moved&&Math.hypot(event.clientX-state.startX,event.clientY-state.startY)>6){state.moved=true;dragState=state.id;createDragGhost(state,event);state.card.classList.add('dragging')}
     if(!state.moved)return true;
     event.preventDefault();event.stopImmediatePropagation();moveDragGhost(event);clearDrop();
     const target=targetOf(document.elementFromPoint(event.clientX,event.clientY));

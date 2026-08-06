@@ -29,8 +29,9 @@
   opacity: .82 !important;
   overflow: hidden !important;
   transform-origin: 0 0 !important;
-  box-shadow: 0 14px 34px rgba(15, 23, 42, .26) !important;
 }
+
+.calendar-drag-ghost:hover { filter: none !important; }
 
 .time-slot.drop-target {
   outline: 0;
