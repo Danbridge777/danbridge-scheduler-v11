@@ -1,0 +1,47 @@
+@media (min-width:1100px){
+  body.teacher-cloud-role:not(.auth-locked) > nav{
+    background:linear-gradient(180deg,#0e3558 0%,#124d7a 52%,#0d3a61 100%)!important;
+    color:#fff!important;
+    border-right:1px solid rgba(255,255,255,.10)!important;
+    box-shadow:10px 0 32px rgba(15,23,42,.16)!important;
+  }
+  body.teacher-cloud-role:not(.auth-locked) > nav::before{
+    content:"Danbridge"!important;
+    color:#fff!important;
+    opacity:1!important;
+  }
+  body.teacher-cloud-role:not(.auth-locked) > nav::after{
+    content:"TEACHER PORTAL"!important;
+    color:rgba(255,255,255,.62)!important;
+    opacity:1!important;
+  }
+  body.teacher-cloud-role:not(.auth-locked) > nav button{
+    color:rgba(255,255,255,.86)!important;
+    background:transparent!important;
+    border-color:transparent!important;
+    opacity:1!important;
+    visibility:visible!important;
+  }
+  body.teacher-cloud-role:not(.auth-locked) > nav button:hover{
+    color:#fff!important;
+    background:rgba(255,255,255,.10)!important;
+  }
+  body.teacher-cloud-role:not(.auth-locked) > nav button.active{
+    color:#fff!important;
+    background:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,.11))!important;
+    border-color:rgba(255,255,255,.18)!important;
+    box-shadow:0 8px 20px rgba(0,0,0,.12)!important;
+  }
+  body.teacher-cloud-role:not(.auth-locked) > header{
+    background:linear-gradient(120deg,#0f4c81,#1265a8)!important;
+    color:#fff!important;
+  }
+  body.teacher-cloud-role:not(.auth-locked) > header h1{color:#fff!important}
+  body.teacher-cloud-role:not(.auth-locked) > header p{color:rgba(255,255,255,.78)!important}
+  body.teacher-cloud-role:not(.auth-locked) > header .header-auth-actions span{color:#fff!important}
+  body.teacher-cloud-role:not(.auth-locked) > header .header-auth-actions .btn{
+    color:#18324a!important;
+    background:#fff!important;
+    border-color:rgba(255,255,255,.70)!important;
+  }
+}

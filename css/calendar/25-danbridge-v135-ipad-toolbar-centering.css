@@ -1,0 +1,178 @@
+/* Common control alignment: keep text optically centered inside controls */
+.btn,
+button,
+nav button,
+input,
+select,
+textarea{
+  line-height:1.25!important;
+}
+.btn,
+button,
+nav button,
+.day-add,
+.modal-head button,
+.course-drawer-close{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  text-align:center!important;
+}
+input,
+select{
+  padding-top:0!important;
+  padding-bottom:0!important;
+  text-align:center!important;
+  text-align-last:center!important;
+}
+input::placeholder,
+textarea::placeholder{text-align:center!important}
+
+/* Center the text within dashboard/stat cards without changing their data or order */
+#dashboard .metric,
+#dashboard .v33-ops-mini,
+.finance-metric,
+#settlement .settlement-summary-card,
+.teacher-pay-stat{
+  text-align:center!important;
+  align-items:center!important;
+  justify-content:center!important;
+}
+#dashboard .metric span,
+#dashboard .metric b,
+#dashboard .metric small,
+#dashboard .v33-ops-mini span,
+#dashboard .v33-ops-mini b,
+#dashboard .v33-ops-mini small,
+.finance-metric span,
+.finance-metric b,
+#settlement .settlement-summary-card span,
+#settlement .settlement-summary-card b{
+  width:100%!important;
+  margin-left:auto!important;
+  margin-right:auto!important;
+  text-align:center!important;
+}
+
+/* Calendar toolbar: prevent date and teacher filter from covering each other on iPad */
+@media (min-width:701px) and (max-width:1366px){
+  #calendar,
+  #calendar>.card,
+  #calendar .toolbar{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    box-sizing:border-box!important;
+  }
+  #calendar>.card{overflow:hidden!important}
+  #calendar .toolbar{
+    position:static!important;
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:10px!important;
+    align-items:stretch!important;
+    padding:12px!important;
+    overflow:hidden!important;
+  }
+  #calendar .toolbar>*{
+    min-width:0!important;
+    max-width:100%!important;
+    width:100%!important;
+    box-sizing:border-box!important;
+  }
+  #calendar .toolbar>div{
+    display:flex!important;
+    flex-direction:column!important;
+    justify-content:flex-end!important;
+    min-width:0!important;
+    max-width:100%!important;
+    width:100%!important;
+  }
+  #calendar .toolbar label{
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    min-height:22px!important;
+    margin:0 0 5px!important;
+    text-align:center!important;
+    line-height:1.2!important;
+  }
+  #calendar .toolbar input,
+  #calendar .toolbar select,
+  #calendar .toolbar .btn,
+  #calendar .toolbar button{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    min-height:44px!important;
+    height:44px!important;
+    margin:0!important;
+    padding-left:8px!important;
+    padding-right:8px!important;
+    overflow:hidden!important;
+    white-space:normal!important;
+    text-align:center!important;
+    text-align-last:center!important;
+  }
+  #calendar .toolbar input[type="date"]{
+    -webkit-appearance:none!important;
+    appearance:none!important;
+    font-size:16px!important;
+  }
+  #calendar .toolbar>div:has(#calendarDate),
+  #calendar .toolbar>div:has(#calendarTeacherFilter){
+    grid-column:auto!important;
+  }
+  #calendar .toolbar>div[style*="min-width:230px"]{
+    min-width:0!important;
+    grid-column:span 2!important;
+  }
+  #calendarTitle{
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    text-align:center!important;
+  }
+  .location-legend{justify-content:center!important}
+  .location-chip{
+    display:inline-flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    text-align:center!important;
+  }
+  .day-head,
+  .day-num,
+  .week-head,
+  .time-label{
+    text-align:center!important;
+    align-items:center!important;
+    justify-content:center!important;
+  }
+  th{
+    text-align:center!important;
+    vertical-align:middle!important;
+  }
+}
+
+/* 13-inch iPad portrait / split-screen: use two rows with generous control width */
+@media (min-width:701px) and (max-width:1100px){
+  #calendar .toolbar{
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  }
+  #calendar .toolbar>div:has(#calendarDate),
+  #calendar .toolbar>div:has(#calendarTeacherFilter),
+  #calendar .toolbar>div:has(#calendarSearch){
+    grid-column:auto!important;
+  }
+  #calendar .toolbar>div[style*="min-width:230px"]{grid-column:span 2!important}
+}
+
+/* Narrow iPad split view: stack critical fields so nothing can overlap */
+@media (min-width:701px) and (max-width:820px){
+  #calendar .toolbar{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #calendar .toolbar>div:has(#calendarDate),
+  #calendar .toolbar>div:has(#calendarTeacherFilter),
+  #calendar .toolbar>div[style*="min-width:230px"]{
+    grid-column:1/-1!important;
+  }
+}

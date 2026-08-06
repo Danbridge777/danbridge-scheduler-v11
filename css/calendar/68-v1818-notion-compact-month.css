@@ -1,0 +1,56 @@
+/* V18.18 — Notion-style compact single-line month events. */
+@media (min-width:761px){
+  #calendarCanvas .month-grid .lesson{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+    min-height:34px!important;
+    height:34px!important;
+    margin:4px 0!important;
+    padding:6px 8px 6px 10px!important;
+    border:1px solid rgba(148,163,184,.24)!important;
+    border-left:4px solid var(--teacher,#2563eb)!important;
+    border-radius:8px!important;
+    background:linear-gradient(90deg,rgba(255,255,255,.98),var(--location-bg,#eef5ff))!important;
+    box-shadow:0 2px 6px rgba(15,23,42,.07)!important;
+    line-height:20px!important;
+    overflow:hidden!important;
+  }
+  #calendarCanvas .month-grid .lesson::before,
+  #calendarCanvas .month-grid .lesson::after,
+  #calendarCanvas .month-grid .lesson>.meta,
+  #calendarCanvas .month-grid .lesson>.lesson-report-summary{display:none!important}
+  #calendarCanvas .month-grid .lesson>b{
+    display:block!important;
+    width:100%!important;
+    margin:0!important;
+    color:#1f2937!important;
+    font-size:12px!important;
+    font-weight:800!important;
+    line-height:20px!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+  }
+  #calendarCanvas .month-grid .lesson:hover{
+    transform:translateY(-1px)!important;
+    box-shadow:0 5px 12px rgba(15,23,42,.12)!important;
+  }
+  #calendarCanvas .month-grid .lesson.selectable,
+  #calendarCanvas .month-grid .lesson.selected{padding-left:30px!important}
+  #calendarCanvas .month-grid .lesson.selectable::before,
+  #calendarCanvas .month-grid .lesson.selected::before{
+    content:""!important;
+    display:grid!important;
+    left:7px!important;
+    top:7px!important;
+    width:18px!important;
+    height:18px!important;
+    border-radius:5px!important;
+    border:2px solid #64748b!important;
+    background:#fff!important;
+    color:#fff!important;
+    box-shadow:none!important;
+  }
+  #calendarCanvas .month-grid .lesson.selected::before{content:"✓"!important;border-color:#2563eb!important;background:#2563eb!important}
+}

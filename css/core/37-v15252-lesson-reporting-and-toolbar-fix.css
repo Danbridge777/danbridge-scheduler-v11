@@ -1,0 +1,84 @@
+/* V15.25.2 — Lesson Reporting foundation + calendar toolbar alignment */
+
+/* Keep every toolbar field label in a real vertical slot instead of letting it cling to the input edge. */
+#calendar .calendar-toolbar>div{
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:flex-start!important;
+}
+#calendar .calendar-toolbar>div>label{
+  display:flex!important;
+  align-items:center!important;
+  min-height:32px!important;
+  margin:0 0 8px!important;
+  line-height:1.25!important;
+}
+#calendar .calendar-toolbar>div:has(#calendarDate)>label{
+  justify-content:center!important;
+  padding-top:3px!important;
+}
+#calendar .calendar-toolbar #calendarDate{
+  margin-top:0!important;
+}
+
+@media (max-width:980px){
+  #calendar .calendar-toolbar>div>label{min-height:28px!important;margin-bottom:7px!important}
+}
+
+/* V15.25.3 — Calendar base date: true optical centering on Safari/iPad.
+   Reserve equal horizontal space while positioning the native calendar icon independently,
+   so the date value stays in the exact center of the field rather than being pushed left. */
+#calendar .calendar-toolbar #calendarDate{
+  position:relative!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  height:46px!important;
+  min-height:46px!important;
+  padding:0 46px!important;
+  line-height:normal!important;
+  text-align:center!important;
+  text-align-last:center!important;
+  box-sizing:border-box!important;
+}
+#calendar .calendar-toolbar #calendarDate::-webkit-date-and-time-value{
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+  height:auto!important;
+  margin:0!important;
+  padding:0!important;
+  line-height:1.2!important;
+  text-align:center!important;
+}
+#calendar .calendar-toolbar #calendarDate::-webkit-datetime-edit{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  min-width:0!important;
+  margin:0!important;
+  padding:0!important;
+  text-align:center!important;
+}
+#calendar .calendar-toolbar #calendarDate::-webkit-datetime-edit-fields-wrapper{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  min-width:0!important;
+  padding:0!important;
+}
+#calendar .calendar-toolbar #calendarDate::-webkit-calendar-picker-indicator{
+  position:absolute!important;
+  right:14px!important;
+  top:50%!important;
+  transform:translateY(-50%)!important;
+  margin:0!important;
+}
+
+/* V15.26.1 — lesson-report role and edit-window messaging */
+.teacher-report-permission-note{margin:12px 0;padding:10px 12px;border:1px solid #d7dee9;border-radius:10px;background:#f7f9fc;color:#40516a;font-weight:750}
+#teacherReportModal[data-read-only="true"] .report-status-option{opacity:.78;cursor:default}
+#teacherReportModal[data-read-only="true"] textarea,
+#teacherReportModal[data-read-only="true"] input[type="file"]{background:#f4f6f8;color:#536174}

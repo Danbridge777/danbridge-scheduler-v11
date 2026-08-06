@@ -1,0 +1,76 @@
+/* Finance / settlement executive workspace */
+#finance > .card,
+#settlement > .card,
+#data > .card,
+#security > .card,
+#makeups > .card,
+#camps .card,
+#winterCamps .card{
+  border:1px solid #dbe5f0;
+  box-shadow:0 16px 40px rgba(15,23,42,.07);
+  background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);
+}
+#finance .toolbar,#settlement .toolbar,#makeups .toolbar{
+  background:#f8fbff;border:1px solid #dbe7f3;border-radius:18px;padding:14px 16px;
+  align-items:end;gap:12px;
+}
+.finance-summary{
+  display:grid!important;grid-template-columns:repeat(5,minmax(190px,1fr));gap:14px;margin:18px 0 20px;
+  overflow-x:auto;padding:2px 2px 10px;scrollbar-width:thin;
+}
+.finance-metric{
+  min-width:190px;border:1px solid #dbe7f3!important;border-radius:20px!important;padding:18px 18px!important;
+  background:linear-gradient(145deg,#fff,#f7fbff)!important;box-shadow:0 10px 28px rgba(15,23,42,.06);
+  position:relative;overflow:hidden;
+}
+.finance-metric:after{content:"";position:absolute;width:88px;height:88px;border-radius:50%;right:-24px;top:-28px;background:rgba(37,99,235,.06)}
+.finance-metric span{display:block;color:#64748b;font-weight:800;font-size:13px;letter-spacing:.02em;margin-bottom:10px}
+.finance-metric b{display:block;color:#0f172a;font-size:clamp(22px,2vw,34px);line-height:1.1;white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:-.035em}
+.finance-metric:nth-child(1){border-top:4px solid #2563eb!important}.finance-metric:nth-child(2){border-top:4px solid #64748b!important}.finance-metric:nth-child(3){border-top:4px solid #f59e0b!important}.finance-metric:nth-child(4){border-top:4px solid #14b8a6!important}.finance-metric:nth-child(5){border-top:4px solid #22c55e!important}
+.finance-profit-negative{color:#dc2626!important}.finance-profit-positive{color:#15803d!important}
+.finance-layout{gap:18px!important}.finance-layout>.card{border-radius:22px!important}
+.finance-form-row{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:14px;gap:12px!important}
+.finance-payroll-row{padding:13px 4px!important;border-bottom:1px solid #e7edf4!important;align-items:center}
+#financeSummaryText,#settlementText{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.65;background:#0f172a;color:#e2e8f0;border-color:#1e293b!important}
+
+/* Settlement cards */
+.teacher-pay-card{border:1px solid #dbe7f3!important;border-radius:22px!important;background:#fff!important;box-shadow:0 12px 30px rgba(15,23,42,.06)!important;overflow:hidden}
+.teacher-pay-card h4{margin:-1px -1px 0!important;padding:16px 18px!important;background:linear-gradient(135deg,#0f4c81,#1769aa);color:#fff;font-size:18px!important}
+.teacher-work-summary{padding:12px 18px!important;background:#eff6ff;color:#31506e!important;border-bottom:1px solid #dbeafe}
+.teacher-pay-grid{padding:16px!important;gap:12px!important}
+.teacher-pay-stat{background:#f8fafc!important;border:1px solid #e2e8f0!important;border-radius:15px!important;padding:13px!important}
+.teacher-pay-stat b{font-variant-numeric:tabular-nums;font-size:20px!important}
+.weekly-detail{margin:0 16px 16px!important;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden}
+.weekly-row{padding:10px 12px!important}.weekly-row.head{background:#f1f5f9!important;color:#334155;font-weight:800}
+
+/* Camps */
+.camp-layout{gap:18px!important;align-items:start}.camp-layout>.card{border-radius:24px!important}
+.camp-layout h2{display:flex;align-items:center;gap:9px}.camp-layout h2:before{content:"";width:8px;height:24px;border-radius:999px;background:linear-gradient(#2563eb,#14b8a6)}
+.camp-form-grid{background:#f8fbff;border:1px solid #dbe7f3;border-radius:18px;padding:16px;gap:14px!important}
+.teacher-checks{gap:9px!important}.teacher-check{border:1px solid #dbe5ef!important;border-radius:999px!important;padding:8px 12px!important;background:#fff;transition:.18s ease}
+.teacher-check:has(input:checked){background:#eaf3ff;border-color:#60a5fa!important;color:#0f4c81;box-shadow:0 0 0 3px rgba(59,130,246,.10)}
+.camp-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.preview-box{border:1px dashed #93c5fd!important;background:#f0f7ff!important;border-radius:16px!important;padding:15px!important}
+.camp-class-list .backup-item,.backup-list .backup-item{border-radius:15px!important;border:1px solid #e2e8f0!important;background:#fff!important}
+
+/* Makeup, backup, security */
+#makeups table tbody tr:hover,#finance table tbody tr:hover,#settlement table tbody tr:hover{background:#f7fbff}
+#data h2,#security h2,#makeups h2{letter-spacing:-.02em}
+#data .backup-list,#security .backup-list{display:grid;gap:10px}
+#data .backup-item,#security .backup-item{border:1px solid #dbe5ef!important;border-radius:16px!important;background:#fff!important;padding:14px 16px!important;box-shadow:0 6px 18px rgba(15,23,42,.04)}
+#data .hint,#security .hint{border-radius:15px!important;background:#f8fafc!important;border:1px solid #e2e8f0!important;color:#475569!important}
+#security input[type="email"],#security select{background:#fff}
+#security .btn.primary{box-shadow:0 8px 20px rgba(37,99,235,.18)}
+
+/* Tables and section headers */
+#finance h2,#settlement h2,#makeups h2,#data h2,#security h2,#camps h2,#winterCamps h2{font-size:21px;color:#0f2742;margin-bottom:14px}
+#finance table,#settlement table,#makeups table{border-collapse:separate;border-spacing:0}
+#finance thead th,#settlement thead th,#makeups thead th{background:#edf4fb!important;color:#27435f!important;border-bottom:1px solid #d7e3ef!important}
+
+/* Responsive */
+@media(max-width:1100px){.finance-summary{grid-template-columns:repeat(5,minmax(210px,210px))}.finance-layout,.camp-layout{grid-template-columns:1fr!important}}
+@media(max-width:700px){
+ .finance-summary{margin-left:-4px;margin-right:-4px}.finance-metric{min-width:205px}
+ .finance-form-row{grid-template-columns:1fr!important}.teacher-pay-grid{grid-template-columns:repeat(2,1fr)!important}
+ .camp-form-grid{grid-template-columns:1fr!important}.camp-form-grid .span-2,.camp-form-grid .span-4{grid-column:auto!important}
+}

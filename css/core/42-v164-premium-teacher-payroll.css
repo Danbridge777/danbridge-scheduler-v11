@@ -1,0 +1,220 @@
+/* Danbridge Operations V16.4 — premium teacher payroll cards.
+   Presentation only. No calculations, IDs, handlers, data structures, permissions or cloud sync logic changed. */
+
+#settlement .teacher-pay-cards{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:20px!important;
+  margin:18px 0 24px!important;
+  align-items:start!important;
+}
+
+#settlement .teacher-pay-card{
+  position:relative;
+  min-width:0;
+  padding:0!important;
+  overflow:hidden!important;
+  border:1px solid #dfe6ef!important;
+  border-radius:22px!important;
+  background:linear-gradient(180deg,#fff 0%,#fcfdff 100%)!important;
+  box-shadow:0 14px 38px rgba(26,45,72,.075)!important;
+}
+
+#settlement .teacher-pay-card::before{
+  content:"";
+  position:absolute;
+  inset:0 0 auto;
+  height:3px;
+  background:linear-gradient(90deg,#c69a3a 0%,#e2c476 38%,#274f7b 100%);
+}
+
+#settlement .teacher-pay-head{
+  display:flex;
+  align-items:center;
+  gap:13px;
+  padding:22px 22px 15px!important;
+  background:transparent!important;
+}
+
+#settlement .teacher-pay-avatar{
+  flex:0 0 46px;
+  width:46px;
+  height:46px;
+  display:grid;
+  place-items:center;
+  border-radius:15px;
+  color:#fff;
+  font-size:18px;
+  font-weight:850;
+  line-height:1;
+  background:linear-gradient(145deg,#173c65,#2d6ca8);
+  box-shadow:0 8px 18px rgba(28,70,111,.20);
+}
+
+#settlement .teacher-pay-identity{
+  min-width:0;
+  flex:1;
+}
+
+#settlement .teacher-pay-card h4{
+  display:block!important;
+  max-width:none!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  white-space:normal!important;
+  text-overflow:clip!important;
+  word-break:break-word!important;
+  color:#17263b!important;
+  background:none!important;
+  font-size:21px!important;
+  font-weight:850!important;
+  line-height:1.25!important;
+  letter-spacing:-.01em;
+}
+
+#settlement .teacher-pay-role{
+  margin-top:4px;
+  color:#8995a7;
+  font-size:11px;
+  font-weight:750;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+#settlement .teacher-work-summary{
+  margin:0 22px!important;
+  padding:12px 14px!important;
+  border:1px solid #e7ecf3!important;
+  border-radius:13px!important;
+  background:#f7f9fc!important;
+  color:#596b82!important;
+  font-size:12px!important;
+  font-weight:650;
+  line-height:1.55;
+}
+
+#settlement .teacher-pay-grid{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:10px!important;
+  padding:17px 22px 16px!important;
+}
+
+#settlement .teacher-pay-stat{
+  min-width:0;
+  min-height:106px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:space-between;
+  padding:14px!important;
+  border:1px solid #e4eaf2!important;
+  border-radius:15px!important;
+  background:linear-gradient(160deg,#fff,#f7f9fc)!important;
+  color:#607086!important;
+  font-size:12px!important;
+  font-weight:750;
+  line-height:1.35;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9);
+}
+
+#settlement .teacher-pay-stat b{
+  display:block;
+  max-width:100%;
+  margin-top:10px!important;
+  color:#18283f;
+  font-size:20px!important;
+  font-weight:850!important;
+  line-height:1.18!important;
+  overflow-wrap:anywhere;
+}
+
+#settlement .teacher-pay-stat b.hours-over{color:#16825f!important}
+#settlement .teacher-pay-stat b.hours-short{color:#d14a4a!important}
+#settlement .teacher-pay-stat b.hours-even{color:#65758a!important}
+
+#settlement .branch-breakdown.cards{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:8px!important;
+  margin:0 22px 16px!important;
+}
+
+#settlement .branch-breakdown.cards span{
+  display:flex!important;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  min-width:0;
+  padding:10px 12px!important;
+  border:1px solid #e4eaf2!important;
+  border-radius:12px!important;
+  background:#fafbfd!important;
+  color:#65758a!important;
+  font-size:11px!important;
+}
+
+#settlement .branch-breakdown.cards b{
+  min-width:0;
+  color:#40546d!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+
+#settlement .weekly-detail{
+  margin:0 22px 22px!important;
+  padding:0!important;
+  overflow:hidden;
+  border:1px solid #e2e8f0!important;
+  border-radius:15px!important;
+  background:#fff!important;
+}
+
+#settlement .weekly-row{
+  display:grid!important;
+  grid-template-columns:1.45fr repeat(3,minmax(0,1fr))!important;
+  gap:8px!important;
+  align-items:center;
+  min-height:42px;
+  padding:9px 13px!important;
+  border-bottom:1px solid #edf1f6!important;
+  color:#384b64;
+  font-size:12px!important;
+}
+
+#settlement .weekly-row:last-child{border-bottom:0!important}
+#settlement .weekly-row.head{
+  min-height:40px;
+  border-radius:0!important;
+  background:#f2f5f9!important;
+  color:#53657b!important;
+  font-size:11px!important;
+  font-weight:850!important;
+}
+
+#settlement .weekly-row:not(.head):hover{background:#fafcff}
+
+@media(max-width:1180px){
+  #settlement .teacher-pay-cards{grid-template-columns:1fr!important}
+}
+
+@media(max-width:760px){
+  #settlement .teacher-pay-head{padding:18px 17px 13px!important}
+  #settlement .teacher-work-summary{margin:0 17px!important}
+  #settlement .teacher-pay-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;padding:14px 17px!important}
+  #settlement .branch-breakdown.cards{grid-template-columns:1fr!important;margin-inline:17px!important}
+  #settlement .weekly-detail{margin:0 17px 18px!important;overflow-x:auto}
+  #settlement .weekly-row{min-width:480px}
+}
+
+@media(max-width:430px){
+  #settlement .teacher-pay-grid{grid-template-columns:1fr!important}
+  #settlement .teacher-pay-stat{min-height:82px}
+}
+
+@media print{
+  #settlement .teacher-pay-card{box-shadow:none!important;break-inside:avoid}
+  #settlement .teacher-pay-avatar{box-shadow:none!important}
+}

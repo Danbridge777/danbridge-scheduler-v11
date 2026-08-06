@@ -1,0 +1,224 @@
+/* Danbridge Operations V16.2 — visual-only global design system.
+   No IDs, event handlers, data structures, permissions, or sync logic are changed. */
+:root{
+  --ds-bg:#f5f7fb;
+  --ds-surface:#ffffff;
+  --ds-surface-soft:#f8fafc;
+  --ds-line:#dbe4ef;
+  --ds-line-strong:#cbd7e6;
+  --ds-text:#1c2a42;
+  --ds-muted:#66758d;
+  --ds-primary:#234f88;
+  --ds-primary-hover:#193e70;
+  --ds-brand:#bd9134;
+  --ds-brand-hover:#a97d25;
+  --ds-success:#16835e;
+  --ds-danger:#c84646;
+  --ds-radius-sm:10px;
+  --ds-radius:16px;
+  --ds-radius-lg:22px;
+  --ds-shadow:0 10px 30px rgba(22,39,67,.07);
+  --ds-shadow-hover:0 14px 36px rgba(22,39,67,.11);
+}
+
+html,body{background:var(--ds-bg);color:var(--ds-text)}
+body{font-feature-settings:"kern" 1,"tnum" 1;text-rendering:optimizeLegibility}
+main{background:linear-gradient(180deg,#f8fafc 0,#f4f7fb 100%)}
+
+/* App header */
+header{
+  border-bottom:1px solid rgba(208,218,232,.85)!important;
+  box-shadow:0 4px 18px rgba(23,38,63,.035)!important;
+  backdrop-filter:saturate(130%) blur(14px);
+}
+header h1{letter-spacing:-.025em}
+header p{color:var(--ds-muted)!important}
+.header-auth-actions{gap:8px!important}
+
+/* Sidebar: visual grouping only; original buttons and access control remain intact. */
+nav{
+  padding:22px 14px 26px!important;
+  gap:5px!important;
+  overflow-y:auto!important;
+  scrollbar-width:thin;
+}
+nav button{
+  min-height:48px!important;
+  padding:0 15px 0 48px!important;
+  border-radius:12px!important;
+  font-size:15px!important;
+  font-weight:680!important;
+  letter-spacing:.005em;
+  transition:background .16s ease,color .16s ease,transform .16s ease,box-shadow .16s ease!important;
+}
+nav button:hover{transform:translateX(2px)}
+nav button.active{box-shadow:inset 0 0 0 1px rgba(218,174,76,.22),0 7px 18px rgba(0,0,0,.13)!important}
+nav button:nth-child(1),nav button:nth-child(4),nav button:nth-child(7),nav button:nth-child(9),nav button:nth-child(11){
+  margin-top:28px!important;
+  position:relative;
+}
+nav button:nth-child(1){margin-top:20px!important}
+nav button:nth-child(1)::before,nav button:nth-child(4)::before,nav button:nth-child(7)::before,nav button:nth-child(9)::before,nav button:nth-child(11)::before{
+  position:absolute;
+  left:9px;
+  top:-23px;
+  color:rgba(231,205,145,.67);
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.18em;
+  pointer-events:none;
+}
+nav button:nth-child(1)::before{content:"營運"}
+nav button:nth-child(4)::before{content:"課務"}
+nav button:nth-child(7)::before{content:"課程專案"}
+nav button:nth-child(9)::before{content:"財務"}
+nav button:nth-child(11)::before{content:"系統"}
+
+/* Cards and page sections */
+.card{
+  border:1px solid var(--ds-line)!important;
+  border-radius:var(--ds-radius-lg)!important;
+  box-shadow:var(--ds-shadow)!important;
+  background:rgba(255,255,255,.97)!important;
+}
+.card:hover{border-color:var(--ds-line-strong)}
+section> .card,section>.grid{margin-bottom:18px}
+h2,h3{color:var(--ds-text);letter-spacing:-.02em}
+h2{font-weight:790}
+h3{font-weight:740}
+.small,.hint{color:var(--ds-muted)!important;line-height:1.55}
+
+/* Form controls */
+label{
+  color:#5b6c85!important;
+  font-size:12px!important;
+  font-weight:760!important;
+  letter-spacing:.025em;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),select,textarea{
+  border:1px solid var(--ds-line-strong)!important;
+  border-radius:12px!important;
+  background:#fff!important;
+  color:var(--ds-text)!important;
+  box-shadow:0 1px 2px rgba(20,38,66,.025)!important;
+  transition:border-color .15s ease,box-shadow .15s ease,background .15s ease!important;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),select{min-height:44px}
+input:focus,select:focus,textarea:focus{
+  outline:none!important;
+  border-color:#7198c7!important;
+  box-shadow:0 0 0 4px rgba(51,105,166,.11)!important;
+}
+input::placeholder,textarea::placeholder{color:#9aa8ba!important}
+
+/* Unified button hierarchy */
+.btn{
+  min-height:42px!important;
+  padding:0 16px!important;
+  border-radius:11px!important;
+  border:1px solid var(--ds-line-strong)!important;
+  background:#fff!important;
+  color:#2d3e57!important;
+  font-weight:750!important;
+  box-shadow:0 2px 7px rgba(20,38,66,.045)!important;
+  transition:transform .14s ease,box-shadow .14s ease,background .14s ease,border-color .14s ease!important;
+}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 14px rgba(20,38,66,.09)!important;background:#f8fafc!important}
+.btn:active{transform:translateY(0);box-shadow:0 2px 5px rgba(20,38,66,.06)!important}
+.btn.primary{background:var(--ds-primary)!important;border-color:var(--ds-primary)!important;color:#fff!important}
+.btn.primary:hover{background:var(--ds-primary-hover)!important;border-color:var(--ds-primary-hover)!important}
+.btn.ok{background:#eef9f4!important;border-color:#bde4d3!important;color:#176c50!important}
+.btn.danger,.btn.bad{background:#fff4f4!important;border-color:#efc7c7!important;color:#a93737!important}
+button:disabled,.btn:disabled{opacity:.52!important;transform:none!important;box-shadow:none!important}
+
+/* Toolbars stay in normal document flow and wrap cleanly. */
+.toolbar{
+  position:relative!important;
+  top:auto!important;
+  z-index:auto!important;
+  border:1px solid var(--ds-line)!important;
+  border-radius:var(--ds-radius)!important;
+  background:var(--ds-surface-soft)!important;
+  padding:14px!important;
+  gap:10px!important;
+  box-shadow:none!important;
+  align-items:end!important;
+  flex-wrap:wrap!important;
+}
+#calendar .toolbar{background:#f8fafc!important}
+#settlement .toolbar,#finance .toolbar{position:static!important;inset:auto!important;transform:none!important}
+
+/* Tables */
+.table-wrap{
+  border:1px solid var(--ds-line)!important;
+  border-radius:16px!important;
+  background:#fff;
+  overflow:auto!important;
+  box-shadow:0 4px 16px rgba(24,43,72,.035);
+}
+table{border-collapse:separate!important;border-spacing:0!important}
+thead th{
+  position:sticky;
+  top:0;
+  z-index:2;
+  background:#edf4fb!important;
+  color:#344c6d!important;
+  font-size:12px!important;
+  font-weight:800!important;
+  letter-spacing:.025em;
+  border-bottom:1px solid #cfdeed!important;
+}
+tbody td{border-bottom:1px solid #e5ebf2!important;vertical-align:middle!important}
+tbody tr:last-child td{border-bottom:0!important}
+tbody tr{transition:background .12s ease}
+tbody tr:hover{background:#f7faff!important}
+
+/* KPI surfaces */
+.metric,.finance-metric,.v33-ops-mini,.teacher-kpi-summary>*{
+  border:1px solid var(--ds-line)!important;
+  border-radius:17px!important;
+  box-shadow:0 6px 20px rgba(22,39,67,.045)!important;
+}
+.metric b,.finance-metric b,.v33-ops-mini b{letter-spacing:-.035em}
+.finance-summary{gap:12px!important}
+.finance-metric{background:linear-gradient(145deg,#fff,#f7faff)!important}
+
+/* Modals and drawers */
+.modal,.modal-card,.dialog,.drawer,.side-drawer{
+  border-radius:20px!important;
+}
+.modal-content,.modal-card,.dialog{
+  border:1px solid var(--ds-line)!important;
+  box-shadow:0 24px 70px rgba(10,27,51,.2)!important;
+}
+
+/* Status chips */
+.badge,.pill,.status-badge,[class*="status-pill"]{
+  border-radius:999px!important;
+  font-weight:760!important;
+  letter-spacing:.01em;
+}
+
+/* Scrollbars */
+*{scrollbar-color:#c5d1df transparent;scrollbar-width:thin}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:#c5d1df;border:2px solid transparent;background-clip:padding-box;border-radius:999px}
+*::-webkit-scrollbar-thumb:hover{background:#aebdce;border:2px solid transparent;background-clip:padding-box}
+
+/* Responsive consistency */
+@media (max-width:1180px){
+  nav{padding-inline:9px!important}
+  nav button{padding-left:42px!important;font-size:14px!important}
+  .toolbar>div{min-width:160px}
+}
+@media (max-width:820px){
+  .card{border-radius:17px!important}
+  .toolbar{padding:12px!important}
+  .toolbar>div,.toolbar input,.toolbar select{width:100%!important;min-width:0!important}
+  .toolbar .btn{flex:1 1 150px}
+  thead th{position:static}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}
+}

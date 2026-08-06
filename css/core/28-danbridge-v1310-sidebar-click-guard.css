@@ -1,0 +1,5 @@
+@media (min-width:1100px){
+  body:not(.auth-locked)>nav{pointer-events:auto!important;z-index:2000!important}
+  body:not(.auth-locked)>nav button{pointer-events:auto!important}
+  body:not(.auth-locked)>main,body:not(.auth-locked)>header{position:relative;z-index:auto}
+}

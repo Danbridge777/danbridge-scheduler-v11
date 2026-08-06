@@ -1,0 +1,82 @@
+/* KPI rail: preserve room for seven-digit financial amounts without clipping */
+#dashboard .summary{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(168px,1fr)) repeat(3,minmax(248px,1.36fr)) repeat(2,minmax(168px,1fr))!important;
+  gap:14px!important;
+  overflow-x:auto!important;
+  padding:2px 2px 12px!important;
+  scrollbar-width:thin;
+  scrollbar-color:#b8c8d8 transparent;
+}
+#dashboard .metric{
+  min-width:168px!important;
+  min-height:132px!important;
+  padding:20px 18px 18px 66px!important;
+  position:relative!important;
+  overflow:hidden!important;
+  white-space:nowrap!important;
+}
+#dashboard .metric:has(#mRevenue),
+#dashboard .metric:has(#mUnpaid),
+#dashboard .metric:has(#mPayroll){
+  min-width:248px!important;
+  padding-right:18px!important;
+}
+#dashboard .metric b{
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  font-size:clamp(25px,1.55vw,34px)!important;
+  line-height:1.05!important;
+  letter-spacing:-.045em!important;
+  font-variant-numeric:tabular-nums lining-nums!important;
+  white-space:nowrap!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+#dashboard .metric:has(#mRevenue) b,
+#dashboard .metric:has(#mUnpaid) b,
+#dashboard .metric:has(#mPayroll) b{
+  font-size:clamp(24px,1.45vw,32px)!important;
+  letter-spacing:-.055em!important;
+}
+#dashboard .metric::after{
+  content:"";
+  position:absolute;
+  width:108px;height:108px;
+  right:-38px;top:-42px;
+  border-radius:50%;
+  background:rgba(31,102,154,.055);
+  pointer-events:none;
+}
+#dashboard .metric:has(#mUnpaid)::after{background:rgba(210,133,18,.065)}
+#dashboard .metric:has(#mPayroll)::after{background:rgba(25,132,91,.06)}
+#dashboard .metric:has(#mMakeups)::after{background:rgba(107,75,180,.06)}
+#dashboard .metric:has(#mChanges)::after{background:rgba(180,35,42,.06)}
+@media(min-width:1900px){
+  #dashboard .summary{overflow-x:visible!important}
+}
+@media(max-width:1500px){
+  #dashboard .summary{
+    grid-template-columns:repeat(3,178px) repeat(3,258px) repeat(2,178px)!important;
+    scroll-snap-type:x proximity;
+  }
+  #dashboard .metric{scroll-snap-align:start}
+}
+@media(max-width:900px){
+  #dashboard .summary{
+    display:flex!important;
+    gap:12px!important;
+    overflow-x:auto!important;
+    overscroll-behavior-inline:contain;
+    scroll-snap-type:x mandatory;
+  }
+  #dashboard .metric{flex:0 0 178px!important;min-width:178px!important;scroll-snap-align:start}
+  #dashboard .metric:has(#mRevenue),#dashboard .metric:has(#mUnpaid),#dashboard .metric:has(#mPayroll){flex-basis:256px!important;min-width:256px!important}
+}
+@media(max-width:640px){
+  #dashboard .metric{min-height:112px!important;padding:17px 14px 14px 55px!important}
+  #dashboard .metric:has(#mRevenue),#dashboard .metric:has(#mUnpaid),#dashboard .metric:has(#mPayroll){flex-basis:242px!important;min-width:242px!important}
+  #dashboard .metric b{font-size:25px!important}
+  #dashboard .metric:has(#mRevenue) b,#dashboard .metric:has(#mUnpaid) b,#dashboard .metric:has(#mPayroll) b{font-size:26px!important}
+}

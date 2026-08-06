@@ -1,0 +1,4 @@
+/* V15.25.5 — Owner lesson reporting */
+.lesson-row-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.lesson-row-actions .btn{white-space:nowrap}
+#courseDrawerReportBtn[hidden]{display:none!important}
+@media (max-width:760px){.lesson-row-actions{align-items:stretch}.lesson-row-actions .btn{flex:1 1 auto}}

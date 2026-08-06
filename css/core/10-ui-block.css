@@ -1,0 +1,236 @@
+/* ===== V2.9 Course card redesign ===== */
+:root{
+  --lesson-card-radius:16px;
+  --lesson-card-shadow:0 8px 22px rgba(15,23,42,.08);
+  --lesson-card-shadow-hover:0 14px 34px rgba(15,23,42,.15);
+}
+
+/* Month cards */
+.lesson{
+  position:relative;
+  display:grid;
+  gap:4px;
+  min-height:68px;
+  padding:10px 11px 10px 38px!important;
+  border:1px solid rgba(148,163,184,.24)!important;
+  border-left:5px solid var(--teacher,#2563eb)!important;
+  border-radius:var(--lesson-card-radius)!important;
+  background:linear-gradient(145deg,rgba(255,255,255,.98),var(--location-bg,#eef5ff))!important;
+  box-shadow:var(--lesson-card-shadow)!important;
+  overflow:hidden;
+  cursor:pointer;
+  transition:box-shadow .16s ease,border-color .16s ease,filter .16s ease!important;
+}
+.lesson::before{
+  content:"◷";
+  position:absolute;
+  left:11px;
+  top:11px;
+  width:20px;
+  height:20px;
+  display:grid;
+  place-items:center;
+  border-radius:7px;
+  background:rgba(255,255,255,.82);
+  color:var(--teacher,#2563eb);
+  font-size:13px;
+  font-weight:900;
+  box-shadow:0 2px 8px rgba(15,23,42,.09);
+}
+.lesson::after{
+  content:"";
+  position:absolute;
+  inset:0 0 auto 0;
+  height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.9),transparent);
+  pointer-events:none;
+}
+.lesson:hover{
+  box-shadow:var(--lesson-card-shadow-hover)!important;
+  border-color:rgba(37,99,235,.28)!important;
+  filter:saturate(1.04);
+}
+.lesson b{
+  display:block;
+  color:#0f172a!important;
+  font-size:13px!important;
+  font-weight:900!important;
+  line-height:1.35!important;
+  letter-spacing:-.01em;
+}
+.lesson .meta{
+  display:block;
+  color:#475569!important;
+  font-size:11px!important;
+  line-height:1.55!important;
+  font-weight:650;
+  word-break:break-word;
+}
+.lesson.selected{
+  outline:3px solid #2563eb!important;
+  outline-offset:2px!important;
+  background:linear-gradient(145deg,#eff6ff,#dbeafe)!important;
+}
+
+/* Week cards */
+.week-event{
+  position:relative;
+  padding:7px 8px 7px 30px!important;
+  border:1px solid rgba(148,163,184,.24)!important;
+  border-left:5px solid var(--teacher,#2563eb)!important;
+  border-radius:13px!important;
+  background:linear-gradient(145deg,rgba(255,255,255,.98),var(--location-bg,#eef5ff))!important;
+  box-shadow:0 7px 18px rgba(15,23,42,.11)!important;
+  transition:box-shadow .16s ease,border-color .16s ease!important;
+}
+.week-event::before{
+  content:"◷";
+  position:absolute;
+  left:8px;
+  top:7px;
+  color:var(--teacher,#2563eb);
+  font-size:12px;
+  font-weight:900;
+}
+.week-event:hover{
+  box-shadow:0 13px 28px rgba(15,23,42,.18)!important;
+  border-color:rgba(37,99,235,.28)!important;
+}
+.week-event b{
+  color:#0f172a!important;
+  font-size:11.5px!important;
+  font-weight:900!important;
+  line-height:1.3!important;
+}
+.week-event .week-event-meta{
+  display:block;
+  margin-top:2px;
+  color:#475569!important;
+  font-size:10px!important;
+  font-weight:650;
+  line-height:1.35;
+}
+
+/* Strong, accessible status treatments */
+.teacher-overlap,
+.lesson.teacher-overlap,
+.week-event.teacher-overlap{
+  color:#fff!important;
+  background:linear-gradient(145deg,#ef4444,#b91c1c)!important;
+  border-color:#991b1b!important;
+  border-left-color:#7f1d1d!important;
+  box-shadow:0 12px 28px rgba(185,28,28,.34)!important;
+}
+.teacher-overlap::before,
+.lesson.teacher-overlap::before,
+.week-event.teacher-overlap::before{
+  content:"⚠"!important;
+  color:#b91c1c!important;
+  background:#fff!important;
+}
+.teacher-overlap b,
+.teacher-overlap .meta,
+.teacher-overlap .week-event-meta,
+.lesson.teacher-overlap b,
+.lesson.teacher-overlap .meta,
+.week-event.teacher-overlap b,
+.week-event.teacher-overlap .week-event-meta{
+  color:#fff!important;
+  text-shadow:0 1px 2px rgba(0,0,0,.25);
+}
+.overlap-badge{
+  background:#b91c1c!important;
+  color:#fff!important;
+  border:1px solid rgba(255,255,255,.46)!important;
+  box-shadow:0 3px 10px rgba(127,29,29,.22);
+}
+
+/* Records page status chips */
+[class^="status-"]{
+  font-weight:850!important;
+}
+.status-已上課,
+.status-補課{
+  color:#166534!important;
+}
+.status-未上課{
+  color:#1d4ed8!important;
+}
+.status-學生請假,
+.status-老師請假{
+  color:#9a6700!important;
+}
+.status-取消,
+.status-停課{
+  color:#b91c1c!important;
+}
+.pill{
+  border:1px solid rgba(148,163,184,.24);
+  font-weight:800!important;
+  box-shadow:0 1px 3px rgba(15,23,42,.05);
+}
+.pill.red{background:#fff7ed!important;color:#c2410c!important;border-color:#fed7aa!important}
+.pill.green{background:#ecfdf5!important;color:#166534!important;border-color:#bbf7d0!important}
+
+/* Calendar workspace refinement */
+#calendarTitle{
+  display:flex;
+  align-items:center;
+  min-height:42px;
+  padding:9px 13px;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:linear-gradient(180deg,#fff,#f8fafc);
+  color:#0f172a;
+  font-size:14px;
+  box-shadow:0 4px 14px rgba(15,23,42,.05);
+}
+.day-cell{
+  background:linear-gradient(180deg,#fff,#fcfdff)!important;
+}
+.day-cell:hover{
+  background:#f8fbff!important;
+}
+.day-cell.out{
+  background:#f8fafc!important;
+}
+.day-num{
+  color:#334155;
+}
+.day-add{
+  box-shadow:0 2px 8px rgba(15,23,42,.08);
+}
+
+/* Ensure white headers never hide controls */
+.header-auth-actions,
+.header-auth-actions span{
+  color:#0f172a!important;
+}
+.header-auth-actions .btn{
+  color:#0f172a!important;
+  background:#fff!important;
+  border-color:#cbd5e1!important;
+  box-shadow:0 4px 12px rgba(15,23,42,.08)!important;
+}
+.header-auth-actions .btn:hover{
+  color:#1d4ed8!important;
+  background:#eff6ff!important;
+  border-color:#93c5fd!important;
+}
+
+/* Mobile card readability */
+@media(max-width:700px){
+  .lesson{
+    min-height:72px;
+    padding:10px 10px 10px 36px!important;
+    border-radius:14px!important;
+  }
+  .lesson b{font-size:12.5px!important}
+  .lesson .meta{font-size:10.5px!important}
+  .week-event{padding-left:27px!important}
+}
+
+/* Reduced motion accessibility */
+@media(prefers-reduced-motion:reduce){
+  .lesson,.week-event{transition:none!important}
+}

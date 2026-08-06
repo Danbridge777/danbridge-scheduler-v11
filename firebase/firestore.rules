@@ -1,0 +1,165 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null && request.auth.token.email is string; }
+    function emailKey() { return request.auth.token.email.lower(); }
+    function ownerProfileExists() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function ownerProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isOwner() {
+      return signedIn() && (
+        emailKey() == 'a0965487920@gmail.com'
+        || (ownerProfileExists()
+          && ownerProfile().active != false
+          && ownerProfile().companyId == 'danbridge'
+          && ownerProfile().role == 'owner')
+      );
+    }
+    function accessExists() { return signedIn() && exists(/databases/$(database)/documents/companyAccess/$(emailKey())); }
+    function access() { return get(/databases/$(database)/documents/companyAccess/$(emailKey())).data; }
+    function activeMember(companyId) { return accessExists() && access().active == true && access().companyId == companyId; }
+    function currentProfileExists() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function currentProfile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function effectiveTeacherId() {
+      return access().teacherId is string
+        ? access().teacherId
+        : (currentProfileExists() && currentProfile().teacherId is string ? currentProfile().teacherId : '');
+    }
+    function effectiveBranchIds() {
+      return access().branchIds is list
+        ? access().branchIds
+        : (currentProfileExists() && currentProfile().branchIds is list ? currentProfile().branchIds : []);
+    }
+    function isTeacher(companyId) { return activeMember(companyId) && access().role == 'teacher' && effectiveTeacherId() != ''; }
+    function isManager(companyId) { return activeMember(companyId) && access().role == 'branch_manager' && effectiveTeacherId() != ''; }
+    function ownTeacherId() { return effectiveTeacherId(); }
+    function ownLessonReport(data) {
+      return data.reportedForTeacherIds is list && data.reportedForTeacherIds.hasAny([ownTeacherId()]);
+    }
+    function managerBranch(data) {
+      return data.branchId is string && effectiveBranchIds().hasAny([data.branchId]);
+    }
+    function metaPath(companyId, lessonId) {
+      return /databases/$(database)/documents/companies/$(companyId)/lessonMeta/$(lessonId);
+    }
+    function metaExists(companyId, lessonId) { return exists(metaPath(companyId, lessonId)); }
+    function meta(companyId, lessonId) { return get(metaPath(companyId, lessonId)).data; }
+    function withinReportWindow(companyId, lessonId) {
+      return meta(companyId, lessonId).editableFrom is timestamp
+        && meta(companyId, lessonId).editableUntil is timestamp
+        && request.time >= meta(companyId, lessonId).editableFrom
+        && request.time <= meta(companyId, lessonId).editableUntil;
+    }
+
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isOwner());
+      allow create: if signedIn() && request.auth.uid == uid
+        && (isOwner() || (accessExists()
+          && request.resource.data.email.lower() == emailKey()
+          && request.resource.data.companyId == access().companyId
+          && request.resource.data.role == access().role));
+      allow update: if isOwner() || (
+        signedIn() && request.auth.uid == uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.companyId == resource.data.companyId
+        && request.resource.data.active == resource.data.active
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName','photoURL','lastLoginAt','updatedAt'
+        ])
+      ) || (
+        signedIn() && request.auth.uid == uid
+        && accessExists()
+        && request.resource.data.email.lower() == emailKey()
+        && request.resource.data.companyId == access().companyId
+        && request.resource.data.role == access().role
+        && request.resource.data.active == access().active
+        && request.resource.data.teacherId == access().teacherId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName','photoURL','lastLoginAt','updatedAt','role','companyId','active',
+          'teacherId','teacherName','managerName','branchIds','branchNames','readOnly','canSubmitOwnReports'
+        ])
+      );
+      allow delete: if isOwner();
+    }
+
+    match /companyAccess/{email} {
+      allow read: if isOwner() || (signedIn() && email == emailKey());
+      allow write: if isOwner();
+    }
+
+    // Owner 對公司命名空間具有完整權限。Firestore 會將重疊 match 以 OR 判斷，
+    // 因此 lessonMeta、lessonReports、teacherViews 等新增子集合不會因漏寫 match 而阻擋 Owner。
+    match /companies/{companyId}/{document=**} {
+      allow read, write: if isOwner();
+    }
+
+    match /companies/{companyId}/data/{documentId} {
+      allow read, write: if isOwner();
+    }
+
+    match /companies/{companyId}/teacherViews/{email} {
+      allow read: if isOwner() || (signedIn() && email == emailKey() && activeMember(companyId));
+      allow write: if isOwner();
+    }
+
+    match /companies/{companyId}/branchViews/{email} {
+      allow read: if isOwner() || (signedIn() && email == emailKey() && isManager(companyId));
+      allow write: if isOwner();
+    }
+
+    match /companies/{companyId}/lessonMeta/{lessonId} {
+      allow read: if isOwner()
+        || (isTeacher(companyId)
+          && resource.data.teacherIds is list
+          && resource.data.teacherIds.hasAny([ownTeacherId()]))
+        || (isManager(companyId) && managerBranch(resource.data));
+      allow write: if isOwner();
+    }
+
+    match /companies/{companyId}/scheduleNotifications/{notificationId} {
+      allow read: if isOwner()
+        || (activeMember(companyId)
+          && resource.data.recipientEmail == emailKey());
+      allow create, delete: if isOwner();
+      allow update: if isOwner()
+        || (activeMember(companyId)
+          && resource.data.recipientEmail == emailKey()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'read','acknowledgedAt','acknowledgedBy'
+          ]));
+    }
+
+    match /companies/{companyId}/lessonReports/{lessonId} {
+      // Read rules must match the listener query fields. Firestore queries are not filters:
+      // a collection listener cannot be authorized from lessonMeta lookups alone.
+      allow read: if isOwner()
+        || (isTeacher(companyId) && ownLessonReport(resource.data))
+        || (isManager(companyId) && managerBranch(resource.data));
+
+      // The trusted lessonMeta document and the authenticated account determine permission.
+      // Report payload display fields are not used as authorization inputs, preventing harmless
+      // UID/teacher-array/legacy-field differences from causing a false permission-denied.
+      allow create, update: if isOwner()
+        || (
+          (isTeacher(companyId) || isManager(companyId))
+          && metaExists(companyId, lessonId)
+          && meta(companyId, lessonId).active == true
+          && meta(companyId, lessonId).teacherIds is list
+          && meta(companyId, lessonId).teacherIds.hasAny([ownTeacherId()])
+          && request.resource.data.companyId == companyId
+          && request.resource.data.lessonId == lessonId
+          && (isTeacher(companyId)
+            || (meta(companyId, lessonId).branchId is string
+              && effectiveBranchIds().hasAny([meta(companyId, lessonId).branchId])))
+          && withinReportWindow(companyId, lessonId)
+        );
+
+      allow delete: if isOwner();
+    }
+  }
+}

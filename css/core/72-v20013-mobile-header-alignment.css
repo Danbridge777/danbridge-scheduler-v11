@@ -1,0 +1,83 @@
+/* V20.0.13 — compact mobile header with stable brand and account alignment. */
+@media (max-width:700px){
+  body:not(.auth-locked)>header{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    align-content:center!important;
+    gap:10px!important;
+    min-height:0!important;
+    padding:calc(12px + env(safe-area-inset-top)) 16px 12px!important;
+    overflow:visible!important;
+  }
+  body:not(.auth-locked)>header h1{
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+    margin:0!important;
+    padding:0!important;
+    font-size:21px!important;
+    line-height:1.15!important;
+    letter-spacing:-.025em!important;
+    white-space:nowrap!important;
+    overflow:visible!important;
+    overflow-wrap:normal!important;
+    word-break:keep-all!important;
+  }
+  body:not(.auth-locked)>header .header-auth-actions{
+    position:static!important;
+    width:100%!important;
+    min-width:0!important;
+    margin:0!important;
+    display:flex!important;
+    flex-wrap:nowrap!important;
+    align-items:center!important;
+    justify-content:flex-end!important;
+    gap:7px!important;
+  }
+  body:not(.auth-locked)>header .header-auth-actions>span:first-child{
+    flex:1 1 auto!important;
+    min-width:0!important;
+    max-width:none!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+    font-size:12px!important;
+    line-height:1.2!important;
+  }
+  body:not(.auth-locked)>header .header-auth-actions .btn{
+    flex:0 0 auto!important;
+    min-width:44px!important;
+    min-height:40px!important;
+    height:40px!important;
+    padding:7px 11px!important;
+    font-size:13px!important;
+    line-height:1!important;
+  }
+  body:not(.auth-locked)>header .header-auth-actions .notification-bell{
+    position:relative!important;
+    width:44px!important;
+    padding:7px!important;
+    overflow:visible!important;
+  }
+  body:not(.auth-locked)>header .notification-count{
+    top:-7px!important;
+    right:-7px!important;
+    min-width:24px!important;
+    height:20px!important;
+    padding:0 5px!important;
+    font-size:10px!important;
+    line-height:20px!important;
+    white-space:nowrap!important;
+  }
+  body:not(.auth-locked)>header .danbridge-language-toggle{
+    min-width:46px!important;
+  }
+}
+
+@media (max-width:380px){
+  body:not(.auth-locked)>header{padding-left:12px!important;padding-right:12px!important}
+  body:not(.auth-locked)>header h1{font-size:19px!important}
+  body:not(.auth-locked)>header .header-auth-actions{gap:5px!important}
+  body:not(.auth-locked)>header .header-auth-actions>span:first-child{font-size:11px!important}
+  body:not(.auth-locked)>header .header-auth-actions .btn{min-width:40px!important;padding:7px 9px!important;font-size:12px!important}
+}

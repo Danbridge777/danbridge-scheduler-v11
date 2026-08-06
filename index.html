@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8"><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#0f4c81">
+<title>Danbridge Operations</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Danbridge">
+
+<link rel="stylesheet" href="./css/core/00-base.css">
+<link rel="stylesheet" href="./css/modules/calendar-interaction-feedback.css?v=20.5.3">
+
+<!-- Danbridge UI V2.1 — visual-only override; application logic unchanged -->
+<link rel="stylesheet" href="./css/core/02-danbridge-ui-v21.css">
+
+<link rel="stylesheet" href="./css/core/03-danbridge-ui-v2.css">
+
+
+
+<!-- Danbridge UI V2.3 — Calendar & workspace polish; visual-only -->
+<link rel="stylesheet" href="./css/core/04-danbridge-ui-v23.css">
+
+
+
+<!-- Danbridge UI V2.4 — Dashboard redesign; visual-only -->
+<link rel="stylesheet" href="./css/core/05-danbridge-ui-v24.css">
+
+
+
+<!-- Danbridge UI V2.5 — Dashboard KPI Pro; visual-only -->
+<link rel="stylesheet" href="./css/core/06-danbridge-ui-v25.css">
+
+
+
+<!-- Danbridge UI V2.6 — Contrast fixes + People & Records polish; visual-only -->
+<link rel="stylesheet" href="./css/core/07-danbridge-ui-v26.css">
+<!-- Danbridge UI V2.7 — Finance, Settlement, Camps, Backup & Security polish; visual-only -->
+<link rel="stylesheet" href="./css/core/08-ui-block.css">
+
+
+<!-- Danbridge UI V2.8 — Teacher workspace + modal system polish; visual-only -->
+<link rel="stylesheet" href="./css/core/09-ui-block.css">
+
+
+
+<!-- Danbridge V3.0 — Course Detail Drawer -->
+<link rel="stylesheet" href="./css/core/10-ui-block.css">
+
+
+<link rel="stylesheet" href="./css/dashboard/11-danbridge-v32-dashboard.css">
+
+
+<!-- Danbridge V3.2.1 — teacher-only sidebar color hotfix; no application logic changes -->
+<link rel="stylesheet" href="./css/teachers/12-danbridge-v321-teacher-sidebar-hotfix.css">
+
+
+<link rel="stylesheet" href="./css/core/13-danbridge-v33-operations.css">
+
+<link rel="stylesheet" href="./css/teachers/14-danbridge-v36-teacher-ui.css">
+
+
+<link rel="stylesheet" href="./css/teachers/15-danbridge-v37-teacher-navigation.css">
+
+<link rel="stylesheet" href="./css/calendar/16-danbridge-v38-drag-ux.css">
+
+<link rel="stylesheet" href="./css/finance/17-danbridge-v39-settlement.css">
+
+<link rel="stylesheet" href="./css/finance/18-danbridge-v40-sync.css">
+<link rel="stylesheet" href="./css/core/19-danbridge-v12-course-state.css">
+<link rel="stylesheet" href="./css/core/40-v1726-summer-camp-registration.css?v=18.12.2">
+
+
+
+<!-- Danbridge V13.1 Mobile / Tablet UI — visual-only; no application logic changes -->
+<link rel="stylesheet" href="./css/responsive/20-danbridge-v131-responsive-ui.css">
+
+
+<link rel="stylesheet" href="./css/teachers/21-danbridge-v13-mobile-teacher-fix.css?v=18.22.8">
+
+
+<link rel="stylesheet" href="./css/teachers/22-danbridge-v132-teacher-hours-overflow-fix.css">
+
+<link rel="stylesheet" href="./css/core/23-danbridge-v133-completed-hours-fix.css">
+
+<!-- Danbridge V13.4 Calendar mobile overflow fix — visual only -->
+<link rel="stylesheet" href="./css/calendar/24-danbridge-v134-calendar-mobile-overflow.css">
+
+
+<!-- Danbridge V13.5 — 13-inch iPad toolbar + control centering fix; visual only -->
+<link rel="stylesheet" href="./css/calendar/25-danbridge-v135-ipad-toolbar-centering.css">
+
+<!-- Danbridge V13.6 — iPad 13-inch calendar toolbar hard layout fix; visual only -->
+<link rel="stylesheet" href="./css/calendar/26-danbridge-v136-ipad-calendar-hard-fix.css">
+
+
+<!-- Danbridge V13.7 — actual-width iPad toolbar fix -->
+<link rel="stylesheet" href="./css/calendar/27-danbridge-v137-ipad-toolbar-runtime-fix.css">
+
+
+<link rel="stylesheet" href="./css/core/28-danbridge-v1310-sidebar-click-guard.css">
+
+<!-- V15.14 Weekly-first calendar interface -->
+<link rel="stylesheet" href="./css/calendar/30-v1514-weekly-first-toolbar.css">
+<link rel="stylesheet" href="css/calendar/31-branch-delivery-room-foundation.css">
+<link rel="stylesheet" href="./css/core/branch-business-scope.css">
+<link rel="stylesheet" href="./css/core/32-v1522-ui-polish.css">
+<link rel="stylesheet" href="./css/core/33-v1523-brand-data-integrity.css">
+<link rel="stylesheet" href="./css/core/34-v1524-brand-kpi.css">
+<link rel="stylesheet" href="./css/core/35-v1525-owner-brand-refinement.css">
+<link rel="stylesheet" href="./css/core/36-v15255-owner-lesson-reporting.css">
+<link rel="stylesheet" href="./css/core/36-v1525-ui-contrast-balance.css">
+<link rel="stylesheet" href="./css/core/37-v15252-lesson-reporting-and-toolbar-fix.css">
+<link rel="stylesheet" href="./css/core/36-v1526-notification-center.css">
+<link rel="stylesheet" href="./css/calendar/38-v15293-calendar-toolbar-polish.css">
+<link rel="stylesheet" href="./css/calendar/39-v16-calendar-ui-refresh.css?v=16.1">
+<!-- V16.2 visual-only global design system -->
+<link rel="stylesheet" href="./css/core/40-v162-global-design-system.css?v=16.2">
+<link rel="stylesheet" href="./css/core/41-v163-premium-crm-and-pages.css?v=16.3">
+<link rel="stylesheet" href="./css/core/42-v164-premium-teacher-payroll.css?v=16.4">
+<link rel="stylesheet" href="./css/core/43-v165-luxury-teacher-payroll.css?v=16.5">
+<link rel="stylesheet" href="./css/core/44-v166-payroll-kpi-nowrap.css?v=16.6">
+<link rel="stylesheet" href="./css/core/45-v167-payroll-fluid-kpi.css?v=16.7">
+<link rel="stylesheet" href="./css/core/46-v168-schedule-notifications.css?v=20.0.11">
+<link rel="stylesheet" href="./css/core/47-v17-enterprise-ui.css?v=17.0">
+<link rel="stylesheet" href="./css/core/48-v171-luxury-auth.css?v=17.1">
+<link rel="stylesheet" href="./css/core/50-v173-executive-auth-polish.css?v=17.3">
+<link rel="stylesheet" href="./css/core/51-v174-aligned-auth-stage.css?v=17.4">
+<link rel="stylesheet" href="./css/core/52-v175-ipad-drag-and-lessons-toolbar-fix.css?v=17.5">
+<link rel="stylesheet" href="./css/core/53-v176-mobile-bottom-viewport-fix.css?v=17.6">
+<link rel="stylesheet" href="./css/core/54-v177-ipad-calendar-navigation-alignment.css?v=17.7">
+<link rel="stylesheet" href="./css/core/55-v178-lesson-record-scroll-and-actions-fix.css?v=17.8">
+<link rel="stylesheet" href="./css/core/56-v179-lesson-filter-header-separation.css?v=17.9">
+<link rel="stylesheet" href="./css/core/57-v1710-lesson-filter-control-separation.css?v=17.10">
+<link rel="stylesheet" href="./css/core/59-v1712-lesson-month-border-center.css?v=17.12">
+<link rel="stylesheet" href="./css/core/58-v1711-mobile-dashboard-and-nav-alignment.css?v=17.11">
+<link rel="stylesheet" href="./css/core/60-v1717-student-crm-independent-scroll.css?v=17.17">
+<link rel="stylesheet" href="./css/core/61-v1718-teacher-revenue-kpi.css?v=17.18">
+<link rel="stylesheet" href="./css/core/62-v18213-minimal-feather-auth.css?v=18.22.2">
+<link rel="stylesheet" href="./css/core/62-v1719-large-teacher-revenue-kpi.css?v=17.19">
+  <link rel="stylesheet" href="./css/core/63-v1730-searchable-student-selects.css">
+<link rel="stylesheet" href="./css/core/66-v18-information-architecture.css?v=18.18.1">
+<link rel="stylesheet" href="./css/core/67-v185-interface-clarity.css?v=18.5">
+<link rel="stylesheet" href="./css/calendar/68-v1818-notion-compact-month.css?v=18.18">
+<link rel="stylesheet" href="./css/core/69-v1819-responsive-convenience.css?v=18.22.6">
+<link rel="stylesheet" href="./css/core/70-v1822-usability-polish.css?v=18.22">
+<link rel="stylesheet" href="./css/calendar/71-v20-scheduling-efficiency.css?v=20.0.8">
+<link rel="stylesheet" href="./css/core/72-v20013-mobile-header-alignment.css?v=20.0.13">
+<link rel="stylesheet" href="./css/core/73-v20014-role-responsive-ux.css?v=20.0.36">
+</head>
+<body class="auth-locked">
+<div id="authScreen" class="auth-screen">
+  <div class="auth-minimal-shell">
+    <section class="auth-minimal-brand" aria-label="Danbridge Operations">
+      <div class="auth-minimal-wordmark">Danbridge</div>
+      <div class="auth-feather-scene" aria-hidden="true">
+        <span class="auth-feather-halo"></span>
+        <img class="auth-gold-feather" src="./assets/images/danbridge-gold-feather-v2.png" alt="">
+        <span class="auth-feather-line"></span>
+      </div>
+      <div class="auth-minimal-copy">
+        <span>EDUCATION OPERATIONS</span>
+        <h1>Quiet precision.<br><em>Exceptional learning.</em></h1>
+        <p>Private education operations, refined.</p>
+      </div>
+    </section>
+    <section class="auth-minimal-panel">
+      <div class="auth-card auth-card-minimal">
+        <div class="auth-card-seal"><i></i> SECURE ACCESS</div>
+        <div class="auth-card-kicker">WELCOME BACK</div>
+        <h1>Enter the workspace.</h1>
+        <p>Sign in with your authorized Google account to continue.</p>
+        <button type="button" class="auth-google-btn" disabled><span class="auth-google-mark">G</span><span class="auth-google-label">Loading secure sign-in…</span><span class="auth-google-arrow">→</span></button>
+        <div class="auth-minimal-security"><span>Authorized accounts only</span><i></i><span>Role-based access</span></div>
+        <div class="auth-meta"><span>Danbridge English Co., Ltd.</span><strong>Private Cloud</strong></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<header><h1>Danbridge Operations</h1><p>Education Management System｜多校區營運｜課務｜財務｜師資管理</p><div class="header-auth-actions"><button type="button" class="btn notification-bell" onclick="DanbridgeNotifications.open()" aria-label="開啟通知中心"><span class="notification-bell-icon">🔔</span><span id="notificationCount" class="notification-count" hidden>0</span></button><button type="button" class="btn" onclick="switchTab('security')">安全設定</button><button type="button" class="btn" onclick="authLogout()">登出</button></div></header>
+<nav><button class="active" data-tab="dashboard">總覽</button><button data-tab="students">學生／家長</button><button data-tab="teachers">老師</button><button data-tab="calendar">拖曳課表</button><button data-tab="lessons">課程紀錄</button><button data-tab="makeups">補課中心</button><button data-tab="camps">冬／夏令營</button><button data-tab="finance">公司財務</button><button data-tab="data">備份／iPad</button><button data-tab="security">安全設定</button></nav>
+<main><section id="dashboard" class="active"><div class="branch-scope-bar"><div><label>查看校區</label><select id="dashboardBranchScope" onchange="DanbridgeBranchBusiness.setScope('dashboard',this.value)"></select></div><div id="dashboardBranchScopeNote" class="small"></div></div>
+  <div class="v32-welcome">
+    <div><div class="v32-eyebrow">DANBRIDGE OPERATIONS</div><h2 id="v32Greeting">今日營運總覽</h2><p id="v32DateText">正在整理今天的課程與營運資料。</p></div>
+    <div class="v32-header-actions"><button class="btn" onclick="switchTab('calendar')">查看完整課表</button><button class="btn primary owner-only-action" onclick="openLessonModal()">＋ 新增課程</button></div>
+  </div>
+  <div class="v33-ops-strip owner-v33-only">
+    <div class="v33-ops-mini"><span>今日課程</span><b id="v33TodayLessons">0</b><small id="v33TodayHours">0 小時</small></div>
+    <div class="v33-ops-mini"><span>今日預估營收</span><b id="v33TodayRevenue">NT$0</b><small>依收費設定估算</small></div>
+    <div class="v33-ops-mini"><span>今日授課老師</span><b id="v33TodayTeachers">0</b><small>不重複計算</small></div>
+    <div class="v33-ops-mini"><span>使用中教室</span><b id="v33LiveRooms">0</b><small id="v33RoomTotal">共 0 間排課</small></div>
+  </div>
+  <div class="summary v32-kpis">
+    <div class="metric"><span>學生數</span><b id="mStudents">0</b><small>目前資料庫</small></div>
+    <div class="metric"><span>老師數</span><b id="mTeachers">0</b><small>已建立師資</small></div>
+    <div class="metric"><span>本月課程</span><b id="mLessons">0</b><small id="v32MonthCompleted">0 堂已完成</small></div><div class="metric teacher-hours-metric"><span>本月即時時數</span><b id="mTeacherHours">0.0 小時</b><small>依目前課表即時計算</small></div>
+    <div class="metric"><span>本月預估營收</span><b id="mRevenue">$0</b><small>依課程自動估算</small></div>
+    <div class="metric"><span>本月未收款</span><b id="mUnpaid">$0</b><small id="v32UnpaidCount">0 堂待處理</small></div>
+    <div class="metric"><span>本月老師薪資</span><b id="mPayroll">$0</b><small>依工時自動估算</small></div>
+    <div class="metric"><span>待補課</span><b id="mMakeups">0</b><small>尚未完成安排</small></div>
+    <div class="metric"><span>今日異動</span><b id="mChanges">0</b><small>新增、修改與刪除</small></div>
+  </div>
+  <div class="v32-dashboard-grid">
+    <div class="card v32-today-card">
+      <div class="v32-card-head"><div><span class="v32-section-icon">日</span><div><h2>今日課程</h2><p id="v32TodaySummary">今日尚無課程</p></div></div><button class="btn" onclick="switchTab('calendar')">查看課表</button></div>
+      <div id="todayLessons" class="v32-timeline"></div>
+    </div>
+    <div class="v32-side-stack">
+      <div class="card v32-insight-card"><div class="v32-card-head"><div><span class="v32-section-icon purple">AI</span><div><h2>智慧提醒</h2><p>依目前資料自動整理</p></div></div></div><div id="v32Insights" class="v32-insights"></div></div>
+      <div class="card v32-quick-card"><div class="v32-card-head"><div><span class="v32-section-icon green">快</span><div><h2>快速操作</h2><p>常用功能捷徑</p></div></div></div><div class="searchbar"><input id="globalSearch" placeholder="搜尋學生、老師、課程、日期" oninput="renderGlobalSearch()"></div><div id="globalSearchResults" style="margin-top:8px"></div><div class="row-actions"><button class="btn" onclick="switchTab('calendar')">拖曳課表</button><button class="btn" onclick="switchTab('lessons')">課程紀錄</button><button class="btn" onclick="switchTab('makeups')">補課中心</button></div></div>
+    </div>
+    <div class="card v33-room-card owner-v33-only"><div class="v32-card-head"><div><span class="v32-section-icon green">室</span><div><h2>教室即時狀態</h2><p>依今天課表與目前時間判斷</p></div></div></div><div id="v33RoomStatus" class="v33-room-grid"></div></div>
+    <div class="card v33-week-card owner-v33-only"><div class="v32-card-head"><div><span class="v32-section-icon">週</span><div><h2>未來七天課程量</h2><p>快速掌握每日負載</p></div></div></div><div id="v33WeekBars" class="v33-week-bars"></div></div>
+    <div class="card v33-teacher-card teacher-v33-only"><div id="v33TeacherNext"></div></div>
+    <div class="card dashboard-changes v32-changes"><div class="v32-card-head"><div><span class="v32-section-icon orange">動</span><div><h2>今日異動</h2><p>追蹤今日課表變更</p></div></div></div><div id="todayChanges" class="change-table-wrap"></div></div>
+  </div>
+</section>
+
+<section id="students"><div class="grid"><div class="card col-4"><h2>學生／家長 CRM</h2><div id="studentEditIndicator" class="hint" style="display:none;margin-top:0"></div><input type="hidden" id="studentId"><div class="crm-form-grid"><div><label>學生姓名 *</label><input id="studentName"></div><div><label>狀態</label><select id="studentStatus"><option value="active">在讀</option><option value="trial">試讀</option><option value="paused">暫停</option><option value="inactive">離班</option></select></div><div><label>學校</label><input id="studentSchool"></div><div><label>年級</label><input id="studentGrade" placeholder="例如：G4／國一"></div><div><label>英文程度</label><input id="studentLevel" placeholder="例如：Flyers／FCE"></div><div><label>固定老師</label><select id="studentPreferredTeacher"></select></div><div><label>家長姓名</label><input id="parentName"></div><div><label>電話</label><input id="parentContact"></div><div><label>LINE</label><input id="parentLine"></div><div><label>Email</label><input id="parentEmail" type="email"></div><div class="span-2"><label>到府地址</label><input id="studentHomeAddress" placeholder="選擇到府課程時會自動帶入"></div><div><label>課程類型</label><select id="studentCourseType"><option>1對1</option><option>1對4</option><option>團班</option><option>安親</option></select></div><div><label>收費方式</label><select id="studentBilling"><option value="hour">每小時</option><option value="lesson">每堂</option><option value="month">月費</option></select></div><div><label>單價</label><input id="studentRate" type="number"></div><div><label>教材</label><input id="studentMaterials" placeholder="例如：Great Writing 4"></div><div class="span-2"><label>每週可上課時段</label><textarea id="studentAvailability" placeholder="每行一個時段，例如：&#10;週一 16:00-20:00&#10;週三 18:00-21:00&#10;週六 09:00-12:00"></textarea></div><div class="span-2"><label>考試／成績紀錄</label><textarea id="studentScores" placeholder="例如：2026/07 Flyers Mock 13 shields"></textarea></div><div class="span-2"><label>學習備註</label><textarea id="studentNote"></textarea></div></div><br><button class="btn primary" onclick="saveStudent()">儲存</button> <button class="btn" onclick="clearStudentForm()">清空</button> <button class="btn ok" onclick="openSmartScheduler()">智慧排課</button></div><div class="card col-8"><div class="toolbar"><div><h2 style="margin:0">學生清單</h2></div><div style="flex:1;min-width:220px"><label>搜尋 CRM</label><input id="crmSearch" placeholder="姓名、家長、學校、程度、電話" oninput="renderStudents()"></div></div><div class="table-wrap"><table><thead><tr><th>學生</th><th>家長／聯絡</th><th>學校／程度</th><th>課程／收費</th><th>歷程</th><th>操作</th></tr></thead><tbody id="studentRows"></tbody></table></div></div></div></section><section id="teachers"><div class="grid"><div class="card col-4"><h2>新增／修改老師</h2><input type="hidden" id="teacherId"><label>老師姓名</label><input id="teacherName"><label>名牌顯示名稱</label><input id="teacherDisplayName" placeholder="例如：Daniel／Wendy；留白則顯示老師姓名"><div class="small">登入右上角、歡迎詞與課堂回報署名會優先使用此名稱。</div><label>薪資制度</label><select id="teacherPayrollMode"><option value="hourly">純時薪制</option><option value="fixed">固定底薪制</option></select><label>一般時薪（純時薪制）</label><input id="teacherRate" type="number" min="0" step="1" placeholder="請自行輸入"><label>固定底薪</label><input id="teacherBaseSalary" type="number" min="0" step="1" placeholder="請自行輸入"><label>超時時薪</label><input id="teacherOvertimeRate" type="number" min="0" step="1" placeholder="請自行輸入"><label>不足工時扣款時薪</label><input id="teacherDeductionRate" type="number" min="0" step="1" placeholder="請自行輸入"><label>每週最低工時</label><input id="teacherMinWeeklyHours" type="number" min="0" step="0.5" placeholder="請自行輸入"><label>固定工作日</label><div id="teacherWorkDays" class="workday-checks"><label class="workday-check"><input type="checkbox" value="1" checked>週一</label><label class="workday-check"><input type="checkbox" value="2" checked>週二</label><label class="workday-check"><input type="checkbox" value="3" checked>週三</label><label class="workday-check"><input type="checkbox" value="4" checked>週四</label><label class="workday-check"><input type="checkbox" value="5" checked>週五</label><label class="workday-check"><input type="checkbox" value="6">週六</label><label class="workday-check"><input type="checkbox" value="0">週日</label></div><div class="small">所有薪資數字均由你自行填寫；系統不套用共同預設值。固定底薪制必須填寫底薪、超時時薪與不足扣款時薪。<br>月底最低工時＝每週最低工時 ÷ 固定工作天數 × 該月實際出現的固定工作日天數。</div><label>身份</label><select id="teacherType"><option>兼職</option><option>正職</option><option>外師</option></select><label>可教科目</label><input id="teacherSubjects"><label>課表顏色</label><input id="teacherColor" type="color" value="#2563eb"><label>備註</label><textarea id="teacherNote"></textarea><br><button class="btn primary" onclick="saveTeacher()">儲存</button> <button class="btn" onclick="clearTeacherForm()">清空</button></div><div class="card col-8"><h2>老師清單</h2><div class="table-wrap"><table><thead><tr><th>老師</th><th>時薪</th><th>最低工時／工作日</th><th>身份</th><th>科目</th><th>操作</th></tr></thead><tbody id="teacherRows"></tbody></table></div></div></div><div class="card col-12 teacher-kpi-card"><div class="teacher-kpi-head"><div><div class="kpi-eyebrow">TEACHER PERFORMANCE</div><h2>老師 KPI</h2><p class="small">依月份與校區查看老師的學生數、堂數、時數、營收、請假率、補課率與課堂回報完成率。營收依每位老師的課表分別計算；同一堂 SC 排多位老師時，每位老師各計一筆。</p></div><div class="teacher-kpi-filters"><div><label>月份</label><input id="teacherKpiMonth" type="month" onchange="renderTeacherKpi()"></div><div><label>校區</label><select id="teacherKpiBranch" onchange="renderTeacherKpi()"></select></div></div></div><div id="teacherKpiSummary" class="teacher-kpi-summary"></div><div id="teacherKpiGrid" class="teacher-kpi-grid"></div></div></div></section>
+<section id="calendar"><div class="card"><div class="calendar-workspace-head"><div><span class="calendar-eyebrow">WEEKLY SCHEDULING</span><h2>課表管理</h2><p>以每週為單位安排與複製課程，減少頻繁異動造成的重複課程。</p></div><button class="btn primary calendar-head-add" onclick="openLessonModal()">＋ 新增課程</button></div><div class="toolbar calendar-toolbar calendar-toolbar-v16">
+  <div class="calendar-toolbar-row calendar-toolbar-navigation">
+    <div class="calendar-field calendar-mode-field"><label>顯示模式</label><select id="calendarMode" onchange="calendarActionChanged()"><option value="month">月</option><option value="week">週</option></select></div>
+    <div class="calendar-field calendar-date-field"><label>基準日期</label><input id="calendarDate" type="date" onchange="calendarActionChanged()"></div>
+    <div class="calendar-navigation-actions" aria-label="日期導覽"><button class="btn calendar-nav-btn" onclick="moveCalendar(-1)" title="上一頁">‹</button><button class="btn calendar-today-btn" onclick="cancelSelectionForNewAction();calendarDate.value=todayStr();renderCalendar()">今天</button><button class="btn calendar-nav-btn" onclick="moveCalendar(1)" title="下一頁">›</button></div>
+    <button class="btn primary calendar-quick-add" onclick="openLessonModal()">＋ 新增課程</button>
+  </div>
+  <div class="calendar-toolbar-row calendar-toolbar-filters">
+    <div class="calendar-field"><label>老師</label><select id="calendarTeacherFilter" onchange="calendarTeacherTargetChanged()"></select></div>
+    <div class="calendar-field"><label>地點</label><select id="calendarLocationFilter" onchange="calendarActionChanged()"><option value="">全部地點</option><option value="河西一路">河西一路</option><option value="美術東四路">美術東四路</option><option value="到府">到府</option><option value="線上課">線上課</option></select></div>
+    <div class="calendar-field"><label>學生／班級</label><select id="calendarStudentFilter" onchange="calendarActionChanged()"></select></div>
+    <div class="calendar-field"><label>教室</label><select id="calendarRoomFilter" onchange="calendarActionChanged()"></select></div>
+    <div class="calendar-field"><label>課程狀態</label><select id="calendarStateFilter" onchange="calendarActionChanged()"><option value="">全部</option><option value="active">正式</option><option value="draft">草稿</option></select></div>
+    <div class="calendar-field calendar-search-field"><label>搜尋課程</label><input id="calendarSearch" placeholder="搜尋學生、老師、課名或教室" oninput="calendarActionChanged()"></div>
+  </div>
+  <div class="calendar-toolbar-row calendar-toolbar-tools">
+    <span class="calendar-tools-label">課表工具</span>
+    <button class="btn ok weekly-copy-btn" onclick="copyVisibleWeekToNextWeek()">複製本週到下週</button>
+    <button class="btn secondary-action" id="selectionModeBtn" onclick="toggleSelectionMode()">部分選取</button>
+    <button class="btn secondary-action apple-calendar-btn" onclick="exportVisibleAppleCalendar()">加入本週 Apple 行事曆</button>
+    <button class="btn secondary-action" onclick="window.print()">列印／PDF</button>
+  </div>
+</div><div id="selectionBar" class="selection-bar hidden"><span class="selection-count" id="selectionCount">已選 0 堂</span><button class="btn" onclick="selectVisibleLessons()">全選目前畫面</button><button class="btn" onclick="clearLessonSelection()">清除選取</button><button class="btn primary" onclick="openBatchModal()">批次調整</button><button class="btn danger" onclick="deleteSelectedLessons()">刪除選取</button><button class="btn" onclick="toggleSelectionMode(false)">結束多選</button></div><div class="location-legend"><span class="location-chip"><span class="location-dot" style="background:#dbeafe"></span>河西一路</span><span class="location-chip"><span class="location-dot" style="background:#dcfce7"></span>美術東四路</span><span class="location-chip"><span class="location-dot" style="background:#ffedd5"></span>到府</span><span class="location-chip"><span class="location-dot" style="background:#ede9fe"></span>線上課</span><span class="location-chip" style="background:#ff2020;color:#fff;border-color:#b91c1c"><span class="location-dot" style="background:#fff"></span>老師時間重複</span></div><div id="calendarTitle" style="font-weight:800;margin:4px 0 10px"></div><div class="calendar-shell" id="calendarCanvas"></div><div id="calendarAnalysis" class="calendar-analysis"></div></div></section>
+<section id="lessons"><div class="card"><h2>課程紀錄</h2><div class="toolbar"><div><label>月份</label><input type="month" id="lessonMonth" onchange="renderLessons()"></div><div><label>學生</label><select id="filterStudent" onchange="renderLessons()"></select></div><div><label>老師</label><select id="filterTeacher" onchange="renderLessons()"></select></div><button class="btn ok" onclick="markMonthLessonsCompleted()">本月全部變成已上課</button></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>時間</th><th>學生／老師</th><th>課程</th><th>狀態</th><th>收費／薪資</th><th>操作</th></tr></thead><tbody id="lessonRows"></tbody></table></div></div></section>
+<section id="makeups"><div class="card"><h2>補課中心</h2><div class="toolbar"><div><label>狀態</label><select id="makeupFilter" onchange="renderMakeups()"><option value="pending">待安排</option><option value="scheduled">已安排</option><option value="done">已完成</option><option value="all">全部</option></select></div></div><div class="table-wrap"><table><thead><tr><th>學生</th><th>原課程</th><th>時數</th><th>原因</th><th>補課狀態</th><th>操作</th></tr></thead><tbody id="makeupRows"></tbody></table></div></div></section>
+
+<section id="camps"><div class="camp-layout"><div class="card"><h2>夏令營班級</h2><input type="hidden" id="summerClassId"><label>班級名稱</label><input id="summerClassName" placeholder="例如：SC A班"><div class="camp-actions"><button class="btn primary" onclick="saveSummerCampClass()">儲存班級</button><button class="btn" onclick="clearSummerCampClassForm()">清空</button></div><div id="summerClassList" class="camp-class-list"></div><hr style="border:0;border-top:1px solid var(--line);margin:18px 0"><h2>夏令營教師群組</h2><input type="hidden" id="teacherGroupId"><label>群組名稱</label><input id="teacherGroupName" placeholder="例如：Camp 1 教師"><label>群組老師</label><div id="teacherGroupChecks" class="teacher-checks"></div><div class="camp-actions"><button class="btn primary" onclick="saveTeacherGroup()">儲存群組</button><button class="btn" onclick="clearTeacherGroupForm()">清空</button></div><div id="teacherGroupList" class="backup-list"></div></div><div class="card"><h2>快速建立整期營隊</h2><div class="camp-form-grid"><div><label>營隊／班級</label><select id="campStudent"></select></div><div><label>營隊名稱／班別</label><input id="campTitle" placeholder="例如：SC A班"></div><div><label>營隊代碼</label><input id="campCode" placeholder="例如：SC"></div><div><label>教師群組</label><select id="campTeacherGroup" onchange="renderCampTeacherPreview()"></select></div><div><label>開始日期</label><input id="campStart" type="date"></div><div><label>結束日期</label><input id="campEnd" type="date"></div><div><label>開始時間</label><input id="campTimeStart" type="time" step="300" value="09:00"></div><div><label>結束時間</label><input id="campTimeEnd" type="time" step="300" value="12:00"></div><div><label>上課地點</label><select id="campLocation"><option value="河西一路">河西一路</option><option value="美術東四路" selected>美術東四路</option><option value="到府">到府</option><option value="線上課">線上課</option></select></div><div><label>教室</label><input id="campRoom" placeholder="例如：大教室"></div><div class="span-2"><label>上課星期</label><div class="teacher-checks" id="campWeekdays"><label class="teacher-check"><input type="checkbox" value="1" checked>一</label><label class="teacher-check"><input type="checkbox" value="2" checked>二</label><label class="teacher-check"><input type="checkbox" value="3" checked>三</label><label class="teacher-check"><input type="checkbox" value="4" checked>四</label><label class="teacher-check"><input type="checkbox" value="5" checked>五</label><label class="teacher-check"><input type="checkbox" value="6">六</label><label class="teacher-check"><input type="checkbox" value="0">日</label></div></div><div class="span-4"><div id="campTeacherPreview" class="hint"></div></div></div><div class="camp-actions"><button class="btn" onclick="previewCamp()">預覽</button><button class="btn primary" onclick="createCampSeries()">建立整期營隊</button></div><div id="campPreview" class="preview-box camp-preview-wide" style="margin-top:12px">尚未預覽。</div></div><div class="card camp-registration-card"><h2>夏令營學生報名與費用</h2><input type="hidden" id="summerRegistrationId"><div class="camp-registration-form"><div><label>學生</label><select id="summerRegistrationStudent" onchange="suggestSummerRegistrationBranch();loadSummerRegistrationForSelection()"></select></div><div><label>所屬校區</label><select id="summerRegistrationBranch"></select></div><div><label>報名月份</label><input id="summerRegistrationMonth" type="month" onchange="loadSummerRegistrationForSelection()"></div><div><label>計價方式</label><select id="summerRegistrationPricingMode" onchange="updateSummerRegistrationTotal()"><option value="daily">按日計費</option><option value="weekly">固定週費</option><option value="weeklySplit">前後週不同價格</option><option value="monthly">按月計費</option></select></div><div data-summer-rate="daily"><label>單日費用</label><input id="summerRegistrationDailyRate" type="number" min="0" step="1" inputmode="numeric" placeholder="例如：2100" oninput="updateSummerRegistrationTotal()"></div><div data-summer-rate="weekly"><label>固定週費</label><input id="summerRegistrationWeeklyRate" type="number" min="0" step="1" inputmode="numeric" placeholder="例如：10000" oninput="updateSummerRegistrationTotal()"></div><div data-summer-rate="weeklySplit"><label>前段共幾週</label><input id="summerRegistrationFrontWeeks" type="number" min="1" max="5" step="1" value="2" inputmode="numeric" oninput="updateSummerRegistrationTotal()"></div><div data-summer-rate="weeklySplit"><label>前段每週費用</label><input id="summerRegistrationFrontWeeklyRate" type="number" min="0" step="1" inputmode="numeric" placeholder="例如：10000" oninput="updateSummerRegistrationTotal()"></div><div data-summer-rate="weeklySplit"><label>後段每週費用</label><input id="summerRegistrationBackWeeklyRate" type="number" min="0" step="1" inputmode="numeric" placeholder="例如：12000" oninput="updateSummerRegistrationTotal()"></div><div data-summer-rate="monthly"><label>月費用</label><input id="summerRegistrationMonthlyRate" type="number" min="0" step="1" inputmode="numeric" placeholder="例如：36000" oninput="updateSummerRegistrationTotal()"></div><div class="registration-total-box"><span>已選天數</span><b id="summerRegistrationDayCount">0 天</b><span>涵蓋週數</span><b id="summerRegistrationWeekCount">0 週</b><span>應收費用</span><strong id="summerRegistrationTotal">NT$0</strong></div></div><div class="camp-date-toolbar"><button type="button" class="btn" onclick="selectSummerRegistrationWeekdays()">全選平日</button><button type="button" class="btn" onclick="clearSummerRegistrationDates()">清除日期</button></div><div id="summerRegistrationDates" class="camp-date-grid"></div><div class="hint">可選按日、固定週費、前後週不同價格或按月計費。「前後週不同價格」可指定前段共幾週，再分別填前段與後段每週費用。選回同一學生與月份時會自動載入原紀錄，可直接補選其他日期後更新。是否已收費不影響此應收金額。</div><div class="camp-actions"><button class="btn primary" onclick="saveSummerRegistration()">儲存報名</button><button class="btn" onclick="clearSummerRegistrationForm()">清空</button></div><div class="camp-registration-summary"><b>本月報名紀錄</b><span id="summerRegistrationMonthTotal">共 0 人｜NT$0</span></div><div id="summerRegistrationList" class="backup-list"></div></div></div></section><section id="winterCamps"><div class="camp-layout"><div class="card"><h2>冬令營班級</h2><input type="hidden" id="winterClassId"><label>班級名稱</label><input id="winterClassName" placeholder="例如：WC A班"><div class="camp-actions"><button class="btn primary" onclick="saveWinterCampClass()">儲存班級</button><button class="btn" onclick="clearWinterCampClassForm()">清空</button></div><div id="winterClassList" class="camp-class-list"></div><hr style="border:0;border-top:1px solid var(--line);margin:18px 0"><h2>冬令營教師群組</h2><input type="hidden" id="winterTeacherGroupId"><label>群組名稱</label><input id="winterTeacherGroupName" placeholder="例如：Camp 1 教師"><label>群組老師</label><div id="winterTeacherGroupChecks" class="teacher-checks"></div><div class="camp-actions"><button class="btn primary" onclick="saveWinterTeacherGroup()">儲存群組</button><button class="btn" onclick="clearWinterTeacherGroupForm()">清空</button></div><div id="winterTeacherGroupList" class="backup-list"></div></div><div class="card"><h2>快速建立整期冬令營</h2><div class="camp-form-grid"><div><label>營隊／班級</label><select id="winterCampStudent"></select></div><div><label>營隊名稱／班別</label><input id="winterCampTitle" placeholder="例如：WC A班"></div><div><label>營隊代碼</label><input id="winterCampCode" placeholder="例如：WC"></div><div><label>教師群組</label><select id="winterCampTeacherGroup" onchange="renderWinterCampTeacherPreview()"></select></div><div><label>開始日期</label><input id="winterCampStart" type="date"></div><div><label>結束日期</label><input id="winterCampEnd" type="date"></div><div><label>開始時間</label><input id="winterCampTimeStart" type="time" step="300" value="09:00"></div><div><label>結束時間</label><input id="winterCampTimeEnd" type="time" step="300" value="12:00"></div><div><label>上課地點</label><select id="winterCampLocation"><option value="河西一路">河西一路</option><option value="美術東四路" selected>美術東四路</option><option value="到府">到府</option><option value="線上課">線上課</option></select></div><div><label>教室</label><input id="winterCampRoom" placeholder="例如：大教室"></div><div class="span-2"><label>上課星期</label><div class="teacher-checks" id="winterCampWeekdays"><label class="teacher-check"><input type="checkbox" value="1" checked>一</label><label class="teacher-check"><input type="checkbox" value="2" checked>二</label><label class="teacher-check"><input type="checkbox" value="3" checked>三</label><label class="teacher-check"><input type="checkbox" value="4" checked>四</label><label class="teacher-check"><input type="checkbox" value="5" checked>五</label><label class="teacher-check"><input type="checkbox" value="6">六</label><label class="teacher-check"><input type="checkbox" value="0">日</label></div></div><div class="span-4"><div id="winterCampTeacherPreview" class="hint"></div></div></div><div class="camp-actions"><button class="btn" onclick="previewWinterCamp()">預覽</button><button class="btn primary" onclick="createWinterCampSeries()">建立整期冬令營</button></div><div id="winterCampPreview" class="preview-box camp-preview-wide" style="margin-top:12px">尚未預覽。</div></div></div></section>
+<section id="settlement"><div class="card"><h2>月底一鍵結算</h2><div class="toolbar"><div><label>結算月份</label><select id="settleMonth" onchange="renderSettlement()"></select></div><div><label>結算校區</label><select id="settlementBranchScope" onchange="DanbridgeBranchBusiness.setScope('settlement',this.value)"></select></div><button class="btn primary" onclick="renderSettlement()">重新計算</button><button class="btn ok" onclick="saveMonthlySettlement()">儲存本月結算</button><button class="btn" onclick="copySettlementText()">複製文字</button><button class="btn" onclick="downloadCSV()">匯出 CSV</button><button class="btn primary" onclick="downloadSettlementExcel()">匯出 Excel</button><button class="btn" onclick="printSettlementReport()">列印報表</button></div><div id="settlementExecutiveSummary" class="settlement-executive-summary"></div><h3>學生應收與請假率</h3><div class="table-wrap"><table><thead><tr><th>學生</th><th>家長</th><th>原定</th><th>收費</th><th>請假</th><th>請假率</th><th>應收</th></tr></thead><tbody id="studentSettleRows"></tbody></table></div><h3>老師工時與薪資</h3><div class="hint">每位老師依自己的「每週最低工時＋固定工作日」計算本月最低工時。例：20 hr／週、週一至週五工作，則每日最低 4 hr；當月有 22 個工作日，本月最低為 88 hr。</div><div id="teacherPayCards" class="teacher-pay-cards"></div><div class="table-wrap"><table><thead><tr><th>老師</th><th>工作日</th><th>每週最低</th><th>本月最低</th><th>實際時數</th><th>多／少</th><th>時薪</th><th>公司營收 KPI</th><th>應付</th></tr></thead><tbody id="teacherSettleRows"></tbody></table></div><textarea id="settlementText" readonly style="margin-top:14px;min-height:240px"></textarea><div class="settlement-history"><h3>每月結算紀錄</h3><div class="small" style="margin-bottom:8px">每個月份各自保留一筆；同月份再次儲存會更新該月紀錄。</div><div class="table-wrap"><table><thead><tr><th>月份</th><th>結算時間</th><th>總堂數</th><th>總時數</th><th>總收入</th><th>總請假</th><th>請假率</th><th>老師薪資</th><th>操作</th></tr></thead><tbody id="settlementHistoryRows"></tbody></table></div></div></div></section>
+
+<section id="security"><div class="grid">
+  <div class="card col-4 account-summary-card">
+    <h2>帳號中心</h2>
+    <div class="security-note">使用 Google 帳號登入後，系統會依角色與校區自動限制可查看的資料。</div>
+    <p><b>系統擁有者：</b>a0965487920@gmail.com</p>
+    <div class="access-role-guide">
+      <div><b>Owner</b><span>全部校區與全部功能</span></div>
+      <div><b>校區管理者</b><span>指定校區的課程、營收、時數與薪資</span></div>
+      <div><b>老師</b><span>自己的課表與課堂回報</span></div>
+    </div>
+  </div>
+  <div id="cloudUserManager" class="card col-4">
+    <h2>老師帳號</h2>
+    <div class="small">選擇老師並綁定 Gmail。老師登入後只能查看自己的課表。</div>
+    <label>老師</label><select id="cloudTeacherSelect"><option value="">請選擇老師</option></select>
+    <label>老師 Gmail</label><input id="cloudTeacherEmail" type="email" placeholder="teacher@gmail.com">
+    <br><button class="btn primary" id="saveCloudTeacherAccess">新增／更新老師權限</button>
+    <div id="cloudTeacherAccessList" class="backup-list" style="margin-top:12px"></div>
+  </div>
+  <div id="cloudBranchManager" class="card col-4 branch-manager-access-card">
+    <div class="role-card-heading"><div><span class="role-kicker">BRANCH ACCESS</span><h2>校區管理者</h2></div><span class="pill blue">管理＋授課</span></div>
+    <div class="small">管理者可查看指定校區資料；綁定自己的老師身分後，可回報自己教授的課程，但不能代填其他老師的回報。</div>
+    <label>管理者 Gmail</label><input id="cloudBranchManagerEmail" type="email" placeholder="manager@gmail.com">
+    <label>對應老師身分</label><select id="cloudBranchManagerTeacher"><option value="">請選擇管理者本人</option></select>
+    <label>可查看校區</label><div id="cloudBranchChoices" class="check-grid branch-choice-grid"></div>
+    <br><button type="button" class="btn primary" id="saveCloudBranchManager">新增／更新管理者權限</button>
+    <div id="cloudBranchManagerStatus" class="small" role="status" aria-live="polite" style="display:none;margin-top:8px"></div>
+    <div id="cloudBranchManagerList" class="backup-list" style="margin-top:12px"></div>
+  </div>
+</div></section>
+
+<section id="finance"><div class="card"><div class="toolbar"><div><label>財務月份</label><select id="financeMonth" onchange="renderFinance()"></select></div><div><label>財務校區</label><select id="financeBranchScope" onchange="DanbridgeBranchBusiness.setScope('finance',this.value)"></select></div><button class="btn primary" onclick="renderFinance()">重新計算</button><button class="btn" onclick="copyFinanceSummary()">複製財務摘要</button></div><div class="finance-summary"><div class="finance-metric"><span>本月收入</span><b id="financeRevenue">NT$0</b></div><div class="finance-metric"><span>固定開銷</span><b id="financeFixedTotal">NT$0</b></div><div class="finance-metric"><span>一次性支出</span><b id="financeOneTimeTotal">NT$0</b></div><div class="finance-metric"><span>老師薪資總額</span><b id="financePayrollTotal">NT$0</b></div><div class="finance-metric"><span>本月淨利</span><b id="financeProfit">NT$0</b></div></div><div class="finance-layout"><div class="card"><h2>公司固定開銷</h2><div class="small">名稱與金額可自行設定；依起始月份到結束月份（留空表示持續）自動計入每月支出。</div><input type="hidden" id="fixedExpenseId"><div class="finance-form-row"><div><label>歸屬校區</label><select id="fixedExpenseBranch"></select></div><div><label>支出名稱</label><input id="fixedExpenseName" placeholder="例如：房租、電費、網路"></div><div><label>每月金額</label><input id="fixedExpenseAmount" type="number" min="0" step="1"></div><div><label>起始月份</label><select id="fixedExpenseStart"></select></div><div><label>結束月份</label><select id="fixedExpenseEnd"><option value="">持續</option></select></div><button class="btn primary" onclick="saveFixedExpense()">儲存</button></div><div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>名稱</th><th>每月金額</th><th>起始</th><th>結束</th><th>操作</th></tr></thead><tbody id="fixedExpenseRows"></tbody></table></div></div><div class="card"><h2>一次性支出</h2><div class="small">只計入指定月份，例如維修、設備、材料、裝潢或廣告費。</div><input type="hidden" id="oneTimeExpenseId"><div class="finance-form-row one-time"><div><label>歸屬校區</label><select id="oneTimeExpenseBranch"></select></div><div><label>支出名稱</label><input id="oneTimeExpenseName" placeholder="例如：冷氣維修、營隊材料"></div><div><label>金額</label><input id="oneTimeExpenseAmount" type="number" min="0" step="1"></div><div><label>月份</label><select id="oneTimeExpenseMonth"></select></div><button class="btn primary" onclick="saveOneTimeExpense()">儲存</button></div><div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>月份</th><th>名稱</th><th>金額</th><th>操作</th></tr></thead><tbody id="oneTimeExpenseRows"></tbody></table></div></div><div class="card"><h2>老師薪資明細（自動）</h2><div class="small">直接依正式課程、授課時數與每位老師的薪資設定自動加總，不能在此手動修改。</div><div id="financePayrollRows" class="finance-payroll-list"></div></div><div class="card"><h2>本月支出明細</h2><div id="financeExpenseBreakdown"></div><textarea id="financeSummaryText" readonly style="margin-top:12px;min-height:190px"></textarea></div></div></div></section>
+<section id="data"><div class="data-horizontal">
+<div class="card col-6"><h2>iCloud 匯出／匯入</h2><p><span class="sync-badge">✓ 半自動跨裝置同步</span></p><p class="small">在 Mac 匯出 JSON 並存到 iCloud Drive；在 iPad 按「匯入 JSON」選取同一份檔案。匯入前系統會先建立本機安全版本。</p><button class="btn primary" onclick="downloadBackup()">匯出最新資料</button> <button class="btn" onclick="document.getElementById('importFile').click()">匯入 JSON</button><input hidden type="file" id="importFile" accept=".json,application/json" onchange="importBackup(event)"><button class="btn ok" onclick="exportICS()">匯出 Apple Calendar</button><p class="small" id="lastBackupInfo"></p></div>
+<div class="card col-6"><h2>本機版本紀錄</h2><p class="small">每次匯入、清空及重要變更前會自動留下版本。最多保留 20 份，可直接復原。</p><button class="btn" onclick="createManualVersion()">立即建立版本</button> <button class="btn" onclick="renderBackupHistory()">重新整理</button><div id="backupHistory" class="backup-table-wrap" style="margin-top:12px"></div></div>
+<div class="card data-integrity-card" style="grid-column:1/-1">
+  <div class="data-integrity-head"><div><h2>資料完整性中心</h2><div class="small">檢查校區歸屬、課程關聯與舊資料格式，避免報表、權限和 KPI 計算錯誤。</div></div><span id="dataIntegrityBadge" class="integrity-badge">尚未檢查</span></div>
+  <div id="dataIntegritySummary" class="integrity-summary"></div>
+  <div class="row-actions"><button class="btn" onclick="renderDataIntegrity(true)">重新檢查</button><button class="btn primary" onclick="repairDataIntegrity()">一鍵整理資料</button></div>
+</div><div class="card" style="grid-column:1/-1"><h2>安全與搬移</h2><div class="danger-note">不同裝置的 Safari 不會自動共用 localStorage。跨裝置時，請以 iCloud Drive 中最新 JSON 為準，匯入前先確認檔名與時間。</div><ol><li>Mac：按「匯出最新資料」→ 儲存至 iCloud Drive。</li><li>iPad：開啟本網站 →「匯入 JSON」→ 選取最新備份。</li><li>iPad 修改後，再匯出回同一個 iCloud 資料夾。</li></ol><button class="btn danger" onclick="resetData()">清空全部資料</button></div>
+</div></section>
+</main><div class="floating-actions"><button id="undoBtn" class="btn" onclick="undoLast()" disabled>↶ 復原</button><button id="redoBtn" class="btn" onclick="redoLast()" disabled>↷ 重做</button><button class="btn primary" onclick="openLessonModal()">＋ 新增</button></div><div class="toast" id="toast"></div><div id="pasteModeBanner" class="paste-mode-banner"><div id="pasteModeMessage">📋 已複製課程</div><div class="small">點哪一天，第一筆就貼到哪一天；其餘課程保留原本日期間距；Esc 取消。</div></div><div id="marqueeBox" class="marquee-box"></div><div id="calendarContextMenu" class="calendar-context-menu"><button onclick="contextCopyLessons()"><span class="context-line-icon"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg></span><span>複製選取課程</span></button><button onclick="contextPasteLessons()"><span class="context-line-icon"><svg viewBox="0 0 24 24"><path d="M9 5h6"></path><rect x="6" y="4" width="12" height="16" rx="3"></rect><path d="m10 13 2 2 4-4"></path></svg></span><span>貼上到這裡</span></button><button onclick="selectVisibleLessons()"><span class="context-line-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"></rect><path d="m8 12 3 3 5-6"></path></svg></span><span>全選目前畫面</span></button><button class="danger-item" onclick="deleteSelectedLessons();hideCalendarContextMenu()"><span class="context-line-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path></svg></span><span>刪除選取課程</span></button><button class="context-cancel" onclick="hideCalendarContextMenu()"><span class="context-line-icon"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"></path></svg></span><span>取消</span></button></div>
+
+<div id="courseDrawerBackdrop" class="course-drawer-backdrop" onclick="closeCourseDrawer()"></div>
+<aside id="courseDrawer" class="course-drawer" aria-hidden="true" aria-label="課程詳細資料">
+  <div class="course-drawer-head">
+    <div>
+      <div class="course-drawer-kicker">Course details</div>
+      <h2 id="courseDrawerTitle" class="course-drawer-title">課程</h2>
+      <div id="courseDrawerSubtitle" class="course-drawer-subtitle"></div>
+    </div>
+    <button type="button" class="course-drawer-close" onclick="closeCourseDrawer()" aria-label="關閉">×</button>
+  </div>
+  <div id="courseDrawerBody" class="course-drawer-body"></div>
+  <div class="course-drawer-footer">
+    <button type="button" class="btn" onclick="closeCourseDrawer()">關閉</button>
+    <button type="button" class="btn ok" id="courseDrawerReportBtn" hidden>課堂回報</button>
+    <button type="button" class="btn primary" id="courseDrawerEditBtn">編輯課程</button>
+  </div>
+</aside>
+
+
+<div class="modal-backdrop" id="smartSchedulerModal"><div class="modal wide"><div class="modal-head"><h2>智慧排課助手</h2><button onclick="closeSmartScheduler()">×</button></div><div class="smart-layout"><div><label>學生</label><select id="smartStudent" onchange="syncSmartStudent()"></select><label>優先老師</label><select id="smartTeacher"></select><div class="grid"><div class="col-6"><label>起始日期</label><input id="smartDateFrom" type="date"></div><div class="col-6"><label>截止日期</label><input id="smartDateTo" type="date"></div><div class="col-6"><label>課程長度</label><select id="smartDuration"><option value="60">60 分鐘</option><option value="90">90 分鐘</option><option value="120">120 分鐘</option><option value="150">150 分鐘</option><option value="180">180 分鐘</option></select></div><div class="col-6"><label>搜尋間隔</label><select id="smartStep"><option value="30">30 分鐘</option><option value="15">15 分鐘</option></select></div></div><label>歸屬校區</label><select id="smartBranch"></select><label>上課方式</label><select id="smartDeliveryMode"><option value="onsite">校區實體</option><option value="home">到府</option><option value="online">線上</option></select><label>教室</label><input id="smartRoom" placeholder="留空代表任何空教室"><label>課程名稱</label><input id="smartTitle" placeholder="例如：補課／英文"><button class="btn primary" style="width:100%;margin-top:12px" onclick="findSmartSlots()">尋找可排時段</button><div id="smartAvailabilityHint" class="small" style="margin-top:10px"></div></div><div><div class="hint" style="margin-top:0">系統會同時檢查學生、老師與指定教室的衝堂；選擇時段後會開啟原本的課程視窗，最後仍由你確認儲存。</div><div id="smartResults" class="smart-results"><span class="small">請先選擇條件並搜尋。</span></div></div></div></div></div>
+<div class="modal-backdrop" id="lessonModal"><div class="modal"><div class="modal-head"><h2>新增／修改課程</h2><button onclick="closeLessonModal()">×</button></div><input type="hidden" id="lessonId"><label>日期</label><input id="lessonDate" type="date"><div class="grid"><div class="col-6"><label>開始時間</label><input id="startTime" type="time" step="300"></div><div class="col-6"><label>結束時間</label><input id="endTime" type="time" step="300"></div></div><label>學生</label><div class="student-select-row"><select id="lessonStudent" onchange="handleLessonStudentChange()"></select><button type="button" class="btn" onclick="toggleQuickStudent(true)">＋ 新增學生</button></div><div id="quickStudentBox" class="quick-student-box hidden"><b>快速新增學生</b><div class="grid"><div class="col-6"><label>學生姓名 *</label><input id="quickStudentName" placeholder="必填"></div><div class="col-6"><label>家長姓名</label><input id="quickParentName"></div><div class="col-6"><label>聯絡方式</label><input id="quickParentContact"></div><div class="col-6"><label>到府地址</label><input id="quickHomeAddress" placeholder="選到府時自動帶入"></div><div class="col-6"><label>課程類型</label><select id="quickCourseType"><option>1對1</option><option>1對4</option><option>團班</option><option>安親</option></select></div><div class="col-6"><label>收費方式</label><select id="quickBilling"><option value="hour">每小時</option><option value="lesson">每堂</option><option value="month">月費</option></select></div><div class="col-6"><label>單價</label><input id="quickRate" type="number" inputmode="numeric"></div></div><div class="quick-student-actions"><button type="button" class="btn primary" onclick="saveQuickStudent()">儲存並選取</button><button type="button" class="btn" onclick="toggleQuickStudent(false)">取消</button></div></div><label>主要老師</label><select id="lessonTeacher" onchange="syncCoTeacherOptions()"></select><div id="coTeacherWrap" class="co-teacher-wrap hidden"><b>共同授課老師（僅限團班）</b><div class="small" style="margin:4px 0 8px">夏令營或團班可勾選多位老師；主要老師也會自動計入。</div><div id="coTeacherChecks" class="teacher-checks"></div></div><label>課程名稱／班別</label><input id="lessonTitle" placeholder="例如：SC A班"><div id="lessonCampIdWrap" class="hidden"><label>營隊代碼（同一營隊不同班請填完全相同，例如 SC）</label><input id="lessonCampId" placeholder="例如：SC"><div class="small">只有團班使用；相同營隊代碼、日期與時段可共用老師；每位老師各自正常計薪，同一位老師跨多班不重複累加。</div></div><div class="grid branch-delivery-grid"><div class="col-6"><label>歸屬校區</label><select id="lessonBranch" onchange="handleBranchChange()"></select></div><div class="col-6"><label>上課方式</label><select id="lessonDeliveryMode" onchange="handleLocationChange()"><option value="onsite">校區實體</option><option value="home">到府</option><option value="online">線上</option></select></div></div><input type="hidden" id="lessonLocation"><div id="lessonRoomWrap"><label>教室</label><select id="lessonRoom"></select></div><div id="lessonAddressWrap" class="address-wrap hidden"><label>到府地址</label><input id="lessonAddress" placeholder="可自動帶入學生資料的地址"><div id="lessonMapLinkWrap" class="small" style="margin-top:6px"></div></div><div id="lessonOnlineWrap" class="address-wrap hidden"><div class="grid"><div class="col-6"><label>線上平台</label><select id="lessonOnlinePlatform"><option>Google Meet</option><option>Zoom</option><option>Microsoft Teams</option><option>其他</option></select></div><div class="col-6"><label>會議連結</label><input id="lessonMeetingUrl" type="url" placeholder="https://..."></div></div></div><div id="lessonUnassignedWarning" class="hint hidden">這堂舊課尚未指定歸屬校區，請選擇校區後再儲存。</div><div class="grid"><div class="col-6"><label>付款狀態</label><select id="paymentStatus"><option value="unpaid">未繳</option><option value="paid">已繳</option><option value="waived">免收</option></select></div></div><label>課程狀態</label><select id="lessonState"><option value="active">正式課程</option><option value="draft">草稿（不計費、不顯示於老師端）</option></select><label>上課狀態</label><select id="lessonStatus"><option>已上課</option><option>未上課</option><option>學生請假</option><option>老師請假</option><option>補課</option><option>取消</option><option>停課</option></select><label>收費確認（不影響課表營收）</label><select id="chargeStudent"><option value="yes">已確認</option><option value="no">尚未確認</option></select><label>是否計入老師薪資</label><select id="payTeacher"><option value="yes">是</option><option value="no">否</option></select><label>備註</label><textarea id="lessonNote"></textarea><div class="grid"><div class="col-6"><label>重複排課</label><select id="repeatMode"><option value="none">不重複</option><option value="weekly">每週</option></select></div><div class="col-6"><label>重複到</label><input id="repeatUntil" type="date"></div></div><div id="seriesScopeWrap" style="display:none"><label>系列課程修改範圍</label><select id="seriesScope"><option value="one">只修改這一堂</option><option value="future">修改這堂及之後</option><option value="all">修改整個系列</option></select></div><br><button class="btn primary" onclick="saveLesson()">儲存課程</button> <button class="btn danger" id="modalDeleteBtn" onclick="deleteCurrentLesson()" style="display:none">刪除</button></div></div>
+
+
+<div id="classFocusMode" class="class-focus" aria-hidden="true" aria-label="老師上課模式">
+  <div class="class-focus-top">
+    <div>
+      <div class="class-focus-brand">Danbridge Class Mode</div>
+      <div id="classFocusTitle" class="class-focus-title">課程</div>
+      <div id="classFocusMeta" class="class-focus-meta"></div>
+    </div>
+    <div id="classFocusTimer" class="class-focus-timer">
+      <div id="classFocusTimerLabel" class="class-focus-timer-label">距離下課</div>
+      <div id="classFocusTimerValue" class="class-focus-timer-value">00:00</div>
+    </div>
+  </div>
+  <div class="class-focus-body">
+    <div class="class-focus-grid">
+      <div class="class-focus-card">
+        <h3>📝 課堂紀錄</h3>
+        <label>今日上課內容</label>
+        <textarea id="classFocusContent" placeholder="例如：Flyers Unit 8、過去式、Speaking practice"></textarea>
+        <label>家庭作業</label>
+        <textarea id="classFocusHomework" placeholder="例如：Workbook P.42、背 Unit 8 單字"></textarea>
+        <label>老師回饋</label>
+        <textarea id="classFocusFeedback" placeholder="例如：今天口說表現穩定，但拼字仍需加強"></textarea>
+        <label>內部備註</label>
+        <textarea id="classFocusNote" placeholder="僅供老師與管理者查看"></textarea>
+      </div>
+      <div class="class-focus-card">
+        <h3>✅ 課程狀態</h3>
+        <div class="class-focus-status">
+          <label><input type="radio" name="classFocusStatus" value="completed">已完成</label>
+          <label><input type="radio" name="classFocusStatus" value="student_leave">學生請假</label>
+          <label><input type="radio" name="classFocusStatus" value="teacher_leave">老師請假</label>
+          <label><input type="radio" name="classFocusStatus" value="no_show">缺席</label>
+          <label><input type="radio" name="classFocusStatus" value="makeup_completed">補課完成</label>
+        </div>
+        <div class="class-focus-note">內容會先自動暫存在這台裝置。按「完成並儲存」後，才會正式同步到雲端課程回報。</div>
+      </div>
+    </div>
+  </div>
+  <div class="class-focus-footer">
+    <button type="button" class="btn" id="classFocusExitBtn">暫存並離開</button>
+    <button type="button" class="btn danger" id="classFocusDiscardBtn">放棄本次輸入</button>
+    <button type="button" class="btn primary" id="classFocusCompleteBtn">完成並儲存</button>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="teacherReportModal"><div class="modal"><div class="modal-head"><h2>課程回報</h2><button type="button" id="closeTeacherReportModal">×</button></div><input type="hidden" id="teacherReportLessonId"><div id="teacherReportLessonInfo" class="hint"></div><div id="teacherReportPermissionNote" class="hint teacher-report-permission-note" hidden></div><label>上課狀態</label><div class="report-status-grid"><label class="report-status-option"><input type="radio" name="teacherReportStatus" value="completed">已完成</label><label class="report-status-option"><input type="radio" name="teacherReportStatus" value="student_leave">學生請假</label><label class="report-status-option"><input type="radio" name="teacherReportStatus" value="teacher_leave">老師請假</label><label class="report-status-option"><input type="radio" name="teacherReportStatus" value="no_show">缺席（No Show）</label><label class="report-status-option"><input type="radio" name="teacherReportStatus" value="makeup_completed">補課完成</label></div><label>今日上課內容</label><textarea id="teacherReportContent" placeholder="例如：Flyers Unit 8、過去式、Speaking practice"></textarea><label>家庭作業</label><textarea id="teacherReportHomework" placeholder="例如：Workbook P.42、背 Unit 8 單字"></textarea><label>老師回饋</label><textarea id="teacherReportFeedback" placeholder="例如：今天口說表現穩定，但拼字仍需加強"></textarea><label>內部備註</label><textarea id="teacherReportNote" placeholder="僅供老師與管理者查看"></textarea><br><button type="button" class="btn ok" id="startClassFocusBtn">開始上課</button> <button type="button" class="btn primary" id="quickCompleteTeacherReportBtn">一鍵完成</button> <button type="button" class="btn primary" id="saveTeacherReportBtn">儲存回報</button> <button type="button" class="btn" id="cancelTeacherReportBtn">取消</button><div class="small" style="margin-top:10px">系統會自動記錄回報時間與登入老師。</div></div></div>
+<div class="modal-backdrop" id="batchModal"><div class="modal wide"><div class="modal-head"><h2>批次調整</h2><button onclick="closeBatchModal()">×</button></div><p class="small">只會處理目前選取的課程。先預覽，再正式套用。</p><div class="grid"><div class="col-6"><label>日期位移</label><select id="batchDateShift"><option value="0">不變</option><option value="1">往後 1 天</option><option value="7">往後 1 週</option><option value="14">往後 2 週</option><option value="-1">往前 1 天</option><option value="-7">往前 1 週</option></select></div><div class="col-6"><label>時間位移</label><select id="batchTimeShift"><option value="0">不變</option><option value="30">延後 30 分鐘</option><option value="60">延後 60 分鐘</option><option value="-30">提前 30 分鐘</option><option value="-60">提前 60 分鐘</option></select></div><div class="col-6"><label>更換老師</label><select id="batchTeacher"><option value="">不變</option></select></div><div class="col-6"><label>歸屬校區</label><select id="batchBranch" onchange="handleBatchBranchChange()"><option value="">不變</option></select></div><div class="col-6"><label>更換教室</label><select id="batchRoom"><option value="">不變</option><option value="__CLEAR__">清除教室</option></select></div><div class="col-6"><label>狀態</label><select id="batchStatus"><option value="">不變</option><option>已上課</option><option>未上課</option><option>學生請假</option><option>老師請假</option><option>補課</option><option>取消</option><option>停課</option></select></div><div class="col-6"><label>付款狀態</label><select id="batchPayment"><option value="">不變</option><option value="unpaid">未繳</option><option value="paid">已繳</option><option value="waived">免收</option></select></div></div><br><button class="btn" onclick="previewBatch()">預覽</button> <button class="btn primary" onclick="applyBatch()">確認套用</button><div id="batchPreview" class="preview-box" style="margin-top:12px">尚未預覽。</div></div></div>
+<div class="notification-backdrop" onclick="DanbridgeNotifications.close()"></div>
+<aside id="notificationDrawer" class="notification-drawer" aria-label="通知中心">
+  <div class="notification-head"><div><h2>通知中心</h2><p id="notificationSummary">正在整理營運通知…</p></div><div class="notification-head-actions"><button type="button" class="btn" onclick="DanbridgeNotifications.markAllRead()">全部已讀</button><button type="button" class="btn" onclick="DanbridgeNotifications.close()">關閉</button></div></div>
+  <div class="notification-tabs">
+    <button class="notification-tab active" data-filter="all" onclick="DanbridgeNotifications.setFilter('all')">全部</button>
+    <button class="notification-tab" data-filter="report" onclick="DanbridgeNotifications.setFilter('report')">未完成回報</button>
+    <button class="notification-tab" data-filter="payment" onclick="DanbridgeNotifications.setFilter('payment')">未收款</button>
+    <button class="notification-tab" data-filter="makeup" onclick="DanbridgeNotifications.setFilter('makeup')">補課</button>
+    <button class="notification-tab" data-filter="tomorrow" onclick="DanbridgeNotifications.setFilter('tomorrow')">明日課程</button>
+    <button class="notification-tab" data-filter="hours" onclick="DanbridgeNotifications.setFilter('hours')">老師時數</button>
+    <button class="notification-tab" data-filter="anomaly" onclick="DanbridgeNotifications.setFilter('anomaly')">異常</button>
+  </div>
+  <div id="notificationList" class="notification-list"></div>
+  <div id="notificationFooter" class="notification-footer">尚未更新</div>
+</aside>
+<script src="./js/core/constants.js"></script>
+<script src="./js/core/dom.js"></script>
+<script src="./js/core/date-utils.js"></script>
+<script src="./js/core/utils.js"></script>
+<script src="./js/core/data-persistence.js?v=20.5.5"></script>
+<script src="./js/core/access-control.js"></script>
+<script src="./js/core/data-integrity.js?v=18.21.2"></script>
+<script src="./js/modules/students/students-crm.js?v=18.14.2"></script>
+<script src="./js/modules/students/student-crm-independent-scroll.js?v=17.17"></script>
+<script src="./js/modules/teachers/teachers-crm.js"></script>
+<script src="./js/modules/calendar/scheduler-ui.js?v=20.5.7"></script>
+<script src="./js/modules/calendar/course-operations.js?v=20.1.0"></script>
+<script src="./js/modules/calendar/lesson-save-visibility-guard.js?v=18.16.1"></script>
+<script src="./js/modules/camps/camp-management.js?v=18.21.2"></script>
+<script src="./js/modules/settings/settings-expenses.js"></script>
+<script src="./js/modules/reports/reports-export.js?v=18.21"></script>
+<script src="./js/modules/business/business-logic.js?v=20.0.21"></script>
+<script src="./js/modules/makeups/makeup-management.js?v=20.0.21"></script>
+<script src="./js/modules/dashboard/dashboard.js?v=18.2"></script>
+<script src="./js/modules/notifications/notification-center.js?v=20.0.21"></script>
+<script src="./js/core/branch-business-scope.js?v=20.0.19"></script>
+<script src="./js/modules/teachers/teacher-kpi.js?v=20.0.19"></script>
+<script src="./js/modules/lessons/lesson-list-and-search.js?v=20.0.21"></script>
+<script src="./js/app/app-shell.js?v=20.5.7"></script>
+<script src="./js/ui/select-options.js"></script>
+<script src="./js/app/render-orchestrator.js?v=20.5.7"></script>
+<script src="./js/ui/searchable-student-selects.js?v=17.30"></script>
+<script src="./js/modules/application-and-business-features.js?v=20.0.35"></script>
+<script src="./js/modules/calendar/smart-scheduler.js?v=20.0.6"></script>
+<script src="./js/modules/calendar/batch-lesson-operations.js?v=20.0.21"></script>
+
+<script src="./js/modules/calendar/ipad-toolbar-layout.js"></script>
+
+
+
+<script src="./js/core/cloud-sync-bridge.js"></script>
+
+<script type="module" src="./js/core/firebase-auth-and-cloud-sync.module.js?v=20.0.32"></script>
+
+
+<script src="./js/core/pwa-installation.js"></script>
+
+<script src="./js/modules/calendar/marquee-multi-selection.js?v=20.5.1"></script>
+
+<script src="./js/core/undo-redo-history.js"></script>
+<script src="./js/app/v18-information-architecture.js?v=18.21.1"></script>
+<script src="./js/app/v18-convenience-suite.js?v=20.0.11"></script>
+<script src="./js/app/v1819-responsive-convenience.js?v=18.22.5"></script>
+<script src="./js/app/v1822-usability-polish.js?v=18.22"></script>
+<script src="./js/app/v20-scheduling-efficiency.js?v=20.0.6"></script>
+<script src="./js/app/v20014-role-responsive-ux.js?v=20.0.37"></script>
+<script src="./js/core/ui-language.js?v=20.0.20"></script>
+</body></html>

@@ -1,0 +1,146 @@
+/* V17.7 — iPad calendar navigation containment
+   The legacy ipad-real-width-fix treated each V16 toolbar row as a separate
+   grid cell. Keep the V16 row-based toolbar intact so date, Today and add
+   controls never overlap or clip. Visual/layout only. */
+
+#calendar .calendar-toolbar-v16,
+#calendar .calendar-toolbar-v16.ipad-real-width-fix,
+#calendar .calendar-toolbar-v16.ipad-real-width-fix.ipad-real-width-narrow{
+  display:flex!important;
+  flex-direction:column!important;
+  grid-template-columns:none!important;
+  grid-auto-flow:initial!important;
+  gap:0!important;
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  overflow:hidden!important;
+}
+
+#calendar .calendar-toolbar-v16>.calendar-toolbar-row,
+#calendar .calendar-toolbar-v16.ipad-real-width-fix>.calendar-toolbar-row,
+#calendar .calendar-toolbar-v16.ipad-real-width-fix.ipad-real-width-narrow>.calendar-toolbar-row{
+  display:grid!important;
+  grid-column:auto!important;
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  overflow:visible!important;
+  box-sizing:border-box!important;
+  flex-direction:initial!important;
+  justify-content:initial!important;
+}
+
+#calendar .calendar-toolbar-v16 .calendar-toolbar-navigation{
+  grid-template-columns:120px minmax(230px,1fr) auto minmax(145px,max-content)!important;
+  align-items:end!important;
+}
+
+#calendar .calendar-toolbar-v16 .calendar-mode-field,
+#calendar .calendar-toolbar-v16 .calendar-date-field,
+#calendar .calendar-toolbar-v16 .calendar-navigation-actions,
+#calendar .calendar-toolbar-v16 .calendar-quick-add{
+  grid-column:auto!important;
+  min-width:0!important;
+  max-width:100%!important;
+  width:auto!important;
+  overflow:visible!important;
+}
+
+#calendar .calendar-toolbar-v16 .calendar-date-field{
+  min-width:230px!important;
+}
+
+#calendar .calendar-toolbar-v16 #calendarDate{
+  box-sizing:border-box!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  padding-left:14px!important;
+  padding-right:10px!important;
+  text-indent:0!important;
+  white-space:nowrap!important;
+  overflow:visible!important;
+  font-size:16px!important;
+  line-height:44px!important;
+  text-align:left!important;
+  text-align-last:left!important;
+  -webkit-appearance:auto!important;
+  appearance:auto!important;
+}
+
+#calendar .calendar-toolbar-v16 #calendarDate::-webkit-date-and-time-value,
+#calendar .calendar-toolbar-v16 #calendarDate::-webkit-datetime-edit,
+#calendar .calendar-toolbar-v16 #calendarDate::-webkit-datetime-edit-fields-wrapper{
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  padding:0!important;
+  margin:0!important;
+  text-align:left!important;
+  overflow:visible!important;
+}
+
+#calendar .calendar-toolbar-v16 .calendar-navigation-actions{
+  display:grid!important;
+  grid-template-columns:44px minmax(72px,auto) 44px!important;
+  gap:7px!important;
+  align-items:end!important;
+  justify-content:start!important;
+  padding:0!important;
+  white-space:nowrap!important;
+}
+
+#calendar .calendar-toolbar-v16 .calendar-navigation-actions .btn{
+  width:100%!important;
+  min-width:0!important;
+  margin:0!important;
+  flex:none!important;
+}
+
+#calendar .calendar-toolbar-v16 .calendar-quick-add{
+  justify-self:end!important;
+  width:auto!important;
+  min-width:145px!important;
+  white-space:nowrap!important;
+}
+
+@media (min-width:901px) and (max-width:1250px){
+  #calendar .calendar-toolbar-v16 .calendar-toolbar-navigation{
+    grid-template-columns:110px minmax(230px,1fr) auto minmax(145px,max-content)!important;
+  }
+}
+
+@media (min-width:701px) and (max-width:900px){
+  #calendar .calendar-toolbar-v16 .calendar-toolbar-navigation{
+    grid-template-columns:minmax(110px,.72fr) minmax(230px,1.28fr)!important;
+  }
+  #calendar .calendar-toolbar-v16 .calendar-navigation-actions{
+    grid-column:1!important;
+    width:100%!important;
+  }
+  #calendar .calendar-toolbar-v16 .calendar-quick-add{
+    grid-column:2!important;
+    justify-self:stretch!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+}
+
+@media (max-width:700px){
+  #calendar .calendar-toolbar-v16 .calendar-toolbar-navigation{
+    grid-template-columns:1fr!important;
+  }
+  #calendar .calendar-toolbar-v16 .calendar-date-field{
+    min-width:0!important;
+  }
+  #calendar .calendar-toolbar-v16 .calendar-navigation-actions,
+  #calendar .calendar-toolbar-v16 .calendar-quick-add{
+    grid-column:1!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+  #calendar .calendar-toolbar-v16 .calendar-navigation-actions{
+    grid-template-columns:44px minmax(0,1fr) 44px!important;
+  }
+}

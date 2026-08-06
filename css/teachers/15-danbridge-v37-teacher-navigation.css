@@ -1,0 +1,12 @@
+/* V3.7 老師端權限導覽：僅顯示老師實際可使用的頁面 */
+body.teacher-cloud-role nav button.teacher-nav-hidden,
+body.teacher-cloud-role nav button[hidden]{display:none!important}
+body.teacher-cloud-role #students,
+body.teacher-cloud-role #teachers,
+body.teacher-cloud-role #makeups,
+body.teacher-cloud-role #camps,
+body.teacher-cloud-role #winterCamps,
+body.teacher-cloud-role #settlement,
+body.teacher-cloud-role #finance,
+body.teacher-cloud-role #data,
+body.teacher-cloud-role #security{display:none!important}

@@ -1,0 +1,64 @@
+/* Danbridge Operations V17.17 — Student CRM independent scrolling.
+   Desktop / landscape tablet only. The editor and student list keep separate scroll positions. */
+
+@media (min-width:1041px){
+  #students.active{
+    height:var(--student-crm-viewport-height,calc(100dvh - 118px));
+    min-height:520px;
+    overflow:hidden!important;
+    padding-bottom:0!important;
+  }
+
+  #students.active>.grid{
+    height:100%!important;
+    min-height:0!important;
+    align-items:stretch!important;
+  }
+
+  #students.active>.grid>.card{
+    height:100%!important;
+    min-height:0!important;
+  }
+
+  /* Left: student / parent form scrolls by itself. */
+  #students.active>.grid>.card.col-4{
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain;
+    scrollbar-gutter:stable;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-y;
+  }
+
+  /* Right: keep the title/search bar fixed while only the list scrolls. */
+  #students.active>.grid>.card.col-8{
+    display:flex!important;
+    flex-direction:column!important;
+    overflow:hidden!important;
+  }
+
+  #students.active>.grid>.card.col-8>.toolbar{
+    flex:0 0 auto!important;
+  }
+
+  #students.active>.grid>.card.col-8>.table-wrap{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow:auto!important;
+    overscroll-behavior:contain;
+    scrollbar-gutter:stable;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-x pan-y;
+  }
+
+  #students.active>.grid>.card.col-8>.table-wrap thead{
+    position:sticky;
+    top:0;
+    z-index:3;
+  }
+}
+
+/* Stacked layouts retain normal document scrolling to avoid nested short panels. */
+@media (max-width:1040px){
+  #students.active{height:auto!important;min-height:0!important;overflow:visible!important}
+}

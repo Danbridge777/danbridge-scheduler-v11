@@ -1,0 +1,58 @@
+/* 老師總覽：新增本月即時時數；修正手機卡片超出畫面 */
+.teacher-hours-metric{display:none!important}
+body.teacher-cloud-role #dashboard .teacher-hours-metric{display:flex!important}
+
+@media(max-width:900px){
+  html,body{width:100%!important;max-width:100%!important;overflow-x:hidden!important}
+  body:not(.auth-locked)>main,main,section,#dashboard,.v32-dashboard-grid,.v32-side-stack,.card{
+    width:100%!important;max-width:100%!important;min-width:0!important;
+  }
+  body:not(.auth-locked)>header{width:100%!important;max-width:100%!important;overflow:hidden!important}
+  body:not(.auth-locked)>header h1{min-width:0!important;overflow-wrap:anywhere!important}
+  .v32-welcome,.v32-header-actions,.v32-card-head,.v32-card-head>div{min-width:0!important;max-width:100%!important}
+  .v32-header-actions{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}
+  .v32-header-actions .btn{min-width:0!important;white-space:normal!important}
+  #dashboard .summary,body.teacher-cloud-role #dashboard .summary{box-sizing:border-box!important;max-width:100%!important}
+
+  body.teacher-cloud-role #dashboard .summary{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+    gap:8px!important;
+    width:100%!important;
+    margin:0 0 12px!important;
+    padding:0!important;
+    overflow:visible!important;
+  }
+  body.teacher-cloud-role #dashboard .metric:has(#mLessons),
+  body.teacher-cloud-role #dashboard .teacher-hours-metric{
+    display:flex!important;
+    flex:initial!important;
+    width:auto!important;
+    max-width:100%!important;
+    min-width:0!important;
+    min-height:82px!important;
+    padding:12px 9px 10px 43px!important;
+    border-radius:15px!important;
+    overflow:hidden!important;
+  }
+  body.teacher-cloud-role #dashboard .metric::before{
+    left:9px!important;top:11px!important;width:25px!important;height:25px!important;font-size:12px!important;
+  }
+  body.teacher-cloud-role #dashboard .teacher-hours-metric::before{content:"時"!important;background:#eaf8f0!important;color:#16845b!important}
+  body.teacher-cloud-role #dashboard .metric span{font-size:10px!important;white-space:normal!important;line-height:1.25!important}
+  body.teacher-cloud-role #dashboard .metric b{font-size:18px!important;line-height:1.12!important;white-space:normal!important;overflow-wrap:anywhere!important}
+  body.teacher-cloud-role #dashboard .metric small{font-size:9px!important;line-height:1.25!important;white-space:normal!important}
+  #dashboard .v32-dashboard-grid>.card,#dashboard .v32-side-stack>.card,#dashboard .v32-today-card{overflow:hidden!important}
+  #dashboard #todayLessons .lesson,body.teacher-cloud-role #todayLessons .lesson{
+    width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important;
+  }
+  #dashboard #todayLessons .lesson b,#dashboard #todayLessons .lesson .meta{
+    min-width:0!important;max-width:100%!important;white-space:normal!important;overflow-wrap:anywhere!important;
+  }
+}
+
+@media(max-width:390px){
+  body.teacher-cloud-role #dashboard .summary{gap:7px!important}
+  body.teacher-cloud-role #dashboard .metric:has(#mLessons),body.teacher-cloud-role #dashboard .teacher-hours-metric{padding-left:39px!important}
+  body.teacher-cloud-role #dashboard .metric b{font-size:16px!important}
+}

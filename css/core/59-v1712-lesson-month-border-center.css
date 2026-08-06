@@ -1,0 +1,75 @@
+/* V17.12 — Lesson month field border and forced centering
+   Restores the full control outline and centers the rendered month value,
+   including Safari/iPadOS WebKit date controls. Layout-only. */
+
+#lessons > .card > .toolbar > div:first-child{
+  overflow:visible!important;
+  padding:0!important;
+}
+
+#lessons #lessonMonth{
+  display:block!important;
+  width:100%!important;
+  inline-size:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  height:44px!important;
+  min-height:44px!important;
+  margin:0!important;
+  padding:8px 14px!important;
+  box-sizing:border-box!important;
+  border:1px solid var(--line,#dfe5ec)!important;
+  border-right-width:1px!important;
+  border-style:solid!important;
+  border-radius:12px!important;
+  background:#fff!important;
+  color:var(--text,#172033)!important;
+  text-align:center!important;
+  text-align-last:center!important;
+  -webkit-appearance:none!important;
+  appearance:none!important;
+  overflow:visible!important;
+}
+
+/* Safari/iPadOS renders type=month through an internal datetime-edit box. */
+#lessons #lessonMonth::-webkit-datetime-edit{
+  display:flex!important;
+  width:100%!important;
+  min-width:0!important;
+  justify-content:center!important;
+  align-items:center!important;
+  padding:0!important;
+  text-align:center!important;
+}
+
+#lessons #lessonMonth::-webkit-datetime-edit-fields-wrapper{
+  display:flex!important;
+  width:100%!important;
+  justify-content:center!important;
+  align-items:center!important;
+  padding:0!important;
+}
+
+#lessons #lessonMonth::-webkit-datetime-edit-year-field,
+#lessons #lessonMonth::-webkit-datetime-edit-month-field,
+#lessons #lessonMonth::-webkit-datetime-edit-text{
+  text-align:center!important;
+  padding:0!important;
+}
+
+#lessons #lessonMonth::-webkit-calendar-picker-indicator{
+  position:absolute!important;
+  right:10px!important;
+  opacity:.72!important;
+  margin:0!important;
+}
+
+/* Keep every filter control visually consistent. */
+#lessons > .card > .toolbar > div > input,
+#lessons > .card > .toolbar > div > select{
+  height:44px!important;
+  min-height:44px!important;
+  border:1px solid var(--line,#dfe5ec)!important;
+  border-radius:12px!important;
+  box-sizing:border-box!important;
+}

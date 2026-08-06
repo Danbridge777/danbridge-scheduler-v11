@@ -1,0 +1,444 @@
+/* Danbridge Scheduler V15.22 — UI polish only
+   1) Camp builder responsive overflow fix
+   2) Dashboard role identity: Owner gold, Branch Manager blue, Teacher white
+*/
+
+/* ---------- Camp builder: never exceed the content viewport ---------- */
+#camps,
+#winterCamps,
+#camps .camp-layout,
+#winterCamps .camp-layout,
+#camps .card,
+#winterCamps .card,
+#camps .camp-form-grid,
+#winterCamps .camp-form-grid,
+#camps .camp-form-grid > div,
+#winterCamps .camp-form-grid > div {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+#camps .camp-layout,
+#winterCamps .camp-layout {
+  display: grid !important;
+  grid-template-columns: minmax(300px, .72fr) minmax(0, 1.8fr) !important;
+  gap: 20px !important;
+  align-items: start;
+  width: 100%;
+  overflow: visible;
+}
+
+#camps .camp-layout > .card,
+#winterCamps .camp-layout > .card {
+  width: 100%;
+  overflow: hidden;
+}
+
+#camps .camp-form-grid,
+#winterCamps .camp-form-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+  width: 100%;
+}
+
+#camps input,
+#camps select,
+#camps textarea,
+#winterCamps input,
+#winterCamps select,
+#winterCamps textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#camps .teacher-checks,
+#winterCamps .teacher-checks {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  width: 100%;
+}
+
+#campWeekdays,
+#winterCampWeekdays {
+  grid-template-columns: repeat(4, minmax(72px, 1fr)) !important;
+}
+
+#camps .teacher-check,
+#winterCamps .teacher-check {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+#camps .teacher-check input,
+#winterCamps .teacher-check input {
+  width: 17px !important;
+  height: 17px !important;
+  flex: 0 0 17px;
+}
+
+#camps .camp-actions,
+#winterCamps .camp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+#camps .camp-preview-wide,
+#winterCamps .camp-preview-wide {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1450px) {
+  #camps .camp-form-grid,
+  #winterCamps .camp-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  #camps .camp-form-grid .span-2,
+  #winterCamps .camp-form-grid .span-2,
+  #camps .camp-form-grid .span-4,
+  #winterCamps .camp-form-grid .span-4 {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 1120px) {
+  #camps .camp-layout,
+  #winterCamps .camp-layout {
+    grid-template-columns: 1fr !important;
+  }
+  #camps .teacher-checks,
+  #winterCamps .teacher-checks {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 720px) {
+  #camps .camp-form-grid,
+  #winterCamps .camp-form-grid,
+  #camps .teacher-checks,
+  #winterCamps .teacher-checks,
+  #campWeekdays,
+  #winterCampWeekdays {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ---------- Role identity on Dashboard ---------- */
+body {
+  --role-accent: #ffffff;
+  --role-accent-strong: #64748b;
+  --role-accent-soft: #f8fafc;
+  --role-accent-border: #dbe4ee;
+  --role-accent-text: #10243e;
+}
+
+body[data-cloud-role="owner"] {
+  --role-accent: #d4af37;
+  --role-accent-strong: #9a6b00;
+  --role-accent-soft: #fff8dd;
+  --role-accent-border: #ead58a;
+  --role-accent-text: #6b4b00;
+}
+
+body[data-cloud-role="branch_manager"] {
+  --role-accent: #2563eb;
+  --role-accent-strong: #1749b6;
+  --role-accent-soft: #eff6ff;
+  --role-accent-border: #a9c8ff;
+  --role-accent-text: #143f91;
+}
+
+body[data-cloud-role="teacher"] {
+  --role-accent: #ffffff;
+  --role-accent-strong: #64748b;
+  --role-accent-soft: #ffffff;
+  --role-accent-border: #d7e0ea;
+  --role-accent-text: #334155;
+}
+
+#dashboard {
+  position: relative;
+}
+
+#dashboard::before {
+  display: block;
+  width: fit-content;
+  margin: 0 0 14px;
+  padding: 7px 13px;
+  border: 1px solid var(--role-accent-border);
+  border-radius: 999px;
+  background: var(--role-accent-soft);
+  color: var(--role-accent-text);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  box-shadow: 0 6px 18px rgba(15, 35, 60, .06);
+}
+
+body[data-cloud-role="owner"] #dashboard::before { content: "OWNER · COMPANY DASHBOARD"; }
+body[data-cloud-role="branch_manager"] #dashboard::before { content: "BRANCH MANAGER · BRANCH DASHBOARD"; }
+body[data-cloud-role="teacher"] #dashboard::before { content: "TEACHER · MY DASHBOARD"; }
+
+#dashboard .branch-scope-bar {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--role-accent-border) !important;
+  background: linear-gradient(135deg, var(--role-accent-soft), #fff 72%) !important;
+  box-shadow: 0 14px 34px rgba(15, 35, 60, .08) !important;
+}
+
+#dashboard .branch-scope-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 7px;
+  background: var(--role-accent);
+}
+
+#dashboard .v32-welcome {
+  margin-top: 8px;
+  padding: 18px 20px;
+  border: 1px solid var(--role-accent-border);
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--role-accent-soft), rgba(255,255,255,.96) 68%);
+  box-shadow: 0 12px 30px rgba(15, 35, 60, .07);
+}
+
+#dashboard .v32-eyebrow {
+  color: var(--role-accent-strong) !important;
+}
+
+#dashboard .v32-welcome::after {
+  content: "";
+  align-self: stretch;
+  width: 5px;
+  min-height: 58px;
+  border-radius: 999px;
+  background: var(--role-accent);
+  order: -1;
+}
+
+#dashboard .v32-welcome > div:first-child {
+  flex: 1;
+}
+
+#dashboard .v33-ops-mini,
+#dashboard .v32-kpis .metric {
+  border-top: 3px solid var(--role-accent) !important;
+}
+
+body[data-cloud-role="teacher"] #dashboard .v33-ops-mini,
+body[data-cloud-role="teacher"] #dashboard .v32-kpis .metric {
+  border-top-color: #e2e8f0 !important;
+  background: #fff !important;
+}
+
+/* Active navigation follows the signed-in role without changing app behavior. */
+body[data-cloud-role="owner"] > nav button.active {
+  box-shadow: inset 4px 0 0 #d4af37 !important;
+  background: linear-gradient(90deg, rgba(212,175,55,.30), rgba(255,255,255,.13)) !important;
+}
+body[data-cloud-role="branch_manager"] > nav button.active {
+  box-shadow: inset 4px 0 0 #60a5fa !important;
+}
+body[data-cloud-role="teacher"] > nav button.active {
+  box-shadow: inset 4px 0 0 #ffffff !important;
+  background: rgba(255,255,255,.18) !important;
+}
+
+/* Header account label gets a restrained role marker. */
+.header-auth-actions span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.header-auth-actions span::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--role-accent);
+  border: 1px solid var(--role-accent-border);
+  box-shadow: 0 0 0 3px var(--role-accent-soft);
+}
+
+@media (max-width: 760px) {
+  #dashboard .v32-welcome::after { display: none; }
+  #dashboard .v32-welcome { padding: 16px; }
+}
+
+
+/* ---------- V15.22.1 Security account cards: contain long names / emails ---------- */
+#cloudUserManager,
+#cloudUserManager *,
+#cloudTeacherAccessList,
+#cloudTeacherAccessList * {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+#cloudTeacherAccessList {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+#cloudTeacherAccessList .backup-item {
+  width: 100%;
+  max-width: 100%;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+}
+
+#cloudTeacherAccessList .backup-item .info {
+  min-width: 0;
+  overflow: hidden;
+}
+
+#cloudTeacherAccessList .backup-item .info b,
+#cloudTeacherAccessList .backup-item .info .small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#cloudTeacherAccessList .backup-item .row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+#cloudTeacherAccessList .backup-item .btn {
+  width: auto !important;
+  max-width: 100%;
+  white-space: nowrap;
+  padding-inline: 14px;
+}
+
+@media (max-width: 1180px) {
+  #cloudTeacherAccessList .backup-item {
+    grid-template-columns: 1fr;
+  }
+  #cloudTeacherAccessList .backup-item .row-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 680px) {
+  #cloudTeacherAccessList .backup-item .row-actions,
+  #cloudTeacherAccessList .backup-item .btn {
+    width: 100% !important;
+  }
+}
+
+/* ---------- V15.22.2 Security permission rows: hard containment ---------- */
+#security .card,
+#cloudUserManager,
+#cloudTeacherAccessList,
+#cloudBranchManagerList {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+#cloudTeacherAccessList .backup-item,
+#cloudBranchManagerList .backup-item {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  box-sizing: border-box !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-items: stretch !important;
+  gap: 10px !important;
+  overflow: hidden !important;
+}
+
+#cloudTeacherAccessList .backup-item .info,
+#cloudBranchManagerList .backup-item .info {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+#cloudTeacherAccessList .backup-item .row-actions,
+#cloudBranchManagerList .backup-item .row-actions {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#cloudTeacherAccessList .backup-item .btn,
+#cloudBranchManagerList .backup-item .btn,
+#cloudBranchManagerList .branch-access-delete {
+  flex: 0 1 auto;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  padding: 9px 12px !important;
+  line-height: 1.2;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+
+#cloudBranchManagerList .branch-access-delete {
+  justify-self: end;
+}
+
+@media (max-width: 520px) {
+  #cloudTeacherAccessList .backup-item .row-actions,
+  #cloudBranchManagerList .backup-item .row-actions,
+  #cloudTeacherAccessList .backup-item .btn,
+  #cloudBranchManagerList .backup-item .btn,
+  #cloudBranchManagerList .branch-access-delete {
+    width: 100% !important;
+    justify-content: center;
+  }
+}
+/* Account and branch access controls consolidated from the retired export stylesheet. */
+#security .grid{align-items:stretch}
+#security .card{min-height:100%}
+.access-role-guide{display:grid;gap:10px;margin-top:18px}
+.access-role-guide>div{display:flex;flex-direction:column;gap:3px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:rgba(248,250,252,.78)}
+.access-role-guide span{font-size:12px;color:var(--muted)}
+.role-card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
+.role-card-heading h2{margin:2px 0 0}
+.role-kicker{font-size:10px;font-weight:900;letter-spacing:.14em;color:#2563eb}
+.branch-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:7px}
+.branch-choice-grid label{display:flex;align-items:center;gap:8px;min-width:0;box-sizing:border-box;width:100%;overflow:hidden;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#f8fafc;cursor:pointer}
+.branch-choice-grid label input[type="checkbox"]{flex:0 0 22px;width:22px!important;height:22px!important;max-width:22px;margin:0!important}
+.branch-choice-grid label span{min-width:0;overflow-wrap:anywhere}
+#cloudBranchManagerList{min-width:0}
+#cloudBranchManagerList .branch-access-item{min-width:0;max-width:100%;box-sizing:border-box;flex-wrap:wrap;align-items:flex-start}
+#cloudBranchManagerList .branch-access-item .info{flex:1 1 210px;max-width:100%;overflow:hidden}
+#cloudBranchManagerList .branch-access-item .small{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#cloudBranchManagerList .branch-access-delete{flex:0 0 auto;max-width:100%;white-space:nowrap}
+@media(max-width:1100px){#security .col-4{grid-column:span 6}.account-summary-card{grid-column:span 12!important}}
+@media(max-width:720px){#security .col-4{grid-column:span 12}.branch-choice-grid{grid-template-columns:1fr}#cloudBranchManagerList .branch-access-item{display:grid!important;grid-template-columns:minmax(0,1fr);gap:12px}#cloudBranchManagerList .branch-access-delete{width:100%;justify-content:center}}

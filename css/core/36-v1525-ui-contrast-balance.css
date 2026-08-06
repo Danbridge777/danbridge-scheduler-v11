@@ -1,0 +1,199 @@
+/* V15.25.1 — Owner UI contrast balance
+   Reduces the abrupt gold/white contrast while preserving the Danbridge owner identity. */
+body[data-cloud-role="owner"]{
+  --owner-nav-start:#1b1914;
+  --owner-nav-mid:#262118;
+  --owner-nav-end:#30291d;
+  --owner-gold:#c5a24e;
+  --owner-gold-strong:#d8bb6b;
+  --owner-gold-soft:#f7f0dc;
+  --owner-canvas:#f4f3ef;
+  --owner-surface:#fbfaf7;
+  --owner-surface-muted:#f6f4ee;
+  --owner-line:#e5e0d3;
+  --owner-text:#1d2a3d;
+  --owner-muted:#737d8e;
+}
+
+body[data-cloud-role="owner"]{
+  background:var(--owner-canvas)!important;
+}
+
+@media (min-width:981px){
+  body[data-cloud-role="owner"]>nav{
+    background:
+      radial-gradient(circle at 18% 3%,rgba(197,162,78,.10),transparent 31%),
+      linear-gradient(180deg,var(--owner-nav-start) 0%,var(--owner-nav-mid) 52%,var(--owner-nav-end) 100%)!important;
+    border-right-color:rgba(216,187,107,.14)!important;
+    box-shadow:10px 0 28px rgba(22,20,16,.16)!important;
+  }
+  body[data-cloud-role="owner"]>nav::before{color:#f4f1e8!important}
+  body[data-cloud-role="owner"]>nav::after{color:rgba(216,187,107,.68)!important}
+  body[data-cloud-role="owner"]>nav button{color:rgba(247,244,235,.90)!important}
+  body[data-cloud-role="owner"]>nav button::before{color:#cdb46f!important}
+  body[data-cloud-role="owner"]>nav button:hover{
+    background:rgba(216,187,107,.055)!important;
+    border-color:rgba(216,187,107,.10)!important;
+  }
+  body[data-cloud-role="owner"]>nav button.active{
+    background:linear-gradient(90deg,rgba(197,162,78,.17),rgba(255,255,255,.035))!important;
+    border-color:rgba(216,187,107,.29)!important;
+    box-shadow:inset 4px 0 0 #c5a24e,0 8px 18px rgba(0,0,0,.075)!important;
+    color:#fffdf8!important;
+  }
+}
+
+/* Header and application canvas */
+body[data-cloud-role="owner"]>header{
+  background:rgba(251,250,247,.96)!important;
+  border-bottom-color:#e8e4da!important;
+  box-shadow:0 4px 16px rgba(35,40,48,.035)!important;
+}
+body[data-cloud-role="owner"]>header h1,
+body[data-cloud-role="owner"] main h1,
+body[data-cloud-role="owner"] main h2,
+body[data-cloud-role="owner"] main h3{color:var(--owner-text)!important}
+body[data-cloud-role="owner"]>header p,
+body[data-cloud-role="owner"] main .small,
+body[data-cloud-role="owner"] main .muted{color:var(--owner-muted)!important}
+
+/* Owner badge stays branded, but is no longer a bright floating pill. */
+body[data-cloud-role="owner"] .role-dashboard-badge{
+  color:#715a22!important;
+  background:#f7f1df!important;
+  border-color:#dfd0a3!important;
+  box-shadow:0 4px 12px rgba(90,72,31,.045)!important;
+}
+
+/* Branch selector is a utility control, not a primary callout. */
+body[data-cloud-role="owner"] .branch-scope-card{
+  background:var(--owner-surface)!important;
+  border-color:var(--owner-line)!important;
+  box-shadow:0 7px 20px rgba(27,38,55,.045)!important;
+}
+body[data-cloud-role="owner"] .branch-scope-card::before{
+  background:#c5a24e!important;
+  opacity:.72!important;
+}
+body[data-cloud-role="owner"] .branch-scope-card select{
+  background:#fff!important;
+  border-color:#d9dce2!important;
+}
+
+/* Hero: warm neutral rather than high-contrast yellow-white. */
+body[data-cloud-role="owner"] .dashboard-hero,
+body[data-cloud-role="owner"] .v32-hero{
+  background:linear-gradient(112deg,#f8f3e5 0%,#fbfaf7 48%,#f7f6f2 100%)!important;
+  border-color:#dfd3b2!important;
+  box-shadow:0 10px 26px rgba(51,43,25,.045)!important;
+}
+body[data-cloud-role="owner"] .dashboard-hero::before,
+body[data-cloud-role="owner"] .v32-hero::before{
+  background:#c5a24e!important;
+  opacity:.86!important;
+}
+
+/* Standardize cards to neutral surfaces; gold becomes a restrained accent. */
+body[data-cloud-role="owner"] main .card,
+body[data-cloud-role="owner"] .dashboard-stat-card,
+body[data-cloud-role="owner"] .v32-stat,
+body[data-cloud-role="owner"] .v32-today-card,
+body[data-cloud-role="owner"] .v32-insight-card,
+body[data-cloud-role="owner"] .v32-quick-card,
+body[data-cloud-role="owner"] .v32-changes{
+  background:var(--owner-surface)!important;
+  border-color:#e1e3e7!important;
+  box-shadow:0 10px 28px rgba(28,38,52,.055)!important;
+}
+body[data-cloud-role="owner"] .dashboard-stat-card,
+body[data-cloud-role="owner"] .v32-stat{
+  border-top-color:#d2b66b!important;
+  border-top-width:3px!important;
+}
+body[data-cloud-role="owner"] .dashboard-stat-card:hover,
+body[data-cloud-role="owner"] .v32-stat:hover{
+  border-color:#d8c58e!important;
+  box-shadow:0 12px 28px rgba(53,45,27,.075)!important;
+}
+
+/* KPI icon chips use a cool neutral blue to separate data from brand accents. */
+body[data-cloud-role="owner"] .v32-section-icon,
+body[data-cloud-role="owner"] .metric-icon,
+body[data-cloud-role="owner"] .dashboard-stat-icon{
+  background:#edf2f7!important;
+  color:#315b7b!important;
+  border-color:#dce5ee!important;
+}
+
+/* Timeline rows: remove competing gradients and rely on the status rail. */
+body[data-cloud-role="owner"] .v32-timeline .lesson,
+body[data-cloud-role="owner"] .dashboard-today-list .lesson{
+  background:#fbfbf9!important;
+  border-color:#e1e4e8!important;
+  box-shadow:0 4px 14px rgba(30,41,55,.035)!important;
+}
+body[data-cloud-role="owner"] .v32-timeline .lesson:hover,
+body[data-cloud-role="owner"] .dashboard-today-list .lesson:hover{
+  background:#f7f8f6!important;
+  border-color:#cfd8df!important;
+}
+
+/* Buttons: reserve solid gold for genuinely primary actions. */
+body[data-cloud-role="owner"] .btn:not(.danger):not(.primary){
+  background:#fbfaf7!important;
+  border-color:#d9dde3!important;
+  color:#27364a!important;
+  box-shadow:none!important;
+}
+body[data-cloud-role="owner"] .btn:not(.danger):not(.primary):hover{
+  background:#f4f2ec!important;
+  border-color:#c9c5b9!important;
+}
+body[data-cloud-role="owner"] .btn.primary{
+  background:#ae8d3d!important;
+  border-color:#ae8d3d!important;
+  color:#fff!important;
+  box-shadow:0 7px 16px rgba(111,88,34,.14)!important;
+}
+body[data-cloud-role="owner"] .btn.primary:hover{
+  background:#987a34!important;
+  border-color:#987a34!important;
+}
+
+/* Form controls and inner panels are quieter and consistent. */
+body[data-cloud-role="owner"] input,
+body[data-cloud-role="owner"] select,
+body[data-cloud-role="owner"] textarea{
+  border-color:#d9dde3!important;
+  background:#fff!important;
+}
+body[data-cloud-role="owner"] input:focus,
+body[data-cloud-role="owner"] select:focus,
+body[data-cloud-role="owner"] textarea:focus{
+  border-color:#b9a260!important;
+  box-shadow:0 0 0 3px rgba(197,162,78,.11)!important;
+}
+body[data-cloud-role="owner"] .v32-insight,
+body[data-cloud-role="owner"] .teacher-kpi-summary>div,
+body[data-cloud-role="owner"] .teacher-kpi-metric{
+  background:var(--owner-surface-muted)!important;
+  border-color:#e4e1d9!important;
+}
+
+/* Keep gold typography legible without looking saturated. */
+body[data-cloud-role="owner"] .v32-eyebrow,
+body[data-cloud-role="owner"] .kpi-eyebrow{
+  color:#846923!important;
+}
+body[data-cloud-role="owner"] .teacher-kpi-bar{
+  background:#e7e5df!important;
+}
+body[data-cloud-role="owner"] .teacher-kpi-bar i{
+  background:#b79645!important;
+}
+
+@media (max-width:980px){
+  body[data-cloud-role="owner"]{
+    --owner-canvas:#f5f4f0;
+  }
+}

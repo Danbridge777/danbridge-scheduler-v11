@@ -1,0 +1,67 @@
+/* V17.5 — iPad calendar drag recovery + lesson-record toolbar containment.
+   Functional scope: touch drag cleanup only. Layout scope: lesson filters only. */
+
+/* Never allow a released/cancelled iPad drag to leave the page locked. */
+body:not(.touch-drag-active) #calendarCanvas{
+  touch-action:auto;
+}
+#calendar .lesson.drag-arming,
+#calendar .week-event.drag-arming{
+  -webkit-touch-callout:none!important;
+}
+
+/* The generic toolbar rules can make month/student controls compete for width
+   inside the narrower iPad content column. Give this page its own grid. */
+#lessons > .card > .toolbar{
+  position:static!important;
+  top:auto!important;
+  z-index:auto!important;
+  display:grid!important;
+  grid-template-columns:minmax(180px,.9fr) minmax(180px,1fr) minmax(180px,1fr) max-content!important;
+  align-items:end!important;
+  gap:12px!important;
+  width:100%!important;
+  overflow:visible!important;
+  box-sizing:border-box!important;
+}
+#lessons > .card > .toolbar > div{
+  min-width:0!important;
+  width:100%!important;
+  max-width:100%!important;
+  box-sizing:border-box!important;
+}
+#lessons > .card > .toolbar label{
+  display:block!important;
+  min-height:18px!important;
+  margin:0 0 7px!important;
+  line-height:18px!important;
+}
+#lessons > .card > .toolbar input,
+#lessons > .card > .toolbar select{
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  box-sizing:border-box!important;
+}
+#lessons > .card > .toolbar .btn{
+  width:auto!important;
+  min-width:210px!important;
+  margin:0!important;
+  white-space:nowrap!important;
+}
+
+@media (max-width:1180px){
+  #lessons > .card > .toolbar{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  #lessons > .card > .toolbar .btn{
+    width:100%!important;
+    min-width:0!important;
+  }
+}
+@media (max-width:620px){
+  #lessons > .card > .toolbar{
+    grid-template-columns:1fr!important;
+  }
+}

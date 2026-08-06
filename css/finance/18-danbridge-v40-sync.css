@@ -1,0 +1,7 @@
+#firebaseCloudStatus{display:flex!important;align-items:center;gap:8px;max-width:min(520px,calc(100vw - 24px));white-space:normal;line-height:1.35}
+#firebaseCloudStatus::before{content:"";width:9px;height:9px;border-radius:50%;background:#94a3b8;flex:0 0 auto;box-shadow:0 0 0 4px rgba(148,163,184,.18)}
+#firebaseCloudStatus[data-kind="ok"]::before{background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.18)}
+#firebaseCloudStatus[data-kind="error"]::before{background:#ef4444;box-shadow:0 0 0 4px rgba(239,68,68,.18)}
+#firebaseCloudStatus[data-kind="pending"]::before{background:#f59e0b;box-shadow:0 0 0 4px rgba(245,158,11,.18)}
+#firebaseCloudStatus[data-kind="offline"]::before{background:#64748b;box-shadow:0 0 0 4px rgba(100,116,139,.18)}
+@media(max-width:700px){#firebaseCloudStatus{left:10px!important;right:10px!important;bottom:10px!important;max-width:none!important}}

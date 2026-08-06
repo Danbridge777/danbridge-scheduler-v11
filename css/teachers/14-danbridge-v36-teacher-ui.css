@@ -1,0 +1,133 @@
+/* V3.6 Teacher UI — visual only; no data, Firebase, permission or scheduling logic changes */
+body.teacher-cloud-role{
+  --teacher-navy:#0b2f50;
+  --teacher-blue:#145d95;
+  --teacher-blue-2:#1f78b4;
+  --teacher-surface:#ffffff;
+  --teacher-soft:#f3f8fd;
+  --teacher-line:#d9e6f1;
+  --teacher-text:#132238;
+  --teacher-muted:#6f7f92;
+  background:linear-gradient(180deg,#edf5fb 0,#f7f9fc 280px,#f4f7fb 100%)!important;
+}
+body.teacher-cloud-role:not(.auth-locked)>header{
+  background:linear-gradient(120deg,var(--teacher-navy),var(--teacher-blue) 62%,var(--teacher-blue-2))!important;
+  box-shadow:0 10px 30px rgba(8,47,82,.22)!important;
+  border-bottom:1px solid rgba(255,255,255,.13)!important;
+}
+body.teacher-cloud-role:not(.auth-locked)>header h1{font-size:25px!important;letter-spacing:-.03em!important;color:#fff!important}
+body.teacher-cloud-role:not(.auth-locked)>header p{color:rgba(255,255,255,.78)!important}
+body.teacher-cloud-role:not(.auth-locked)>main{background:transparent!important}
+body.teacher-cloud-role #dashboard .v32-welcome{
+  padding:4px 2px 8px!important;
+  margin-bottom:20px!important;
+}
+body.teacher-cloud-role #dashboard .v32-eyebrow{color:#256da5!important}
+body.teacher-cloud-role #dashboard .v32-welcome h2{font-size:30px!important;color:var(--teacher-text)!important}
+body.teacher-cloud-role #dashboard .v32-welcome p{color:var(--teacher-muted)!important}
+body.teacher-cloud-role #dashboard .summary{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(190px,1fr))!important;
+  gap:16px!important;
+  overflow:visible!important;
+  padding:0!important;
+}
+body.teacher-cloud-role #dashboard .metric{
+  min-width:0!important;
+  min-height:136px!important;
+  padding:22px 20px 20px 70px!important;
+  border-radius:24px!important;
+  background:linear-gradient(145deg,#fff 0%,#f7fbff 100%)!important;
+  border:1px solid var(--teacher-line)!important;
+  box-shadow:0 14px 34px rgba(20,74,112,.08)!important;
+}
+body.teacher-cloud-role #dashboard .metric b{font-size:34px!important;color:var(--teacher-text)!important}
+body.teacher-cloud-role #dashboard .metric span{font-size:14px!important;color:#50657b!important}
+body.teacher-cloud-role #dashboard .metric small{font-size:12px!important;color:#8794a5!important}
+body.teacher-cloud-role #dashboard .v32-dashboard-grid{
+  grid-template-columns:minmax(0,1.6fr) minmax(320px,.8fr)!important;
+  gap:20px!important;
+}
+body.teacher-cloud-role #dashboard .card{
+  border:1px solid var(--teacher-line)!important;
+  background:rgba(255,255,255,.97)!important;
+  box-shadow:0 16px 38px rgba(19,54,84,.07)!important;
+}
+body.teacher-cloud-role #dashboard .v32-today-card{min-height:360px!important}
+body.teacher-cloud-role #dashboard .v32-card-head h2{font-size:21px!important;color:var(--teacher-text)!important}
+body.teacher-cloud-role #dashboard .v32-card-head p{color:var(--teacher-muted)!important}
+body.teacher-cloud-role #todayLessons .lesson{
+  min-height:86px!important;
+  padding:15px 16px 15px 48px!important;
+  border-radius:17px!important;
+  border:1px solid #d9e6f2!important;
+  border-left:6px solid var(--teacher,#2563eb)!important;
+  background:linear-gradient(135deg,var(--location-bg,#eef5ff),#fff 82%)!important;
+  box-shadow:0 7px 18px rgba(15,54,86,.07)!important;
+}
+body.teacher-cloud-role #todayLessons .lesson b{font-size:15px!important;color:#10243a!important}
+body.teacher-cloud-role #todayLessons .lesson .meta{font-size:12px!important;color:#607186!important}
+body.teacher-cloud-role .v33-teacher-next{
+  border-radius:22px!important;
+  padding:20px!important;
+  background:linear-gradient(135deg,#0f4777,#1770ad)!important;
+  box-shadow:0 16px 36px rgba(15,71,119,.24)!important;
+}
+body.teacher-cloud-role .v33-teacher-next h3{font-size:20px!important}
+body.teacher-cloud-role .v33-teacher-next .btn{min-height:46px!important;border-radius:13px!important}
+body.teacher-cloud-role #calendar>.card,
+body.teacher-cloud-role #lessons>.card{
+  border:1px solid var(--teacher-line)!important;
+  box-shadow:0 16px 38px rgba(19,54,84,.07)!important;
+}
+body.teacher-cloud-role #calendar .toolbar,
+body.teacher-cloud-role #lessons .toolbar{
+  background:linear-gradient(180deg,#f9fcff,#f3f8fd)!important;
+  border-color:#d9e6f1!important;
+}
+body.teacher-cloud-role .btn.primary{
+  background:linear-gradient(135deg,#145d95,#1d73ae)!important;
+  box-shadow:0 8px 18px rgba(20,93,149,.20)!important;
+}
+body.teacher-cloud-role .btn.ok{
+  background:linear-gradient(135deg,#167955,#1f966b)!important;
+}
+body.teacher-cloud-role input,
+body.teacher-cloud-role select,
+body.teacher-cloud-role textarea{
+  border-color:#cddbea!important;
+  background:#fff!important;
+}
+body.teacher-cloud-role input:focus,
+body.teacher-cloud-role select:focus,
+body.teacher-cloud-role textarea:focus{
+  border-color:#3b82b8!important;
+  box-shadow:0 0 0 4px rgba(59,130,184,.13)!important;
+}
+@media(min-width:1100px){
+  body.teacher-cloud-role:not(.auth-locked)>nav{
+    background:linear-gradient(180deg,#082f4f 0%,#0f4e79 54%,#0a3b61 100%)!important;
+    box-shadow:12px 0 34px rgba(8,47,79,.18)!important;
+  }
+  body.teacher-cloud-role:not(.auth-locked)>nav button{
+    min-height:48px!important;
+    border-radius:14px!important;
+    font-size:14px!important;
+    color:rgba(255,255,255,.88)!important;
+  }
+  body.teacher-cloud-role:not(.auth-locked)>nav button.active{
+    background:linear-gradient(135deg,rgba(255,255,255,.23),rgba(255,255,255,.12))!important;
+    box-shadow:0 9px 22px rgba(0,0,0,.14)!important;
+  }
+}
+@media(max-width:1000px){
+  body.teacher-cloud-role #dashboard .summary{grid-template-columns:repeat(3,220px)!important;overflow-x:auto!important;padding-bottom:10px!important}
+  body.teacher-cloud-role #dashboard .v32-dashboard-grid{grid-template-columns:1fr!important}
+}
+@media(max-width:700px){
+  body.teacher-cloud-role #dashboard .summary{display:flex!important;gap:12px!important;overflow-x:auto!important}
+  body.teacher-cloud-role #dashboard .metric{flex:0 0 220px!important;min-height:118px!important;padding:18px 16px 16px 58px!important}
+  body.teacher-cloud-role #dashboard .metric b{font-size:28px!important}
+  body.teacher-cloud-role #dashboard .v32-welcome h2{font-size:25px!important}
+  body.teacher-cloud-role #todayLessons .lesson{min-height:80px!important;padding:13px 13px 13px 42px!important}
+}

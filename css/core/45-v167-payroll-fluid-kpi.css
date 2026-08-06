@@ -1,0 +1,153 @@
+/* Danbridge Operations V16.7 — fluid payroll KPI layout.
+   Visual-only overrides. Prevents long salary/hour values from widening or clipping teacher cards. */
+
+#settlement,
+#settlement .teacher-pay-cards,
+#settlement .teacher-pay-card,
+#settlement .teacher-pay-grid,
+#settlement .teacher-pay-stat{
+  min-width:0!important;
+  max-width:100%!important;
+  box-sizing:border-box!important;
+}
+
+#settlement .teacher-pay-card{
+  overflow:hidden!important;
+}
+
+/* Four equal fluid columns: no fixed minimum width that can enlarge the card. */
+#settlement .teacher-pay-grid{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:9px!important;
+  padding:14px 22px 14px!important;
+  overflow:hidden!important;
+}
+
+#settlement .teacher-pay-stat{
+  container-type:inline-size;
+  min-height:88px!important;
+  padding:12px 7px!important;
+  overflow:hidden!important;
+  line-height:1.15!important;
+}
+
+#settlement .teacher-pay-stat b{
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  margin-top:7px!important;
+  white-space:nowrap!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  font-size:clamp(15px,1.22vw,20px)!important;
+  line-height:1.08!important;
+  letter-spacing:-.04em!important;
+  font-variant-numeric:tabular-nums;
+}
+
+/* Difference and salary strings are usually the longest. */
+#settlement .teacher-pay-stat:nth-child(3) b{
+  font-size:clamp(14px,1.12vw,19px)!important;
+}
+
+#settlement .teacher-pay-stat:nth-child(4) b{
+  font-size:clamp(13px,1.02vw,18px)!important;
+  letter-spacing:-.055em!important;
+}
+
+/* Container-aware sizing keeps the full value visible inside narrower teacher cards. */
+@supports (font-size:1cqw){
+  #settlement .teacher-pay-stat b{
+    font-size:clamp(14px,15cqw,20px)!important;
+  }
+  #settlement .teacher-pay-stat:nth-child(3) b{
+    font-size:clamp(13px,14cqw,19px)!important;
+  }
+  #settlement .teacher-pay-stat:nth-child(4) b{
+    font-size:clamp(12px,12.5cqw,18px)!important;
+  }
+}
+
+/* Denser supporting information to reduce each teacher card's height. */
+#settlement .teacher-pay-head{
+  padding-top:21px!important;
+  padding-bottom:12px!important;
+}
+
+#settlement .teacher-work-summary{
+  padding:10px 13px!important;
+  line-height:1.45!important;
+}
+
+#settlement .branch-breakdown.cards{
+  gap:7px!important;
+  margin-bottom:13px!important;
+}
+
+#settlement .branch-breakdown.cards span{
+  min-width:0!important;
+  padding:9px 11px!important;
+}
+
+#settlement .branch-breakdown.cards span > *{
+  min-width:0!important;
+}
+
+#settlement .weekly-detail{
+  margin-bottom:20px!important;
+}
+
+#settlement .weekly-row{
+  min-height:39px!important;
+}
+
+/* At medium widths, use a comfortable 2 × 2 KPI layout rather than clipping. */
+@media(max-width:1450px){
+  #settlement .teacher-pay-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  #settlement .teacher-pay-stat{
+    min-height:78px!important;
+  }
+  #settlement .teacher-pay-stat b,
+  #settlement .teacher-pay-stat:nth-child(3) b,
+  #settlement .teacher-pay-stat:nth-child(4) b{
+    font-size:20px!important;
+    letter-spacing:-.035em!important;
+  }
+}
+
+@media(max-width:760px){
+  #settlement .teacher-pay-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    padding-inline:16px!important;
+  }
+  #settlement .teacher-pay-stat{
+    min-height:74px!important;
+  }
+  #settlement .teacher-pay-stat b,
+  #settlement .teacher-pay-stat:nth-child(3) b,
+  #settlement .teacher-pay-stat:nth-child(4) b{
+    font-size:18px!important;
+  }
+}
+
+@media(max-width:390px){
+  #settlement .teacher-pay-grid{grid-template-columns:1fr!important}
+  #settlement .teacher-pay-stat b,
+  #settlement .teacher-pay-stat:nth-child(3) b,
+  #settlement .teacher-pay-stat:nth-child(4) b{
+    font-size:20px!important;
+  }
+}
+
+@media print{
+  #settlement .teacher-pay-grid{
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  }
+  #settlement .teacher-pay-stat b,
+  #settlement .teacher-pay-stat:nth-child(3) b,
+  #settlement .teacher-pay-stat:nth-child(4) b{
+    font-size:15px!important;
+  }
+}

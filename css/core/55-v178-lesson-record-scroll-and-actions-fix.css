@@ -1,0 +1,57 @@
+/* V17.8 — Lesson records scroll recovery and floating-action containment.
+   Layout-only: no lesson, Firebase, permission, or record logic changes. */
+
+/* The global calendar undo/redo/add controls must not cover lesson-record rows. */
+body[data-active-section]:not([data-active-section="calendar"]) > .floating-actions{
+  display:none!important;
+}
+
+/* Keep the record page in the normal document flow on iPad and allow the page
+   itself to continue scrolling to the final row. */
+#lessons,
+#lessons.active,
+#lessons > .card,
+#lessons .table-wrap{
+  height:auto!important;
+  max-height:none!important;
+  min-height:0!important;
+}
+#lessons.active{
+  overflow:visible!important;
+}
+#lessons > .card{
+  overflow:visible!important;
+  padding-bottom:clamp(24px,4vw,54px)!important;
+}
+#lessons .table-wrap{
+  overflow-x:auto!important;
+  overflow-y:visible!important;
+  -webkit-overflow-scrolling:touch!important;
+  overscroll-behavior-x:contain!important;
+  touch-action:pan-x pan-y!important;
+}
+#lessons table{
+  margin-bottom:18px!important;
+}
+
+@media (min-width:701px) and (max-width:1366px){
+  html,body{
+    min-height:100%!important;
+    overflow-y:auto!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+  body:not(.auth-locked) > main{
+    overflow:visible!important;
+    min-height:calc(100dvh - 120px)!important;
+    padding-bottom:64px!important;
+  }
+  #lessons .table-wrap{
+    width:100%!important;
+    max-width:100%!important;
+  }
+}
+
+/* Fallback for browsers before the body data attribute is initialized. */
+body:has(#lessons.active) > .floating-actions{
+  display:none!important;
+}

@@ -1,0 +1,40 @@
+#dashboard{position:relative}
+#dashboard .summary{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:16px!important;margin:0 0 18px!important}
+#dashboard .metric{min-height:126px!important;padding:20px 20px 18px 68px!important;border-radius:22px!important;background:linear-gradient(145deg,#fff 0%,#f8fbff 100%)!important;border:1px solid #dce5ef!important;box-shadow:0 12px 30px rgba(15,41,70,.065)!important;display:flex;flex-direction:column;justify-content:center;color:#526078;font-weight:750;line-height:1.25}
+#dashboard .metric b{font-size:28px!important;line-height:1.05;margin-top:9px!important;color:#17243a;letter-spacing:-.045em}
+#dashboard .metric::before{position:absolute;left:20px;top:21px;width:34px;height:34px;border-radius:12px;display:grid;place-items:center;background:#eaf3fb;color:#14558b;font-size:18px;box-shadow:inset 0 0 0 1px rgba(20,85,139,.08)}
+#dashboard .metric:has(#mStudents)::before{content:"人"}
+#dashboard .metric:has(#mTeachers)::before{content:"師"}
+#dashboard .metric:has(#mLessons)::before{content:"課"}
+#dashboard .metric:has(#mRevenue)::before{content:"收"}
+#dashboard .metric:has(#mUnpaid)::before{content:"待";background:#fff4e5;color:#a56508}
+#dashboard .metric:has(#mPayroll)::before{content:"薪";background:#eef8f3;color:#16845b}
+#dashboard .metric:has(#mMakeups)::before{content:"補";background:#f2edff;color:#6b4bb4}
+#dashboard .metric:has(#mChanges)::before{content:"動";background:#feecec;color:#b4232a}
+#dashboard .metric:has(#mRevenue){background:linear-gradient(145deg,#f4fbf8,#fff)!important}
+#dashboard .metric:has(#mUnpaid){background:linear-gradient(145deg,#fffaf2,#fff)!important}
+#dashboard .metric:has(#mPayroll){background:linear-gradient(145deg,#f5fbf8,#fff)!important}
+#dashboard .dashboard-main{grid-template-columns:minmax(0,1.7fr) minmax(320px,.75fr)!important;gap:18px!important;margin-top:0!important}
+#dashboard .dashboard-main>.card{border-radius:24px!important;padding:22px!important;box-shadow:0 14px 36px rgba(15,41,70,.065)!important}
+#dashboard .dashboard-main>.card h2{font-size:20px!important;margin-bottom:16px!important;display:flex;align-items:center;gap:10px}
+#dashboard .dashboard-main>.card h2::before{content:"";width:9px;height:9px;border-radius:50%;background:#1b6ca5;box-shadow:0 0 0 6px rgba(27,108,165,.11)}
+#dashboard #todayLessons{display:grid;gap:9px}
+#dashboard #todayLessons .lesson{margin:0!important;padding:13px 14px 13px 16px!important;border-radius:15px!important;box-shadow:none!important;border:1px solid rgba(150,167,187,.18)!important;border-left:5px solid var(--teacher,#2563eb)!important;background:linear-gradient(135deg,var(--location-bg,#eef5ff),rgba(255,255,255,.93))!important;display:grid;gap:4px}
+#dashboard #todayLessons .lesson:hover{transform:translateY(-1px);box-shadow:0 9px 20px rgba(15,41,70,.09)!important}
+#dashboard #todayLessons .lesson b{font-size:14px!important;letter-spacing:-.015em}
+#dashboard #todayLessons .lesson .meta{font-size:12px!important;color:#64748b!important}
+#dashboard .searchbar{position:relative}
+#dashboard .searchbar::before{content:"⌕";position:absolute;left:13px;top:50%;transform:translateY(-51%);color:#7890a7;font-size:20px;z-index:1}
+#dashboard .searchbar input{min-width:0!important;width:100%!important;padding-left:40px!important;border-radius:14px!important;background:#f8fafc!important}
+#dashboard .row-actions{display:grid!important;grid-template-columns:1fr 1fr;gap:9px!important;margin-top:14px!important}
+#dashboard .row-actions .btn{width:100%;justify-content:center;min-height:46px!important}
+#dashboard .hint{margin-top:14px!important;padding:13px 14px!important;border-radius:14px!important;background:#f8fbfe!important;border-color:#dce8f2!important;color:#5a6a80!important}
+#dashboard .dashboard-changes{margin-top:0!important}
+#dashboard .dashboard-changes h2::before{background:#b7791f!important;box-shadow:0 0 0 6px rgba(183,121,31,.10)!important}
+#dashboard .change-table-wrap{border:1px solid #e1e8f0;border-radius:16px;overflow:auto;background:#fff}
+#dashboard .change-table{margin:0}
+#dashboard .change-table th{background:#f6f9fc!important}
+#dashboard .change-table td,#dashboard .change-table th{padding:12px 14px!important}
+@media(min-width:1400px){#dashboard .summary{grid-template-columns:repeat(8,minmax(135px,1fr))!important}#dashboard .metric{padding-left:60px!important}#dashboard .metric::before{left:17px}}
+@media(max-width:1180px){#dashboard .summary{grid-template-columns:repeat(2,minmax(0,1fr))!important}#dashboard .dashboard-main{grid-template-columns:1fr!important}#dashboard .dashboard-changes{grid-column:auto!important}}
+@media(max-width:640px){#dashboard .summary{gap:10px!important}#dashboard .metric{min-height:104px!important;padding:16px 12px 14px 54px!important;border-radius:18px!important;font-size:12px}#dashboard .metric::before{left:14px;top:16px;width:30px;height:30px;border-radius:10px;font-size:15px}#dashboard .metric b{font-size:21px!important}#dashboard .dashboard-main>.card{padding:16px!important;border-radius:19px!important}#dashboard .row-actions{grid-template-columns:1fr!important}}

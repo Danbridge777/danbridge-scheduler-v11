@@ -1,0 +1,19 @@
+/* V15.24 — corrected product mark and teacher KPI foundation. */
+@media (min-width:1100px){
+  body:not(.auth-locked)>nav{padding-top:128px!important}
+  body:not(.auth-locked)>nav::before{
+    content:"Danbridge"!important;top:24px!important;left:24px!important;right:18px!important;
+    white-space:normal!important;font-size:25px!important;line-height:1!important;letter-spacing:-.035em!important;font-weight:900!important;
+  }
+  body:not(.auth-locked)>nav::after{
+    content:"OPERATIONS\A EDUCATION MANAGEMENT SYSTEM"!important;white-space:pre!important;
+    top:58px!important;left:25px!important;right:14px!important;font-size:10px!important;line-height:1.65!important;
+    letter-spacing:.13em!important;font-weight:850!important;color:rgba(255,255,255,.68)!important;
+  }
+  body[data-cloud-role="owner"]>nav::before{content:"Danbridge"!important;color:#fff8dc!important;letter-spacing:-.035em!important}
+  body[data-cloud-role="owner"]>nav::after{content:"OPERATIONS\A EDUCATION MANAGEMENT SYSTEM"!important;color:rgba(255,238,174,.72)!important}
+}
+.teacher-kpi-card{overflow:hidden}.teacher-kpi-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;flex-wrap:wrap}.kpi-eyebrow{font-size:12px;letter-spacing:.16em;font-weight:900;color:#2563eb}.teacher-kpi-head h2{margin:4px 0 4px}.teacher-kpi-filters{display:grid;grid-template-columns:repeat(2,minmax(170px,1fr));gap:12px;min-width:min(100%,390px)}.teacher-kpi-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}.teacher-kpi-summary>div{padding:14px;border:1px solid var(--line);border-radius:16px;background:#f8fafc}.teacher-kpi-summary span{display:block;color:#64748b;font-size:12px;font-weight:800}.teacher-kpi-summary b{display:block;margin-top:5px;font-size:22px}.teacher-kpi-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.teacher-kpi-item{border:1px solid #dbe5ef;border-radius:18px;padding:16px;background:#fff;min-width:0;box-shadow:0 10px 24px rgba(15,23,42,.05)}.teacher-kpi-title{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.teacher-kpi-title h3{margin:0}.teacher-kpi-title .small{display:block;margin-top:3px}.teacher-kpi-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:14px}.teacher-kpi-metric{padding:10px;border-radius:12px;background:#f8fafc;min-width:0}.teacher-kpi-metric span{display:block;font-size:11px;color:#64748b;font-weight:800}.teacher-kpi-metric b{display:block;margin-top:4px;font-size:16px;overflow:hidden;text-overflow:ellipsis}.teacher-kpi-progress{margin-top:12px}.teacher-kpi-progress-row{display:grid;grid-template-columns:90px 1fr 52px;gap:8px;align-items:center;margin-top:8px;font-size:12px}.teacher-kpi-bar{height:8px;background:#e8eef5;border-radius:999px;overflow:hidden}.teacher-kpi-bar i{display:block;height:100%;border-radius:inherit;background:#2563eb}.teacher-kpi-empty{padding:28px;border:1px dashed #cbd5e1;border-radius:16px;color:#64748b;text-align:center}.role-teacher .teacher-kpi-card .teacher-kpi-filters>div:last-child{display:none}
+body[data-cloud-role="owner"] .kpi-eyebrow{color:#9a7100}body[data-cloud-role="owner"] .teacher-kpi-bar i{background:#d7aa24}
+@media(max-width:1050px){.teacher-kpi-grid{grid-template-columns:1fr}.teacher-kpi-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.teacher-kpi-filters,.teacher-kpi-summary,.teacher-kpi-metrics{grid-template-columns:1fr 1fr}.teacher-kpi-head{display:block}.teacher-kpi-filters{margin-top:14px;min-width:0}.teacher-kpi-progress-row{grid-template-columns:74px 1fr 45px}}

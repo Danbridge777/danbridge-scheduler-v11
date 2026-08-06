@@ -1,0 +1,12 @@
+/* Danbridge Operations V15.23 — brand identity, Owner gold navigation, integrity center. */
+body:not(.auth-locked)>header h1{letter-spacing:-.035em}
+body[data-cloud-role="owner"]{--owner-nav-start:#4b3604;--owner-nav-end:#8a6506;--owner-gold:#e1b72f;--owner-gold-soft:#fff4c5}
+@media (min-width:981px){
+ body[data-cloud-role="owner"]>nav{background:linear-gradient(180deg,var(--owner-nav-start),#604704 50%,var(--owner-nav-end))!important;border-right-color:rgba(255,226,122,.32)!important;box-shadow:12px 0 36px rgba(75,54,4,.18)!important}
+ body[data-cloud-role="owner"]>nav::before{content:"Danbridge\A OPERATIONS";white-space:pre;color:#fff8dc!important;letter-spacing:.12em}
+ body[data-cloud-role="owner"]>nav button{color:#fff8dc!important}
+ body[data-cloud-role="owner"]>nav button:hover{background:rgba(255,244,197,.12)!important}
+ body[data-cloud-role="owner"]>nav button.active{background:linear-gradient(90deg,rgba(225,183,47,.28),rgba(255,255,255,.12))!important;border-color:rgba(255,226,122,.46)!important;box-shadow:inset 5px 0 0 var(--owner-gold)!important;color:#fff!important}
+ body[data-cloud-role="owner"]>nav button::before{color:#ffe88c!important}
+}
+.data-integrity-card{overflow:hidden}.data-integrity-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}.integrity-badge{display:inline-flex;padding:7px 11px;border-radius:999px;background:#eef2f7;color:#475569;font-size:12px;font-weight:900}.integrity-badge.ok{background:#eaf8f0;color:#137047}.integrity-badge.warn{background:#fff4d8;color:#8a5a00}.integrity-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}.integrity-item{display:flex;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid #dfe7ef;border-radius:14px;background:#f8fafc;min-width:0}.integrity-item span{min-width:0}.integrity-item b{color:#18794e}.integrity-item.warn{background:#fff9e9;border-color:#efd28a}.integrity-item.warn b{color:#a16207}@media(max-width:900px){.integrity-summary{grid-template-columns:1fr}}

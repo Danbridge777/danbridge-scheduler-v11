@@ -1,0 +1,5 @@
+/* Danbridge V18.22 — usability polish only. */
+:where(button,.btn,input,select,textarea,a):focus-visible{outline:3px solid rgba(37,99,235,.28)!important;outline-offset:2px!important}
+.modal-backdrop.show .modal{scroll-margin-block:24px}
+nav button[data-tab]{scroll-margin-inline:28px}
+@media(max-width:700px){nav{scroll-behavior:smooth}.modal-backdrop.show .modal{scroll-margin-block:12px}}

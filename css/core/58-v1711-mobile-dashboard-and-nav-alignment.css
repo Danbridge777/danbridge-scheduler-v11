@@ -1,0 +1,199 @@
+/* V17.11 Mobile dashboard scale + bottom navigation alignment
+   Layout-only overrides. No routing, permissions, data, Firebase or business logic changed. */
+@media (max-width:700px){
+  :root{
+    --mobile-nav-h:78px;
+    --mobile-nav-columns:5;
+  }
+
+  /* Give the dashboard's main mobile panels more visual weight. */
+  #dashboard .v32-welcome{
+    min-height:228px!important;
+    padding:20px 18px 18px!important;
+    margin:0 0 14px!important;
+    border-radius:22px!important;
+    display:flex!important;
+    flex-direction:column!important;
+    justify-content:center!important;
+    box-sizing:border-box!important;
+  }
+  #dashboard .v32-eyebrow{
+    font-size:11px!important;
+    letter-spacing:.18em!important;
+    margin-bottom:8px!important;
+  }
+  #dashboard .v32-welcome h2{
+    font-size:30px!important;
+    line-height:1.12!important;
+    margin:0 0 7px!important;
+  }
+  #dashboard .v32-welcome p{
+    font-size:14px!important;
+    line-height:1.45!important;
+    margin:0!important;
+  }
+  #dashboard .v32-header-actions{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+    gap:10px!important;
+    margin-top:18px!important;
+  }
+  #dashboard .v32-header-actions .btn{
+    min-height:54px!important;
+    height:54px!important;
+    padding:10px 12px!important;
+    border-radius:16px!important;
+    font-size:14px!important;
+    white-space:nowrap!important;
+  }
+
+  /* Three daily operation cards: one wide card + two substantial half cards. */
+  #dashboard .v33-ops-strip{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:12px!important;
+    width:100%!important;
+    margin:0 0 16px!important;
+    padding:0!important;
+    overflow:visible!important;
+    scroll-snap-type:none!important;
+  }
+  #dashboard .v33-ops-mini{
+    min-width:0!important;
+    width:100%!important;
+    min-height:132px!important;
+    padding:18px 15px!important;
+    border-radius:22px!important;
+    box-sizing:border-box!important;
+    scroll-snap-align:none!important;
+  }
+  #dashboard .v33-ops-mini:first-child{
+    grid-column:1/-1!important;
+    min-height:144px!important;
+  }
+  #dashboard .v33-ops-mini b{
+    font-size:28px!important;
+    line-height:1.05!important;
+    margin-top:7px!important;
+  }
+  #dashboard .v33-ops-mini span,
+  #dashboard .v33-ops-mini small{
+    font-size:12px!important;
+    line-height:1.35!important;
+  }
+
+  /* Core KPI cards no longer become a narrow clipped carousel. */
+  #dashboard .summary,
+  body.teacher-cloud-role #dashboard .summary{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:12px!important;
+    width:100%!important;
+    margin:0 0 16px!important;
+    padding:0!important;
+    overflow:visible!important;
+    scroll-snap-type:none!important;
+  }
+  #dashboard .metric,
+  #dashboard .metric:has(#mRevenue),
+  #dashboard .metric:has(#mUnpaid),
+  #dashboard .metric:has(#mPayroll),
+  body.teacher-cloud-role #dashboard .metric{
+    flex:none!important;
+    width:100%!important;
+    min-width:0!important;
+    min-height:142px!important;
+    padding:20px 13px 16px 56px!important;
+    border-radius:22px!important;
+    box-sizing:border-box!important;
+    scroll-snap-align:none!important;
+  }
+  #dashboard .metric::before{
+    left:14px!important;
+    top:18px!important;
+    width:34px!important;
+    height:34px!important;
+  }
+  #dashboard .metric b,
+  #dashboard .metric:has(#mRevenue) b,
+  #dashboard .metric:has(#mUnpaid) b,
+  #dashboard .metric:has(#mPayroll) b{
+    font-size:27px!important;
+    line-height:1.05!important;
+  }
+  #dashboard .metric span{font-size:13px!important;line-height:1.25!important}
+  #dashboard .metric small{font-size:11px!important;line-height:1.35!important;margin-top:9px!important}
+
+  /* Bottom navigation: exactly five equal slots per viewport, aligned icon and label rows. */
+  body:not(.auth-locked)>nav{
+    height:calc(var(--mobile-nav-h) + env(safe-area-inset-bottom))!important;
+    min-height:calc(var(--mobile-nav-h) + env(safe-area-inset-bottom))!important;
+    align-items:stretch!important;
+    gap:0!important;
+    padding-top:6px!important;
+    padding-left:max(4px,env(safe-area-inset-left))!important;
+    padding-right:max(4px,env(safe-area-inset-right))!important;
+    padding-bottom:env(safe-area-inset-bottom)!important;
+    scroll-snap-type:x mandatory!important;
+  }
+  body:not(.auth-locked)>nav button{
+    flex:0 0 calc((100dvw - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right))) / var(--mobile-nav-columns))!important;
+    width:calc((100dvw - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right))) / var(--mobile-nav-columns))!important;
+    min-width:0!important;
+    max-width:none!important;
+    height:68px!important;
+    min-height:68px!important;
+    display:grid!important;
+    grid-template-rows:28px 22px!important;
+    align-content:center!important;
+    align-items:center!important;
+    justify-items:center!important;
+    gap:2px!important;
+    padding:7px 2px 6px!important;
+    margin:0!important;
+    border-radius:14px!important;
+    font-size:11px!important;
+    line-height:1!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:clip!important;
+    box-sizing:border-box!important;
+    scroll-snap-align:start!important;
+  }
+  body:not(.auth-locked)>nav button::before{
+    width:28px!important;
+    height:28px!important;
+    display:grid!important;
+    place-items:center!important;
+    margin:0!important;
+    font-size:21px!important;
+    line-height:28px!important;
+  }
+
+  /* Keep overlays consistently above the taller navigation. */
+  #firebaseCloudStatus{
+    bottom:calc(var(--mobile-nav-h) + 10px + env(safe-area-inset-bottom))!important;
+  }
+  .floating-actions,
+  .selection-bar,
+  .paste-mode-banner{
+    bottom:calc(var(--mobile-nav-h) + 10px + env(safe-area-inset-bottom))!important;
+  }
+  body:not(.auth-locked){
+    padding-bottom:calc(var(--mobile-nav-h) + env(safe-area-inset-bottom))!important;
+  }
+  body:not(.auth-locked)>main{
+    padding-bottom:calc(var(--mobile-nav-h) + 34px + env(safe-area-inset-bottom))!important;
+  }
+}
+
+@media (max-width:380px){
+  #dashboard .v32-welcome{min-height:214px!important;padding:18px 15px!important}
+  #dashboard .v32-welcome h2{font-size:27px!important}
+  #dashboard .v32-header-actions .btn{font-size:12px!important;padding-inline:8px!important}
+  #dashboard .v33-ops-mini{min-height:126px!important;padding:16px 12px!important}
+  #dashboard .metric,
+  #dashboard .metric:has(#mRevenue),
+  #dashboard .metric:has(#mUnpaid),
+  #dashboard .metric:has(#mPayroll){min-height:136px!important;padding-right:9px!important}
+  body:not(.auth-locked)>nav button{font-size:10px!important}
+}

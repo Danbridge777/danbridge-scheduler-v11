@@ -1,0 +1,723 @@
+# Changelog
+
+## V11 initial clean repository
+
+- Recreated the application from the latest validated v10 source without its Git history, macOS metadata, or historical audit reports.
+- Preserved Firebase project configuration, owner/teacher/branch roles, cloud data paths, calendar interaction fixes, and notification flows.
+- Added `.nojekyll` for direct static GitHub Pages publishing and assigned a v11-specific Service Worker cache.
+
+## V18.22.25 — 重建桌面課表互動核心
+
+- 移除每次渲染後複製並替換整個課表容器的機制，選取、貼上與拖曳改用單一永久事件層。
+- 課表內容更新不再刪除互動事件，消除偶爾可用、慢一步及部分卡片無法拖曳。
+- 桌面拖曳的開始、目標標示、放下與清理全部由永久課表事件層接管。
+- 一般單人課程只採用目前主要老師判斷撞課，忽略舊資料殘留的多老師陣列。
+- 團班仍保留多老師撞課判斷，不影響共同授課規則。
+- 課表紅色衝堂標示同步排除草稿、取消與停課，只標示正式課程的真實時間重疊。
+
+## V18.22.24 — 移除操作慢一步與永久恢復拖曳
+
+- 貼上由延後的 click 改為 pointerdown 當下執行，第一下就完成，不再由下一個動作觸發上一筆。
+- 移除多選期間略過拖曳事件綁定的設計；事件永久存在，只在多選當下暫停。
+- 退出多選後直接恢復拖曳，不再依賴重新渲染或非同步重綁。
+- 貼上模式點到另一張課程時先結束舊貼上，避免舊剪貼簿干擾下一次選取。
+
+## V18.22.23 — 重綁拖曳與排除隱藏重複資料
+
+- 複製並退出多選後立即重建課表，恢復每一張課程卡片的拖曳事件。
+- 貼上重複檢查排除草稿、取消及停課，不再被畫面未顯示的資料擋住。
+- 貼上模式移動滑鼠時即時標示目標日期／時間格，點擊後使用同一目標貼上。
+- 課表區禁止瀏覽器原生文字反黑，框選與拖曳不再互相干擾。
+
+## V18.22.22 — 跨週跨老師貼上與假撞課修正
+
+- 複製後切換週次、日期、顯示模式或目標老師時，保留待貼課程與貼上模式。
+- 修正 7/30 複製後切到 8/6、或切換 Kim 等老師時被自動取消貼上的問題。
+- 草稿課程不再阻擋正式課程拖移或貼上，避免畫面空白卻提示撞課。
+- 貼上若因完全重複、學生或教室衝突而全部略過，直接列出實際原因。
+
+## V18.22.21 — 統一撞課、複製貼上與拖移狀態
+
+- 指定老師課表中拖移課程時，改以目前選取老師作為目標，不再沿用原老師造成假撞課。
+- 拖移仍排除課程本身，只在學生、教室或目標老師真正時間重疊時提示。
+- 複製完成立即退出多選狀態並保留待貼課程，點目標格即可貼上。
+- 貼上、拖移、批次更新與整週複製完成後，統一清除多選及貼上操作狀態。
+
+## V18.22.20 — 修復重建課表後無法貼上
+
+- 修正框選功能重建課表畫布後，貼上事件被一併移除的問題。
+- 貼上模式點擊空白日期／時間格時優先執行貼上，不再被誤判為取消多選。
+- 桌面月檢視、週檢視與手機週卡片共用同一套最終貼上處理。
+
+## V18.22.19 — 修復電腦版課程貼上
+
+- 桌面月課表與週課表改用統一貼上事件，點日期格或時間格即可可靠貼上。
+- 每次複製後清除來源格的舊貼上位置，避免誤判成貼回原課程位置。
+- 鍵盤貼上優先採用滑鼠目前所在格，再使用最後有效目標。
+
+## V18.22.18 — 恢復手機課程複製貼上
+
+- 多選課程工具列新增可直接操作的「複製選取」。
+- 手機週課表每一天重新綁定貼上日期，複製後可直接點目標日期完成貼上。
+- 輸入框與文字區域恢復手機原生長按選取、複製及貼上。
+
+## V18.22.17 — 手機月份欄位與課程日期對齊
+
+- 課程紀錄與營隊報名的月份標籤恢復靠左，僅輸入框內年月置中。
+- 限制營隊報名月份欄位與父層寬度，避免手機版格子向右超出。
+- 課程紀錄卡片的日期數字在內容欄置中，保留欄位標籤靠左。
+
+## V18.22.16 — 手機營隊日期滑動與月份置中
+- 冬／夏令營報名日期月曆加入獨立橫向滑動容器，七個星期欄可完整左右查看與勾選。
+- 776px 日期月曆固定收納在手機卡片內，不再撐寬頁面或讓右側日期超出畫面。
+- 報名月份與課程紀錄月份的年月數字及標籤強制置中，維持相同欄寬與數字間距。
+
+## V18.22.15 — 全角色手機排版、週課表與角色切換修正
+- 老闆端財務中心分頁固定為兩欄手機網格，所有標題、說明與金額限制在卡片內並置中。
+- 老闆、主管與老師的課程紀錄共用同一套手機卡片；時間／時數、學生／老師、回報內容、狀態、費用與操作對齊固定欄位。
+- 長回報內容、薪資與收費資料在卡片內自然換行，統一手機字級，不再向右超出。
+- 手機週課表改為七天直向行程卡，完整列出所選老師每天的課程；桌機維持原本 5 分鐘週格線。
+- 老師切回老闆帳號時自動恢復原始分頁名稱、課表篩選、分析區及新增／復原工具，不必重新整理。
+
+## V18.22.14 — 回報欄位左對齊與底部導覽避讓
+- 課程回報的標籤、輸入內容、提示文字與預留文字統一靠左對齊。
+- 手機上課狀態改為單欄等寬選項，圓鈕與文字使用固定欄位，不再左右錯位或留下落單選項。
+- 回報視窗層級提高至底部導覽列之上，往下滑時操作按鈕不再被手機選單遮住。
+- 回報視窗上下保留 iPhone 安全距離，並維持視窗內獨立捲動。
+
+## V18.22.13 — 回報卡單列資訊與獨立捲動視窗
+- 老師回報卡的時間／時數、學生／老師、地點／教室改為同一列，以細分隔線清楚區分並對齊固定內容欄。
+- 每個資訊列保留獨立底線，長內容可自然換行但不會再產生不一致的大空隙。
+- 課程回報視窗開啟時鎖住背景，只允許回報視窗本身順暢捲動。
+- 「開始上課」改為高對比綠底白字；不可使用時仍保留清楚的柔和綠色狀態。
+
+## V18.22.12 — 老師回報卡內容列與操作區對齊
+- 課程回報卡每個欄位改為固定標籤欄與單一內容區，換行不再把時數、老師或地點推到錯誤欄位。
+- 日期、時間、學生／老師、課程內容與狀態統一字級、行高及左右對齊。
+- 月份標籤與月份值在手機卡片中置中顯示。
+- 回報視窗的開始上課、一鍵完成、儲存回報與取消改為等寬兩欄按鈕，文字與間距一致。
+
+## V18.22.11 — 老師手機課表操作卡重新編排
+- 手機版將日期導覽、課程搜尋與課表工具拆成三張同寬卡片，桌機版維持原排版。
+- 顯示模式、基準日期、前後日期與今天按鈕統一邊界、寬度、間距及高度。
+- Apple 行事曆與列印／PDF 改為並排手機按鈕，搜尋文案改為老師實際可用的日期、學生與課程名稱。
+- 老師登入後直接移除全域新增課程工具，避免其他模組或舊樣式再次顯示浮動加號。
+
+## V18.22.10 — 老師課表欄位與回報卡片強制收斂
+- 老師登入完成後直接移除老師、地點、學生／班級、教室及課程狀態欄位，只保留日期與關鍵字搜尋。
+- 權限介面於登入後再次套用，避免模組載入順序造成老師專用樣式失效。
+- 課程回報卡的標籤、日期、時間、學生、課程內容與狀態統一為相同字級和固定欄寬。
+- 操作按鈕限制在卡片內容欄內，新增課程浮動按鈕也以老師登入 class 強制隱藏。
+- 手機頁首固定保留雲端狀態列空間，不再壓住 Danbridge Operations。
+
+## V18.22.9 — 老師手機介面與權限內容一次整理
+- 老師總覽的歡迎卡與雙按鈕限制在卡片寬度內，統一間距並移除手機版溢出。
+- 課程回報列表改為老師專用的緊湊卡片，日期、時間、學生、課程、狀態與操作欄位對齊。
+- 老師端移除老師、學生／班級、教室與內部狀態篩選，也不再產生教室使用率及老師空堂分析。
+- 強制隱藏老師端新增課程浮動按鈕；舊版回報監聽權限不足時不再用紅色錯誤遮住畫面，課表仍可正常載入。
+- 更新相關樣式與程式快取版本，確保手機立即套用新版。
+
+## V18.22.8 — 老師手機面板字體與防溢出調整
+- 老師手機頁首、歡迎面板、統計卡與今日課程改為更柔和一致的字重、行高與字距。
+- 英文眉題、姓名、統計數值及按鈕文字依螢幕寬度縮放與安全換行，不再超出卡片。
+- 老師手機樣式加入版本參數，避免瀏覽器沿用舊快取而持續顯示溢出版面。
+
+## V18.22.7 — 雲端狀態置頂且不遮擋頁首
+- 手機版雲端同步狀態固定顯示於螢幕最上方。
+- 狀態顯示期間自動替頁首保留高度，避免覆蓋品牌標題、帳號與操作按鈕。
+
+## V18.22.6 — 手機與 iPad 響應式細節修正
+- 手機月曆恢復單欄寬度，完整日期與課程卡片不再被 700px 月曆畫布裁切。
+- 同步狀態移至底部導覽列上方，避免遮住手機頁首與標題。
+- 手機與 iPad 導覽斷點統一為 700px；iPad 直向、橫向及分割畫面維持平板導覽。
+- 手機隱藏返回頂端浮動按鈕，避免遮住課程內容與操作區。
+
+## V18.22.5 — 手機月曆顯示完整日期
+- 手機版每個月曆日期群組改為顯示「月日・星期」，不再只顯示單一日期數字。
+- 展開／收合提示保留在日期標題右側，桌機與 iPad 月曆排版不變。
+
+## V18.22.4 — 完整移除課堂照片與修正校區請假率
+- 移除舊課堂照片的資料同步、課程列表／詳情顯示、樣式與 Firebase Storage Rules；課堂回報只保留文字、作業、回饋、狀態及內部備註。
+- 校區結算的課表總堂數改為全部正式課程，請假率使用相同分母並限制在 0～100%。
+- 新增校區結算請假率回歸測試，涵蓋「收費堂數少於請假堂數」的邊界。
+
+## V18.22.3 — 停用課堂照片上傳
+- 移除課堂回報中的照片選擇、預覽與 Firebase Storage 上傳流程；文字、作業、回饋、狀態及內部備註維持原同步方式。
+- Firebase 部署改為只需要 Firestore Rules，不再因尚未啟用 Storage 而中止。
+- 舊回報若已有照片資料仍保留唯讀顯示；新版儲存不會清除既有照片欄位。
+
+## V18.22.2 — 登入頁首幀直接顯示新版
+- 將 HTML 初始登入畫面同步為目前黑金羽毛設計，網頁剛開啟的第一幀即顯示新版。
+- 移除 Firebase 登入模組載入前短暫出現舊版藍黑登入頁的畫面閃換。
+- Google 登入完成載入後仍沿用原驗證流程；權限、同步與營運資料不變。
+
+## V18.22.1 — 老師空堂固定單週
+- 老師空堂分析固定只列出課表基準日期所屬的週一至週日，不再跟著月曆顯示整個月份。
+- 當基準日期為週日時，改列出隔天週一起至下個週日，規則與 Apple 行事曆一週匯出一致。
+- 教室使用率仍依目前月／週顯示範圍計算；課表、薪資、財務、營隊與既有資料不變。
+
+## V18.22 — 不改功能的操作便利性
+- 桌機可按 Command／Ctrl＋K 直接定位目前頁面的搜尋欄，支援營運總覽、學生 CRM 與課程管理。
+- Escape 可關閉最上層彈窗；彈窗開啟後會自動定位第一個可操作欄位，減少滑鼠移動。
+- 切換功能頁面時會記住各頁捲動位置，返回後接續先前閱讀處；資料只存在目前瀏覽分頁。
+- 手機橫向導覽會自動將目前頁籤捲入可見範圍，並補強鍵盤焦點標記；不變更計算、資料結構、權限或同步。
+
+## V18.21.11 — 品牌名稱與標語比例
+- Danbridge 公司名稱再放大一級，桌機、iPad 與手機版同步強化品牌主體。
+- Quiet precision 與 Exceptional learning 兩行標語同步縮小，進一步降低輔助文案的視覺比重。
+- 僅調整登入頁文字比例，不變更登入、權限、同步或營運資料。
+
+## V18.21.10 — 品牌字加粗與陰影強化
+- Danbridge 品牌名稱提升至最高字重並加入細緻金色描邊，補強精品襯線字偏細的筆畫。
+- 陰影改為清楚的深金偏移層、深色立體陰影與柔和金色光暈，提升黑色背景上的辨識度。
+- 僅調整登入頁品牌文字，不變更登入、權限、同步或營運資料。
+
+## V18.21.9 — 品牌字標加重與標語正體
+- Danbridge 品牌名稱再加粗，加入輕微斜體與克制的金色立體陰影，提升字標力量與精品感。
+- Exceptional learning 取消斜體並與 Quiet precision 統一為穩定正體，降低輔助標語的視覺搶占。
+- 僅調整登入頁字體視覺，不變更登入、權限、同步或營運資料。
+
+## V18.21.8 — 精品品牌字與羽毛提亮
+- Danbridge 公司名稱改用 Didot／Bodoni 精品襯線字體序列，調整字重、字距與金色光澤。
+- 金色羽毛提高亮度、飽和度與柔和高光，但維持既有尺寸與視覺層級。
+- 僅調整登入頁品牌視覺，不變更登入、權限、同步或營運資料。
+
+## V18.21.7 — 公司名稱強化與視覺降噪
+- Danbridge 公司名稱改為更粗、更大的精品襯線字，提升清晰度與品牌力量。
+- 金色羽毛縮小並降低亮度與飽和度，不再搶過公司名稱的視覺焦點。
+- Quiet precision 與 Exceptional learning 再縮小並降低對比，明確作為輔助品牌標語。
+
+## V18.21.6 — 登入頁品牌層級與卡片比例
+- 將 Danbridge 提升為左側主要品牌標題，改用放大的精品襯線字體與較自然的字距。
+- 縮小 Quiet precision 與 Exceptional learning 標語，讓視覺層級回到公司名稱與金色羽毛。
+- 收緊登入卡上下留白與高度，保留舒適間距但移除過多空白，桌機與手機版同步調整。
+
+## V18.21.5 — 羽毛融合與登入卡圓角
+- 登入頁背景統一為純黑並柔化羽毛圖片外緣，移除可見的矩形圖片邊界。
+- 公司名稱移除前方小型 D 圖章並放大 DANBRIDGE 字樣，強化品牌辨識。
+- 登入卡與 Google 按鈕改為柔和圓角，移除卡片左上方多餘的金色短線裝飾。
+
+## V18.21.4 — 寫實金色羽毛與英文登入頁
+- 將扁平羽毛圖示替換為具細緻羽絲與金屬光澤的寫實金色羽毛主視覺。
+- 登入介面的標題、說明、按鈕與安全提示統一改為英文，移除中英混用。
+- 放寬主標題行距、字距、段落與登入卡留白，提升桌機、iPad 與手機的閱讀舒適度。
+
+## V18.21.3 — 黑金羽毛筆登入頁
+- 登入頁改為簡約雙欄構圖，以金色羽毛筆作為主視覺，維持 Danbridge 黑金品牌風格。
+- 移除裝飾性營運儀表板、重複權限說明與過多狀態資訊，聚焦品牌與 Google 登入操作。
+- 桌機、iPad 與手機皆採精簡響應式排版；僅調整登入畫面，不變更權限、同步或任何營運資料。
+
+## V18.21.2 — 營隊資料季別完整隔離
+- 營隊報名的編輯、載入與刪除明確帶入夏令營或冬令營季別，不再只靠紀錄 ID 猜測資料來源。
+- 資料完整性中心同步檢查與整理冬、夏令營報名，並偵測兩季間重複的紀錄 ID。
+- LINE 對帳維持「該月正式家教＋單一所選營隊季別」，公司總財務才合計兩季實際收入。
+
+## V18.21.1 — LINE 對帳營隊季別隔離
+- 財務中心與營隊頁的 LINE 預覽一律只計目前選擇的夏令營或冬令營，不再將兩季混合在同一則訊息。
+- LINE 明細仍會加上該月份所有正式家教課程；若學生有目前季別的營隊報名，再加入該季日期、計價與小計。
+- 預覽視窗新增營隊季別切換，切換後立即重算，並記住目前選擇；財務總帳仍完整合計冬、夏令營所有實際收入。
+
+## V18.21 — 冬／夏令營收費切換
+- 左側「夏令營收費」改為「冬／夏令營」，營隊學生收費頁新增夏令營／冬令營季別選擇。
+- 同一學生同月份的冬令營與夏令營報名分開保存、載入、編輯、刪除與合計；既有紀錄自動維持為夏令營資料，不搬移也不覆蓋。
+- 營隊頁的 LINE 預覽依目前選擇顯示「夏令營」或「冬令營」及該季日期、計價公式與小計；財務中心的家庭 LINE 仍可合併顯示兩季。
+- 公司財務與學生應收會合計冬／夏令營收入，畫面文字同步改為冬／夏令營；桌機、iPad 與手機皆支援季別切換。
+
+## V18.20.3 — 月曆選取標記精簡
+- 桌機與 iPad 月曆的選取勾勾縮為小型圓形標記，改用較低飽和的藍色，仍能清楚辨識。
+- 選取外框由厚重亮藍框改為細緻柔和線條，縮小左側留白；多選操作與選取範圍維持不變。
+
+## V18.20.2 — 週日匯出下一週
+- Apple Calendar 一週匯出在基準日期為週日時，改為匯出隔天週一起至下個週日；週一至週六仍匯出所在週。
+- 匯出範圍仍固定為完整 7 天，其他課表篩選、行程名稱與內容維持不變。
+
+## V18.20.1 — Apple 行事曆固定一週與游標修正
+- Apple Calendar 匯出固定以課表「基準日期」所在週的週一至週日為範圍，無論月曆或週曆模式都剛好 7 天，不多也不少。
+- 仍套用目前老師、學生、地點、教室、課程狀態與搜尋篩選；按鈕文字改為「加入本週 Apple 行事曆」。
+- 滑鼠移到月曆及週曆課程時維持一般箭頭，不再因完整資訊提示顯示問號游標；多選模式仍保留可點擊指標。
+
+## V18.20 — 課表一鍵加入 Apple 行事曆
+- 課表工具列新增「加入 Apple 行事曆」，依目前月／週範圍及老師、學生、地點、教室、狀態與搜尋篩選匯出正式課程。
+- Apple 行事曆事件標題顯示「月／日＋學生／班級姓名」，並保留正確上課時間、老師、課程、地點與狀態說明。
+- 桌機、iPad 與手機皆輸出標準 `.ics` 檔案；不修改課表資料，Apple 系統仍會要求使用者確認加入。
+
+## V18.19.1 — 浮動按鈕與右鍵選單排版
+- 右下角復原／重做／新增操作與快速新增圓形按鈕錯開排列，不再互相遮擋；手機版分置左右並避開底部導覽列。
+- 課表右鍵選單改為輕量圓角浮層，加入線條圖示、細線分隔與柔和陰影，並會自動保持在螢幕範圍內。
+- 回到頂端按鈕在手機版移至快速新增按鈕上方，避免新的浮動元件再次重疊。
+
+## V18.19 — 桌機、iPad 與手機操作便利性
+- 月曆可點日期標題展開當日課程，集中查看完整老師、地點與課程資訊，再次點擊即可收合。
+- iPad 與手機的寬表格左右滑動時固定第一欄，降低學生、日期或老師資料看錯列的機會。
+- 課表、課程紀錄、老師 KPI、財務與收款的月份及篩選條件會記住在目前裝置，下次返回頁面可延續操作。
+- 長頁面新增回到頂端按鈕，手機版會自動避開底部導覽列與安全區。
+- 學生、課程、補課、收款、薪資、支出及結算沒有資料時，顯示一致且清楚的空白提示。
+- 課程編輯、課堂回報、批次調整及 LINE 預覽的主要操作按鈕固定於視窗底部；只改善操作與排版，不更動資料及計算。
+
+## V18.18.1 — 手機復原提示位置修正
+- 手機版課程修改後的「復原」提示移至底部導覽列上方，避免按鈕與導覽列互相遮擋。
+- 桌面版提示位置與課程、財務及其他功能維持不變。
+
+## V18.18 — Notion 式單行月曆課程
+- 桌面與 iPad 的月曆模式改為緊湊單行橫向課程列，時間與學生／班級顯示在同一排。
+- 隱藏月曆卡片內重複的老師、地點與付款第二行，完整資訊仍可透過提示或點開課程查看。
+- 保留老師顏色、草稿、撞課、選取、拖曳與點擊編輯狀態；週曆與手機顯示不變。
+
+## V18.17 — 六項日常便利功能
+- 編輯既有課程時先預覽日期、時間、學生、老師、校區、教室、狀態與付款差異，確認後才儲存；成功後提供 8 秒快速復原。
+- LINE 預覽可為家庭設定媽咪、爸爸、家長或自訂稱謂，開頭與結尾會同步套用且不影響費用計算。
+- 學生收款新增家庭勾選與批次標記已通知、已收款、恢復待通知，並可記錄收款方式與日期。
+- LINE 確認複製成功後自動留下通知紀錄，避免同一月份重複通知或漏發。
+- 財務總覽新增月底待辦，顯示尚未通知、尚未收款、學生單價異常與老師薪資設定異常數量。
+- 新增的收款追蹤資料獨立存放，不更動既有課程、財務、薪資、權限與同步計算結構。
+
+## V18.16.4 — 移除 LINE 重複小計
+- 移除每位孩子明細結尾重複出現的額外小計。
+- 家教與 Summer Camp 各自的項目小計仍保留，訊息最後維持月份共計。
+
+## V18.16.3 — LINE 每位孩子小計文字
+- 家庭 LINE 明細中每位孩子結尾的「小朋友小計」簡化為「小計」。
+- 家教與營隊項目小計、每位孩子小計及最後月份共計的金額計算維持不變。
+
+## V18.16.2 — LINE 開頭隱藏孩子姓名
+- LINE 費用明細開頭統一顯示「以下是小朋友」，不再列出全部孩子姓名。
+- 多位孩子的個別姓名仍保留在後續費用分段，時數、單價、家庭合併與總額計算不變。
+
+## V18.16.1 — 編輯課程儲存後可見性保護
+- 編輯既有課程成功後會自動定位到該堂課的新日期，避免跨日或跨月修改後看起來像課程消失。
+- 只清除與該堂課不相符的老師、學生、校區、教室、狀態或搜尋篩選，確保儲存後仍能立即看到課程。
+- 儲存後會再次確認原課程 ID 仍存在；若資料異常則立即警告，不執行誤導性的畫面切換。
+
+## V18.16 — LINE 複製前預覽
+- 家庭 LINE 與完整 LINE 收費改為先開啟預覽視窗，不再按下後立即複製。
+- 預覽內容可於複製前直接編輯；編輯只影響當次剪貼簿文字，不會修改學生、課程或收費資料。
+- 確認複製成功後自動關閉預覽並顯示完成提示，取消或點擊背景可安全關閉。
+
+## V18.15 — 月底一次檢查
+- 財務總覽新增「月底一次檢查」，依目前月份與校區掃描學生單價、課程時間、重複課程、家長姓名、老師薪資設定與營隊報名。
+- 檢查結果會列出需修正與提醒項目，並核對家教財務收入與學生應收是否一致。
+- 同時顯示家教堂數與收入、營隊報名與收入、老師及學生數量；檢查過程不修改任何營運資料。
+
+## V18.14.3 — 財務月份雙向同步
+- 財務總覽上方資料月份與中間財務月份改為雙向同步，任一欄位變更都會更新全部財務模組。
+- 「重新計算」會依目前財務月份強制更新收入、支出、薪資、學生收款與老師 KPI，並顯示完成提示。
+
+## V18.14.2 — 學生收款與 LINE 計算一致化
+- 所有已排入正式課表的家教課程一律計入學生收費，不再因舊的「不向學生收費」欄位而漏算。
+- 學生收款的收費堂數、收費時數、家教金額、財務收入與 LINE 明細統一使用同一批正式課表家教課程。
+- 營隊課表不重複計入家教收費；Summer Camp 仍只依報名紀錄計費。
+- 原定堂數與請假率仍依該月全部正式排課統計，老師工時、薪資及既有課程資料不受影響。
+
+## V18.14.1 — 家庭 LINE 月份共計標籤
+- 家庭 LINE 對帳的總額文字由「家庭本月應收」改為依財務月份顯示的「X月共計」。
+- 單一學生的 LINE 對帳同樣使用「X月共計」，費用計算與家庭合併邏輯維持不變。
+
+## V18.14 — 跨老師課表複製貼上
+- 複製課程後切換老師篩選不再退出貼上模式。
+- 選取老師後貼上，課程會改派給該位目標老師；選擇全部老師時則保留原老師。
+- 貼上提示會顯示目標老師，完成訊息也會確認實際貼給哪位老師。
+
+## V18.13.2 — 同名家長隱藏空白修正
+- 家庭仍只依家長姓名合併，但比對前會清除前後空白與不可見空白字元。
+- 同名家庭會納入所有學生資料，不因學生狀態而漏掉兄弟姊妹。
+- 當月為 0 堂的孩子仍會顯示在家庭 LINE 標題，費用明細則只列出實際有課程或營隊費用的孩子。
+
+## V18.13.1 — 家長姓名精確對帳
+- 家庭成員只依家長姓名完全相同進行合併，不再參考電話、LINE、Email 或推測式家庭編號。
+- LINE 對帳使用畫面目前實際顯示的財務月份，修正有課程但複製內容顯示 0 元的月份錯置。
+- 同一家長的多位孩子仍會分別計算家教與夏令營，再合併為一份家庭 LINE 對帳。
+
+## V17.25 — Teacher Schedule Row Revenue Audit
+- Replaced teacher-count multiplication with explicit per-teacher timetable revenue rows.
+- Each timetable row calculates student hourly rate × scheduled duration.
+- Repeated lessons remain counted; no revenue deduplication.
+- Collection/payment/report/status fields do not affect revenue.
+
+## V17.14 — 每位老師個別設定底薪
+- 移除所有正職老師共用 NT$35,000 的預設底薪。
+- 每位老師的固定底薪必須由管理者自行輸入並獨立儲存。
+- 正職老師未填固定底薪時禁止儲存，避免月底結算套用錯誤金額。
+- 兼職老師未設定底薪時維持按實際工時 × 時薪計算。
+- 老師清單在未設定底薪時顯示「尚未設定」。
+
+
+## V17.13 — 正職底薪＋超時薪資公式
+- 正職薪資改為：固定底薪＋超過本月最低工時的時數×超時時薪。
+- 既有正職老師未設定底薪時，預設使用 NT$35,000。
+- 兼職與未設定底薪老師維持按實際授課時數計薪。
+# V17.2 Executive Authentication UI
+
+- Upgraded the login screen to a full-width black-and-gold executive workspace.
+- Added a code-rendered operations dashboard, status cards, schedule chart, and trust indicators.
+- Preserved Google authentication, Firebase synchronization, roles, and permissions without logic changes.
+
+# V16.8 — Teacher Schedule Change Notifications
+
+- Owner schedule changes now notify only affected teachers in real time.
+- Added, modified, reassigned, and removed lessons include readable change details.
+- Teachers can acknowledge a notification so it does not reappear.
+- Existing scheduling, synchronization, payroll, finance, permissions, and removed request features remain unchanged.
+
+# V16.7 — Payroll Fluid KPI Layout
+
+- Fixed long salary values being clipped or pushing teacher cards outside the viewport.
+- Removed fixed KPI minimum widths and switched to fluid zero-minimum grid columns.
+- Added responsive and container-aware KPI typography.
+- Kept hour units on the same line while preserving full salary values.
+- Reduced teacher card vertical spacing and weekly-row height.
+- No calculation, data, permission, sync, ID, or event-handler changes.
+
+# V16.6 — Payroll KPI single-line refinement
+
+- Keep teacher difference values such as `多 10.8 hr` and `少 94.3 hr` on one line.
+- Use responsive KPI typography and numeric alignment.
+- Adjust KPI grid breakpoints so values retain adequate width.
+- Visual-only change; calculations, data, permissions, sync and event handlers are unchanged.
+
+
+## V16.4 — Premium Teacher Payroll UI
+- Redesigned teacher work-hour and payroll cards.
+- Teacher full names now wrap and remain fully visible.
+- Visual-only change; calculations and functionality unchanged.
+## V15.28.8 — Final Lesson Report Permission Fix
+
+- Unified client and Firestore authorization on `extensionUntil`.
+- Eliminated false permission-denied results from timestamp arithmetic and duplicated metadata comparisons.
+- Preserved teacher ownership, active lesson, manager branch, and expiration controls.
+
+# V15.28.3 — Final Lesson ID Integrity Lock
+
+- Owner-only legacy Lesson ID migration authority.
+- Teacher and branch-manager cloud views never generate local replacement IDs.
+- Backup restore and every save pass through the same identity normalization guard.
+- Duplicate legacy IDs are remapped only by exact lesson fingerprint; ambiguous records are preserved and logged instead of being attached to the wrong lesson.
+- Grant, request, lessonMeta, Firestore Rules, and Storage Rules verify the same lesson date, time, student, and teacher fingerprint.
+- Existing scheduling, reporting, finance, camp, backup, and permission behavior remains unchanged.
+
+# V15.28.2 — Unified Lesson Identity Core
+
+- All new lesson IDs use canonical `lsn_<UUID>` format.
+- Existing lesson IDs are migrated once with local references rewritten.
+- Firestore lessonMeta, lessonReports, reportExtensionRequests and reportExtensionGrants share the exact lesson ID as document ID.
+- Single and batch requests write one canonical request document per lesson.
+- Lesson copy/recurrence/camp creation always generates a new lesson ID.
+- Existing non-lesson entity IDs and application behavior remain unchanged.
+
+# V15.27.11 — Approved Grant UI Synchronization Fix
+
+- Fixes the approval loop where an approved request arrived before the matching grant snapshot.
+- Approved requests no longer show the request button again while grant synchronization is pending.
+- Teacher schedule and open course drawer re-render immediately after grants arrive.
+- Approved grants are filtered by the currently signed-in teacher.
+- A direct Firestore grant refresh is triggered after approval to remove listener timing races.
+
+# V15.27.11 — Lesson Report Workflow Stability
+
+## Fixed
+- 核准不再使用兩個平行寫入，避免申請已核准但 grant 未建立的半完成狀態。
+- 多堂課分開申請與核准時，每堂課的授權完全獨立。
+- 儲存前驗證正式 grant，錯誤訊息可區分未核准、資料不完整與伺服器時間尚未回寫。
+- Firestore request create rules 驗證 requesterTeacherId 與 lessonMeta.teacherIds。
+
+
+## V15.28.7 — Lesson Report Authorization Source Fix
+- Lesson report writes now authorize from authenticated membership plus trusted lessonMeta.
+- Removed payload identity fields as authorization gates to prevent false permission-denied.
+- Teacher/manager scope, lesson ownership, branch scope, and report time window remain enforced.
+
+## V15.28.11
+- Fixed permission-denied when an authorized teacher or branch manager submits a new extension request for a lesson that already has an older request document.
+- Removed fragile exact date/time/student/teacher-array comparisons from request authorization.
+- Added branch scope validation for branch managers.
+
+
+## V15.29.1 Cloud Sync Dirty Guard
+- Fixed schedule drag changes reverting before cloud upload completed.
+- Added a local dirty-state guard so stale Firestore snapshots cannot overwrite unsynced local changes.
+- Added immediate retry when a stale snapshot arrives during the save/upload window.
+- Preserved all existing features; no removed application/request feature was restored.
+- Bumped module and service-worker cache versions.
+
+## V16.2 — Global Design System
+- Added a visual-only final CSS layer for consistent navigation, cards, forms, buttons, tables, KPI panels and dialogs.
+- Added sidebar visual grouping while preserving the original navigation buttons and permission logic.
+- Preserved all V16.1 synchronization and no-overlay fixes.
+- Updated the PWA cache key.
+
+## V16.3 Premium CRM and Pages
+- Added visual-only premium refinement for Student / Parent CRM and related management pages.
+- Preserved all IDs, handlers, synchronization, permissions, calculations, and data behavior.
+
+## V17.3 — Authentication Card Alignment Polish
+- Corrected the Danbridge logo lockup alignment in the authentication card.
+- Enlarged the right-side login panel for stronger visual balance.
+- Preserved all authentication and cloud-sync behavior.
+
+## V17.4 — Aligned Authentication Stage
+- Aligned the executive dashboard and secure access panel to the same top and bottom edges.
+- Expanded the dashboard vertically for a balanced two-column enterprise composition.
+- Enlarged the access card, logo and Google sign-in control while preserving all authentication behavior.
+- Responsive tablet and mobile layouts remain stacked and fully usable.
+
+## V17.5 — iPad Drag Recovery and Lesson Record Toolbar
+- Fixed iPad touch drags remaining in a locked/dragging state after pointer release outside the lesson card.
+- Added pointer cancellation, lost-capture, and global release cleanup.
+- Prevented lesson-record Month and Student filters from overlapping at iPad widths.
+- No Firebase, permission, payroll, or lesson business logic was changed.
+
+## V17.12
+- Restored the missing right border on the lesson month field.
+- Forced month text centering across desktop Safari and iPadOS.
+
+## V17.16 — Unified Payroll Core
+- Added a single payroll calculation result shared by finance, settlement, dashboard payroll and exports.
+- Added per-teacher payroll mode, overtime rate and short-hours deduction rate fields.
+- Added fixed-salary deductions when actual hours are below the monthly minimum.
+- Removed branch-specific fallback to legacy hourly payroll in settlement and finance.
+- Upgraded branch-manager teacher payroll cards to display full minimum hours, actual hours, difference, formula, breakdown and weekly details.
+- Left branch assignment and unassigned-branch data unchanged.
+
+## V17.17 — Student CRM Independent Scroll
+- Added separate vertical scrolling for the Student / Parent CRM editor and student list on desktop and landscape tablet layouts.
+- Kept the CRM search toolbar and student table header visible while the student list scrolls.
+- Added viewport-aware height recalculation for resize, orientation change, and iPad visual viewport changes.
+- Preserved normal document scrolling on stacked tablet and mobile layouts.
+- No CRM data, permissions, synchronization, or business logic changed.
+
+## V17.18
+- Added per-teacher company revenue KPI calculated from scheduled chargeable lessons.
+## V17.19
+- Enlarged each teacher company revenue KPI card and payable salary card.
+- Prevented the five-card payroll KPI row from becoming too narrow.
+- Preserved responsive tablet and mobile layouts.
+
+
+## V18.0 — Information Architecture & Finance Center
+- Dashboard now focuses on lesson counts, teaching hours, students, teachers, makeups and operational changes; monetary cards are hidden.
+- Consolidated Company Finance, Teacher KPI and Monthly Settlement into one Finance Center with internal tabs.
+- Added collapsible finance detail cards so expense and payroll details are loaded on demand visually.
+- Added teacher KPI search and sorting controls.
+- Renamed primary navigation around operations, CRM, course management and finance.
+- Added a global floating quick-action menu for lessons, students, teachers, expenses and camp registration.
+- Preserved existing finance, payroll, settlement and revenue calculation functions and data IDs.
+
+## V18.1 — Enterprise Finance Center
+- Reorganized Finance Center into Finance Overview, Teacher Salary / KPI, Student Collections and Expense Management.
+- Removed the standalone Monthly Settlement navigation entry while preserving its calculations, records and exports.
+- Rebuilt Teacher KPI as a searchable left-list and right-detail workspace.
+- Added Student Collections summary cards and a collapsed searchable complete list.
+- Restored reliable finance rendering by preserving every existing data target while moving it into the new modules.
+- Standardized card alignment, grid containment and responsive desktop, iPad and mobile layouts.
+- Preserved Firebase, permissions, synchronization, revenue formulas, payroll formulas and stored data structures.
+
+## V18.1.1 — Finance UI Cleanup
+- Removed the standalone Monthly Settlement navigation item and all settlement-only controls from the visible Student Collections workflow.
+- Renamed the remaining collection filters and refresh action around student receivables.
+- Replaced the dark navy and gold finance treatment with a lighter blue-gray enterprise palette.
+- Isolated nested Finance Center navigation from global sidebar group labels that caused misalignment.
+- Standardized finance headings, descriptions, tab labels and active-state alignment.
+- Locked all four Finance Center module controls to identical dimensions in both normal and active states.
+- Increased heading, description and module-label contrast for clearer reading.
+- Replaced circular teacher initials with slim accent rails and decorated name rows.
+- Added a light profile header, accent rule and stronger name hierarchy to Teacher KPI details.
+- Aligned every teacher-list accent rail and name to fixed grid columns.
+- Removed teacher-initial avatars from complete payroll cards and replaced them with line-decorated headers.
+- Constrained desktop payroll cards and KPI grids to prevent horizontal overflow while preserving iPad stacking.
+
+## V18.2 — Unified Tutoring and Summer Camp Revenue
+- Defined total monthly revenue as tutoring timetable revenue plus summer-camp registration fees.
+- Excluded camp timetable rows from student revenue so multi-teacher camps never multiply tuition.
+- Preserved camp timetable rows for teacher hours and payroll calculations.
+- Added separate Tutoring Revenue and Summer Camp Revenue lines to the finance breakdown and copied summary.
+- Applied the same calculation to company-wide and branch-scoped finance views.
+
+## V18.3 — Student LINE Billing Copy
+- Added a per-student Copy LINE action to the monthly Student Collections table.
+- Combined tutoring hours and Summer Camp registration dates into one parent-facing monthly message.
+- Kept parent tutoring charges independent of teacher headcount.
+- Omitted empty tutoring or Summer Camp sections automatically.
+- Used the approved opening, totals and confirmation wording for the copied message.
+
+## V18.3.1 — Family LINE Billing
+- Grouped all children sharing the same parent into one LINE billing message.
+- Added a per-child subtotal and one combined family monthly total.
+
+## V18.3.2 — Finance Number Fit and Parent Matching
+- Sized revenue cards for million-level totals and expense cards for hundred-thousand-level totals without overflow.
+- Restricted family billing groups to students with the same normalized parent name only.
+- Removed decorative brackets from parent-facing billing text.
+
+## V18.3.3 — Visible Family Billing Scope
+- Built each family message from the current month's visible settlement rows only.
+- Prevented archived or unrelated database records from entering a parent's copied LINE bill.
+
+## V18.3.4 — Complete Active Family Members
+- Included active siblings sharing the same parent name even when a sibling is absent from the tutoring settlement rows.
+- Continued excluding camp backing records and inactive student records.
+
+## V18.3.5 — Complete Student Collections List
+- Included Summer Camp registration-only students in the branch-scoped Student Collections table.
+- Kept every student with either monthly lesson rows or Summer Camp receivables visible.
+
+## V18.3.6 — Full Student Directory in Collections
+- Displayed every student record in Student Collections, including students with zero activity in the selected month.
+- Added the full student count to the expandable list heading.
+- Kept the average leave rate based on students with lesson activity so zero-activity rows do not dilute it.
+
+## V18.3.7 — Parent Search
+- Added a dedicated parent-name search field beside the student search in Student Collections.
+- Allowed student and parent filters to work independently or together.
+
+## V18.4 — Finance Reconciliation
+- Counted each tutoring lesson once for company revenue regardless of how many teachers share the lesson.
+- Kept Summer Camp revenue sourced only from student registrations.
+- Included all applicable teachers in KPI, payroll and salary detail lists, including zero-lesson and fixed-salary teachers.
+- Reconciled finance revenue with Student Collections receivables.
+- Standardized all five finance summary cards to the same height and reduced number typography to prevent clipping.
+
+## V18.5 — Interface Clarity Refresh
+- Separated calendar navigation, filters and tools into three visually distinct control bands.
+- Simplified the calendar student filter by removing the redundant inline search box.
+- Narrowed and condensed the Student CRM editor while widening the student directory.
+- Improved CRM table hierarchy with clearer headers, zebra rows and compact actions.
+- Reworked Lesson Records into a compact filter panel and scan-friendly fixed-column table.
+
+## V18.6 — One-click Chinese / English UI
+- Added a persistent EN / 中文 toggle for the complete application interface.
+- Translated navigation, forms, filters, buttons, statuses, finance, camps, CRM, reports and dynamic UI labels.
+- Preserved student, parent, teacher, course and financial data exactly as entered.
+- Remembered the selected language across reloads and translated newly rendered interface elements automatically.
+
+## V18.7 — Synchronized Finance Month
+- Added a Data Month selector to Financial Overview, Teacher KPI, Student Collections and Expense Management.
+- Synchronized all four selectors and underlying native month fields.
+- Recalculated all four finance modules immediately after any month change.
+- Filtered recurring expenses to records active in the selected month and one-time expenses to that exact month.
+
+## V18.7.1 — Safari Month and Language Button Fix
+- Updated finance data on month input, selection, blur or Enter in Safari.
+- Persisted the active finance workspace month as the authoritative value for all finance calculations.
+- Moved the language toggle into the header action group and automatically remounted it after authentication refreshes.
+# V18.8 — 營隊課表與報名流程整合
+
+- 將夏令營操作整理為「建立營隊課表」與「學生報名與收費」兩個連續步驟，明確區分老師工時與學生收入。
+- 夏令營學生報名可選擇既有營隊課表，並一鍵帶入所選月份的全部課表日期，不必重複勾選。
+- 報名紀錄保存所屬營隊；舊紀錄仍可依原日期推斷營隊，不破壞既有資料。
+- 冬令營介面同步簡化說明，避免把建立課表誤認為另一套報名功能。
+# V18.9 — 冬夏令營建立介面精簡
+
+- 冬、夏令營改為單一建立表單，不再要求選擇學生、營隊代碼、教師群組或教室。
+- 校區只保留「美術東」與「河西一路」，班級名稱改為直接輸入並自動建立班級資料。
+- 新增早上／下午時段選項，仍可調整開始與結束時間、上課星期及日期範圍。
+- 收費直接設定在營隊班級；既有學生報名與費用資料保留但不再顯示重複表單。
+# V18.9.1 — 營隊日期欄位窄版修正
+
+- 冬、夏令營表單在窄版畫面自動切換為單欄，開始與結束日期可完整顯示。
+- 限制日期、時間、金額與選單寬度不超出卡片，避免 iPad 分割畫面或窄視窗裁切內容。
+# V18.9.2 — 營隊日期完整顯示
+
+- 營隊建立表單固定最多兩欄，不再以整個瀏覽器寬度誤判版面。
+- 日期欄位取得足夠寬度，可完整顯示年、月、日。
+# V18.9.3 — 日期欄改為完整列
+
+- 開始日期與結束日期各自獨占一整列，避免 Safari 日期控制元件裁掉最後的天數。
+- 調整日期欄字級與內距，完整顯示年、月、日。
+# V18.10 — 移除冬夏令營獨立介面
+
+- 側邊欄移除「夏令營」與「冬令營」，快速新增選單同步移除夏令營報名入口。
+- 冬夏令營獨立建立介面停止顯示，營隊課程改由一般課表直接安排。
+- 財務中心「學生收款」完整保留；既有營隊課程、收費與歷史資料均未刪除。
+# V18.10.1 — 保留夏令營學生收費
+
+- 側邊欄恢復單一「夏令營收費」入口，只顯示學生報名日期與費用功能。
+- 夏令營班級建立、教師群組、整期排課與冬令營介面維持移除。
+- 營隊課程繼續使用一般課表安排；既有夏令營收費紀錄完整保留。
+# V18.11 — 夏令營收費版面與 LINE 合併對帳
+
+- 夏令營收費重新分區為學生／月份、計價、日期與應收摘要；只顯示目前計價方式需要的費率欄位。
+- 日期選擇改為清楚的七欄卡片，改善勾選框、日期與星期的辨識度及響應式排列。
+- 新增「複製完整 LINE 收費」：家教與夏令營分開列小計，最後合併本月應收；同一家長的多位孩子一起統計。
+- 確認收入計算仍維持一般課表家教收入與夏令營報名收入分流，避免重複計算。
+# V18.12 — 夏令營日期改為課表月曆排列
+
+- 日期選擇改為與課表管理一致的週一至週日七欄月曆。
+- 每月第一天依實際星期定位，前方自動留白，不再把 1 日固定放在第一欄。
+- 週末使用不同底色；窄版維持完整七欄並提供橫向查看，星期位置不會被打亂。
+# V18.12.1 — 夏令營收費欄位等尺寸
+
+- 學生、校區、月份、計價方式、費率與應收摘要統一為三欄等寬卡片。
+- 所有設定卡片統一高度、內距、邊框與輸入框高度，消除大小不一的視覺落差。
+- iPad 自動改為兩欄，手機改為單欄。
+# V18.12.2 — 夏令營收費高級等尺寸卡片
+
+- 上方六個設定區改為完全一致的高度、內距、圓角、邊框與細緻漸層飾線。
+- 標題、輸入內容及摘要數值統一字級與字重，移除金額過度放大的視覺落差。
+- 學生選擇移除重複下拉框，只保留單一可搜尋選擇欄位。
+
+# V20.2 — 桌面課表互動控制器重建
+
+- 桌面課表的點選、框選、複製、貼上與拖曳改由單一事件控制器處理，不再同時執行舊版逐課程事件。
+- 第一次 Control／Command 點選立即生效；複製後直接點日期或時間格即可立即貼上。
+- 月曆日期格與週課表五分鐘時間格共用同一拖放目標判斷，完成貼上或拖曳後自動退出多選狀態。
+- 日曆重新繪製時只更新課程卡狀態，不再重複綁定事件；服務工作程式同步換版以清除舊快取。
+- 撞課檢查統一排除取消、已取消、停課及舊英文停用狀態，避免空白日期被歷史紀錄誤擋。
+- 滑鼠停在課程上可直接按 Control／Command+C 複製，不必先進行第二次選取。
+- 複製貼上的鍵盤、滑鼠、框選、右鍵與目標日期處理全部集中到同一控制器，綜合功能模組不再註冊課表剪貼簿事件。
+- 月曆日期格、週課表時間格及課程卡上方皆會即時記錄貼上目標，Control／Command+V 不再等待下一個滑鼠動作。
+- 桌面拖曳不再依賴 Safari 原生 drag/drop，改由指標座標直接辨識放開位置；課程拖到月曆日期格或週課表時間格後立即移動。
+- 桌面選取、複製貼上與拖曳完整回復到最後可用的 `799c30b` 實作，移除其後連續堆疊的互動控制器版本；其他權限、資料、手機與財務修正維持不變。
+
+# V20.4.1 — 課表拖曳與即時貼上修復
+
+- 日曆固定使用同一個容器，不再透過複製替換節點清除事件。
+- 老闆端課程與日期格每次重畫都取得完整拖曳及放下事件；老師與校區管理者維持唯讀。
+- 移除會因舊角色狀態在全頁捕獲階段誤擋老闆拖曳的攔截器。
+- 複製完成立即退出多選、保留剪貼簿並恢復拖曳，點選日期或時間格即可直接貼上。
+- 貼上目標持續依滑鼠所在日期／時間更新，不因日曆重畫而遺失。
+
+# V20.5 — 單一課表互動控制器
+
+- 框選、課程點選、拖曳、放下、複製與貼上統一由固定日曆容器處理，不再由多套事件競爭。
+- 框選結束時直接使用放開座標重新計算命中課程，快速第一次滑動也能立即選取。
+- 拖曳放下以瀏覽器剪貼資料或內部課程 ID 任一者為準，修正 Safari 能拉起但放不下。
+- 貼上改在日期格 pointerdown 當下執行，不再依賴可能被權限攔截的 click。
+- 移除老師／校區管理者的全頁日期點擊攔截；單一控制器仍依即時角色維持唯讀。
+## V20.5.1 — Reliable desktop calendar completion
+
+- Replaced desktop HTML5 `draggable`/`dataTransfer` movement with one pointer-driven controller so Safari and other desktop browsers resolve the drop date consistently.
+- Restored the missing shared calendar-selection cleanup function that previously stopped a move after the lesson object changed but before save and rerender.
+- Kept marquee selection, copy/paste, drag completion, and selection exit in the same delegated calendar controller.
+
+## V20.5.2 — Immediate calendar rerender
+
+- Calendar mutations now detect the active calendar from both the section class and the navigation state on `body`.
+- Drag, paste, and other saved calendar changes rerender immediately instead of waiting for a refresh or tab round trip.
+
+## V20.5.3 — Calendar-first rendering and focused selection
+
+- Active calendars now rerender before unrelated dashboards and reports, so another renderer cannot delay visible schedule changes.
+- Selected and dragged lessons use an inset card highlight; destination cells use a quiet background cue instead of a heavy outer frame.
+
+## V20.5.4 — Resilient save and immediate schedule DOM
+
+- The calendar now rerenders unconditionally at the start of every full render, including while its section is hidden.
+- A failure in an unrelated view renderer is logged but can no longer abort the cloud dirty guard or upload scheduling after local data has been saved.
+- Backup and undo controls update in a `finally` block after every successful local persistence write.
+
+## V20.5.5 — Guaranteed Owner cloud scheduling
+
+- Owner dirty-state hashing and cloud upload scheduling now run in a `finally` block around local persistence.
+- Calendar updates continue to upload the main database, publish teacher and branch views, and create schedule notifications even if a local view renderer reports an error.
+- Exposed the same guarded cloud queue for direct persistence workflows that do not call the standard save wrapper.
+
+## V20.5.6 — Single persistence-to-cloud handoff
+
+- Every successful calendar mutation now schedules cloud synchronization from the shared persistence endpoint used by drag, paste, delete, batch edit, and lesson editing.
+- The Firebase wrapper remains responsible for role enforcement but no longer owns a second, order-sensitive cloud scheduling call.
+- Updated the data, cloud module, and Service Worker versions so a deployed client can replace stale schedule code immediately.
+
+## V20.5.7 — Calendar-independent immediate rendering
+
+- Calendar rendering no longer runs settlement-month setup before drawing the month or week view.
+- Full application rendering now paints the calendar before initializing unrelated sections, so their errors cannot leave the current schedule DOM stale.
+- Drag, paste, delete, and lesson edits therefore display from the mutated in-memory database before cloud synchronization begins.

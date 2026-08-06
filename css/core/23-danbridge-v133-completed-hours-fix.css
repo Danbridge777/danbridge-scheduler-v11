@@ -1,0 +1,17 @@
+/* 老師即時時數：只有按「完成並儲存」或回報為補課完成後才累計 */
+body.teacher-cloud-role #dashboard .teacher-hours-metric{
+  display:flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+}
+body:not(.teacher-cloud-role) #dashboard .teacher-hours-metric{display:none!important}
+@media(max-width:900px){
+  body.teacher-cloud-role #dashboard .summary{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    overflow:hidden!important;
+  }
+  body.teacher-cloud-role #dashboard .metric:has(#mLessons),
+  body.teacher-cloud-role #dashboard .teacher-hours-metric{
+    min-width:0!important;max-width:100%!important;width:100%!important;
+  }
+}

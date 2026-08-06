@@ -1,0 +1,95 @@
+/* Danbridge Operations V16.6 — payroll KPI readability refinement.
+   Visual-only overrides. Keeps teacher hour values on one line and improves density. */
+
+#settlement .teacher-pay-grid{
+  grid-template-columns:repeat(4,minmax(132px,1fr))!important;
+  gap:12px!important;
+}
+
+#settlement .teacher-pay-stat{
+  min-width:0!important;
+  min-height:104px!important;
+  padding:15px 10px!important;
+  overflow:hidden!important;
+}
+
+#settlement .teacher-pay-stat b{
+  display:flex!important;
+  align-items:baseline!important;
+  justify-content:center!important;
+  gap:.22em!important;
+  width:100%!important;
+  max-width:100%!important;
+  margin-top:8px!important;
+  white-space:nowrap!important;
+  overflow:visible!important;
+  overflow-wrap:normal!important;
+  word-break:normal!important;
+  font-size:clamp(17px,1.45vw,21px)!important;
+  line-height:1.08!important;
+  letter-spacing:-.025em!important;
+  font-variant-numeric:tabular-nums;
+}
+
+/* Difference values can be longer than the other KPI values. */
+#settlement .teacher-pay-stat:nth-child(3) b{
+  font-size:clamp(16px,1.30vw,20px)!important;
+}
+
+#settlement .teacher-pay-stat:nth-child(4) b{
+  font-size:clamp(17px,1.35vw,21px)!important;
+}
+
+#settlement .teacher-pay-stat b.hours-over,
+#settlement .teacher-pay-stat b.hours-short,
+#settlement .teacher-pay-stat b.hours-even{
+  white-space:nowrap!important;
+}
+
+/* Slightly calmer cards and stronger number hierarchy. */
+#settlement .teacher-pay-stat{
+  background:linear-gradient(180deg,#ffffff 0%,#fbfbfa 100%)!important;
+  box-shadow:0 4px 14px rgba(30,42,58,.028)!important;
+}
+
+#settlement .teacher-pay-stat:hover{
+  border-color:#d9dee5!important;
+  transform:translateY(-1px);
+  transition:border-color .16s ease,transform .16s ease;
+}
+
+@media(max-width:1380px){
+  #settlement .teacher-pay-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  #settlement .teacher-pay-stat b,
+  #settlement .teacher-pay-stat:nth-child(3) b,
+  #settlement .teacher-pay-stat:nth-child(4) b{
+    font-size:21px!important;
+  }
+}
+
+@media(max-width:760px){
+  #settlement .teacher-pay-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:10px!important;
+  }
+  #settlement .teacher-pay-stat b,
+  #settlement .teacher-pay-stat:nth-child(3) b,
+  #settlement .teacher-pay-stat:nth-child(4) b{
+    font-size:18px!important;
+  }
+}
+
+@media(max-width:430px){
+  #settlement .teacher-pay-grid{grid-template-columns:1fr!important}
+  #settlement .teacher-pay-stat b,
+  #settlement .teacher-pay-stat:nth-child(3) b,
+  #settlement .teacher-pay-stat:nth-child(4) b{
+    font-size:20px!important;
+  }
+}
+
+@media print{
+  #settlement .teacher-pay-stat:hover{transform:none}
+}

@@ -1,0 +1,133 @@
+/* Modal system */
+.modal-backdrop{
+  background:rgba(15,23,42,.42)!important;
+  backdrop-filter:blur(10px) saturate(120%);
+  -webkit-backdrop-filter:blur(10px) saturate(120%);
+  padding:24px!important;
+}
+.modal{
+  width:min(680px,calc(100vw - 32px))!important;
+  max-height:min(88vh,860px)!important;
+  overflow:auto!important;
+  border:1px solid rgba(148,163,184,.28)!important;
+  border-radius:24px!important;
+  box-shadow:0 28px 80px rgba(15,23,42,.28)!important;
+  padding:22px!important;
+  background:rgba(255,255,255,.98)!important;
+}
+.modal-head{
+  position:sticky;top:-22px;z-index:4;
+  margin:-22px -22px 18px!important;
+  padding:18px 22px 14px!important;
+  background:rgba(255,255,255,.94)!important;
+  backdrop-filter:blur(14px);
+  border-bottom:1px solid #e8eef6!important;
+  border-radius:24px 24px 0 0;
+}
+.modal-head h2{font-size:22px!important;letter-spacing:-.02em;color:#0f172a!important}
+.modal-head button{
+  width:38px!important;height:38px!important;border-radius:12px!important;
+  border:1px solid #dbe4ef!important;background:#f8fafc!important;color:#334155!important;
+  font-size:24px!important;line-height:1!important;
+}
+.modal label{font-size:13px!important;font-weight:800!important;color:#475569!important;margin-top:14px!important;display:block}
+.modal input,.modal select,.modal textarea{
+  border:1px solid #cfd9e6!important;border-radius:14px!important;background:#fff!important;
+  box-shadow:0 1px 2px rgba(15,23,42,.03)!important;
+}
+.modal textarea{min-height:104px!important;resize:vertical}
+.modal input:focus,.modal select:focus,.modal textarea:focus{
+  border-color:#3b82f6!important;box-shadow:0 0 0 4px rgba(59,130,246,.12)!important;outline:none!important;
+}
+#saveTeacherReportBtn{min-width:150px}
+.report-status-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important}
+.report-status-option{
+  min-height:48px;border-radius:14px!important;border-color:#d9e2ec!important;
+  transition:.16s ease;background:#fff!important;
+}
+.report-status-option:hover{transform:translateY(-1px);border-color:#93c5fd!important;background:#f8fbff!important}
+.report-status-option:has(input:checked){border-color:#2563eb!important;background:#eff6ff!important;color:#1d4ed8!important;box-shadow:0 0 0 3px rgba(37,99,235,.10)}
+
+/* Teacher workspace */
+body.teacher-cloud-role{
+  --teacher-accent:#2563eb;
+  --teacher-soft:#eff6ff;
+  background:linear-gradient(180deg,#f7fbff 0,#f8fafc 260px)!important;
+}
+body.teacher-cloud-role .app-shell,
+body.teacher-cloud-role main{max-width:1480px;margin-inline:auto}
+body.teacher-cloud-role .topbar,
+body.teacher-cloud-role header{
+  background:linear-gradient(120deg,#0f4c81,#1265a8)!important;
+  color:#fff!important;
+  box-shadow:0 8px 26px rgba(15,76,129,.18)!important;
+}
+body.teacher-cloud-role .header-auth-actions,
+body.teacher-cloud-role .header-auth-actions *{color:#fff!important}
+body.teacher-cloud-role .header-auth-actions .btn,
+body.teacher-cloud-role #logoutBtn{
+  background:rgba(255,255,255,.12)!important;border-color:rgba(255,255,255,.30)!important;color:#fff!important;
+}
+body.teacher-cloud-role .header-auth-actions .btn:hover,
+body.teacher-cloud-role #logoutBtn:hover{background:rgba(255,255,255,.22)!important}
+body.teacher-cloud-role nav{
+  background:rgba(255,255,255,.92)!important;backdrop-filter:blur(16px);
+  border-bottom:1px solid #e5edf6!important;
+}
+body.teacher-cloud-role nav .btn,
+body.teacher-cloud-role nav button{border-radius:14px!important}
+body.teacher-cloud-role .stat-card,
+body.teacher-cloud-role .metric-card,
+body.teacher-cloud-role .dashboard-card{
+  border:1px solid #dce7f3!important;
+  box-shadow:0 10px 26px rgba(30,64,175,.07)!important;
+}
+body.teacher-cloud-role #todayLessons .lesson{
+  padding:14px 16px!important;border-radius:16px!important;margin-bottom:10px!important;
+  border:1px solid #d9e5f2!important;border-left:5px solid var(--teacher,#2563eb)!important;
+  box-shadow:0 5px 16px rgba(15,23,42,.05)!important;
+}
+body.teacher-cloud-role #todayLessons .lesson:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(15,23,42,.08)!important}
+body.teacher-cloud-role .lesson,
+body.teacher-cloud-role .week-event{cursor:pointer!important}
+body.teacher-cloud-role .lesson b,
+body.teacher-cloud-role .week-event b{font-weight:900!important;color:#172033!important}
+body.teacher-cloud-role .lesson-report-summary{background:#f8fbff!important;border-color:#d9e7f5!important}
+body.teacher-cloud-role #calendarCanvas{border-radius:20px;overflow:hidden;box-shadow:0 8px 26px rgba(15,23,42,.06)}
+body.teacher-cloud-role .day-cell{background:#fff!important}
+body.teacher-cloud-role .day-cell.today{background:#f0f7ff!important}
+body.teacher-cloud-role .day-cell.today .day-num>span{background:#155c98!important;color:#fff!important}
+body.teacher-cloud-role #lessons table tbody tr:hover{background:#f6faff!important}
+body.teacher-cloud-role #lessons .btn{min-width:86px}
+
+/* Empty states */
+.empty-state,.empty,.no-data{
+  border:1px dashed #cbd5e1!important;border-radius:18px!important;background:#f8fafc!important;
+  color:#64748b!important;padding:28px!important;text-align:center!important;
+}
+
+/* Compact responsive teacher app */
+@media(max-width:760px){
+  .modal-backdrop{padding:0!important;align-items:flex-end!important}
+  .modal{
+    width:100%!important;max-width:none!important;max-height:92vh!important;
+    border-radius:24px 24px 0 0!important;padding:18px!important;
+  }
+  .modal-head{top:-18px;margin:-18px -18px 14px!important;padding:16px 18px 12px!important;border-radius:24px 24px 0 0}
+  .report-status-grid{grid-template-columns:1fr 1fr!important}
+  body.teacher-cloud-role header{padding:14px 16px!important}
+  body.teacher-cloud-role header h1{font-size:23px!important}
+  body.teacher-cloud-role nav{position:sticky!important;top:0;z-index:30;padding:8px!important;overflow-x:auto!important;white-space:nowrap!important}
+  body.teacher-cloud-role nav::-webkit-scrollbar{display:none}
+  body.teacher-cloud-role nav .btn,body.teacher-cloud-role nav button{min-height:44px!important}
+  body.teacher-cloud-role main{padding:12px!important}
+  body.teacher-cloud-role .cards,body.teacher-cloud-role .stats-grid{gap:10px!important}
+  body.teacher-cloud-role .stat-card,body.teacher-cloud-role .metric-card{min-width:145px!important;padding:16px!important}
+  body.teacher-cloud-role .stat-card .value,body.teacher-cloud-role .metric-value{font-size:30px!important}
+  body.teacher-cloud-role .month-grid{min-width:1050px}
+  body.teacher-cloud-role #calendarCanvas{overflow:auto!important;-webkit-overflow-scrolling:touch}
+}
+@media(max-width:460px){
+  .report-status-grid{grid-template-columns:1fr!important}
+  .modal .btn{width:100%;margin:5px 0!important}
+}

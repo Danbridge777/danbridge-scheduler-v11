@@ -1,0 +1,171 @@
+/* Contrast regression fixes */
+.location-chip[style*="background:#ff2020"],
+.location-chip[style*="background: #ff2020"]{
+  background:#dc2626!important;
+  color:#fff!important;
+  border-color:#991b1b!important;
+  box-shadow:0 6px 14px rgba(220,38,38,.22)!important;
+}
+.location-chip[style*="background:#ff2020"] .location-dot,
+.location-chip[style*="background: #ff2020"] .location-dot{
+  background:#fff!important;
+  border-color:rgba(255,255,255,.9)!important;
+}
+header .header-auth-actions .btn,
+#firebaseLogoutBtn,
+.header-auth-actions button{
+  color:#18324a!important;
+  background:#fff!important;
+  border:1px solid #c9d7e4!important;
+  text-shadow:none!important;
+  box-shadow:0 4px 12px rgba(15,45,70,.08)!important;
+}
+header .header-auth-actions .btn:hover,
+#firebaseLogoutBtn:hover,
+.header-auth-actions button:hover{
+  color:#0f5b91!important;
+  background:#eef7fd!important;
+  border-color:#80b6d8!important;
+}
+
+/* Students / teachers — clearer two-panel workspace */
+#students>.grid,#teachers>.grid{
+  align-items:start!important;
+  gap:20px!important;
+}
+#students .card,#teachers .card,#lessons>.card{
+  border:1px solid #dce6ef!important;
+  border-radius:22px!important;
+  box-shadow:0 14px 34px rgba(22,55,82,.075)!important;
+  background:linear-gradient(180deg,#fff 0%,#fbfdff 100%)!important;
+}
+#students .col-4,#teachers .col-4{
+  position:sticky!important;
+  top:92px!important;
+  padding:24px!important;
+}
+#students h2,#teachers h2,#lessons h2{
+  margin:0 0 18px!important;
+  color:#102a43!important;
+  font-size:22px!important;
+  letter-spacing:-.02em!important;
+}
+#students .col-4 h2::before{content:"學生資料";font-size:11px;display:block;color:#2474a8;letter-spacing:.14em;margin-bottom:5px;text-transform:uppercase}
+#teachers .col-4 h2::before{content:"師資資料";font-size:11px;display:block;color:#6d55b2;letter-spacing:.14em;margin-bottom:5px;text-transform:uppercase}
+#lessons h2::before{content:"LESSON RECORDS";font-size:11px;display:block;color:#2474a8;letter-spacing:.14em;margin-bottom:5px}
+#students label,#teachers label,#lessons label{
+  color:#53687a!important;
+  font-size:12px!important;
+  font-weight:800!important;
+  letter-spacing:.02em!important;
+  margin-top:12px!important;
+}
+#students input,#students select,#students textarea,
+#teachers input,#teachers select,#teachers textarea,
+#lessons input,#lessons select{
+  min-height:44px!important;
+  border-radius:12px!important;
+  border:1px solid #cfdae5!important;
+  background:#fff!important;
+  box-shadow:inset 0 1px 2px rgba(15,45,70,.025)!important;
+}
+#students input:focus,#students select:focus,#students textarea:focus,
+#teachers input:focus,#teachers select:focus,#teachers textarea:focus,
+#lessons input:focus,#lessons select:focus{
+  border-color:#2b7fb6!important;
+  box-shadow:0 0 0 4px rgba(43,127,182,.12)!important;
+  outline:none!important;
+}
+#students textarea,#teachers textarea{min-height:90px!important;resize:vertical}
+#students .col-4>.btn,#teachers .col-4>.btn{
+  margin-top:14px!important;
+  min-height:44px!important;
+}
+#students .table-wrap,#teachers .table-wrap,#lessons .table-wrap{
+  border:1px solid #e1e9f0!important;
+  border-radius:16px!important;
+  overflow:auto!important;
+  background:#fff!important;
+}
+#students table,#teachers table,#lessons table{
+  border-collapse:separate!important;
+  border-spacing:0!important;
+}
+#students thead th,#teachers thead th,#lessons thead th{
+  position:sticky!important;
+  top:0!important;
+  z-index:2!important;
+  background:#f2f7fb!important;
+  color:#445b6e!important;
+  font-size:12px!important;
+  letter-spacing:.035em!important;
+  text-transform:none!important;
+  border-bottom:1px solid #d9e5ee!important;
+}
+#students tbody tr,#teachers tbody tr,#lessons tbody tr{
+  transition:background .16s ease,transform .16s ease!important;
+}
+#students tbody tr:hover,#teachers tbody tr:hover,#lessons tbody tr:hover{
+  background:#f6fbff!important;
+}
+#students td,#teachers td,#lessons td{
+  vertical-align:middle!important;
+  border-bottom:1px solid #edf2f6!important;
+  padding-top:13px!important;
+  padding-bottom:13px!important;
+}
+#students tbody tr:last-child td,#teachers tbody tr:last-child td,#lessons tbody tr:last-child td{border-bottom:0!important}
+
+/* Workday selection chips */
+#teachers .workday-checks{display:flex!important;flex-wrap:wrap!important;gap:7px!important;margin-top:7px!important}
+#teachers .workday-check{
+  margin:0!important;
+  padding:7px 10px!important;
+  border:1px solid #d6e1ea!important;
+  border-radius:999px!important;
+  background:#f8fbfd!important;
+  color:#4c6072!important;
+  cursor:pointer!important;
+}
+#teachers .workday-check:has(input:checked){background:#e8f4fb!important;border-color:#85b9d9!important;color:#135f90!important}
+#teachers .workday-check input{min-height:auto!important;width:auto!important;margin-right:5px!important}
+
+/* Course records toolbar and report cards */
+#lessons>.card{padding:24px!important}
+#lessons .toolbar{
+  background:#f4f8fb!important;
+  border:1px solid #dce7ef!important;
+  border-radius:16px!important;
+  padding:14px!important;
+  margin-bottom:16px!important;
+  gap:10px!important;
+}
+#lessons .lesson-report-summary{
+  margin-top:9px!important;
+  padding:10px 12px!important;
+  border:1px solid #dbe6ee!important;
+  border-radius:12px!important;
+  background:#f8fbfd!important;
+  line-height:1.55!important;
+}
+#lessons .overlap-badge{
+  display:inline-flex!important;
+  align-items:center!important;
+  margin-top:6px!important;
+  padding:5px 9px!important;
+  border-radius:999px!important;
+  color:#991b1b!important;
+  background:#fee2e2!important;
+  border:1px solid #fecaca!important;
+  font-weight:800!important;
+}
+
+/* Responsive safety */
+@media(max-width:1100px){
+  #students .col-4,#teachers .col-4{position:static!important}
+}
+@media(max-width:720px){
+  #students .card,#teachers .card,#lessons>.card{border-radius:17px!important;padding:16px!important}
+  #students>.grid,#teachers>.grid{gap:14px!important}
+  #lessons .toolbar{padding:10px!important}
+}

@@ -1,0 +1,50 @@
+/* Applied by ResizeObserver using the toolbar's real usable width, not the full iPad viewport. */
+#calendar .toolbar.ipad-real-width-fix{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  grid-auto-flow:row!important;
+  gap:10px 12px!important;
+  align-items:end!important;
+  width:100%!important;
+  max-width:100%!important;
+  overflow:hidden!important;
+}
+#calendar .toolbar.ipad-real-width-fix>div{
+  grid-column:span 1!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  overflow:hidden!important;
+}
+#calendar .toolbar.ipad-real-width-fix>div:has(#calendarSearch),
+#calendar .toolbar.ipad-real-width-fix>div[style*="min-width:230px"]{
+  grid-column:1/-1!important;
+}
+#calendar .toolbar.ipad-real-width-fix label{
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  min-height:20px!important;margin:0 0 5px!important;text-align:center!important;line-height:1.2!important;
+}
+#calendar .toolbar.ipad-real-width-fix input,
+#calendar .toolbar.ipad-real-width-fix select{
+  display:block!important;width:100%!important;min-width:0!important;max-width:100%!important;
+  height:46px!important;min-height:46px!important;margin:0!important;padding:0 10px!important;
+  box-sizing:border-box!important;text-align:center!important;text-align-last:center!important;overflow:hidden!important;
+}
+#calendar .toolbar.ipad-real-width-fix input[type="date"]{
+  -webkit-appearance:auto!important;appearance:auto!important;font-size:15px!important;line-height:normal!important;
+}
+#calendar .toolbar.ipad-real-width-fix input[type="date"]::-webkit-date-and-time-value{
+  width:100%!important;min-width:0!important;text-align:center!important;
+}
+#calendar .toolbar.ipad-real-width-fix>.btn{
+  grid-column:span 1!important;width:100%!important;min-width:0!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;
+}
+#calendar .toolbar.ipad-real-width-fix.ipad-real-width-narrow{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+}
+#calendar .toolbar.ipad-real-width-fix.ipad-real-width-narrow>div:has(#calendarDate),
+#calendar .toolbar.ipad-real-width-fix.ipad-real-width-narrow>div:has(#calendarTeacherFilter),
+#calendar .toolbar.ipad-real-width-fix.ipad-real-width-narrow>div:has(#calendarSearch),
+#calendar .toolbar.ipad-real-width-fix.ipad-real-width-narrow>div[style*="min-width:230px"]{grid-column:1/-1!important}
+@media(max-width:700px){#calendar .toolbar.ipad-real-width-fix{grid-template-columns:repeat(2,minmax(0,1fr))!important}}

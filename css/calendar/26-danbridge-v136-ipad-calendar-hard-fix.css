@@ -1,0 +1,83 @@
+/* iPad Safari uses the full 1366px viewport even though the sidebar reduces workspace width.
+   Force the calendar filters into two columns so native date/select controls can never overlap. */
+@media (min-width:701px) and (max-width:1366px){
+  #calendar>.card{overflow:visible!important}
+  #calendar .toolbar{
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    grid-auto-flow:row!important;
+    grid-auto-rows:auto!important;
+    gap:10px 12px!important;
+    align-items:end!important;
+    overflow:visible!important;
+    padding:14px!important;
+  }
+  /* Every filter occupies half of the usable toolbar width. */
+  #calendar .toolbar>div{
+    grid-column:span 2!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    overflow:visible!important;
+  }
+  #calendar .toolbar>div[style*="min-width:230px"],
+  #calendar .toolbar>div:has(#calendarSearch){grid-column:1/-1!important}
+
+  #calendar .toolbar label{
+    min-height:20px!important;
+    margin:0 0 5px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    line-height:20px!important;
+    text-align:center!important;
+  }
+  #calendar .toolbar input,
+  #calendar .toolbar select{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    height:46px!important;
+    min-height:46px!important;
+    margin:0!important;
+    padding:0 12px!important;
+    line-height:46px!important;
+    text-align:center!important;
+    text-align-last:center!important;
+    box-sizing:border-box!important;
+    overflow:hidden!important;
+  }
+  #calendar .toolbar input[type="date"]{
+    -webkit-appearance:auto!important;
+    appearance:auto!important;
+    font-size:16px!important;
+    line-height:normal!important;
+    padding:0 10px!important;
+  }
+  #calendar .toolbar input[type="date"]::-webkit-date-and-time-value{
+    min-height:46px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    text-align:center!important;
+  }
+  /* Action buttons use four columns and wrap cleanly below the filters. */
+  #calendar .toolbar>.btn{
+    grid-column:span 1!important;
+    width:100%!important;
+    min-width:0!important;
+    min-height:44px!important;
+    height:auto!important;
+    padding:8px 6px!important;
+    white-space:normal!important;
+    line-height:1.25!important;
+  }
+}
+
+/* Narrow iPad split view: one filter per row, two action buttons per row. */
+@media (min-width:701px) and (max-width:900px){
+  #calendar .toolbar{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #calendar .toolbar>div{grid-column:1/-1!important}
+  #calendar .toolbar>.btn{grid-column:span 1!important}
+}

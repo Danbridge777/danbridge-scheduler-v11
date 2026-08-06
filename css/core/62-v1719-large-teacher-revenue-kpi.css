@@ -1,0 +1,64 @@
+/* Danbridge Operations V17.19 — larger per-teacher revenue KPI. */
+
+/* Keep the three hour KPIs compact, then give revenue and salary a full-width
+   half-row each. This prevents five narrow cards from shrinking the figures. */
+#settlement .teacher-pay-grid{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  align-items:stretch;
+}
+
+#settlement .teacher-pay-stat{
+  min-height:126px!important;
+  display:flex!important;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
+
+#settlement .teacher-pay-stat.teacher-revenue-kpi,
+#settlement .teacher-pay-stat:nth-child(5){
+  grid-column:span 2;
+  min-height:138px!important;
+}
+
+#settlement .teacher-revenue-kpi b,
+#settlement .teacher-pay-stat:nth-child(5) b{
+  font-size:clamp(24px,2.05vw,34px)!important;
+  line-height:1.08!important;
+}
+
+#settlement .teacher-revenue-kpi small,
+#settlement .teacher-pay-stat:nth-child(5) small{
+  max-width:100%;
+  font-size:11px!important;
+  line-height:1.45!important;
+  margin-top:8px!important;
+}
+
+@media(max-width:1280px){
+  #settlement .teacher-pay-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  #settlement .teacher-pay-stat.teacher-revenue-kpi,
+  #settlement .teacher-pay-stat:nth-child(5){
+    grid-column:span 1;
+  }
+}
+
+@media(max-width:760px){
+  #settlement .teacher-pay-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  #settlement .teacher-pay-stat{
+    min-height:108px!important;
+  }
+}
+
+@media(max-width:520px){
+  #settlement .teacher-pay-grid{grid-template-columns:1fr!important}
+  #settlement .teacher-pay-stat.teacher-revenue-kpi,
+  #settlement .teacher-pay-stat:nth-child(5){
+    grid-column:auto;
+  }
+}

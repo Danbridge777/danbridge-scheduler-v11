@@ -1,0 +1,210 @@
+/* Danbridge Operations V16.3 — premium visual refinement.
+   Visual layer only: no IDs, handlers, data structures, permissions, sync, or calculations changed. */
+:root{
+  --lux-ink:#14233a;
+  --lux-muted:#718097;
+  --lux-line:#e3e9f1;
+  --lux-line-strong:#d3dce8;
+  --lux-surface:#ffffff;
+  --lux-soft:#f7f9fc;
+  --lux-navy:#183457;
+  --lux-navy-2:#234c7c;
+  --lux-gold:#b98a2c;
+  --lux-gold-2:#d7b45d;
+  --lux-success:#158060;
+  --lux-danger:#c64545;
+  --lux-shadow:0 18px 48px rgba(21,39,65,.075);
+  --lux-shadow-soft:0 8px 24px rgba(21,39,65,.055);
+}
+
+body{background:#f4f6fa!important}
+main{background:
+  radial-gradient(circle at 90% 0,rgba(205,222,244,.22),transparent 28%),
+  linear-gradient(180deg,#fbfcfe 0,#f4f6fa 100%)!important}
+section{padding-top:8px}
+
+/* Premium page cards */
+.card{
+  border-color:var(--lux-line)!important;
+  border-radius:24px!important;
+  box-shadow:var(--lux-shadow)!important;
+  overflow:hidden;
+}
+.card::before{
+  content:"";
+  display:block;
+  height:3px;
+  margin:-1px -1px 18px;
+  background:linear-gradient(90deg,var(--lux-navy),var(--lux-gold-2),transparent 78%);
+  opacity:.9;
+}
+.card h2{font-size:25px!important;line-height:1.18;margin-bottom:20px!important}
+.card h2::after{
+  content:"";
+  display:block;
+  width:38px;
+  height:3px;
+  margin-top:10px;
+  border-radius:999px;
+  background:linear-gradient(90deg,var(--lux-gold),var(--lux-gold-2));
+}
+
+/* Student CRM: cleaner split layout and stronger information hierarchy */
+#students>.grid{
+  display:grid!important;
+  grid-template-columns:minmax(340px,410px) minmax(640px,1fr)!important;
+  gap:22px!important;
+  align-items:start!important;
+}
+#students .col-4,#students .col-8{grid-column:auto!important;width:auto!important;max-width:none!important}
+#students .card{padding:24px!important}
+#students .crm-form-grid{gap:15px 14px!important}
+#students .crm-form-grid>div{min-width:0}
+#students .crm-form-grid label{display:block;margin-bottom:7px!important}
+#students input:not([type="hidden"]),#students select,#students textarea{
+  width:100%!important;
+  min-height:46px!important;
+  padding-inline:14px!important;
+  font-size:14px!important;
+}
+#students textarea{min-height:88px!important;padding-block:12px!important;resize:vertical}
+#students .card:first-child>.btn{margin-top:8px!important;margin-right:7px!important}
+#students .card:first-child>.btn.primary{
+  min-width:120px;
+  background:linear-gradient(135deg,var(--lux-navy),var(--lux-navy-2))!important;
+  border-color:transparent!important;
+  box-shadow:0 9px 20px rgba(27,66,110,.2)!important;
+}
+#students .card:first-child>.btn.ok{
+  background:linear-gradient(135deg,#f7ecd0,#fff8e9)!important;
+  border-color:#e5c874!important;
+  color:#775317!important;
+}
+
+/* CRM search bar */
+#students .card.col-8>.toolbar{
+  display:grid!important;
+  grid-template-columns:auto minmax(340px,1fr)!important;
+  align-items:end!important;
+  gap:22px!important;
+  padding:20px!important;
+  margin-bottom:18px!important;
+  border-color:var(--lux-line)!important;
+  background:linear-gradient(135deg,#f9fbfd,#f3f7fc)!important;
+}
+#students .card.col-8>.toolbar h2{margin:0!important;white-space:nowrap}
+#students .card.col-8>.toolbar h2::after{margin-top:8px}
+#students #crmSearch{
+  height:50px!important;
+  padding-left:18px!important;
+  border-radius:14px!important;
+  background:#fff!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 4px 14px rgba(27,49,78,.04)!important;
+}
+
+/* CRM data table */
+#students .table-wrap{border-radius:19px!important;box-shadow:none!important}
+#students table{min-width:920px}
+#students thead th{
+  height:58px;
+  padding:14px 16px!important;
+  background:linear-gradient(180deg,#eef4fa,#e9f0f8)!important;
+  color:#3c536f!important;
+  font-size:12px!important;
+  text-transform:none;
+}
+#students tbody td{padding:18px 16px!important;line-height:1.48}
+#students tbody tr{background:#fff}
+#students tbody tr:nth-child(even){background:#fcfdff}
+#students tbody tr:hover{background:#f5f8fc!important}
+#students tbody td:first-child{font-weight:780;color:var(--lux-ink)}
+#students tbody td .small{font-size:12px!important}
+#students tbody .btn{
+  min-height:38px!important;
+  padding:0 13px!important;
+  margin:3px!important;
+  border-radius:10px!important;
+  font-size:13px!important;
+  box-shadow:none!important;
+}
+#students tbody .btn:not(.danger):not(.bad):hover{border-color:#9eb6d1!important;color:var(--lux-navy)!important}
+#students tbody .btn.danger,#students tbody .btn.bad{background:#fff7f7!important;border-color:#f0c4c4!important;color:#b83838!important}
+
+/* Premium status chips */
+#students .badge,#students .pill,#students [class*="status"]{
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.45);
+}
+
+/* Teachers and management pages share the premium split language */
+#teachers>.grid,#makeups>.grid,#camp>.grid,#winterCamp>.grid{
+  gap:22px!important;
+  align-items:start!important;
+}
+#teachers .card,#makeups .card,#camp .card,#winterCamp .card{padding:24px!important}
+#teachers .table-wrap,#makeups .table-wrap,#camp .table-wrap,#winterCamp .table-wrap{box-shadow:none!important}
+
+/* Finance and settlement: executive dashboard tone */
+#settlement .card,#finance .card{padding:24px!important}
+#settlement .toolbar,#finance .toolbar{
+  padding:18px!important;
+  border-radius:18px!important;
+  background:linear-gradient(135deg,#f9fbfd,#f1f5fa)!important;
+}
+#settlement .metric,#finance .finance-metric{
+  background:linear-gradient(145deg,#fff,#f7f9fc)!important;
+  border-color:var(--lux-line)!important;
+}
+
+/* Buttons: restrained luxury rather than many unrelated colors */
+.btn.primary{
+  background:linear-gradient(135deg,var(--lux-navy),var(--lux-navy-2))!important;
+  border-color:transparent!important;
+  box-shadow:0 8px 18px rgba(25,57,96,.16)!important;
+}
+.btn.primary:hover{filter:brightness(1.04)}
+.btn.ok{background:#f1f8f5!important;border-color:#c2e0d3!important;color:#176f55!important}
+.btn.danger,.btn.bad{background:#fff7f7!important;border-color:#efcaca!important;color:#b83e3e!important}
+
+/* Form polish across all admin pages */
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),select,textarea{
+  border-color:var(--lux-line-strong)!important;
+  background:linear-gradient(180deg,#fff,#fdfefe)!important;
+}
+input:focus,select:focus,textarea:focus{
+  border-color:#6f91b9!important;
+  box-shadow:0 0 0 4px rgba(42,89,139,.10),0 6px 16px rgba(25,49,80,.06)!important;
+}
+
+/* Sidebar upgrade: deeper navy-black with refined gold hierarchy */
+nav{
+  background:
+    radial-gradient(circle at 0 0,rgba(189,145,52,.13),transparent 28%),
+    linear-gradient(180deg,#17253a 0,#0d1726 100%)!important;
+  border-right:1px solid rgba(255,255,255,.055)!important;
+}
+nav button{color:#d9e1eb!important}
+nav button:hover{background:rgba(255,255,255,.065)!important;color:#fff!important}
+nav button.active{
+  color:#fff!important;
+  background:linear-gradient(90deg,rgba(185,138,44,.82),rgba(185,138,44,.38))!important;
+  box-shadow:inset 0 0 0 1px rgba(244,213,133,.22),0 10px 24px rgba(0,0,0,.18)!important;
+}
+
+/* Responsive: preserve usability without changing DOM or behavior */
+@media(max-width:1280px){
+  #students>.grid{grid-template-columns:350px minmax(560px,1fr)!important;gap:16px!important}
+  #students .card{padding:20px!important}
+}
+@media(max-width:1040px){
+  #students>.grid{grid-template-columns:1fr!important}
+  #students .card.col-4,#students .card.col-8{width:100%!important}
+  #students .card.col-8>.toolbar{grid-template-columns:1fr!important}
+}
+@media(max-width:720px){
+  .card{border-radius:18px!important}
+  .card::before{margin-bottom:14px}
+  #students .card{padding:16px!important}
+  #students .crm-form-grid{grid-template-columns:1fr!important}
+  #students .crm-form-grid .span-2{grid-column:auto!important}
+  #students .card.col-8>.toolbar{padding:14px!important}
+}

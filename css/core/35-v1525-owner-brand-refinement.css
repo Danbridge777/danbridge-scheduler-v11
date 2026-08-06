@@ -1,0 +1,94 @@
+/* V15.25 — premium Owner palette and overflow-safe sidebar brand. */
+body[data-cloud-role="owner"]{
+  --owner-nav-start:#17140d;
+  --owner-nav-mid:#241d0f;
+  --owner-nav-end:#302512;
+  --owner-gold:#d7ae43;
+  --owner-gold-strong:#f0cf70;
+  --owner-gold-soft:#fff7dd;
+}
+
+@media (min-width:981px){
+  body[data-cloud-role="owner"]>nav{
+    background:
+      radial-gradient(circle at 18% 3%,rgba(215,174,67,.16),transparent 30%),
+      linear-gradient(180deg,var(--owner-nav-start) 0%,var(--owner-nav-mid) 48%,var(--owner-nav-end) 100%)!important;
+    border-right-color:rgba(240,207,112,.22)!important;
+    box-shadow:12px 0 34px rgba(18,15,9,.22)!important;
+  }
+
+  /* The product mark uses fixed-width, independent lines so no text can escape the sidebar. */
+  body:not(.auth-locked)>nav{padding-top:154px!important;overflow:hidden!important}
+  body:not(.auth-locked)>nav::before{
+    content:"Danbridge"!important;
+    box-sizing:border-box!important;
+    display:block!important;
+    position:absolute!important;
+    top:28px!important;
+    left:28px!important;
+    right:24px!important;
+    width:auto!important;
+    max-width:calc(100% - 52px)!important;
+    overflow:hidden!important;
+    white-space:nowrap!important;
+    text-overflow:ellipsis!important;
+    font-size:25px!important;
+    line-height:1.05!important;
+    letter-spacing:-.035em!important;
+    font-weight:900!important;
+  }
+  body:not(.auth-locked)>nav::after{
+    content:"OPERATIONS\A EDUCATION MANAGEMENT\A SYSTEM"!important;
+    box-sizing:border-box!important;
+    display:block!important;
+    position:absolute!important;
+    top:68px!important;
+    left:29px!important;
+    right:24px!important;
+    width:auto!important;
+    max-width:calc(100% - 53px)!important;
+    overflow:hidden!important;
+    white-space:pre-line!important;
+    overflow-wrap:anywhere!important;
+    font-size:9.5px!important;
+    line-height:1.55!important;
+    letter-spacing:.115em!important;
+    font-weight:850!important;
+  }
+
+  body[data-cloud-role="owner"]>nav::before{color:#fff9e8!important}
+  body[data-cloud-role="owner"]>nav::after{color:rgba(240,207,112,.82)!important}
+  body[data-cloud-role="owner"]>nav button{color:#f8f2df!important}
+  body[data-cloud-role="owner"]>nav button::before{color:#ead075!important}
+  body[data-cloud-role="owner"]>nav button:hover{
+    background:rgba(240,207,112,.08)!important;
+    border-color:rgba(240,207,112,.14)!important;
+  }
+  body[data-cloud-role="owner"]>nav button.active{
+    background:linear-gradient(90deg,rgba(215,174,67,.24),rgba(255,255,255,.055))!important;
+    border-color:rgba(240,207,112,.42)!important;
+    box-shadow:inset 5px 0 0 var(--owner-gold),0 10px 24px rgba(0,0,0,.10)!important;
+    color:#fffdf5!important;
+  }
+}
+
+/* Keep the Owner dashboard elegant: warm accents, neutral content surfaces. */
+body[data-cloud-role="owner"] .role-dashboard-badge,
+body[data-cloud-role="owner"] .branch-scope-card{
+  border-color:rgba(215,174,67,.45)!important;
+  background:linear-gradient(100deg,#fffaf0,#fff 72%)!important;
+}
+body[data-cloud-role="owner"] .dashboard-hero,
+body[data-cloud-role="owner"] .v32-hero{
+  background:linear-gradient(110deg,#fffaf0,#fff 72%)!important;
+  border-color:rgba(215,174,67,.38)!important;
+}
+body[data-cloud-role="owner"] .dashboard-stat-card,
+body[data-cloud-role="owner"] .v32-stat{
+  border-top-color:#d7ae43!important;
+}
+
+@media (max-width:1180px) and (min-width:981px){
+  body:not(.auth-locked)>nav::before{font-size:22px!important;left:22px!important;right:18px!important}
+  body:not(.auth-locked)>nav::after{font-size:8.5px!important;left:23px!important;right:18px!important;letter-spacing:.09em!important}
+}
