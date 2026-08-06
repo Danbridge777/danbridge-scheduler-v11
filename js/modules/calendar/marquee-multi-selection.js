@@ -1,7 +1,7 @@
 /* Danbridge calendar interactions — one stable delegated controller. */
 (()=>{
   'use strict';
-  const controller={canvas:null,marquee:null,pointerDrag:null,suppressClickUntil:0};
+  const controller={canvas:null,marquee:null,pointerDrag:null,dragGhost:null,suppressClickUntil:0};
   const cards=()=>controller.canvas?[...controller.canvas.querySelectorAll('[data-id]')]:[];
   const cardOf=target=>target?.closest?.('[data-id]')||null;
   const isControl=target=>!!target?.closest?.('button,input,select,textarea,a');
@@ -56,16 +56,31 @@
     return true;
   }
 
+  function createDragGhost(state,event){
+    const rect=state.card.getBoundingClientRect(),ghost=state.card.cloneNode(true);
+    ghost.classList.remove('selected','marquee-hit','dragging','drop-target');
+    ghost.classList.add('calendar-drag-ghost');ghost.removeAttribute('draggable');ghost.setAttribute('aria-hidden','true');
+    ghost.style.width=rect.width+'px';ghost.style.height=rect.height+'px';
+    document.body.appendChild(ghost);controller.dragGhost=ghost;moveDragGhost(event);
+  }
+
+  function moveDragGhost(event){
+    if(!controller.dragGhost)return;
+    controller.dragGhost.style.transform=`translate3d(${event.clientX+14}px,${event.clientY+14}px,0)`;
+  }
+
+  function removeDragGhost(){controller.dragGhost?.remove();controller.dragGhost=null}
+
   function clearPointerDrag(){
     const state=controller.pointerDrag;if(!state)return;
-    clearDrop();state.card.classList.remove('dragging');controller.pointerDrag=null;dragState=null;
+    clearDrop();removeDragGhost();state.card.classList.remove('dragging');controller.pointerDrag=null;dragState=null;
   }
 
   function movePointerDrag(event){
     const state=controller.pointerDrag;if(!state||event.pointerId!==state.pointerId)return false;
-    if(!state.moved&&Math.hypot(event.clientX-state.startX,event.clientY-state.startY)>6){state.moved=true;dragState=state.id;state.card.classList.add('dragging')}
+    if(!state.moved&&Math.hypot(event.clientX-state.startX,event.clientY-state.startY)>6){state.moved=true;dragState=state.id;state.card.classList.add('dragging');createDragGhost(state,event)}
     if(!state.moved)return true;
-    event.preventDefault();event.stopImmediatePropagation();clearDrop();
+    event.preventDefault();event.stopImmediatePropagation();moveDragGhost(event);clearDrop();
     const target=targetOf(document.elementFromPoint(event.clientX,event.clientY));
     if(target?.date)target.element.classList.add('drop-target');
     return true;

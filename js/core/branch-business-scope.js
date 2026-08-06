@@ -5,7 +5,7 @@
   const ctx=()=>access()?.getContext?.()||{role:'owner',branchIds:[]};
   const branches=()=>db.branches?.length?db.branches:access()?.DEFAULT_BRANCHES||[];
   const branchId=r=>r?.branchId||access()?.branchIdFromLocation?.(r?.location||'')||'unassigned';
-  const allowedScope=value=>{const c=ctx();if(c.role==='branch_manager')return c.branchIds[0]||'unassigned';return value||'all'};
+  const allowedScope=value=>{const c=ctx();if(c.role==='branch_manager')return c.branchIds[0]||'unassigned';if(c.role==='teacher')return'all';return value||'all'};
   const match=(record,scope)=>scope==='all'||branchId(record)===scope;
   const scopeLabel=scope=>scope==='all'?'全部校區':(branches().find(b=>b.id===scope)?.name||'未歸屬校區');
   const scopedLessons=(scope,month='')=>(db.lessons||[]).filter(l=>!l.isDraft&&(!month||l.date.startsWith(month))&&match(l,allowedScope(scope)));
