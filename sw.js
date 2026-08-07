@@ -1,4 +1,4 @@
-const CACHE_NAME='danbridge-v11-all-hours-draggable-6';
+const CACHE_NAME='danbridge-v11-week-horizontal-overflow-7';
 const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{

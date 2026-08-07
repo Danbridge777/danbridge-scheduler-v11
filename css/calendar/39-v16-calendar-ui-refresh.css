@@ -48,7 +48,7 @@
 #calendar .calendar-toolbar-tools .secondary-action:last-of-type{background:#f5f7fa!important;border-color:#d8e0ea!important;color:#52627a!important}
 #calendar .calendar-toolbar-v16 .btn::before,#calendar .calendar-toolbar-v16 .btn::after{content:none!important}
 
-#calendar .calendar-shell{border-radius:16px!important;overflow:hidden!important;background:#fff!important}
+#calendar .calendar-shell{border-radius:16px!important;overflow-x:auto!important;overflow-y:visible!important;overscroll-behavior-x:contain;background:#fff!important;-webkit-overflow-scrolling:touch}
 #calendar .month-grid .day-cell,#calendar .week-grid .day-cell{transition:background .14s ease,box-shadow .14s ease!important}
 #calendar .month-grid .day-cell:hover,#calendar .week-grid .day-cell:hover{background:#fbfdff!important;box-shadow:inset 0 0 0 1px #d8e8f7!important}
 #calendar .lesson-card{border-radius:14px!important;box-shadow:0 5px 15px rgba(43,85,135,.08)!important;transition:transform .14s ease,box-shadow .14s ease!important}
