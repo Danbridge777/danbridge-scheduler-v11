@@ -163,5 +163,31 @@ function copyVisibleMonth(){const base=new Date($('calendarDate').value+'T00:00:
 
 $('lessonModal').addEventListener('click',e=>{if(e.target===$('lessonModal'))closeLessonModal()});$('batchModal').addEventListener('click',e=>{if(e.target===$('batchModal'))closeBatchModal()});
 
+/* Keep every visible lesson at its real time, including early-morning classes. */
+renderWeek=function(date,f){
+  if(matchMedia('(max-width:700px)').matches)return renderMobileWeek(date,f);
+  const day=date.getDay(),mon=new Date(date);mon.setDate(date.getDate()-((day+6)%7));
+  const days=Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d});
+  const weekDates=new Set(days.map(localDate));
+  const visibleLessons=db.lessons.filter(l=>weekDates.has(l.date)&&lessonMatchesCalendar(l,f));
+  const startHours=visibleLessons.map(l=>Number(String(l.start||'08:00').slice(0,2))).filter(Number.isFinite);
+  const endHours=visibleLessons.map(l=>{const[h,m]=String(l.end||'22:00').split(':').map(Number);return h+(m?1:0)}).filter(Number.isFinite);
+  const startHour=Math.max(0,Math.min(8,...startHours)),endHour=Math.min(24,Math.max(22,...endHours)),totalSlots=(endHour-startHour)*12;
+  let h='<div class="week-grid"><div class="week-head" style="grid-column:1;grid-row:1">時間</div>'+days.map((d,i)=>`<div class="week-head" style="grid-column:${i+2};grid-row:1">${d.getMonth()+1}/${d.getDate()} 週${weekday(localDate(d))}</div>`).join('');
+  for(let slot=0;slot<totalSlots;slot++){
+    const totalMin=startHour*60+slot*5,hr=Math.floor(totalMin/60),min=totalMin%60,time=`${String(hr).padStart(2,'0')}:${String(min).padStart(2,'0')}`,row=slot+2,isHour=min===0,isHalf=min===30;
+    h+=`<div class="time-label ${isHour?'hour':isHalf?'half-hour':''}" style="grid-column:1;grid-row:${row}">${time}</div>`;
+    for(let i=0;i<days.length;i++){const ds=localDate(days[i]),lineClass=isHour?'full-hour':isHalf?'half-hour':'';h+=`<div class="time-slot ${lineClass}" style="grid-column:${i+2};grid-row:${row}" data-date="${ds}" data-time="${time}" onclick="weekCellClick(event,'${ds}','${time}')"></div>`}
+  }
+  for(let i=0;i<days.length;i++){
+    const ds=localDate(days[i]),lessons=visibleLessons.filter(l=>l.date===ds).sort((a,b)=>a.start.localeCompare(b.start));
+    for(const l of lessons){
+      const [sh,sm]=l.start.split(':').map(Number),[eh,em]=l.end.split(':').map(Number),startMin=sh*60+sm,endMin=eh*60+em,startSlot=Math.round((startMin-startHour*60)/5),span=Math.max(1,Math.round((endMin-startMin)/5)),rowStart=startSlot+2,rowEnd=Math.min(totalSlots+2,rowStart+span);
+      h+=`<div class="week-event ${(l.lessonState==='draft'||l.isDraft)?'lesson-draft':''} ${selectedLessonIds.has(l.id)?'selected':''} ${hasTeacherOverlap(l)?'teacher-overlap':''} ${calendarFilterState().search?'calendar-search-hit':''}" title="${esc(lessonHoverText(l))}" draggable="${selectionMode?'false':'true'}" data-id="${l.id}" style="grid-column:${i+2};grid-row:${rowStart}/${rowEnd};--teacher:${teacher(l.teacherId).color||'#2563eb'};--location-bg:${locationBg(l.location)}"><b>${l.isDraft?'<span class="draft-tag">草稿</span> ':''}${l.start}–${l.end} ${esc(student(l.studentId).name)}</b><span class="week-event-meta">${esc(lessonTeacherNames(l))}${effectiveCampId(l)?`｜營隊:${esc(effectiveCampId(l))}`:''}｜📍${esc(locationLabel(l))}${hasTeacherOverlap(l)?`｜⚠${esc(lessonTeacherConflictNames(l).join('、'))}`:''}</span></div>`;
+    }
+  }
+  h+='</div>';$('calendarCanvas').innerHTML=h;$('calendarTitle').textContent=`${localDate(days[0])} ～ ${localDate(days[6])}｜每 5 分鐘一格（${String(startHour).padStart(2,'0')}:00–${String(endHour).padStart(2,'0')}:00）`;attachDragHandlers();
+};
+
 
 ensureV81Migration();renderAll();
