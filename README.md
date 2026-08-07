@@ -16,3 +16,8 @@ python3 tools/validate_project.py
 ```
 
 `index.html`、JavaScript、CSS、Service Worker 與 Firebase 規則均直接保存在 repository 根目錄及其模組資料夾中。`.nojekyll` 讓 GitHub Pages 直接發布靜態檔案，不執行不需要的 Jekyll 處理。
+
+## 開發與驗收
+
+- [功能清單與驗收狀態看板](docs/FEATURE_ACCEPTANCE_BOARD.md)
+- [Firestore Rules 部署說明](firebase/DEPLOY_RULES.md)

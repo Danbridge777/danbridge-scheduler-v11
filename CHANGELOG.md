@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-07 — 建立功能與驗收狀態基準
+
+- 依完整網站建置文件建立 P0／P1／P2 功能清單與驗收狀態看板。
+- 明確區分已自動驗收、已人工驗收、部分完成、未開始與需要決策。
+- 將 Firestore Rules Emulator 權限測試列為下一個 P0 實作項目。
+- 補上核心課表回歸狀態與正式平台的建議執行順序。
+
 ## V11 initial clean repository
 
 - Recreated the application from the latest validated v10 source without its Git history, macOS metadata, or historical audit reports.
