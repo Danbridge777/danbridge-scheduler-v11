@@ -1,4 +1,4 @@
-const CACHE_NAME='danbridge-v11-deterministic-drag-selection-9';
+const CACHE_NAME='danbridge-v11-selection-overlay-no-shift-10';
 const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{

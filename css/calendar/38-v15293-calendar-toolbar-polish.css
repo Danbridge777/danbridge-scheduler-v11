@@ -114,14 +114,17 @@
 #calendar .calendar-toolbar>#selectionModeBtn::before{content:"☑";font-size:14px}
 #calendar .calendar-toolbar>.secondary-action:last-child::before{content:"⇩";font-size:15px}
 
-/* The multi-select controls also remain in document flow instead of floating over lessons. */
+/* Keep multi-select controls out of document flow so the calendar never shifts. */
 #calendar .selection-bar{
-  position:static!important;
-  inset:auto!important;
-  z-index:auto!important;
-  max-width:none!important;
-  width:100%!important;
-  margin:0 0 12px!important;
+  position:fixed!important;
+  top:92px!important;
+  right:18px!important;
+  bottom:auto!important;
+  left:auto!important;
+  z-index:95!important;
+  max-width:min(760px,calc(100vw - 36px))!important;
+  width:auto!important;
+  margin:0!important;
   padding:10px 12px!important;
   border:1px solid #cbdced!important;
   border-radius:13px!important;
