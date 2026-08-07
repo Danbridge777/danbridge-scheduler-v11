@@ -40,10 +40,12 @@
   margin:1px 5px!important;
   padding:8px 9px 7px 11px!important;
   border:1px solid color-mix(in srgb,var(--teacher,#2563eb) 16%,#dbe3ec)!important;
-  border-left:3px solid var(--teacher,#2563eb)!important;
+  border-left-color:color-mix(in srgb,var(--teacher,#2563eb) 24%,#dbe3ec)!important;
   border-radius:8px!important;
   color:#172033!important;
-  background:linear-gradient(180deg,color-mix(in srgb,var(--teacher,#2563eb) 7%,#fff),color-mix(in srgb,var(--teacher,#2563eb) 4%,var(--location-bg,#f8fafc)))!important;
+  background:
+    linear-gradient(180deg,var(--teacher,#2563eb) 0%,color-mix(in srgb,var(--teacher,#2563eb) 55%,transparent) 38%,transparent 82%) 0 0/3px 100% no-repeat,
+    linear-gradient(180deg,color-mix(in srgb,var(--teacher,#2563eb) 9%,#fff) 0%,color-mix(in srgb,var(--teacher,#2563eb) 5%,#fff) 34%,rgba(255,255,255,.38) 72%,rgba(255,255,255,.12) 100%)!important;
   box-shadow:0 2px 7px rgba(30,50,75,.08)!important;
 }
 #calendarCanvas .week-grid-premium .week-event:not(.selectable)::before{
@@ -131,9 +133,11 @@
   text-align:right!important;
 }
 #calendarCanvas .week-grid-premium .week-event--xl{
-  background:linear-gradient(180deg,color-mix(in srgb,var(--teacher,#2563eb) 8%,#fff),color-mix(in srgb,var(--teacher,#2563eb) 5%,var(--location-bg,#f8fafc)))!important;
+  background:
+    linear-gradient(180deg,var(--teacher,#2563eb) 0%,color-mix(in srgb,var(--teacher,#2563eb) 48%,transparent) 34%,transparent 78%) 0 0/3px 100% no-repeat,
+    linear-gradient(180deg,color-mix(in srgb,var(--teacher,#2563eb) 10%,#fff) 0%,color-mix(in srgb,var(--teacher,#2563eb) 5%,#fff) 28%,rgba(255,255,255,.32) 68%,rgba(255,255,255,.08) 100%)!important;
 }
-#calendarCanvas .week-grid-premium .week-event:hover{border-color:color-mix(in srgb,var(--teacher,#2563eb) 32%,#cbd5e1)!important;border-left-color:var(--teacher,#2563eb)!important;box-shadow:0 5px 14px rgba(30,50,75,.12)!important}
+#calendarCanvas .week-grid-premium .week-event:hover{border-color:color-mix(in srgb,var(--teacher,#2563eb) 32%,#cbd5e1)!important;box-shadow:0 5px 14px rgba(30,50,75,.12)!important}
 
 /* Keep the existing multi-select controls visible above the presentation layer. */
 #calendarCanvas .week-grid-premium .week-event.selectable{padding-left:30px!important}
