@@ -309,3 +309,21 @@ body[data-role-ux="teacher"] header .danbridge-language-toggle:hover{background:
   body[data-role-ux="teacher"] #dashboard .v32-eyebrow{font-size:8.5px!important;letter-spacing:.1em!important}
   #teacherReportModal #startClassFocusBtn,#teacherReportModal #quickCompleteTeacherReportBtn,#teacherReportModal #saveTeacherReportBtn,#teacherReportModal #cancelTeacherReportBtn{width:100%!important;margin:4px 0!important}
 }
+
+/* Selection and drag feedback must never shift a card into another calendar row. */
+#calendarCanvas .lesson,
+#calendarCanvas .week-event,
+#calendarCanvas .lesson:hover,
+#calendarCanvas .week-event:hover,
+#calendarCanvas .lesson.selectable,
+#calendarCanvas .week-event.selectable,
+#calendarCanvas .lesson.selected,
+#calendarCanvas .week-event.selected,
+#calendarCanvas .lesson.marquee-hit,
+#calendarCanvas .week-event.marquee-hit,
+#calendarCanvas .lesson.dragging,
+#calendarCanvas .week-event.dragging{
+  animation:none!important;
+  transition:none!important;
+  transform:none!important;
+}

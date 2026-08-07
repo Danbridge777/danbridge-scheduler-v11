@@ -3,6 +3,7 @@
   'use strict';
   const controller={canvas:null,marquee:null,pointerDrag:null,dragGhost:null,suppressClickUntil:0};
   const cards=()=>controller.canvas?[...controller.canvas.querySelectorAll('[data-id]')]:[];
+  const selectedRenderedIds=()=>{const rendered=new Set(cards().map(card=>card.dataset.id));return[...selectedLessonIds].filter(id=>rendered.has(id))};
   const cardOf=target=>target?.closest?.('[data-id]')||null;
   const isControl=target=>!!target?.closest?.('button,input,select,textarea,a');
   const currentRole=()=>document.body.dataset.cloudRole||window.DanbridgeAccess?.getContext?.().role||window.currentCloudRole?.()||'';
@@ -55,7 +56,7 @@
     if(!card||!canEdit()||event.pointerType==='touch'||event.button!==0||pasteClickMode||isControl(event.target))return false;
     if((selectionMode||selectedLessonIds.size)&&!selectedLessonIds.has(card.dataset.id))return false;
     const rect=card.getBoundingClientRect();
-    const ids=selectedLessonIds.has(card.dataset.id)?[...selectedLessonIds]:[card.dataset.id];
+    const ids=selectedLessonIds.has(card.dataset.id)?selectedRenderedIds():[card.dataset.id];
     controller.pointerDrag={pointerId:event.pointerId,id:card.dataset.id,ids,card,startX:event.clientX,startY:event.clientY,moved:false,grabX:event.clientX-rect.left,grabY:event.clientY-rect.top};
     try{controller.canvas.setPointerCapture(event.pointerId)}catch{}
     return true;

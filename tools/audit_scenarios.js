@@ -122,4 +122,48 @@ assert.match(notificationRules, /recipientEmail == emailKey\(\)/);
 assert.doesNotMatch(notificationRules, /teacherId == ownTeacherId\(\)/);
 assert.match(cloudSource, /roleAccessSignature\(access\)===cloudRoleAccessSignature/);
 
-console.log(`PASS: ${matrix.length} accounting states, settlement rates, leave/makeup lifecycle, role scopes, teacher replacement notifications, and live access guards.`);
+const courseOperationsSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course-operations.js'), 'utf8');
+const moveOperationsStart = courseOperationsSource.indexOf('function moveLessonTo');
+assert.ok(moveOperationsStart >= 0, 'calendar move operations are available');
+context.addMinutes = (time, delta) => { const [h, m] = time.split(':').map(Number); const value = h * 60 + m + delta; return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; };
+context.shiftDate = (date, delta) => { const value = new Date(`${date}T00:00:00`); value.setDate(value.getDate() + delta); return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; };
+context.shiftTime = context.addMinutes;
+context.conflictDetail = () => null;
+context.teacherConflictDetail = () => null;
+context.snapshot = () => { context.moveSnapshots = (context.moveSnapshots || 0) + 1; };
+context.clearCalendarSelectionState = () => {};
+context.cancelPasteClickMode = () => {};
+context.logChange = () => {};
+context.saveDB = options => { context.moveSaves = (context.moveSaves || 0) + 1; context.lastMoveSaveOptions = options; };
+context.toast = () => {};
+context.confirm = () => true;
+context.alert = message => { throw new Error(message); };
+vm.runInContext(courseOperationsSource.slice(moveOperationsStart), context);
+context.db.lessons = [
+  lesson({ id: 'drag-one', date: '2026-08-10', start: '10:00', end: '11:00', teacherId: 't1', teacherIds: ['t1', 't2'] }),
+  lesson({ id: 'drag-two', date: '2026-08-11', start: '12:00', end: '13:00', teacherId: 't2', teacherIds: ['t2'] })
+];
+context.moveSnapshots = 0; context.moveSaves = 0;
+context.moveLessonTo('drag-one', '2026-08-12', '14:00');
+assert.equal(context.db.lessons[0].date, '2026-08-12', 'single drag moves only the anchor lesson');
+assert.equal(context.db.lessons[0].start, '14:00', 'single drag uses the dropped week time');
+assert.deepEqual(Array.from(context.db.lessons[0].teacherIds), ['t1', 't2'], 'single drag preserves all assigned teachers');
+assert.equal(context.db.lessons[1].date, '2026-08-11', 'single drag leaves other lessons unchanged');
+assert.equal(context.moveSnapshots, 1, 'single drag creates one undo snapshot');
+assert.equal(context.moveSaves, 1, 'single drag saves once');
+context.moveSnapshots = 0; context.moveSaves = 0;
+context.moveLessonsTo(['drag-one', 'drag-two'], 'drag-one', '2026-08-14', '15:00');
+const movedAnchor = context.db.lessons.find(row => row.id === 'drag-one');
+const movedCompanion = context.db.lessons.find(row => row.id === 'drag-two');
+assert.equal(movedAnchor.date, '2026-08-14', 'multi drag moves the anchor to the drop date');
+assert.equal(movedCompanion.date, '2026-08-13', 'multi drag preserves relative day spacing');
+assert.equal(movedAnchor.start, '15:00', 'multi drag moves the anchor to the drop time');
+assert.equal(movedCompanion.start, '13:00', 'multi drag preserves relative time spacing');
+assert.equal(context.moveSnapshots, 1, 'multi drag creates one undo snapshot');
+assert.equal(context.moveSaves, 1, 'multi drag saves the whole set once');
+assert.equal(context.lastMoveSaveOptions.calendarOnly, true, 'drag saves only rerender the calendar');
+
+const interactionSource = fs.readFileSync(path.join(root, 'js/modules/calendar/marquee-multi-selection.js'), 'utf8');
+assert.match(interactionSource, /selectedRenderedIds\(\)/, 'multi drag intersects selection with rendered cards');
+
+console.log(`PASS: ${matrix.length} accounting states, settlement rates, role scopes, notifications, live access guards, and single/multi calendar dragging.`);
