@@ -169,5 +169,6 @@ assert.equal(context.lastMoveSaveOptions.skipRender, true, 'drag persistence doe
 
 const interactionSource = fs.readFileSync(path.join(root, 'js/modules/calendar/marquee-multi-selection.js'), 'utf8');
 assert.match(interactionSource, /selectedRenderedIds\(\)/, 'multi drag intersects selection with rendered cards');
+assert.doesNotMatch(interactionSource, /moveLessonsTo\([^\n]+\);else moveLessonTo\([^\n]+\);\s*finishSelection\(\)/, 'successful drops do not clear the same selection twice');
 
 console.log(`PASS: ${matrix.length} accounting states, settlement rates, role scopes, notifications, live access guards, and single/multi calendar dragging.`);

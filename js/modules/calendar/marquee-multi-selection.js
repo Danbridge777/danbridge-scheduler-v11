@@ -115,7 +115,6 @@
     clearPointerDrag();
     if(state.moved&&target?.date&&lesson&&(target.date!==lesson.date||(target.time&&target.time!==lesson.start))){
       if(state.ids.length>1)moveLessonsTo(state.ids,state.id,target.date,target.time||'');else moveLessonTo(state.id,target.date,target.time||'');
-      finishSelection();
     }
     return true;
   }

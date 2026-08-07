@@ -133,18 +133,20 @@ function commitCalendarMove(){
   calendarMoveSaveTimer=setTimeout(()=>{calendarMoveSaveTimer=null;saveDB({skipRender:true})},0);
 }
 
-function moveLessonTo(id,date,time){const l=db.lessons.find(x=>x.id===id);if(!l)return;const oldDur=Math.round(hours(l.start,l.end)*60),n={...l,date,teacherIds:[...lessonTeacherIds(l)]};if(time){n.start=time;n.end=addMinutes(time,oldDur)}const finish=()=>{clearCalendarSelectionState();cancelPasteClickMode(false)};const c=conflictDetail(n,id);if(c){finish();return alert(`拖曳後會造成${c.type}撞課：${c.name}\n${c.lesson.date} ${c.lesson.start}–${c.lesson.end}，已取消。`)}const tw=teacherConflictDetail(n,id);if(tw&&!confirm(`拖曳後老師 ${tw.name} 會時間重複。\n${tw.lesson.date} ${tw.lesson.start}–${tw.lesson.end}\n仍要移動嗎？重複課程會顯示亮紅色。`)){finish();return}snapshot();const before={...l};Object.assign(l,n);logChange('移動課程',l,before);finish();commitCalendarMove();toast('課程已移動')}
+function finishCalendarMoveInteraction(){clearCalendarSelectionState();cancelPasteClickMode(false)}
+
+function moveLessonTo(id,date,time){const l=db.lessons.find(x=>x.id===id);if(!l)return;const oldDur=Math.round(hours(l.start,l.end)*60),n={...l,date,teacherIds:[...lessonTeacherIds(l)]};if(time){n.start=time;n.end=addMinutes(time,oldDur)}const c=conflictDetail(n,id);if(c){finishCalendarMoveInteraction();return alert(`拖曳後會造成${c.type}撞課：${c.name}\n${c.lesson.date} ${c.lesson.start}–${c.lesson.end}，已取消。`)}const tw=teacherConflictDetail(n,id);if(tw&&!confirm(`拖曳後老師 ${tw.name} 會時間重複。\n${tw.lesson.date} ${tw.lesson.start}–${tw.lesson.end}\n仍要移動嗎？重複課程會顯示亮紅色。`)){finishCalendarMoveInteraction();return}snapshot();const before={...l};Object.assign(l,n);logChange('移動課程',l,before);finishCalendarMoveInteraction();commitCalendarMove();toast('課程已移動')}
 
 function moveLessonsTo(ids,anchorId,date,time=''){
   const idSet=new Set(ids),rows=db.lessons.filter(l=>idSet.has(l.id)),anchor=rows.find(l=>l.id===anchorId);
   if(!anchor||rows.length<2)return moveLessonTo(anchorId,date,time);
   const dayDelta=Math.round((new Date(date+'T00:00:00')-new Date(anchor.date+'T00:00:00'))/86400000),toMinutes=value=>{const[h,m]=String(value||'').split(':').map(Number);return h*60+m},timeDelta=time?toMinutes(time)-toMinutes(anchor.start):0;
   const candidates=rows.map(old=>({...old,date:shiftDate(old.date,dayDelta),start:shiftTime(old.start,timeDelta),end:shiftTime(old.end,timeDelta)})),candidateById=new Map(candidates.map(row=>[row.id,row])),originalLessons=db.lessons;
-  if(candidates.some(row=>!row.start||!row.end)){clearCalendarSelectionState();cancelPasteClickMode(false);return alert('整批拖曳後有課程超出當日時間範圍，已取消。')}
+  if(candidates.some(row=>!row.start||!row.end)){finishCalendarMoveInteraction();return alert('整批拖曳後有課程超出當日時間範圍，已取消。')}
   db.lessons=originalLessons.filter(l=>!idSet.has(l.id));let blocking=null,teacherWarnings=0;
   try{for(const candidate of candidates){const conflict=conflictDetail(candidate,'');if(conflict){blocking={candidate,conflict};break}if(teacherConflictDetail(candidate,''))teacherWarnings++}}finally{db.lessons=originalLessons}
-  if(blocking){clearCalendarSelectionState();cancelPasteClickMode(false);return alert(`整批拖曳後會造成${blocking.conflict.type}撞課：${blocking.conflict.name}\n${blocking.conflict.lesson.date} ${blocking.conflict.lesson.start}–${blocking.conflict.lesson.end}，已取消。`)}
-  if(teacherWarnings&&!confirm(`整批拖曳後有 ${teacherWarnings} 堂老師時間重複。\n仍要移動嗎？重複課程會顯示亮紅色。`)){clearCalendarSelectionState();cancelPasteClickMode(false);return}
+  if(blocking){finishCalendarMoveInteraction();return alert(`整批拖曳後會造成${blocking.conflict.type}撞課：${blocking.conflict.name}\n${blocking.conflict.lesson.date} ${blocking.conflict.lesson.start}–${blocking.conflict.lesson.end}，已取消。`)}
+  if(teacherWarnings&&!confirm(`整批拖曳後有 ${teacherWarnings} 堂老師時間重複。\n仍要移動嗎？重複課程會顯示亮紅色。`)){finishCalendarMoveInteraction();return}
   snapshot();for(const old of rows){const before={...old};Object.assign(old,candidateById.get(old.id));logChange('批次移動課程',old,before)}
-  clearCalendarSelectionState();cancelPasteClickMode(false);commitCalendarMove();toast(`已移動 ${rows.length} 堂課程`);
+  finishCalendarMoveInteraction();commitCalendarMove();toast(`已移動 ${rows.length} 堂課程`);
 }
