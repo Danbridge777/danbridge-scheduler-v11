@@ -123,7 +123,7 @@ assert.doesNotMatch(notificationRules, /teacherId == ownTeacherId\(\)/);
 assert.match(cloudSource, /roleAccessSignature\(access\)===cloudRoleAccessSignature/);
 
 const courseOperationsSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course-operations.js'), 'utf8');
-const moveOperationsStart = courseOperationsSource.indexOf('function moveLessonTo');
+const moveOperationsStart = courseOperationsSource.indexOf('let calendarMoveSaveTimer');
 assert.ok(moveOperationsStart >= 0, 'calendar move operations are available');
 context.addMinutes = (time, delta) => { const [h, m] = time.split(':').map(Number); const value = h * 60 + m + delta; return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; };
 context.shiftDate = (date, delta) => { const value = new Date(`${date}T00:00:00`); value.setDate(value.getDate() + delta); return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; };
@@ -135,6 +135,9 @@ context.clearCalendarSelectionState = () => {};
 context.cancelPasteClickMode = () => {};
 context.logChange = () => {};
 context.saveDB = options => { context.moveSaves = (context.moveSaves || 0) + 1; context.lastMoveSaveOptions = options; };
+context.renderCalendar = () => { context.moveRenders = (context.moveRenders || 0) + 1; };
+context.setTimeout = callback => { callback(); return 1; };
+context.clearTimeout = () => {};
 context.toast = () => {};
 context.confirm = () => true;
 context.alert = message => { throw new Error(message); };
@@ -151,6 +154,7 @@ assert.deepEqual(Array.from(context.db.lessons[0].teacherIds), ['t1', 't2'], 'si
 assert.equal(context.db.lessons[1].date, '2026-08-11', 'single drag leaves other lessons unchanged');
 assert.equal(context.moveSnapshots, 1, 'single drag creates one undo snapshot');
 assert.equal(context.moveSaves, 1, 'single drag saves once');
+assert.equal(context.moveRenders, 1, 'single drag paints the new calendar position immediately');
 context.moveSnapshots = 0; context.moveSaves = 0;
 context.moveLessonsTo(['drag-one', 'drag-two'], 'drag-one', '2026-08-14', '15:00');
 const movedAnchor = context.db.lessons.find(row => row.id === 'drag-one');
@@ -161,7 +165,7 @@ assert.equal(movedAnchor.start, '15:00', 'multi drag moves the anchor to the dro
 assert.equal(movedCompanion.start, '13:00', 'multi drag preserves relative time spacing');
 assert.equal(context.moveSnapshots, 1, 'multi drag creates one undo snapshot');
 assert.equal(context.moveSaves, 1, 'multi drag saves the whole set once');
-assert.equal(context.lastMoveSaveOptions.calendarOnly, true, 'drag saves only rerender the calendar');
+assert.equal(context.lastMoveSaveOptions.skipRender, true, 'drag persistence does not replace the freshly painted calendar');
 
 const interactionSource = fs.readFileSync(path.join(root, 'js/modules/calendar/marquee-multi-selection.js'), 'utf8');
 assert.match(interactionSource, /selectedRenderedIds\(\)/, 'multi drag intersects selection with rendered cards');

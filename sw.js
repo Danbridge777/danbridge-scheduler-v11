@@ -1,4 +1,4 @@
-const CACHE_NAME='danbridge-v11-selection-overlay-no-shift-10';
+const CACHE_NAME='danbridge-v11-immediate-calendar-drop-11';
 const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{

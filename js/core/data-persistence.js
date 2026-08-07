@@ -107,7 +107,7 @@ function saveDB(options={}){
  let saveError=null;
  try{
   normalizeLessonStates();db=normalizeBranchData(db);localStorage.setItem(LS_KEY,JSON.stringify(db));
-  try{options.calendarOnly?renderCalendar():renderAll()}
+  try{if(!options.skipRender)(options.calendarOnly?renderCalendar():renderAll())}
   catch(error){
    console.error('Saved data, but a view renderer failed:',error);
    try{renderCalendar()}catch(calendarError){console.error('Calendar rerender failed after save:',calendarError)}

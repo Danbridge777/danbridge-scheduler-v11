@@ -62,9 +62,11 @@
     return true;
   }
 
+  const ghostStyleProperties=['display','box-sizing','font-family','font-size','font-weight','font-style','line-height','letter-spacing','color','background','background-color','border','border-left','border-radius','box-shadow','padding','text-align','white-space','overflow','text-overflow','opacity'];
   function copyRenderedStyle(source,target){
     const style=getComputedStyle(source);
-    for(const property of style)target.style.setProperty(property,style.getPropertyValue(property),style.getPropertyPriority(property));
+    ghostStyleProperties.forEach(property=>target.style.setProperty(property,style.getPropertyValue(property),style.getPropertyPriority(property)));
+    ['--teacher','--location-bg'].forEach(property=>{const value=style.getPropertyValue(property);if(value)target.style.setProperty(property,value)});
     [...source.children].forEach((child,index)=>{if(target.children[index])copyRenderedStyle(child,target.children[index])});
   }
 
