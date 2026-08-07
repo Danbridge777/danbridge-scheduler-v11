@@ -1,5 +1,5 @@
 {
-  ".firebase/hosting..cache": "cd8ba3b6015380ccbf2808321b96d4b3014093ee64ba75475f8ee377821c8a0d",
+  ".firebase/hosting..cache": "feced748d432afc77e831600b5caab077747953f58d53266020bcbca61f68960",
   ".firebaserc": "c172f5437ae197d37b03aabf0a881db882fe66c3144ab16b74c53fd249090e65",
   ".gitignore": "8bd2f2b020054e8219e1885fb94636111a7d39aebc2206c82815a57a8ff6fbdf",
   ".nojekyll": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
@@ -87,7 +87,7 @@
   "firebase.json": "98f6f851cad5a6fe801ba7febae7a1c2dae9af61b15ed99bdd0457782135df50",
   "icon-192.png": "4c1c39d9ab33e4acd74ba773056bcd59fc7e43ef07fab84005f8967e02625f05",
   "icon-512.png": "772580771cfac41a2e9c17024480c6f8eed1d4c636597000faaff443b85a85a7",
-  "index.html": "8eb34a8b4952b25c72dcf2395b1f71e8b17416429939dfbc0c239782c03ac346",
+  "index.html": "280e38283f627affddb4875e79fcdc1309e56fa2fc2337a8cfaf5163d2b720fd",
   "js/app/app-shell.js": "3ce00f324d7768299b13a5ac4095a14e0f2223e3965a04a105c7d47dd598cd86",
   "js/app/render-orchestrator.js": "cc67456b72b37eb5c922af8960c62833005cab9cf07dd6b289c524bc19d53081",
   "js/app/v18-convenience-suite.js": "67b1f8a699c1fc60dd9274ea319f9447139deee0d953ce5c914cc761400373f1",
@@ -115,8 +115,8 @@
   "js/modules/calendar/course-operations.js": "03df9aaa37fbe62b027d29b8382ffd93489f9f0491bd2a38dbf3790a6df5a2d5",
   "js/modules/calendar/ipad-toolbar-layout.js": "3a0881a5491dd421a941145ce7b9b8039f692c76f63b2241e380b22350881aaa",
   "js/modules/calendar/lesson-save-visibility-guard.js": "985606f37a86ac42c96b1b5378610ae6579eb205565d1a227cdcde54e7e39215",
-  "js/modules/calendar/marquee-multi-selection.js": "215bead18c2a570833872eacd5dbd43e56873d65b6afaa2ab2675bd700c48d81",
-  "js/modules/calendar/scheduler-ui.js": "9cb274065d1f238daac9c7c9c87d86b4eefd7a7df267549e354e077444edba36",
+  "js/modules/calendar/marquee-multi-selection.js": "31b3b8a0c37690910c2190c3326500b6c33e4432b9b3746f94132f87a3c0edbc",
+  "js/modules/calendar/scheduler-ui.js": "068528e97b103601449e31ad6bf1011272fb29adaf8f756d48a88928328051d3",
   "js/modules/calendar/smart-scheduler.js": "cdfd128df4f68a3f0f00e21153acbc44eddf1025a0d4e7864747e99d2bf4dbac",
   "js/modules/camps/camp-management.js": "6c27c876e70b3d84804bc9ae52f7cb84cdc436d6c6782c771a68b9a59773d5f8",
   "js/modules/dashboard/dashboard.js": "9f0e931b0392b7a097c1c83e9bdaede01386a29bec50b974002d53500e53c0c0",
@@ -132,7 +132,7 @@
   "js/ui/searchable-student-selects.js": "ccb66c918887bdd5b208b867942858286bb135049862f0f8700977494545ef95",
   "js/ui/select-options.js": "2c57ccca901824c4c21f38e0d3611e2f91e213371889a707b618eec0dbd11616",
   "manifest.webmanifest": "994d0eebd35796661562d1553b7a9194b2bcd1f455c5d4f5902177db51256b5c",
-  "sw.js": "2b79cb9bf1c276a3717da3b1cd1196cadf46cd1fdd2c1427652b8c56c19136ec",
+  "sw.js": "d801c9970cbed5cfe266fe84cb36966d0cb97f7aa02516d209293944254454de",
   "tools/audit_scenarios.js": "d9d353bb02deb9ba5d161b258e0b76053c1fc6cdc9e1e3c7c15629d6b2493b16",
   "tools/validate_project.py": "1b84e708c38dd4e7f39dc173dce25b92770862d1d1e4f9d8e6655f42a9495c0f"
 }

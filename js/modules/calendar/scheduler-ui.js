@@ -55,26 +55,28 @@ function toggleSelectionMode(force){
   selectionMode=typeof force==='boolean'?force:!selectionMode;
   if(!selectionMode)selectedLessonIds.clear();
   updateSelectionCount();
-  renderCalendar();
+  window.DanbridgeCalendarInteractions?.refresh?.();
 }
 function toggleLessonSelection(id){
   if(!id)return;
   selectionMode=true;
   if(selectedLessonIds.has(id))selectedLessonIds.delete(id);else selectedLessonIds.add(id);
+  if(!selectedLessonIds.size)selectionMode=false;
   updateSelectionCount();
-  renderCalendar();
+  window.DanbridgeCalendarInteractions?.refresh?.();
 }
 function selectVisibleLessons(){
   selectionMode=true;
+  selectedLessonIds.clear();
   document.querySelectorAll('#calendarCanvas [data-id]').forEach(el=>selectedLessonIds.add(el.dataset.id));
   updateSelectionCount();
-  renderCalendar();
+  window.DanbridgeCalendarInteractions?.refresh?.();
 }
 function clearLessonSelection(){
   selectedLessonIds.clear();
   selectionMode=false;
   updateSelectionCount();
-  renderCalendar();
+  window.DanbridgeCalendarInteractions?.refresh?.();
 }
 function copySelectedLessons(){
   const source=calendarTeacherScopedLessons(db.lessons.filter(l=>selectedLessonIds.has(l.id)&&!['取消','停課'].includes(l.status)));
@@ -112,6 +114,7 @@ function cancelSelectionAndPaste(clearClipboard=false){
   if(btn)btn.textContent='部分選取';
   updateSelectionCount();
   cancelPasteClickMode(clearClipboard);
+  window.DanbridgeCalendarInteractions?.refresh?.();
 }
 function cancelSelectionForNewAction(){
   if(selectionMode||selectedLessonIds.size||pasteClickMode){
@@ -138,7 +141,6 @@ function cellClick(e,d){
   }
   if(selectionMode||selectedLessonIds.size){
     cancelSelectionAndPaste(false);
-    renderCalendar();
   }
 }
 function weekCellClick(e,d,t){
@@ -150,7 +152,6 @@ function weekCellClick(e,d,t){
   }
   if(selectionMode||selectedLessonIds.size){
     cancelSelectionAndPaste(false);
-    renderCalendar();
   }
 }
 function showCalendarContextMenu(x,y,target){contextPasteTarget=target||null;const m=$('calendarContextMenu');if(!m)return;m.classList.add('show');const gap=12,rect=m.getBoundingClientRect();m.style.left=Math.max(gap,Math.min(x,window.innerWidth-rect.width-gap))+'px';m.style.top=Math.max(gap,Math.min(y,window.innerHeight-rect.height-gap))+'px'}
@@ -250,7 +251,6 @@ function handleCalendarShortcuts(e){
     if(pasteClickMode||selectionMode||selectedLessonIds.size){
       e.preventDefault();
       cancelSelectionAndPaste(false);
-      renderCalendar();
       toast('已取消多選／貼上模式');
     }
     return;

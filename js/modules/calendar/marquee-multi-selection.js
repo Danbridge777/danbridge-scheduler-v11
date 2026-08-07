@@ -20,6 +20,7 @@
     const selecting=selectionMode||selectedLessonIds.size>0;
     cards().forEach(card=>{
       card.classList.toggle('selected',selectedLessonIds.has(card.dataset.id));
+      card.classList.toggle('selectable',selecting);
       card.classList.remove('marquee-hit');
       card.draggable=false;
     });
