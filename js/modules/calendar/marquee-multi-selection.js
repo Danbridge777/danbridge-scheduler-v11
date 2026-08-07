@@ -42,6 +42,7 @@
     if(!canEdit()||event.pointerType==='touch'||event.button!==0||pasteClickMode||cardOf(event.target)||isControl(event.target))return;
     const box=document.getElementById('marqueeBox');
     controller.marquee={pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,x:event.clientX,y:event.clientY,moved:false,additive:event.ctrlKey||event.metaKey,box,items:cards().map(element=>({element,rect:element.getBoundingClientRect()}))};
+    selectionMode=true;updateSelectionCount();
     if(box){box.style.display='block';box.style.left=event.clientX+'px';box.style.top=event.clientY+'px';box.style.width='0';box.style.height='0';box.style.transform='none'}
     controller.canvas.classList.add('marquee-active');
     try{controller.canvas.setPointerCapture(event.pointerId)}catch{}
@@ -50,9 +51,11 @@
 
   function beginPointerDrag(event){
     const card=cardOf(event.target);
-    if(!card||!canEdit()||event.pointerType==='touch'||event.button!==0||selectionMode||selectedLessonIds.size||pasteClickMode||isControl(event.target))return false;
+    if(!card||!canEdit()||event.pointerType==='touch'||event.button!==0||pasteClickMode||isControl(event.target))return false;
+    if((selectionMode||selectedLessonIds.size)&&!selectedLessonIds.has(card.dataset.id))return false;
     const rect=card.getBoundingClientRect();
-    controller.pointerDrag={pointerId:event.pointerId,id:card.dataset.id,card,startX:event.clientX,startY:event.clientY,moved:false,grabX:event.clientX-rect.left,grabY:event.clientY-rect.top};
+    const ids=selectedLessonIds.has(card.dataset.id)?[...selectedLessonIds]:[card.dataset.id];
+    controller.pointerDrag={pointerId:event.pointerId,id:card.dataset.id,ids,card,startX:event.clientX,startY:event.clientY,moved:false,grabX:event.clientX-rect.left,grabY:event.clientY-rect.top};
     try{controller.canvas.setPointerCapture(event.pointerId)}catch{}
     return true;
   }
@@ -74,6 +77,7 @@
     ghost.style.setProperty('height',rect.height+'px','important');ghost.style.setProperty('min-height',rect.height+'px','important');ghost.style.setProperty('max-height',rect.height+'px','important');
     ghost.style.setProperty('margin','0','important');ghost.style.setProperty('transform','none','important');
     document.body.appendChild(ghost);controller.dragGhost=ghost;moveDragGhost(event);
+    if(state.ids.length>1){const badge=document.createElement('span');badge.className='calendar-drag-count';badge.textContent=`${state.ids.length} 堂`;ghost.appendChild(badge)}
   }
 
   function moveDragGhost(event){
@@ -105,7 +109,10 @@
     const lesson=db.lessons.find(row=>row.id===state.id);
     if(state.moved){event.preventDefault();event.stopImmediatePropagation();controller.suppressClickUntil=Date.now()+350}
     clearPointerDrag();
-    if(state.moved&&target?.date&&lesson&&(target.date!==lesson.date||(target.time&&target.time!==lesson.start))){moveLessonTo(state.id,target.date,target.time||'');finishSelection()}
+    if(state.moved&&target?.date&&lesson&&(target.date!==lesson.date||(target.time&&target.time!==lesson.start))){
+      if(state.ids.length>1)moveLessonsTo(state.ids,state.id,target.date,target.time||'');else moveLessonTo(state.id,target.date,target.time||'');
+      finishSelection();
+    }
     return true;
   }
 
