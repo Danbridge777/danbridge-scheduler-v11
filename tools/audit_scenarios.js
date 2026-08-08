@@ -183,6 +183,16 @@ assert.match(accessibilitySource, /control\.setAttribute\('aria-label'/, 'unname
 assert.match(accessibilitySource, /aria-live','polite'/, 'dynamic status regions announce updates politely');
 assert.match(accessibilitySource, /MutationObserver/, 'dynamically inserted forms receive the same accessibility treatment');
 
+const financeBranchStart = branchBusinessSource.indexOf('const normalizedRoom=');
+const financeBranchEnd = branchBusinessSource.indexOf('const allowedScope=');
+vm.runInContext(branchBusinessSource.slice(financeBranchStart, financeBranchEnd), context);
+context.financeBranches = [{ id: 'river', rooms: ['R101', 'R102'] }, { id: 'museum', rooms: ['M201'] }];
+assert.equal(vm.runInContext("financeBranchId({room:'R101',branchId:'unassigned'},financeBranches)", context), 'river', 'finance scope derives the branch from an exact room match');
+assert.equal(vm.runInContext("financeScopeMatch({room:'R101'},'all',row=>financeBranchId(row,financeBranches))", context), true, 'all branches includes assigned room records');
+assert.equal(vm.runInContext("financeScopeMatch({branchId:'unassigned'},'all',row=>row.branchId)", context), false, 'all branches excludes unassigned records');
+assert.match(branchBusinessSource, /expenseScope\.innerHTML=optionsHTML\(true,false\)/, 'expense scope offers all real branches without unassigned');
+assert.match(fs.readFileSync(path.join(root, 'index.html'), 'utf8'), /id="financeTotalExpenses"/, 'finance overview includes a total expenses metric');
+
 const courseOperationsSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course-operations.js'), 'utf8');
 const moveOperationsStart = courseOperationsSource.indexOf('let calendarMoveSaveTimer');
 assert.ok(moveOperationsStart >= 0, 'calendar move operations are available');

@@ -5,6 +5,13 @@
   const ctx=()=>access()?.getContext?.()||{role:'owner',branchIds:[]};
   const branches=()=>db.branches?.length?db.branches:access()?.DEFAULT_BRANCHES||[];
   const branchId=r=>r?.branchId||access()?.branchIdFromLocation?.(r?.location||'')||'unassigned';
+  const normalizedRoom=value=>String(value||'').trim().toLowerCase();
+  const financeBranchId=(record,branchRows=branches())=>{
+    const room=normalizedRoom(record?.room);
+    if(room){const matches=branchRows.filter(branch=>(branch.rooms||[]).some(value=>normalizedRoom(value)===room));if(matches.length===1)return matches[0].id}
+    return branchId(record);
+  };
+  const financeScopeMatch=(record,scope,resolver=financeBranchId)=>{const id=resolver(record);return scope==='all'?id!=='unassigned':id===scope};
   const allowedScope=value=>{const c=ctx();if(c.role==='branch_manager')return c.branchIds[0]||'unassigned';if(c.role==='teacher')return'all';return value||'all'};
   const match=(record,scope)=>scope==='all'||branchId(record)===scope;
   const scopeLabel=scope=>scope==='all'?'全部校區':(branches().find(b=>b.id===scope)?.name||'未歸屬校區');
@@ -22,11 +29,11 @@
       teachers:(db.teachers||[]).filter(t=>recordMatchesBranch(t,scope,teacherIds))
     };
   }
-  function optionsHTML(includeAll=true){
+  function optionsHTML(includeAll=true,includeUnassigned=true){
     const c=ctx(),bs=branches().filter(b=>c.role==='owner'||c.branchIds.includes(b.id));
     return (includeAll&&c.role==='owner'?'<option value="all">全部校區</option>':'')+
       bs.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')+
-      (c.role==='owner'?'<option value="unassigned">未歸屬</option>':'');
+      (includeUnassigned&&c.role==='owner'?'<option value="unassigned">未歸屬</option>':'');
   }
   function syncSelectors(){
     for(const page of ['dashboard','settlement','finance']){
@@ -40,6 +47,7 @@
       if([...el.options].some(o=>o.value===old))el.value=old;else el.value=defaultExpenseBranch();
       el.disabled=ctx().role==='branch_manager';
     }
+    const expenseScope=$('expenseBranchScope');if(expenseScope){expenseScope.innerHTML=optionsHTML(true,false);expenseScope.value=scopes.finance;expenseScope.disabled=ctx().role==='branch_manager'}
   }
   function setScope(page,value){
     scopes[page]=allowedScope(value);
@@ -62,8 +70,8 @@
   }
 
   window.financeData=function(m){
-    m=window.__danbridgeFinanceWorkspaceMonth||m;const scope=allowedScope(scopes.finance),lessons=scopedLessons(scope,m),lessonRevenue=lessons.reduce((a,l)=>a+timetableRevenueCharge(l),0),campRevenue=summerCampRegistrationRevenue(m,scope),revenue=lessonRevenue+campRevenue;
-    const expenseMatch=x=>scope==='all'||(x.branchId||'unassigned')===scope;
+    m=window.__danbridgeFinanceWorkspaceMonth||m;const scope=allowedScope(scopes.finance),lessons=(db.lessons||[]).filter(l=>!l.isDraft&&l.date.startsWith(m)&&financeScopeMatch(l,scope)),lessonRevenue=lessons.reduce((a,l)=>a+timetableRevenueCharge(l),0),campRevenue=summerCampRegistrationRevenue(m,scope),revenue=lessonRevenue+campRevenue;
+    const expenseMatch=x=>financeScopeMatch(x,scope,r=>r?.branchId||'unassigned');
     const fixed=(db.fixedExpenses||[]).filter(x=>fixedExpenseApplies(x,m)&&expenseMatch(x));
     const one=(db.oneTimeExpenses||[]).filter(x=>x.month===m&&expenseMatch(x));
     const fixedTotal=fixed.reduce((a,x)=>a+(+x.amount||0),0),oneTimeTotal=one.reduce((a,x)=>a+(+x.amount||0),0);
@@ -133,8 +141,10 @@
   const baseRenderFinance=window.renderFinance;
   window.renderFinance=function(){
     syncSelectors();baseRenderFinance();const scope=allowedScope(scopes.finance),m=window.__danbridgeFinanceWorkspaceMonth||$('financeMonth')?.value||'2026-07',d=financeData(m);
-    $('fixedExpenseRows').innerHTML=(db.fixedExpenses||[]).filter(x=>fixedExpenseApplies(x,m)&&(scope==='all'||(x.branchId||'unassigned')===scope)).map(x=>`<tr><td><b>${esc(x.name)}</b><div class="small">${esc(scopeLabel(x.branchId||'unassigned'))}</div></td><td>${money(x.amount)}</td><td>${monthLabel(x.startMonth||'2026-07')}</td><td>${x.endMonth?monthLabel(x.endMonth):'持續'}</td><td><button class="btn" onclick="editFixedExpense('${x.id}')">編輯</button> <button class="btn danger" onclick="deleteFixedExpense('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="5" class="small">本月沒有生效中的固定開銷。</td></tr>';
-    $('oneTimeExpenseRows').innerHTML=(db.oneTimeExpenses||[]).filter(x=>x.month===m&&(scope==='all'||(x.branchId||'unassigned')===scope)).slice().sort((a,b)=>b.month.localeCompare(a.month)).map(x=>`<tr><td>${monthLabel(x.month)}</td><td><b>${esc(x.name)}</b><div class="small">${esc(scopeLabel(x.branchId||'unassigned'))}</div></td><td>${money(x.amount)}</td><td><button class="btn" onclick="editOneTimeExpense('${x.id}')">編輯</button> <button class="btn danger" onclick="deleteOneTimeExpense('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="4" class="small">本月沒有一次性支出。</td></tr>';
+    if($('financeTotalExpenses'))$('financeTotalExpenses').textContent=money(d.totalExpenses);
+    const expenseMatch=x=>financeScopeMatch(x,scope,r=>r?.branchId||'unassigned');
+    $('fixedExpenseRows').innerHTML=(db.fixedExpenses||[]).filter(x=>fixedExpenseApplies(x,m)&&expenseMatch(x)).map(x=>`<tr><td><b>${esc(x.name)}</b><div class="small">${esc(scopeLabel(x.branchId||'unassigned'))}</div></td><td>${money(x.amount)}</td><td>${monthLabel(x.startMonth||'2026-07')}</td><td>${x.endMonth?monthLabel(x.endMonth):'持續'}</td><td><button class="btn" onclick="editFixedExpense('${x.id}')">編輯</button> <button class="btn danger" onclick="deleteFixedExpense('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="5" class="small">本月沒有生效中的固定開銷。</td></tr>';
+    $('oneTimeExpenseRows').innerHTML=(db.oneTimeExpenses||[]).filter(x=>x.month===m&&expenseMatch(x)).slice().sort((a,b)=>b.month.localeCompare(a.month)).map(x=>`<tr><td>${monthLabel(x.month)}</td><td><b>${esc(x.name)}</b><div class="small">${esc(scopeLabel(x.branchId||'unassigned'))}</div></td><td>${money(x.amount)}</td><td><button class="btn" onclick="editOneTimeExpense('${x.id}')">編輯</button> <button class="btn danger" onclick="deleteOneTimeExpense('${x.id}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="4" class="small">本月沒有一次性支出。</td></tr>';
     $('financePayrollRows').innerHTML=d.payrollRows.map(x=>`<div class="finance-payroll-row branch-payroll-row"><span><b>${esc(x.teacher.name)}</b><br><span class="small">${fmtHours(x.h)} hr｜公司營收 ${money(x.revenue)}｜薪資 ${money(x.amount)}</span>${scope==='all'&&x.branches.length>1?`<span class="branch-breakdown">${x.branches.map(b=>`<span>${esc(scopeLabel(b.branchId))}：${fmtHours(b.h)} hr／${money(b.amount)}</span>`).join('')}</span>`:''}</span><b>${money(x.amount)}</b></div>`).join('')||'<span class="small">本月沒有可計薪的老師課程。</span>';
   };
 
@@ -171,5 +181,5 @@
   window.deleteSettlementRecord=function(){toast('月結已鎖定，不可刪除')};
 
   document.addEventListener('DOMContentLoaded',syncSelectors);
-  window.DanbridgeBranchBusiness={scopes,setScope,syncSelectors,defaultExpenseBranch,scopeLabel,scopedLessons,branchBreakdown,settlementDataFor};
+  window.DanbridgeBranchBusiness={scopes,setScope,syncSelectors,defaultExpenseBranch,scopeLabel,scopedLessons,branchBreakdown,settlementDataFor,financeBranchId,financeScopeMatch};
 })();
