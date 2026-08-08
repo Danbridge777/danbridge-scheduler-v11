@@ -148,6 +148,24 @@ assert.match(notificationRules, /recipientEmail == emailKey\(\)/);
 assert.doesNotMatch(notificationRules, /teacherId == ownTeacherId\(\)/);
 assert.match(cloudSource, /roleAccessSignature\(access\)===cloudRoleAccessSignature/);
 
+const notificationCenterSource = fs.readFileSync(path.join(root, 'js/modules/notifications/notification-center.js'), 'utf8');
+const notificationHelperStart = notificationCenterSource.indexOf('const addDays=');
+const notificationHelperEnd = notificationCenterSource.indexOf('const readKey=');
+vm.runInContext(notificationCenterSource.slice(notificationHelperStart, notificationHelperEnd), context);
+assert.equal(vm.runInContext("withinRetention('2026-07-07', '2026-08-05', 30)", context), true, 'notification retention keeps recent items');
+assert.equal(vm.runInContext("withinRetention('2026-07-01', '2026-08-05', 30)", context), false, 'notification retention removes expired items');
+context.db.students = [{ id: 's1', name: 'Student', rate: 200 }];
+context.notificationPaymentRows = [
+  lesson({ id: 'due-1', date: '2026-08-01', paymentStatus: 'unpaid' }),
+  lesson({ id: 'due-2', date: '2026-08-02', paymentStatus: 'unpaid' }),
+  lesson({ id: 'paid', date: '2026-08-03', paymentStatus: 'paid' }),
+  lesson({ id: 'expired', date: '2026-03-01', paymentStatus: 'unpaid' })
+];
+const paymentGroups = vm.runInContext("outstandingPaymentGroups(notificationPaymentRows, '2026-08-05')", context);
+assert.equal(paymentGroups.length, 1, 'unpaid lessons are grouped into one student notification');
+assert.equal(paymentGroups[0].lessons.length, 2, 'paid and expired lessons are excluded from the notification group');
+assert.equal(paymentGroups[0].amount, 400, 'grouped notification totals the outstanding amount');
+
 const courseOperationsSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course-operations.js'), 'utf8');
 const moveOperationsStart = courseOperationsSource.indexOf('let calendarMoveSaveTimer');
 assert.ok(moveOperationsStart >= 0, 'calendar move operations are available');
