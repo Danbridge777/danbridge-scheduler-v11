@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -980,6 +980,12 @@ function buildScheduleLessonChanges(previousDb,currentDb){
  for(const [id,before] of beforeMap){if(!afterMap.has(id))changes.push({type:'removed',lessonId:id,before,after:null})}
  return changes;
 }
+async function createScheduleNotificationIfMissing(notificationRef,payload){
+ await runTransaction(cloud,async transaction=>{
+  const existing=await transaction.get(notificationRef);
+  if(!existing.exists())transaction.set(notificationRef,payload);
+ });
+}
 async function publishScheduleChangeNotifications(previousDb,currentDb,batchKey){
  if(cloudRole!=='owner'||!ownerBaselineReady||!previousDb)return;
  const teacherChanges=buildScheduleNotificationChanges(previousDb,currentDb);
@@ -1032,7 +1038,7 @@ async function publishScheduleChangeNotifications(previousDb,currentDb,batchKey)
      after:item.after?{date:item.after.date||'',start:item.after.start||'',end:item.after.end||'',studentId:item.after.studentId||'',title:item.after.title||'',location:item.after.location||'',branchId:item.after.branchId||'',deliveryMode:item.after.deliveryMode||'',room:item.after.room||'',address:item.after.address||'',onlinePlatform:item.after.onlinePlatform||'',meetingUrl:item.after.meetingUrl||'',status:item.after.status||'',note:item.after.note||'',teacherIds:lessonTeacherIds(item.after)}:null
    }));
    const manager=recipient.role==='branch_manager';
-   jobs.push(setDoc(notificationRef,{companyId:COMPANY_ID,recipientEmail:recipient.email,recipientRole:recipient.role,teacherId,branchIds:manager?recipient.branchIds:[],teacherName:recipient.teacherName||'',title:'課表更新通知',message:manager?`您管理的校區課表有 ${items.length} 個變更`:`您的課表有 ${items.length} 個變更`,changeCount:items.length,details,read:false,createdAt:serverTimestamp(),createdBy:cloudUid,createdByName:'Daniel'}));
+   jobs.push(createScheduleNotificationIfMissing(notificationRef,{companyId:COMPANY_ID,recipientEmail:recipient.email,recipientRole:recipient.role,teacherId,branchIds:manager?recipient.branchIds:[],teacherName:recipient.teacherName||'',title:'課表更新通知',message:manager?`您管理的校區課表有 ${items.length} 個變更`:`您的課表有 ${items.length} 個變更`,changeCount:items.length,details,read:false,createdAt:serverTimestamp(),createdBy:cloudUid,createdByName:'Daniel'}));
  }
  if(jobs.length)await withSyncTimeout(Promise.all(jobs),15000);
 }
