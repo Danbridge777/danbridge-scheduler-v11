@@ -16,7 +16,16 @@ const elements = {
   selectionBar: { classList: fakeClassList('hidden') },
   selectionCount: { textContent: '' },
   selectionModeBtn: { textContent: '' },
-  calendarContextMenu: { classList: fakeClassList() }
+  calendarContextMenu: { classList: fakeClassList() },
+  pasteModeBanner: { classList: fakeClassList() },
+  pasteModeMessage: { textContent: '' },
+  batchDateShift: { value: '7' },
+  batchTimeShift: { value: '0' },
+  batchTeacher: { value: '' },
+  batchBranch: { value: '' },
+  batchRoom: { value: '' },
+  batchStatus: { value: '' },
+  batchPayment: { value: '' }
 };
 let nextId = 0;
 const context = {
@@ -55,6 +64,9 @@ const context = {
   beginPasteClickMode: () => {},
   alerts: [], toasts: [], snapshots: 0, saves: 0, renders: 0
 };
+context.lessonClipboard = [];
+context.contextPasteTarget = null;
+context.pasteClickMode = false;
 context.window = context;
 vm.createContext(context);
 
@@ -78,6 +90,15 @@ const courseSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course
 const conflictStart = courseSource.indexOf('function lessonBlocksScheduling');
 const conflictEnd = courseSource.indexOf('function deleteCurrentLesson');
 vm.runInContext(courseSource.slice(conflictStart, conflictEnd), context);
+
+const clipboardStart = schedulerSource.indexOf('function beginPasteClickMode');
+const clipboardEnd = schedulerSource.indexOf('function enableDesktopMarquee');
+vm.runInContext(schedulerSource.slice(clipboardStart, clipboardEnd), context);
+
+const batchSource = fs.readFileSync(path.join(root, 'js/modules/calendar/batch-lesson-operations.js'), 'utf8');
+const batchStart = batchSource.indexOf('function buildBatchCandidates');
+const batchEnd = batchSource.indexOf('function previewBatch');
+vm.runInContext(batchSource.slice(batchStart, batchEnd), context);
 
 const applicationSource = fs.readFileSync(path.join(root, 'js/modules/application-and-business-features.js'), 'utf8');
 const copyStart = applicationSource.indexOf('function weekMonday');
@@ -126,6 +147,33 @@ context.selectionMode = true;
 elements.calendarContextMenu.classList.add('show');
 context.toggleSelectionMode(false);
 assert.equal(elements.calendarContextMenu.classList.contains('show'), false, 'context menu closes when multi-selection ends');
+
+// Clipboard copy intersects even a stale mixed selection with the active teacher scope.
+context.db.lessons = [
+  lesson({ id: 'clipboard-t1' }),
+  lesson({ id: 'clipboard-t2', studentId: 's2', teacherId: 't2', teacherIds: ['t2'] })
+];
+context.selectedLessonIds = new Set(['clipboard-t1', 'clipboard-t2']);
+context.selectionMode = true;
+assert.equal(context.copyCurrentSelection(), true);
+assert.deepEqual(Array.from(context.getLessonClipboard(), row => row.teacherId), ['t1'], 'clipboard excludes lessons outside the active teacher');
+
+// A batch made from the current teacher selection leaves every other teacher untouched.
+context.db.lessons = [
+  lesson({ id: 'batch-t1' }),
+  lesson({ id: 'batch-t2', studentId: 's2', teacherId: 't2', teacherIds: ['t2'] })
+];
+context.selectedLessonIds = new Set(['batch-t1']);
+const batchCandidates = context.buildBatchCandidates();
+assert.equal(batchCandidates.length, 1);
+assert.equal(batchCandidates[0].old.teacherId, 't1');
+assert.equal(batchCandidates[0].next.date, '2026-08-10');
+assert.equal(context.db.lessons.find(row => row.id === 'batch-t2').date, '2026-08-03', 'batch preview does not touch another teacher');
+
+// The actual marquee controller preserves the fixed first-drag selection behavior.
+const marqueeSource = fs.readFileSync(path.join(root, 'js/modules/calendar/marquee-multi-selection.js'), 'utf8');
+assert.match(marqueeSource, /state\.x=event\.clientX;state\.y=event\.clientY;/, 'marquee uses the pointer-up coordinates');
+assert.match(marqueeSource, /if\(!state\.additive\)selectedLessonIds\.clear\(\)/, 'a normal marquee replaces the previous selection');
 
 // Week copy must remain inside the currently selected teacher scope.
 context.db.lessons = [
