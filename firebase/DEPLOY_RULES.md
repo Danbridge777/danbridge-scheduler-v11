@@ -1,5 +1,14 @@
 # Firebase Rules 部署
 
+部署前先執行本機權限測試：
+
+```bash
+npm install
+npm run test:rules
+```
+
+測試使用獨立專案 ID `danbridge-rules-test` 與 Firestore Emulator，不會讀寫正式資料。全部通過後才可部署 Rules。
+
 V15.26.4 已將「回報延長申請」整合到 `lessonReports/{lessonId}`，不再使用 `lessonReportExtensions` 集合。
 
 課堂回報使用 Firestore。部署：

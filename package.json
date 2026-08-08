@@ -1,0 +1,12 @@
+{
+  "name": "danbridge-scheduler-v11",
+  "private": true,
+  "scripts": {
+    "test": "node tools/audit_scenarios.js",
+    "test:rules": "node tools/run_firestore_rules_tests.mjs"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
+    "firebase": "^12.17.1"
+  }
+}

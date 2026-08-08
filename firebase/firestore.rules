@@ -53,6 +53,15 @@ service cloud.firestore {
         && request.time >= meta(companyId, lessonId).editableFrom
         && request.time <= meta(companyId, lessonId).editableUntil;
     }
+    function reportScopeMatchesMeta(companyId, lessonId, data) {
+      return data.branchId is string
+        && meta(companyId, lessonId).branchId is string
+        && data.branchId == meta(companyId, lessonId).branchId
+        && data.reportedForTeacherIds is list
+        && meta(companyId, lessonId).teacherIds is list
+        && data.reportedForTeacherIds.hasOnly(meta(companyId, lessonId).teacherIds)
+        && meta(companyId, lessonId).teacherIds.hasOnly(data.reportedForTeacherIds);
+    }
 
 
     match /users/{uid} {
@@ -153,6 +162,7 @@ service cloud.firestore {
           && meta(companyId, lessonId).teacherIds.hasAny([ownTeacherId()])
           && request.resource.data.companyId == companyId
           && request.resource.data.lessonId == lessonId
+          && reportScopeMatchesMeta(companyId, lessonId, request.resource.data)
           && (isTeacher(companyId)
             || (meta(companyId, lessonId).branchId is string
               && effectiveBranchIds().hasAny([meta(companyId, lessonId).branchId])))

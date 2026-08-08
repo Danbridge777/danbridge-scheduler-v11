@@ -2,3 +2,6 @@
 __MACOSX/
 *.zip
 .firebase/
+node_modules/
+.npm-cache/
+firestore-debug.log
