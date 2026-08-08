@@ -2,7 +2,7 @@
   "name": "danbridge-scheduler-v11",
   "private": true,
   "scripts": {
-    "test": "node tools/audit_scenarios.js",
+    "test": "node tools/audit_scenarios.js && node tools/audit_calendar_scenarios.js",
     "test:rules": "node tools/run_firestore_rules_tests.mjs"
   },
   "devDependencies": {

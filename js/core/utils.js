@@ -62,6 +62,25 @@ function mapUrl(addr){return addr?'https://www.google.com/maps/search/?api=1&que
 
 function shiftTime(t,mins){const [h,m]=t.split(':').map(Number);let n=h*60+m+mins;if(n<0||n>=1440)return null;return `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`}
 
+/**
+ * 將來源月份的「月曆第幾列＋星期幾」映射到目標月份。
+ * 月曆以週一為每列第一天；若目標列沒有該星期，回傳 null。
+ */
+function mapDateByCalendarWeek(dateStr,fromMonth,toMonth){
+  const [fromYear,fromValue]=String(fromMonth||'').split('-').map(Number);
+  const [toYear,toValue]=String(toMonth||'').split('-').map(Number);
+  const sourceDay=Number(String(dateStr||'').slice(8,10));
+  if(!fromYear||!fromValue||!toYear||!toValue||!sourceDay||!String(dateStr).startsWith(`${fromMonth}-`))return null;
+  const fromFirst=new Date(fromYear,fromValue-1,1),toFirst=new Date(toYear,toValue-1,1);
+  const fromOffset=(fromFirst.getDay()+6)%7,toOffset=(toFirst.getDay()+6)%7;
+  const weekIndex=Math.floor((fromOffset+sourceDay-1)/7);
+  const sourceDate=new Date(fromYear,fromValue-1,sourceDay),weekday=(sourceDate.getDay()+6)%7;
+  const targetDay=1-toOffset+weekIndex*7+weekday;
+  const target=new Date(toYear,toValue-1,targetDay);
+  if(target.getFullYear()!==toYear||target.getMonth()!==toValue-1)return null;
+  return `${toYear}-${String(toValue).padStart(2,'0')}-${String(targetDay).padStart(2,'0')}`;
+}
+
 function minutesOf(t){const[h,m]=String(t||'00:00').split(':').map(Number);return h*60+m}
 
 function fmtHours(n){return Number((+n||0).toFixed(2)).toString()}
