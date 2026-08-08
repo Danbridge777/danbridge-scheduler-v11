@@ -139,7 +139,13 @@ context.appendTeacherDayGaps([
   { start: '16:00', end: '17:00' },
   { start: '18:00', end: '19:00' }
 ], 'Teacher One', '2026-08-05', teacherGaps);
-assert.deepEqual(Array.from(teacherGaps, gap => `${gap.start}-${gap.end}`), ['17:00-18:00', '19:00-21:30']);
+assert.deepEqual(Array.from(teacherGaps, gap => `${gap.start}-${gap.end}`), ['09:00-16:00', '17:00-18:00', '19:00-22:00']);
+const emptyDayGaps = [];
+context.appendTeacherDayGaps([], 'Teacher One', '2026-08-06', emptyDayGaps);
+assert.deepEqual(Array.from(emptyDayGaps, gap => `${gap.start}-${gap.end}`), ['09:00-22:00'], 'a day without lessons is entirely available');
+const overlapGaps = [];
+context.appendTeacherDayGaps([{ start: '10:00', end: '12:00' }, { start: '11:00', end: '13:00' }], 'Teacher One', '2026-08-07', overlapGaps);
+assert.deepEqual(Array.from(overlapGaps, gap => `${gap.start}-${gap.end}`), ['09:00-10:00', '13:00-22:00'], 'overlapping lessons are merged before finding gaps');
 
 // Gap analysis is driven only by the selected week and teacher, never by unrelated calendar filters.
 context.db.lessons = [
@@ -150,10 +156,10 @@ context.db.lessons = [
   lesson({ id: 'gap-draft', date: '2026-08-06', teacherId: 't2', teacherIds: ['t2'], isDraft: true })
 ];
 elements.calendarTeacherFilter.value = '';
-assert.deepEqual(Array.from(context.teacherGapAnalysisLessons(gapRange), row => row.id), ['gap-t1', 'gap-t2'], 'all-teacher gap analysis uses every formal lesson in the selected week');
+assert.deepEqual(Array.from(context.teacherGapAnalysisLessons(gapRange), row => row.id), ['gap-t1', 'gap-t2', 'gap-draft'], 'all-teacher gap analysis uses every scheduled lesson in the selected week');
 assert.deepEqual(Array.from(context.teacherGapAnalysisTeachers(context.teacherGapAnalysisLessons(gapRange)), row => row.id), ['t1', 't2'], 'all-teacher mode includes every teacher');
 elements.calendarTeacherFilter.value = 't2';
-assert.deepEqual(Array.from(context.teacherGapAnalysisLessons(gapRange), row => row.id), ['gap-t2'], 'switching teachers switches the entire gap dataset');
+assert.deepEqual(Array.from(context.teacherGapAnalysisLessons(gapRange), row => row.id), ['gap-t2', 'gap-draft'], 'switching teachers switches the entire gap dataset');
 assert.deepEqual(Array.from(context.teacherGapAnalysisTeachers(context.teacherGapAnalysisLessons(gapRange)), row => row.id), ['t2'], 'single-teacher mode includes only that teacher');
 elements.calendarTeacherFilter.value = 't1';
 
