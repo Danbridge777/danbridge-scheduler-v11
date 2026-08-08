@@ -138,6 +138,11 @@ assert.deepEqual(Array.from(branchView.fixedExpenses, row => row.id), ['expense'
 const notificationStart = cloudSource.indexOf('const SCHEDULE_NOTIFICATION_FIELDS');
 const notificationEnd = cloudSource.indexOf('async function publishScheduleChangeNotifications');
 vm.runInContext(cloudSource.slice(notificationStart, notificationEnd), context);
+const retentionNow = Date.parse('2026-08-09T00:00:00Z');
+assert.equal(context.scheduleNotificationExpired({ createdAt: '2026-07-09T00:00:00Z', read: true }, retentionNow), true, 'read schedule notifications expire after 30 days');
+assert.equal(context.scheduleNotificationExpired({ createdAt: '2026-07-09T00:00:00Z', read: false }, retentionNow), false, 'unread schedule notifications remain for 90 days');
+assert.equal(context.scheduleNotificationExpired({ createdAt: '2026-05-01T00:00:00Z', read: false }, retentionNow), true, 'unread schedule notifications expire after 90 days');
+assert.equal(context.scheduleNotificationExpired({ read: false }, retentionNow), false, 'pending server timestamps are not removed');
 const before = { lessons: [lesson({ id: 'switch', teacherId: 't1', teacherIds: ['t1'], branchId: 'a' })] };
 const after = { lessons: [lesson({ id: 'switch', teacherId: 't2', teacherIds: ['t2'], branchId: 'a' })] };
 const changes = context.buildScheduleNotificationChanges(before, after);

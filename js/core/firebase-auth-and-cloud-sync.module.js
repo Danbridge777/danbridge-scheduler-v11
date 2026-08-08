@@ -44,6 +44,8 @@ let syncTimer=null;
 let unsubscribeReports=null;
 let unsubscribeScheduleNotifications=null;
 let scheduleNotificationDocuments=[];
+let currentScheduleNotification=null;
+let scheduleNotificationCleanupStarted=false;
 let lastPublishedOwnerDB=null;
 let ownerBaselineReady=false;
 let lessonReportDocuments=[];
@@ -893,6 +895,27 @@ async function migrateLegacyLessonCloudDocuments(){
 
 
 const SCHEDULE_NOTIFICATION_FIELDS=['date','start','end','studentId','title','location','room','branchId','deliveryMode','address','onlinePlatform','meetingUrl','status','lessonState','note'];
+const SCHEDULE_NOTIFICATION_READ_RETENTION_DAYS=30;
+const SCHEDULE_NOTIFICATION_UNREAD_RETENTION_DAYS=90;
+function scheduleNotificationCreatedMillis(value){
+ if(value?.toMillis)return value.toMillis();
+ const parsed=new Date(value||0).getTime();return Number.isFinite(parsed)?parsed:0;
+}
+function scheduleNotificationExpired(notification,now=Date.now()){
+ const created=scheduleNotificationCreatedMillis(notification?.createdAt);if(!created)return false;
+ const days=notification?.read===true?SCHEDULE_NOTIFICATION_READ_RETENTION_DAYS:SCHEDULE_NOTIFICATION_UNREAD_RETENTION_DAYS;
+ return created<now-days*86400000;
+}
+async function cleanupExpiredScheduleNotifications(){
+ if(scheduleNotificationCleanupStarted||cloudRole!=='owner')return;
+ scheduleNotificationCleanupStarted=true;
+ try{
+  const oldestRead=Timestamp.fromDate(new Date(Date.now()-SCHEDULE_NOTIFICATION_READ_RETENTION_DAYS*86400000));
+  const snap=await getDocs(query(collection(cloud,'companies',COMPANY_ID,'scheduleNotifications'),where('createdAt','<',oldestRead)));
+  const expired=snap.docs.filter(d=>scheduleNotificationExpired(d.data())).slice(0,100);
+  if(expired.length)await Promise.all(expired.map(d=>deleteDoc(d.ref)));
+ }catch(e){scheduleNotificationCleanupStarted=false;console.error('Schedule notification retention cleanup failed',e);reportOperationalError(e,{category:'cloud-write',area:'notification-retention',retryable:true})}
+}
 function lessonTeacherIds(lesson){return (Array.isArray(lesson?.teacherIds)?lesson.teacherIds:[lesson?.teacherId]).filter(Boolean).map(String)}
 function lessonFingerprintForNotification(lesson){return SCHEDULE_NOTIFICATION_FIELDS.map(k=>String(lesson?.[k]??'')).join('|')+'|'+lessonTeacherIds(lesson).slice().sort().join(',')}
 function lessonDisplayName(lesson,sourceDb){
@@ -1041,10 +1064,20 @@ function renderScheduleNotification(notification){
  const body=document.getElementById('scheduleNotificationBody');
  if(!modal||!body||!notification)return;
  const details=Array.isArray(notification.details)?notification.details:[];
- body.innerHTML=`<p class="schedule-notification-lead"><b>Daniel 已更新您的課表</b><span>${escapeHTML(notification.message||`共有 ${details.length} 個變更`)}，已合併整理如下。</span></p><div class="schedule-notification-table-wrap"><table class="schedule-notification-table"><thead><tr><th>異動</th><th>學生／課程</th><th>原課程</th><th>新課程</th><th>內容</th></tr></thead><tbody>${details.map(item=>`<tr data-type="${escapeHTML(item.type||'modified')}"><td><span class="schedule-notification-type">${item.type==='added'?'新增':item.type==='removed'?'取消':'修改'}</span></td><td><b>${escapeHTML(item.studentName||'課程')}</b></td><td>${escapeHTML(item.beforeTime||'—')}</td><td>${escapeHTML(item.afterTime||'—')}</td><td>${escapeHTML(item.summary||'課表內容已更新')}</td></tr>`).join('')}</tbody></table></div><div class="schedule-notification-time">更新時間：${escapeHTML(formatNotificationTimestamp(notification.createdAt)||'剛剛')}</div>`;
+ currentScheduleNotification=notification;
+ body.innerHTML=`<p class="schedule-notification-lead"><b>Daniel 已更新您的課表</b><span>${escapeHTML(notification.message||`共有 ${details.length} 個變更`)}，已合併整理如下。</span></p><div class="schedule-notification-table-wrap"><table class="schedule-notification-table"><thead><tr><th>異動</th><th>學生／課程</th><th>原課程</th><th>新課程</th><th>內容</th><th>來源</th></tr></thead><tbody>${details.map((item,index)=>`<tr data-type="${escapeHTML(item.type||'modified')}"><td><span class="schedule-notification-type">${item.type==='added'?'新增':item.type==='removed'?'取消':'修改'}</span></td><td><b>${escapeHTML(item.studentName||'課程')}</b></td><td>${escapeHTML(item.beforeTime||'—')}</td><td>${escapeHTML(item.afterTime||'—')}</td><td>${escapeHTML(item.summary||'課表內容已更新')}</td><td><button type="button" class="btn schedule-notification-source" data-notification-detail="${index}">查看課表</button></td></tr>`).join('')}</tbody></table></div><div class="schedule-notification-time">更新時間：${escapeHTML(formatNotificationTimestamp(notification.createdAt)||'剛剛')}</div>`;
+ body.querySelectorAll('[data-notification-detail]').forEach(button=>button.addEventListener('click',()=>openScheduleNotificationSource(Number(button.dataset.notificationDetail))));
  modal.dataset.notificationId=notification.id||'';
  modal.dataset.notificationIds=JSON.stringify(Array.isArray(notification.notificationIds)?notification.notificationIds.filter(Boolean):[notification.id].filter(Boolean));
  modal.hidden=false;
+}
+function openScheduleNotificationSource(index){
+ const detail=currentScheduleNotification?.details?.[index];if(!detail)return;
+ const source=detail.after||detail.before||{},date=source.date||'';
+ const input=document.getElementById('calendarDate');if(input&&date)input.value=date;
+ const modal=document.getElementById('scheduleNotificationModal');if(modal)modal.hidden=true;
+ window.switchTab?.('calendar');
+ setTimeout(()=>{window.renderCalendar?.();if(detail.type!=='removed'&&detail.lessonId)window.editLesson?.(detail.lessonId)},40);
 }
 async function acknowledgeCurrentScheduleNotification(){
  const modal=document.getElementById('scheduleNotificationModal');
@@ -1066,7 +1099,7 @@ function subscribeScheduleNotifications(){
  const q=query(collection(cloud,'companies',COMPANY_ID,'scheduleNotifications'),where('recipientEmail','==',cloudEmailKey));
  unsubscribeScheduleNotifications=onSnapshot(q,{includeMetadataChanges:true},snap=>{
    if(snap.metadata.hasPendingWrites)return;
-   scheduleNotificationDocuments=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.read!==true).sort((a,b)=>{const at=a.createdAt?.toMillis?.()||0,bt=b.createdAt?.toMillis?.()||0;return at-bt});
+   scheduleNotificationDocuments=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.read!==true&&!scheduleNotificationExpired(x)).sort((a,b)=>{const at=a.createdAt?.toMillis?.()||0,bt=b.createdAt?.toMillis?.()||0;return at-bt});
    const current=scheduleNotificationDocuments[0];
    if(current&&!document.getElementById('scheduleNotificationModal')?.hidden)return;
    if(current){
@@ -1162,6 +1195,7 @@ function subscribeOwner(){
      return;
    }
    if(snap.metadata.hasPendingWrites)return;
+   cleanupExpiredScheduleNotifications();
    const currentHash=dataHash(window.__danbridgeGetDB());
    // 本機尚有未確認上傳的修改時，任何不同版本的遠端快照都視為舊資料。
    // 這可防止拖曳、編輯或批次操作在 debounce / 網路延遲期間被倒灌復原。

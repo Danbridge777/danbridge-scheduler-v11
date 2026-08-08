@@ -1,4 +1,4 @@
-const CACHE_NAME='danbridge-v11-notification-identity-32';
+const CACHE_NAME='danbridge-v11-schedule-notification-retention-33';
 const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
