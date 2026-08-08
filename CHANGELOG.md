@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-08 — GitHub Actions 自動檢查
+
+- 新增 push、pull request 與手動執行的 CI 流程。
+- 自動執行專案驗證、manifest 一致性、應用情境與 Firestore Rules 測試。
+- 自動執行 npm 相依套件安全掃描；流程採唯讀權限且不接觸 Firebase 正式資料。
+
 ## 2026-08-08 — 建立獨立 Firebase staging 環境
 
 - 建立 `danbridge-d8877-staging` Firebase 專案、Web App 與 `asia-east1` Firestore 資料庫。
