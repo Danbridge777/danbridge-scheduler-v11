@@ -101,6 +101,12 @@ assert.deepEqual(
   Array.from(context.teacherGapWeekDays(gapRange), day => `${day.label}:${day.date}`),
   ['週一:2026-08-03', '週二:2026-08-04', '週三:2026-08-05', '週四:2026-08-06', '週五:2026-08-07', '週六:2026-08-08', '週日:2026-08-09']
 );
+const teacherGaps = [];
+context.appendTeacherDayGaps([
+  { start: '16:00', end: '17:00' },
+  { start: '18:00', end: '19:00' }
+], 'Teacher One', '2026-08-05', teacherGaps);
+assert.deepEqual(Array.from(teacherGaps, gap => `${gap.start}-${gap.end}`), ['17:00-18:00', '19:00-21:30']);
 
 // Week copy must remain inside the currently selected teacher scope.
 context.db.lessons = [
