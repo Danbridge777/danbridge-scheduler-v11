@@ -192,6 +192,10 @@ assert.equal(vm.runInContext("financeScopeMatch({room:'R101'},'all',row=>finance
 assert.equal(vm.runInContext("financeScopeMatch({branchId:'unassigned'},'all',row=>row.branchId)", context), false, 'all branches excludes unassigned records');
 assert.match(branchBusinessSource, /expenseScope\.innerHTML=optionsHTML\(true,false\)/, 'expense scope offers all real branches without unassigned');
 assert.match(fs.readFileSync(path.join(root, 'index.html'), 'utf8'), /id="financeTotalExpenses"/, 'finance overview includes a total expenses metric');
+const financeArchitectureSource = fs.readFileSync(path.join(root, 'js/app/v18-information-architecture.js'), 'utf8');
+assert.match(financeArchitectureSource, /id="expenseTotalAmount"/, 'expense management includes its own total card');
+assert.match(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.totalExpenses\)/, 'expense total follows the selected month and branch finance calculation');
+assert.match(branchBusinessSource, /expenseTotalScope'\)\.textContent=scopeLabel\(scope\)/, 'expense total identifies the selected branch scope');
 
 const courseOperationsSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course-operations.js'), 'utf8');
 const moveOperationsStart = courseOperationsSource.indexOf('let calendarMoveSaveTimer');
