@@ -1,5 +1,6 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import {
   assertFails,
   assertSucceeds,
@@ -258,5 +259,42 @@ describe('錯誤監控權限與隱私', () => {
       role: 'owner'
     }));
     await assertSucceeds(getDoc(doc(owner, `companies/${COMPANY_ID}/errorEvents/owner-event`)));
+  });
+});
+
+describe('非正式環境備份還原演練', () => {
+  test('完整匯出、清空、還原後集合數量、關聯與抽樣資料一致', async () => {
+    const db = auth('owner-uid', OWNER_EMAIL);
+    const collectionKeys = ['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampClasses','winterCampRegistrations','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches'];
+    const source = Object.fromEntries(collectionKeys.map(key => [key, []]));
+    source.students.push({ id: 'TEST-student-1', name: 'TEST Student' });
+    source.teachers.push({ id: 'TEST-teacher-1', name: 'TEST Teacher' });
+    source.branches.push({ id: 'TEST-branch-1', name: 'TEST Branch' });
+    source.lessons.push({ id: 'TEST-lesson-1', studentId: 'TEST-student-1', teacherId: 'TEST-teacher-1', teacherIds: ['TEST-teacher-1'], branchId: 'TEST-branch-1', date: '2026-08-10', start: '10:00', end: '11:00' });
+    source.makeups.push({ id: 'TEST-makeup-1', lessonId: 'TEST-lesson-1', studentId: 'TEST-student-1', teacherId: 'TEST-teacher-1' });
+    source.collectionRecords.push({ id: 'TEST-collection-1', studentIds: ['TEST-student-1'], amount: 1000 });
+
+    const canonical = JSON.stringify(source);
+    const checksum = createHash('sha256').update(canonical).digest('hex');
+    const counts = Object.fromEntries(collectionKeys.map(key => [key, source[key].length]));
+    const exportedFile = JSON.stringify({ ...source, _meta: { environment: 'emulator', exportedAt: new Date().toISOString(), counts, checksum } });
+
+    await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/data/main`), { db: source, clientHash: checksum }));
+    await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/data/main`), { db: Object.fromEntries(collectionKeys.map(key => [key, []])), clientHash: 'cleared-for-restore-test' }));
+
+    const backup = JSON.parse(exportedFile);
+    const restored = Object.fromEntries(collectionKeys.map(key => [key, backup[key]]));
+    assert.equal(createHash('sha256').update(JSON.stringify(restored)).digest('hex'), backup._meta.checksum);
+    await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/data/main`), { db: restored, clientHash: backup._meta.checksum }));
+
+    const snapshot = await getDoc(doc(db, `companies/${COMPANY_ID}/data/main`));
+    const actual = snapshot.data().db;
+    assert.deepEqual(Object.fromEntries(collectionKeys.map(key => [key, actual[key].length])), counts);
+    assert.equal(actual.lessons[0].studentId, actual.students[0].id);
+    assert.ok(actual.lessons[0].teacherIds.includes(actual.teachers[0].id));
+    assert.equal(actual.lessons[0].branchId, actual.branches[0].id);
+    assert.equal(actual.makeups[0].lessonId, actual.lessons[0].id);
+    assert.equal(actual.collectionRecords[0].studentIds[0], actual.students[0].id);
+    assert.deepEqual(actual, source);
   });
 });
