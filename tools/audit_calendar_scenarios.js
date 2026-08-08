@@ -5,10 +5,18 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
+const fakeClassList = (...initial) => {
+  const values = new Set(initial);
+  return { add: (...names) => names.forEach(name => values.add(name)), remove: (...names) => names.forEach(name => values.delete(name)), toggle: (name, force) => force === undefined ? (values.has(name) ? (values.delete(name), false) : (values.add(name), true)) : (force ? values.add(name) : values.delete(name), force), contains: name => values.has(name) };
+};
 const elements = {
   calendarTeacherFilter: { value: 't1' },
   calendarDate: { value: '2026-08-03' },
-  calendarMode: { value: 'week' }
+  calendarMode: { value: 'week' },
+  selectionBar: { classList: fakeClassList('hidden') },
+  selectionCount: { textContent: '' },
+  selectionModeBtn: { textContent: '' },
+  calendarContextMenu: { classList: fakeClassList() }
 };
 let nextId = 0;
 const context = {
@@ -40,6 +48,7 @@ const context = {
   saveDB: () => { context.saves += 1; },
   renderCalendar: () => { context.renders += 1; },
   clearCalendarSelectionState: () => { context.selectedLessonIds.clear(); context.selectionMode = false; },
+  hideCalendarContextMenu: () => elements.calendarContextMenu.classList.remove('show'),
   cancelPasteClickMode: () => {},
   logChange: () => {},
   updateSelectionCount: () => {},
@@ -55,6 +64,9 @@ vm.runInContext(fs.readFileSync(path.join(root, 'js/core/date-utils.js'), 'utf8'
 
 const schedulerSource = fs.readFileSync(path.join(root, 'js/modules/calendar/scheduler-ui.js'), 'utf8');
 vm.runInContext(schedulerSource.slice(0, schedulerSource.indexOf('function lessonHoverText')), context);
+const selectionStart = schedulerSource.indexOf('function updateSelectionCount');
+const selectionEnd = schedulerSource.indexOf('function copySelectedLessons');
+vm.runInContext(schedulerSource.slice(selectionStart, selectionEnd), context);
 const gapRangeStart = schedulerSource.indexOf('function teacherGapWeekRange');
 const gapRangeEnd = schedulerSource.indexOf('function renderCalendarAnalysis');
 vm.runInContext(schedulerSource.slice(gapRangeStart, gapRangeEnd), context);
@@ -107,6 +119,13 @@ context.appendTeacherDayGaps([
   { start: '18:00', end: '19:00' }
 ], 'Teacher One', '2026-08-05', teacherGaps);
 assert.deepEqual(Array.from(teacherGaps, gap => `${gap.start}-${gap.end}`), ['17:00-18:00', '19:00-21:30']);
+
+// Ending multi-selection also closes an open calendar context menu.
+context.selectedLessonIds.add('selected-card');
+context.selectionMode = true;
+elements.calendarContextMenu.classList.add('show');
+context.toggleSelectionMode(false);
+assert.equal(elements.calendarContextMenu.classList.contains('show'), false, 'context menu closes when multi-selection ends');
 
 // Week copy must remain inside the currently selected teacher scope.
 context.db.lessons = [

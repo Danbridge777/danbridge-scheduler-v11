@@ -54,6 +54,7 @@ function updateSelectionCount(){
   if(label)label.textContent=`已選 ${count} 堂`;
   if(bar)bar.classList.toggle('hidden',!selectionMode&&!count);
   if(btn)btn.textContent=(selectionMode||count)?'多選中':'部分選取';
+  if(!selectionMode&&!count)hideCalendarContextMenu();
 }
 function clearCalendarSelectionState(){
   selectedLessonIds.clear();selectionMode=false;dragState=null;
