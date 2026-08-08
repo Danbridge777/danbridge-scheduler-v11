@@ -65,9 +65,15 @@ assert.equal(branchSettlement.totalLessons, 2, 'branch settlement counts all for
 assert.equal(branchSettlement.leaveRate, 100, 'branch settlement leave rate cannot exceed 100%');
 
 const lockedAt = '2026-09-01T00:00:00.000Z';
-const lockedData = { sr: [{ s: { id: 's1' }, total: 1, charged: 1, h: 1, abs: 0, lessonAmount: 200, campAmount: 0, amount: 200 }], tr: [{ t: { id: 't1' }, count: 1, h: 1, expected: 1, amount: 100, revenue: 200, payroll: { mode: 'hourly', hourlyRate: 100 } }], lessons: [lesson()] };
+const lockedData = { m: '2026-08', scope: 'all', sr: [{ s: { id: 's1' }, total: 1, charged: 1, h: 1, abs: 0, lessonAmount: 200, campAmount: 0, amount: 200 }], tr: [{ t: { id: 't1' }, count: 1, h: 1, expected: 1, amount: 100, revenue: 200, payroll: { mode: 'hourly', hourlyRate: 100 } }], lessons: [lesson()] };
 const lockedRecord = context.createLockedSettlementRecord('2026-08', 'all', lockedData, lockedAt);
 assert.equal(lockedRecord.locked, true, 'monthly settlement is locked');
+assert.equal(lockedRecord.id, '2026-08::all', 'settlement identity combines its exact month and scope');
+assert.notEqual(context.createLockedSettlementRecord('2026-08', 'branch-a', { ...lockedData, scope: 'branch-a' }, lockedAt).id, lockedRecord.id, 'the same month in another branch is not a duplicate');
+assert.throws(() => context.createLockedSettlementRecord('2026-07', 'all', lockedData, lockedAt), /month mismatch/, 'a snapshot cannot be stored under the wrong month');
+assert.throws(() => context.appendSettlementAdjustment(lockedRecord, { ...lockedData, m: '2026-09' }, lockedAt), /month mismatch/, 'an adjustment cannot be attached to the wrong month');
+assert.throws(() => context.createLockedSettlementRecord('2026-08', 'branch-a', lockedData, lockedAt), /scope mismatch/, 'a snapshot cannot be stored under the wrong branch scope');
+assert.throws(() => context.appendSettlementAdjustment(lockedRecord, { ...lockedData, scope: 'branch-a' }, lockedAt), /scope mismatch/, 'an adjustment cannot be attached to the wrong branch scope');
 assert.equal(lockedRecord.totalRevenue, 200, 'locked settlement stores original revenue');
 assert.equal(context.appendSettlementAdjustment(lockedRecord, lockedData, '2026-09-01T00:01:00.000Z'), false, 'unchanged data does not create an adjustment');
 const changedData = { ...lockedData, sr: [{ ...lockedData.sr[0], amount: 400, lessonAmount: 400 }], lessons: [lesson({ price: 400 })] };
@@ -93,6 +99,11 @@ assert.equal(context.completeMakeupForLesson(context.db.lessons[1]), true);
 assert.equal(makeup.status, 'done');
 context.syncMakeupForDeletedLesson(context.db.lessons[1]);
 assert.equal(makeup.status, 'pending', 'deleting a makeup lesson restores the pending item');
+
+const branchBusinessSource = fs.readFileSync(path.join(root, 'js/core/branch-business-scope.js'), 'utf8');
+assert.match(branchBusinessSource, /window\.settleData=function\(\)\{return settlementDataFor\(\$\('settleMonth'\)\.value\|\|monthNow\(\)/, 'settlement rendering always uses the selected settlement month');
+assert.match(branchBusinessSource, /data=settlementDataFor\(month,scope\)/, 'settlement locking calculates the exact month stored in the record');
+assert.doesNotMatch(branchBusinessSource, /window\.settleData=function\(\)\{return settlementDataFor\(window\.__danbridgeFinanceWorkspaceMonth/, 'finance workspace month cannot override settlement month');
 
 const cloudSource = fs.readFileSync(path.join(root, 'js/core/firebase-auth-and-cloud-sync.module.js'), 'utf8');
 const signatureStart = cloudSource.indexOf('function roleAccessSignature');

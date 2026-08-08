@@ -185,10 +185,14 @@ function settlementSnapshotPayload(data){
   return{totals,source,sourceHash:settlementSourceHash({totals,source})};
 }
 function createLockedSettlementRecord(month,scope,data,at=new Date().toISOString()){
+  if(data?.m&&data.m!==month)throw new Error(`Settlement month mismatch: ${month} !== ${data.m}`);
+  if(data?.scope&&data.scope!==scope)throw new Error(`Settlement scope mismatch: ${scope} !== ${data.scope}`);
   const snapshot=settlementSnapshotPayload(data);
   return{id:`${month}::${scope}`,month,branchId:scope,savedAt:at,lockedAt:at,locked:true,formulaVersion:'settlement-v1',...snapshot.totals,snapshot,adjustments:[]};
 }
 function appendSettlementAdjustment(record,data,at=new Date().toISOString()){
+  if(data?.m&&data.m!==record.month)throw new Error(`Settlement adjustment month mismatch: ${record.month} !== ${data.m}`);
+  if(data?.scope&&data.scope!==(record.branchId||'all'))throw new Error(`Settlement adjustment scope mismatch: ${record.branchId||'all'} !== ${data.scope}`);
   const current=settlementSnapshotPayload(data),adjustments=Array.isArray(record.adjustments)?record.adjustments:[],previousAdjustment=adjustments[adjustments.length-1],previous=previousAdjustment?previousAdjustment.currentTotals:(record.snapshot?.totals||{totalLessons:record.totalLessons,totalHours:record.totalHours,totalRevenue:record.totalRevenue,leaveCount:record.leaveCount,leaveRate:record.leaveRate,payroll:record.payroll});
   const previousHash=adjustments.length?adjustments[adjustments.length-1].sourceHash:record.snapshot?.sourceHash;
   if(!previousHash){record.snapshot={totals:{...previous},source:current.source,sourceHash:current.sourceHash};record.locked=true;record.lockedAt=record.lockedAt||record.savedAt||at;record.adjustments=adjustments;return false}

@@ -93,7 +93,7 @@
     });
     return{sr,tr,scope,m,lessons:ls};
   }
-  window.settleData=function(){return settlementDataFor(window.__danbridgeFinanceWorkspaceMonth||$('settleMonth').value||monthNow(),allowedScope(scopes.settlement))};
+  window.settleData=function(){return settlementDataFor($('settleMonth').value||monthNow(),allowedScope(scopes.settlement))};
 
   const baseDashboard=window.renderDashboard;
   window.renderDashboard=function(){
@@ -148,7 +148,7 @@
   };
 
   window.saveMonthlySettlement=function(){
-    const month=$('settleMonth').value||monthNow(),scope=allowedScope(scopes.settlement),data=settleData();
+    const month=$('settleMonth').value||monthNow(),scope=allowedScope(scopes.settlement),data=settlementDataFor(month,scope);
     const id=`${month}::${scope}`;db.settlementRecords||=[];const existing=db.settlementRecords.find(x=>(x.id||`${x.month}::${x.branchId||'all'}`)===id);
     if(existing){toast(`${monthLabel(month)}｜${scopeLabel(scope)} 已鎖定，原始月結不會被覆寫`);return}
     snapshot();db.settlementRecords.push(createLockedSettlementRecord(month,scope,data));saveDB();renderSettlementHistory();toast(`${monthLabel(month)}｜${scopeLabel(scope)} 月結已鎖定`);
