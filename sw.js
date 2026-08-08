@@ -1,4 +1,4 @@
-const CACHE_NAME='danbridge-v11-full-day-teacher-gaps-29';
+const CACHE_NAME='danbridge-v11-weekend-next-gaps-30';
 const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{

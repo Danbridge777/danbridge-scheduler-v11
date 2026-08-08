@@ -134,6 +134,13 @@ assert.deepEqual(
   Array.from(context.teacherGapWeekDays(gapRange), day => `${day.label}:${day.date}`),
   ['週一:2026-08-03', '週二:2026-08-04', '週三:2026-08-05', '週四:2026-08-06', '週五:2026-08-07', '週六:2026-08-08', '週日:2026-08-09']
 );
+elements.calendarDate.value = '2026-08-07';
+assert.deepEqual({ ...context.teacherGapWeekRange() }, { start: '2026-08-03', end: '2026-08-09' }, 'Friday remains in its current week');
+elements.calendarDate.value = '2026-08-08';
+assert.deepEqual({ ...context.teacherGapWeekRange() }, { start: '2026-08-10', end: '2026-08-16' }, 'Saturday advances to next week');
+elements.calendarDate.value = '2026-08-09';
+assert.deepEqual({ ...context.teacherGapWeekRange() }, { start: '2026-08-10', end: '2026-08-16' }, 'Sunday advances to next week');
+elements.calendarDate.value = '2026-08-05';
 const teacherGaps = [];
 context.appendTeacherDayGaps([
   { start: '16:00', end: '17:00' },
