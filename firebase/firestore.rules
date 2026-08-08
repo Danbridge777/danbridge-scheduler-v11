@@ -143,6 +143,27 @@ service cloud.firestore {
           ]));
     }
 
+    match /companies/{companyId}/errorEvents/{eventId} {
+      allow read, delete: if isOwner();
+      allow update: if false;
+      allow create: if (isOwner() || activeMember(companyId))
+        && ((isOwner() && request.resource.data.role == 'owner')
+          || (activeMember(companyId) && request.resource.data.role == access().role))
+        && request.resource.data.keys().hasOnly([
+          'release','environment','category','area','code','role','retryable','occurredAt'
+        ])
+        && request.resource.data.release is string
+        && request.resource.data.release.size() <= 24
+        && request.resource.data.environment in ['production','staging']
+        && request.resource.data.category in ['unhandled','cloud-write','cloud-read','role-view']
+        && request.resource.data.area in ['window','promise','owner-upload','owner-snapshot','teacher-view','branch-view','role-publish','access-guard']
+        && request.resource.data.code is string
+        && request.resource.data.code.size() <= 80
+        && request.resource.data.role in ['owner','teacher','branch_manager']
+        && request.resource.data.retryable is bool
+        && request.resource.data.occurredAt == request.time;
+    }
+
     match /companies/{companyId}/lessonReports/{lessonId} {
       // Read rules must match the listener query fields. Firestore queries are not filters:
       // a collection listener cannot be authorized from lessonMeta lookups alone.

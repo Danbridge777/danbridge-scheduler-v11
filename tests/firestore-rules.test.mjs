@@ -10,6 +10,7 @@ import {
   doc,
   getDoc,
   onSnapshot,
+  serverTimestamp,
   setDoc,
   updateDoc
 } from 'firebase/firestore';
@@ -211,5 +212,51 @@ describe('通知中心權限', () => {
     await assertFails(updateDoc(doc(db, `companies/${COMPANY_ID}/scheduleNotifications/teacher-notice`), {
       message: 'tampered'
     }));
+  });
+});
+
+describe('錯誤監控權限與隱私', () => {
+  const safeEvent = {
+    release: '20.7.0',
+    environment: 'staging',
+    category: 'cloud-read',
+    area: 'teacher-view',
+    code: 'permission-denied',
+    role: 'teacher',
+    retryable: true,
+    occurredAt: serverTimestamp()
+  };
+
+  test('有效成員只能新增最小化錯誤事件，不能讀取事件', async () => {
+    const db = auth('teacher-uid', TEACHER_EMAIL);
+    await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/errorEvents/teacher-event`), safeEvent));
+    await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/errorEvents/teacher-event`)));
+  });
+
+  test('拒絕含敏感或額外內容的錯誤事件', async () => {
+    const db = auth('teacher-uid', TEACHER_EMAIL);
+    await assertFails(setDoc(doc(db, `companies/${COMPANY_ID}/errorEvents/leaky-event`), {
+      ...safeEvent,
+      message: '學生姓名與完整錯誤內容'
+    }));
+  });
+
+  test('拒絕停權成員與偽造角色', async () => {
+    const inactive = auth('inactive-uid', INACTIVE_EMAIL);
+    await assertFails(setDoc(doc(inactive, `companies/${COMPANY_ID}/errorEvents/inactive-event`), safeEvent));
+    const teacher = auth('teacher-uid', TEACHER_EMAIL);
+    await assertFails(setDoc(doc(teacher, `companies/${COMPANY_ID}/errorEvents/spoofed-role`), {
+      ...safeEvent,
+      role: 'owner'
+    }));
+  });
+
+  test('Owner 可以集中讀取錯誤事件', async () => {
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    await assertSucceeds(setDoc(doc(owner, `companies/${COMPANY_ID}/errorEvents/owner-event`), {
+      ...safeEvent,
+      role: 'owner'
+    }));
+    await assertSucceeds(getDoc(doc(owner, `companies/${COMPANY_ID}/errorEvents/owner-event`)));
   });
 });

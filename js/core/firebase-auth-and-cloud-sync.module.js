@@ -13,6 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
+const APP_RELEASE='20.7.0';
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const cloud=getFirestore(app);
@@ -68,6 +69,9 @@ let companyAccessCache=null;
 let companyAccessCacheAt=0;
 let legacyMigrationStarted=false;
 const COMPANY_ACCESS_CACHE_TTL=30000;
+const errorEventQueue=[];
+const errorEventFingerprints=new Map();
+let errorEventCount=0;
 let originalSaveDB=window.saveDB;
 const originalEditLesson=window.editLesson;
 
@@ -82,6 +86,30 @@ function persistCurrentLocalView(){try{localStorage.setItem(localRoleCacheKey(),
 let cloudStatusHideTimer=null;
 function cloudStatus(text,kind=''){let el=document.getElementById('firebaseCloudStatus');if(!el){el=document.createElement('div');el.id='firebaseCloudStatus';el.style.cssText='position:fixed;left:12px;bottom:12px;z-index:10001;padding:8px 11px;border-radius:10px;background:#172033;color:#fff;font-size:12px;font-weight:800;box-shadow:0 8px 20px rgba(0,0,0,.2);pointer-events:none';document.body.appendChild(el)}clearTimeout(cloudStatusHideTimer);el.hidden=false;el.textContent=text;el.dataset.kind=kind||'';el.style.background=kind==='error'?'#991b1b':kind==='ok'?'#18794e':kind==='pending'?'#9a6700':kind==='offline'?'#475569':'#172033';if(kind==='ok')cloudStatusHideTimer=setTimeout(()=>{if(el.dataset.kind==='ok')el.hidden=true},2200)}
 function dataHash(value){try{const text=JSON.stringify(value||{});let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)+':'+text.length}catch{return String(Date.now())}}
+function safeErrorCode(error){
+ const raw=String(error?.code||error?.name||'unknown').toLowerCase();
+ return raw.replace(/[^a-z0-9._/-]/g,'-').slice(0,80)||'unknown';
+}
+async function sendOperationalError(event){
+ if(!auth.currentUser||!cloudRole||errorEventCount>=20)return;
+ const fingerprint=[event.category,event.area,event.code,cloudRole].join('|');
+ const now=Date.now(),last=errorEventFingerprints.get(fingerprint)||0;
+ if(now-last<60000)return;
+ errorEventFingerprints.set(fingerprint,now);errorEventCount++;
+ try{
+   await setDoc(doc(collection(cloud,'companies',COMPANY_ID,'errorEvents')),{release:APP_RELEASE,environment:DANBRIDGE_ENVIRONMENT,category:event.category,area:event.area,code:event.code,role:cloudRole,retryable:event.retryable===true,occurredAt:serverTimestamp()},{merge:false});
+ }catch{ /* 監控寫入失敗不得影響操作，也不得形成遞迴錯誤。 */ }
+}
+function reportOperationalError(error,{category='unhandled',area='window',retryable=false}={}){
+ const allowedCategories=new Set(['unhandled','cloud-write','cloud-read','role-view']);
+ const allowedAreas=new Set(['window','promise','owner-upload','owner-snapshot','teacher-view','branch-view','role-publish','access-guard']);
+ const event={category:allowedCategories.has(category)?category:'unhandled',area:allowedAreas.has(area)?area:'window',code:safeErrorCode(error),retryable:retryable===true};
+ if(!auth.currentUser||!cloudRole){if(errorEventQueue.length<10)errorEventQueue.push(event);return}
+ void sendOperationalError(event);
+}
+function flushOperationalErrors(){while(errorEventQueue.length)void sendOperationalError(errorEventQueue.shift())}
+window.addEventListener('error',event=>reportOperationalError(event.error||{name:'window-error'}));
+window.addEventListener('unhandledrejection',event=>reportOperationalError(event.reason||{name:'promise-rejection'},{area:'promise'}));
 function withSyncTimeout(promise,ms=15000){return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('雲端連線逾時，將自動重試')),ms))])}
 function scheduleOwnerRetry(){clearTimeout(ownerRetryTimer);if(cloudRole!=='owner'||!ownerUploadQueued)return;const delay=Math.min(30000,1000*Math.pow(2,Math.min(ownerRetryCount,5)));ownerRetryTimer=setTimeout(()=>uploadOwnerState(),delay)}
 function setOfflineStatus(){if(!navigator.onLine){cloudStatus('目前離線；所有變更已先保存在這台裝置，恢復網路後會自動同步。','offline')}}
@@ -655,6 +683,7 @@ function roleAccessSignature(value={}){
 function applyRoleUI(profile,user){
  const normalizedRole=String(profile?.role||'').trim().toLowerCase();
  cloudRole=normalizedRole;cloudTeacherId=profile.teacherId==null?'':String(profile.teacherId);cloudBranchIds=Array.isArray(profile.branchIds)?profile.branchIds:[];cloudUid=user.uid;cloudEmailKey=(user.email||'').trim().toLowerCase();window.__danbridgeLessonIdMigrationAuthority=cloudRole==='owner';
+ flushOperationalErrors();
  cloudRoleAccessSignature=cloudRole==='owner'?'':roleAccessSignature({...profile,role:cloudRole,teacherId:cloudTeacherId,branchIds:cloudBranchIds});
  if(cloudRole==='owner'){const current=window.__danbridgeGetDB?.();if(current)window.__danbridgeSetDB(deepCopy(current));}
  window.DanbridgeAccess?.setContext({role:cloudRole,branchIds:cloudBranchIds,teacherId:cloudTeacherId,email:cloudEmailKey,readOnly:profile.readOnly===true||cloudRole==='branch_manager',canSubmitOwnReports:profile.canSubmitOwnReports!==false});
@@ -816,7 +845,7 @@ async function publishRoleViewsWithRetry(){
  roleViewPublishQueued=true;if(roleViewPublishInFlight)return;
  roleViewPublishInFlight=true;roleViewPublishQueued=false;clearTimeout(roleViewRetryTimer);
  try{await Promise.all([publishScopedViews(),publishLessonMeta()]);roleViewRetryCount=0}
- catch(e){roleViewPublishQueued=true;roleViewRetryCount++;lessonMetaCacheReady=false;console.error('Role view background sync failed',e);cloudStatus(roleViewRetryCount<3?'主資料已同步；老師端資料正在背景補送。':'主資料已同步，但老師端資料持續補送中，請保持網路連線。',roleViewRetryCount<3?'pending':'error');roleViewRetryTimer=setTimeout(publishRoleViewsWithRetry,Math.min(30000,1000*Math.pow(2,Math.min(roleViewRetryCount,5))))}
+ catch(e){roleViewPublishQueued=true;roleViewRetryCount++;lessonMetaCacheReady=false;console.error('Role view background sync failed',e);reportOperationalError(e,{category:'role-view',area:'role-publish',retryable:true});cloudStatus(roleViewRetryCount<3?'主資料已同步；老師端資料正在背景補送。':'主資料已同步，但老師端資料持續補送中，請保持網路連線。',roleViewRetryCount<3?'pending':'error');roleViewRetryTimer=setTimeout(publishRoleViewsWithRetry,Math.min(30000,1000*Math.pow(2,Math.min(roleViewRetryCount,5))))}
  finally{roleViewPublishInFlight=false;if(roleViewPublishQueued&&!roleViewRetryCount)queueMicrotask(publishRoleViewsWithRetry)}
 }
 async function migrateLegacyLessonCloudDocuments(){
@@ -1081,7 +1110,7 @@ async function uploadOwnerState(force=false){
      migrateLegacyLessonCloudDocuments().catch(e=>console.error('Legacy lesson migration background task failed',e));
    }
  }catch(e){
-   console.error('Owner cloud sync failed at '+syncStage,e);ownerUploadQueued=true;ownerRetryCount++;
+   console.error('Owner cloud sync failed at '+syncStage,e);reportOperationalError(e,{category:'cloud-write',area:'owner-upload',retryable:true});ownerUploadQueued=true;ownerRetryCount++;
    const retrying=navigator.onLine&&ownerRetryCount<3;
    cloudStatus((navigator.onLine?`雲端連線較慢（${syncStage}），系統正在自動重試：`:'目前離線，變更已保存在本機：')+(e.message||e),navigator.onLine?(retrying?'pending':'error'):'offline');
    scheduleOwnerRetry();
@@ -1154,7 +1183,7 @@ function subscribeOwner(){
    lastPublishedOwnerDB=deepCopy(incoming);ownerBaselineReady=true;
    if(localDirtyHash===incomingHash)localDirtyHash='';
    cloudStatus(`雲端資料已更新：學生 ${incoming.students?.length||0}、老師 ${incoming.teachers?.length||0}、課程 ${incoming.lessons?.length||0}`,'ok');
- },err=>{console.error('owner snapshot',err);cloudStatus('讀取雲端主資料失敗：'+(err.message||err),'error')});
+ },err=>{console.error('owner snapshot',err);reportOperationalError(err,{category:'cloud-read',area:'owner-snapshot',retryable:true});cloudStatus('讀取雲端主資料失敗：'+(err.message||err),'error')});
 }
 async function subscribeTeacher(){
  if(!cloudTeacherId)throw new Error('老師帳號尚未綁定 teacherId。');
@@ -1186,6 +1215,7 @@ async function subscribeTeacher(){
    cloudStatus('老師課表已同步','ok');
  },err=>{
    console.error('讀取老師課表失敗',err);
+   reportOperationalError(err,{category:'cloud-read',area:'teacher-view',retryable:true});
    cloudStatus('讀取老師課表失敗：'+(err.message||err),'error');
  });
 }
@@ -1202,7 +1232,7 @@ function subscribeRoleAccessGuard(){
    const access=snap.exists()?snap.data()||{}:null;
    const valid=!!access&&access.active===true&&access.companyId===COMPANY_ID&&roleAccessSignature(access)===cloudRoleAccessSignature;
    if(!valid)revokeCurrentRoleAccess('此帳號權限已被移除或變更，系統已安全登出。');
- },e=>{console.error('role access guard failed',e);cloudStatus('權限狀態暫時無法確認，系統正在重新連線。','pending')});
+ },e=>{console.error('role access guard failed',e);reportOperationalError(e,{category:'cloud-read',area:'access-guard',retryable:true});cloudStatus('權限狀態暫時無法確認，系統正在重新連線。','pending')});
 }
 
 async function subscribeBranchManager(){
@@ -1241,6 +1271,7 @@ async function subscribeBranchManager(){
    cloudStatus(`校區資料已同步：學生 ${incoming.students?.length||0}、老師 ${incoming.teachers?.length||0}、課程 ${incoming.lessons?.length||0}`,'ok');
  },err=>{
    console.error('讀取校區權限資料失敗',err);
+   reportOperationalError(err,{category:'cloud-read',area:'branch-view',retryable:true});
    cloudStatus('讀取校區資料失敗：'+(err.message||err),'error');
  });
 }
