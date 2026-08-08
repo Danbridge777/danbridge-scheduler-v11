@@ -141,6 +141,22 @@ context.appendTeacherDayGaps([
 ], 'Teacher One', '2026-08-05', teacherGaps);
 assert.deepEqual(Array.from(teacherGaps, gap => `${gap.start}-${gap.end}`), ['17:00-18:00', '19:00-21:30']);
 
+// Gap analysis is driven only by the selected week and teacher, never by unrelated calendar filters.
+context.db.lessons = [
+  lesson({ id: 'gap-t1', date: '2026-08-03' }),
+  lesson({ id: 'gap-t2', date: '2026-08-04', teacherId: 't2', teacherIds: ['t2'], studentId: 's2', location: 'Other', room: 'B' }),
+  lesson({ id: 'gap-outside', date: '2026-08-10', teacherId: 't2', teacherIds: ['t2'] }),
+  lesson({ id: 'gap-cancelled', date: '2026-08-05', teacherId: 't2', teacherIds: ['t2'], status: '取消' }),
+  lesson({ id: 'gap-draft', date: '2026-08-06', teacherId: 't2', teacherIds: ['t2'], isDraft: true })
+];
+elements.calendarTeacherFilter.value = '';
+assert.deepEqual(Array.from(context.teacherGapAnalysisLessons(gapRange), row => row.id), ['gap-t1', 'gap-t2'], 'all-teacher gap analysis uses every formal lesson in the selected week');
+assert.deepEqual(Array.from(context.teacherGapAnalysisTeachers(context.teacherGapAnalysisLessons(gapRange)), row => row.id), ['t1', 't2'], 'all-teacher mode includes every teacher');
+elements.calendarTeacherFilter.value = 't2';
+assert.deepEqual(Array.from(context.teacherGapAnalysisLessons(gapRange), row => row.id), ['gap-t2'], 'switching teachers switches the entire gap dataset');
+assert.deepEqual(Array.from(context.teacherGapAnalysisTeachers(context.teacherGapAnalysisLessons(gapRange)), row => row.id), ['t2'], 'single-teacher mode includes only that teacher');
+elements.calendarTeacherFilter.value = 't1';
+
 // Ending multi-selection also closes an open calendar context menu.
 context.selectedLessonIds.add('selected-card');
 context.selectionMode = true;

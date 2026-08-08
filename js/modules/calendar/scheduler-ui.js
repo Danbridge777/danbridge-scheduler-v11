@@ -20,10 +20,17 @@ function teacherGapWeekDays(range){
   const labels=['週一','週二','週三','週四','週五','週六','週日'];
   return labels.map((label,index)=>{const date=new Date(range.start+'T00:00:00');date.setDate(date.getDate()+index);return{date:localDate(date),label}});
 }
-function appendTeacherDayGaps(lessons,teacherName,date,rows,dayEnd='21:30'){
-  for(let i=0;i<lessons.length-1;i++){const gap=minutesOf(lessons[i+1].start)-minutesOf(lessons[i].end);if(gap>=30)rows.push({teacher:teacherName,date,start:lessons[i].end,end:lessons[i+1].start,gap})}
+function appendTeacherDayGaps(lessons,teacherName,date,rows,dayEnd='21:30',teacherId=''){
+  for(let i=0;i<lessons.length-1;i++){const gap=minutesOf(lessons[i+1].start)-minutesOf(lessons[i].end);if(gap>=30)rows.push({teacher:teacherName,teacherId,date,start:lessons[i].end,end:lessons[i+1].start,gap})}
   const last=lessons.at(-1),afterLast=last?minutesOf(dayEnd)-minutesOf(last.end):0;
-  if(afterLast>=30)rows.push({teacher:teacherName,date,start:last.end,end:dayEnd,gap:afterLast});
+  if(afterLast>=30)rows.push({teacher:teacherName,teacherId,date,start:last.end,end:dayEnd,gap:afterLast});
+}
+function teacherGapAnalysisLessons(range,teacherId=currentCalendarTeacherId()){
+  return(db.lessons||[]).filter(l=>!l.isDraft&&l.date>=range.start&&l.date<=range.end&&!['取消','停課'].includes(l.status)&&(!teacherId||lessonTeacherIds(l).includes(teacherId)));
+}
+function teacherGapAnalysisTeachers(lessons,teacherId=currentCalendarTeacherId()){
+  if(teacherId)return(db.teachers||[]).filter(t=>t.id===teacherId);
+  return(db.teachers||[]).slice();
 }
 function renderCalendarAnalysis(){
   const box=$('calendarAnalysis');if(!box)return;
@@ -32,20 +39,21 @@ function renderCalendarAnalysis(){
   box.hidden=false;
   const r=visibleCalendarRange(),gapRange=teacherGapWeekRange(),f=calendarFilterState();
   const ls=db.lessons.filter(l=>l.date>=r.start&&l.date<=r.end&&lessonMatchesCalendar(l,f)&&!['取消','停課'].includes(l.status));
-  const gapLessons=db.lessons.filter(l=>l.date>=gapRange.start&&l.date<=gapRange.end&&lessonMatchesCalendar(l,f)&&!['取消','停課'].includes(l.status));
+  const gapLessons=teacherGapAnalysisLessons(gapRange),gapTeachers=teacherGapAnalysisTeachers(gapLessons);
   const rooms=[...new Set(ls.map(l=>l.room).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
   const available=Math.max(1,r.days*14*60);
   const roomRows=rooms.map(room=>{const mins=ls.filter(l=>l.room===room&&l.location!=='線上課').reduce((a,l)=>a+Math.max(0,minutesOf(l.end)-minutesOf(l.start)),0),pct=Math.min(100,mins/available*100);return{room,mins,pct}}).sort((a,b)=>b.mins-a.mins);
   const gapRows=[];
-  for(const t of db.teachers){
+  for(const t of gapTeachers){
     for(let d=new Date(gapRange.start+'T00:00:00'),end=new Date(gapRange.end+'T00:00:00');d<=end;d.setDate(d.getDate()+1)){
       const ds=localDate(d),arr=gapLessons.filter(l=>l.date===ds&&lessonTeacherIds(l).includes(t.id)).sort((a,b)=>a.start.localeCompare(b.start));
-      appendTeacherDayGaps(arr,t.name,ds,gapRows);
+      appendTeacherDayGaps(arr,t.name,ds,gapRows,'21:30',t.id);
     }
   }
-  gapRows.sort((a,b)=>b.gap-a.gap||a.date.localeCompare(b.date));
+  gapRows.sort((a,b)=>a.date.localeCompare(b.date)||a.teacher.localeCompare(b.teacher,'zh-Hant')||a.start.localeCompare(b.start));
+  const gapTeacherSummary=gapTeachers.map(t=>{const lessonCount=gapLessons.filter(l=>lessonTeacherIds(l).includes(t.id)).length,gapCount=gapRows.filter(x=>x.teacherId===t.id).length;return`<span class="gap-teacher-chip${lessonCount?'':' no-lessons'}"><b>${esc(t.name||'未命名老師')}</b><em>${lessonCount?`${lessonCount} 堂課・${gapCount} 個空堂`:'本週無課程'}</em></span>`}).join('');
   const gapWeeks=teacherGapWeekDays(gapRange).map(day=>{const rows=gapRows.filter(x=>x.date===day.date);return`<section class="gap-day${rows.length?'':' empty'}"><div class="gap-day-head"><b>${day.label}</b><span>${day.date.slice(5).replace('-','/')}</span>${rows.length?`<em>${rows.length} 個空堂</em>`:'<em>本日無空堂</em>'}</div>${rows.length?`<div class="gap-day-list">${rows.map(x=>`<div class="gap-item"><b>${esc(x.teacher)}</b><span>${x.start}–${x.end}</span><span class="pill red">${fmtHours(x.gap/60)} hr</span></div>`).join('')}</div>`:''}</section>`}).join('');
-  box.innerHTML=`<div class="analysis-panel"><h3>教室使用率</h3><div class="small">以目前顯示範圍 08:00–22:00 計算。</div>${roomRows.length?`<table class="analysis-table"><thead><tr><th>教室</th><th>使用時數</th><th>使用率</th></tr></thead><tbody>${roomRows.map(x=>`<tr><td><b>${esc(x.room)}</b></td><td>${fmtHours(x.mins/60)} hr</td><td>${x.pct.toFixed(1)}%<div class="usage-bar"><span style="width:${x.pct}%"></span></div></td></tr>`).join('')}</tbody></table>`:'<div class="small" style="padding:10px 0">目前範圍沒有已指定教室的課程。</div>'}</div><div class="analysis-panel weekly-gap-panel"><h3>老師空堂分析</h3><div class="small">${gapRange.start}～${gapRange.end}；列出同一天兩堂課之間及最後一堂至 21:30、至少 30 分鐘的空檔。基準日為週日時改算下一週。</div><div class="gap-week">${gapWeeks}</div></div>`;
+  box.innerHTML=`<div class="analysis-panel"><h3>教室使用率</h3><div class="small">以目前顯示範圍 08:00–22:00 計算。</div>${roomRows.length?`<table class="analysis-table"><thead><tr><th>教室</th><th>使用時數</th><th>使用率</th></tr></thead><tbody>${roomRows.map(x=>`<tr><td><b>${esc(x.room)}</b></td><td>${fmtHours(x.mins/60)} hr</td><td>${x.pct.toFixed(1)}%<div class="usage-bar"><span style="width:${x.pct}%"></span></div></td></tr>`).join('')}</tbody></table>`:'<div class="small" style="padding:10px 0">目前範圍沒有已指定教室的課程。</div>'}</div><div class="analysis-panel weekly-gap-panel"><h3>老師空堂分析</h3><div class="small">${gapRange.start}～${gapRange.end}；依目前老師選項逐位分析該週完整課表，不受學生、地點、教室或搜尋條件影響。列出同日兩堂課之間及最後一堂至 21:30、至少 30 分鐘的空檔。</div><div class="gap-teacher-summary">${gapTeacherSummary||'<span class="small">沒有可分析的老師。</span>'}</div><div class="gap-week">${gapWeeks}</div></div>`;
 }
 function renderCalendar(){ensureCalendarDefaults();const mode=$('calendarMode').value,date=new Date($('calendarDate').value+'T00:00:00'),f=calendarFilterState();if(mode==='month')renderMonth(date,f);else renderWeek(date,f);renderCalendarAnalysis();setTimeout(enableDesktopMarquee,0)}
 function updateSelectionCount(){
