@@ -31,7 +31,7 @@
     const expenseScope=pane==='expenses'?'<label><span>支出校區</span><select id="expenseBranchScope" onchange="DanbridgeBranchBusiness.setScope(\'finance\',this.value)"></select></label>':'';
     const bar=document.createElement('div');bar.className='v187-finance-month-bar'+(pane==='expenses'?' v187-expense-scope-bar':'');bar.innerHTML=`<label><span>資料月份</span><input class="v187-finance-month" id="v187FinanceMonth${pane[0].toUpperCase()+pane.slice(1)}" type="month"></label>${expenseScope}<small>${pane==='expenses'?'全部校區依教室歸屬統計，未歸屬資料不納入。':'切換後自動更新財務、老師 KPI、學生收款與支出資料'}</small>`;
     $('.v181-card-title',module)?.after(bar);
-    if(pane==='expenses'){const total=document.createElement('div');total.className='v187-expense-total';total.setAttribute('aria-live','polite');total.innerHTML='<span><small id="expenseTotalScope">全部校區</small><b>本月總支出</b></span><strong id="expenseTotalAmount">NT$0</strong>';bar.after(total)}
+    if(pane==='expenses'){const total=document.createElement('div');total.className='v187-expense-total';total.setAttribute('aria-live','polite');total.innerHTML='<span><small id="expenseTotalScope">全部校區</small><b>固定＋一次性支出</b></span><strong id="expenseTotalAmount">NT$0</strong>';bar.after(total)}
     const input=bar.querySelector('input'),commit=()=>setFinanceWorkspaceMonth(input.value,true);input.addEventListener('input',()=>{if(/^\d{4}-\d{2}$/.test(input.value))commit()});input.addEventListener('change',commit);input.addEventListener('blur',commit);input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();commit();input.blur()}});
   }
   function bindNativeFinanceControls(overview){

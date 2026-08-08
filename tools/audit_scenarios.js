@@ -194,7 +194,8 @@ assert.match(branchBusinessSource, /expenseScope\.innerHTML=optionsHTML\(true,fa
 assert.match(fs.readFileSync(path.join(root, 'index.html'), 'utf8'), /id="financeTotalExpenses"/, 'finance overview includes a total expenses metric');
 const financeArchitectureSource = fs.readFileSync(path.join(root, 'js/app/v18-information-architecture.js'), 'utf8');
 assert.match(financeArchitectureSource, /id="expenseTotalAmount"/, 'expense management includes its own total card');
-assert.match(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.totalExpenses\)/, 'expense total follows the selected month and branch finance calculation');
+assert.match(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.fixedTotal\+d\.oneTimeTotal\)/, 'expense management totals only fixed and one-time expenses');
+assert.doesNotMatch(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.totalExpenses\)/, 'expense management total excludes teacher payroll');
 assert.match(branchBusinessSource, /expenseTotalScope'\)\.textContent=scopeLabel\(scope\)/, 'expense total identifies the selected branch scope');
 
 const courseOperationsSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course-operations.js'), 'utf8');
