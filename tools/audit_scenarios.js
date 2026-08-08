@@ -177,6 +177,12 @@ assert.equal(firstStudentPaymentGroup.student.parent, 'Parent One', 'notificatio
 assert.equal(firstStudentPaymentGroup.lessons.length, 2, 'paid and expired lessons are excluded from the notification group');
 assert.equal(firstStudentPaymentGroup.amount, 400, 'grouped notification totals only the exact student outstanding amount');
 
+const accessibilitySource = fs.readFileSync(path.join(root, 'js/ui/accessibility-baseline.js'), 'utf8');
+assert.match(accessibilitySource, /label:not\(\[for\]\)/, 'accessibility baseline associates visible labels with controls');
+assert.match(accessibilitySource, /control\.setAttribute\('aria-label'/, 'unnamed controls receive an accessible name');
+assert.match(accessibilitySource, /aria-live','polite'/, 'dynamic status regions announce updates politely');
+assert.match(accessibilitySource, /MutationObserver/, 'dynamically inserted forms receive the same accessibility treatment');
+
 const courseOperationsSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course-operations.js'), 'utf8');
 const moveOperationsStart = courseOperationsSource.indexOf('let calendarMoveSaveTimer');
 assert.ok(moveOperationsStart >= 0, 'calendar move operations are available');
