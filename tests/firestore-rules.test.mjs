@@ -1,4 +1,5 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
+import assert from 'node:assert/strict';
 import {
   assertFails,
   assertSucceeds,
@@ -8,6 +9,7 @@ import {
   Timestamp,
   doc,
   getDoc,
+  onSnapshot,
   setDoc,
   updateDoc
 } from 'firebase/firestore';
@@ -81,6 +83,29 @@ describe('Owner 權限', () => {
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/data/main`)));
     await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/data/owner-write`), { ok: true }));
     await assertSucceeds(setDoc(doc(db, 'companyAccess/new@example.com'), { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'new-teacher' }));
+  });
+
+  test('Owner 課表寫入會同步到另一個即時監聽客戶端', async () => {
+    const writer = auth('owner-writer', OWNER_EMAIL);
+    const reader = auth('owner-reader', OWNER_EMAIL);
+    const ref = doc(reader, `companies/${COMPANY_ID}/data/main`);
+    const marker = `sync-${Date.now()}`;
+    let unsubscribe;
+    const received = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('另一個客戶端未在期限內收到課表更新')), 3000);
+      unsubscribe = onSnapshot(ref, snapshot => {
+        if (snapshot.data()?.clientHash !== marker) return;
+        clearTimeout(timer);
+        resolve(snapshot.data());
+      }, reject);
+    });
+    await assertSucceeds(setDoc(doc(writer, `companies/${COMPANY_ID}/data/main`), {
+      clientHash: marker,
+      db: { lessons: [{ id: 'sync-lesson', date: '2026-08-10', teacherId: 'teacher-1' }] }
+    }));
+    const data = await received;
+    unsubscribe?.();
+    assert.equal(data.db.lessons[0].id, 'sync-lesson');
   });
 });
 

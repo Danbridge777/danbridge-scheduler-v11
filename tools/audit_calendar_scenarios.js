@@ -158,6 +158,17 @@ context.selectionMode = true;
 assert.equal(context.copyCurrentSelection(), true);
 assert.deepEqual(Array.from(context.getLessonClipboard(), row => row.teacherId), ['t1'], 'clipboard excludes lessons outside the active teacher');
 
+// The real paste operation lands immediately, keeps relative offsets, and schedules one save.
+context.contextPasteTarget = { date: '2026-08-10', time: '13:00' };
+const savesBeforePaste = context.saves;
+context.contextPasteLessons();
+const pastedLessons = context.db.lessons.filter(row => row.date === '2026-08-10');
+assert.equal(pastedLessons.length, 1, 'paste adds the lesson to the local calendar immediately');
+assert.equal(pastedLessons[0].start, '13:00');
+assert.equal(pastedLessons[0].end, '14:00');
+assert.equal(pastedLessons[0].teacherId, 't1', 'paste remains in the active teacher scope');
+assert.equal(context.saves, savesBeforePaste + 1, 'paste schedules exactly one persistence operation');
+
 // A batch made from the current teacher selection leaves every other teacher untouched.
 context.db.lessons = [
   lesson({ id: 'batch-t1' }),
