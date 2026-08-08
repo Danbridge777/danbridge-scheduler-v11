@@ -55,6 +55,9 @@ vm.runInContext(fs.readFileSync(path.join(root, 'js/core/date-utils.js'), 'utf8'
 
 const schedulerSource = fs.readFileSync(path.join(root, 'js/modules/calendar/scheduler-ui.js'), 'utf8');
 vm.runInContext(schedulerSource.slice(0, schedulerSource.indexOf('function lessonHoverText')), context);
+const gapRangeStart = schedulerSource.indexOf('function teacherGapWeekRange');
+const gapRangeEnd = schedulerSource.indexOf('function renderCalendarAnalysis');
+vm.runInContext(schedulerSource.slice(gapRangeStart, gapRangeEnd), context);
 const selectedCopyStart = schedulerSource.indexOf('function copySelectedLessons');
 const selectedCopyEnd = schedulerSource.indexOf('function deleteSelectedLessons');
 vm.runInContext(schedulerSource.slice(selectedCopyStart, selectedCopyEnd), context);
@@ -88,6 +91,16 @@ context.db.teachers = [
 // Date mapping keeps calendar row + weekday and rejects a missing target row.
 assert.equal(context.mapDateByCalendarWeek('2026-08-06', '2026-08', '2026-09'), '2026-09-10');
 assert.equal(context.mapDateByCalendarWeek('2026-08-31', '2026-08', '2026-02'), null);
+
+// Gap analysis always presents the selected week as Monday through Sunday.
+elements.calendarDate.value = '2026-08-05';
+const gapRange = context.teacherGapWeekRange();
+assert.equal(gapRange.start, '2026-08-03');
+assert.equal(gapRange.end, '2026-08-09');
+assert.deepEqual(
+  Array.from(context.teacherGapWeekDays(gapRange), day => `${day.label}:${day.date}`),
+  ['週一:2026-08-03', '週二:2026-08-04', '週三:2026-08-05', '週四:2026-08-06', '週五:2026-08-07', '週六:2026-08-08', '週日:2026-08-09']
+);
 
 // Week copy must remain inside the currently selected teacher scope.
 context.db.lessons = [

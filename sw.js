@@ -1,4 +1,4 @@
-const CACHE_NAME='danbridge-v11-calendar-regression-16';
+const CACHE_NAME='danbridge-v11-weekly-gap-analysis-17';
 const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
