@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "danbridge-d8877"
+    "default": "danbridge-d8877",
+    "production": "danbridge-d8877",
+    "staging": "danbridge-d8877-staging"
   }
 }

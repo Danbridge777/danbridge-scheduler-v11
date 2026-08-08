@@ -47,7 +47,7 @@
 
 | ID | 功能 | 驗收條件 | 現況 |
 |---|---|---|---|
-| P2-01 | staging 環境 | 使用獨立 Firebase 專案或完全隔離集合；測試不碰正式資料。 | 未開始。 |
+| P2-01 | staging 環境 | 使用獨立 Firebase 專案或完全隔離集合；測試不碰正式資料。 | 已完成：獨立 Firebase 專案、Web App、Firestore、Google 登入、Rules 與 Hosting 均已建立並完成煙霧測試。 |
 | P2-02 | CI 自動檢查 | GitHub Actions 自動執行語法、專案驗證、情境測試與 Rules 測試。 | 未開始。 |
 | P2-03 | 高風險後端寫入 | 月結、權限、批次操作由 Cloud Functions／受信任 API 驗證。 | 未開始。 |
 | P2-04 | 背景工作 | 通知、備份、月結與報表可排程、重試與稽核。 | 未開始。 |

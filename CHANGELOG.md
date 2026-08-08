@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-08 — 建立獨立 Firebase staging 環境
+
+- 建立 `danbridge-d8877-staging` Firebase 專案、Web App 與 `asia-east1` Firestore 資料庫。
+- 網站依 production／staging 網域自動使用對應 Firebase 設定，正式網域仍連接原正式專案。
+- 新增明確指定專案的 production／staging 部署指令，避免部署目標混淆。
+- staging 畫面加入固定環境標記，並記錄測試資料隔離規則。
+
 ## 2026-08-08 — 貼上落位與 Firebase 即時同步整合測試
 
 - 使用正式貼上函式驗證課程會立即加入目標日期與時間、維持目前老師並只觸發一次儲存。

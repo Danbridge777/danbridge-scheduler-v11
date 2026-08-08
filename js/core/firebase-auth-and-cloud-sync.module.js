@@ -2,14 +2,14 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/fireba
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",
-  authDomain: "danbridge-d8877.firebaseapp.com",
-  projectId: "danbridge-d8877",
-  messagingSenderId: "251283850754",
-  appId: "1:251283850754:web:105a2813d86918af03091b",
-  measurementId: "G-K6ZH7DF7RS"
+const firebaseConfigs={
+ production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
+ staging:{apiKey:"AIzaSyDD1zt1Zc8n8Rzk6Vf1hYhanRWHzfrmGeI",authDomain:"danbridge-d8877-staging.firebaseapp.com",projectId:"danbridge-d8877-staging",storageBucket:"danbridge-d8877-staging.firebasestorage.app",messagingSenderId:"883029466360",appId:"1:883029466360:web:c45a0a2164d4c897aaef0d"}
 };
+const DANBRIDGE_ENVIRONMENT=['danbridge-d8877-staging.web.app','danbridge-d8877-staging.firebaseapp.com'].includes(location.hostname)?'staging':'production';
+const firebaseConfig=firebaseConfigs[DANBRIDGE_ENVIRONMENT];
+document.body.dataset.environment=DANBRIDGE_ENVIRONMENT;
+window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
