@@ -172,6 +172,34 @@ function settleData(){const m=$('settleMonth').value||monthNow(),ls=db.lessons.f
 
 function settlementSummaryTotals(studentRows){const rows=studentRows||[],totalLessons=rows.reduce((n,x)=>n+(+x.total||0),0),leaveCount=rows.reduce((n,x)=>n+(+x.abs||0),0);return{totalLessons,leaveCount,leaveRate:totalLessons?Math.min(100,leaveCount/totalLessons*100):0}}
 
+function settlementSourceHash(value){const serialized=typeof value==='string'?value:JSON.stringify(value);let hash=2166136261;for(let i=0;i<serialized.length;i++){hash^=serialized.charCodeAt(i);hash=Math.imul(hash,16777619)}return`v1-${(hash>>>0).toString(16).padStart(8,'0')}`}
+function settlementSnapshotPayload(data){
+  const sr=data?.sr||[],tr=data?.tr||[],lessons=data?.lessons||[];
+  const {totalLessons,leaveCount,leaveRate}=settlementSummaryTotals(sr);
+  const totals={totalLessons,totalHours:tr.reduce((n,x)=>n+(+x.h||0),0),totalRevenue:sr.reduce((n,x)=>n+(+x.amount||0),0),leaveCount,leaveRate,payroll:tr.reduce((n,x)=>n+(+x.amount||0),0)};
+  const source={
+    lessons:lessons.map(l=>{const id=l.id||'',financialFields=[l.date||'',l.start||'',l.end||'',l.studentId||'',lessonTeacherIds(l).slice().sort(),l.status||'',l.teacherReportStatus||'',l.chargeStudent||'',l.payTeacher||'',+l.price||0,+l.rate||0,!!l.isDraft];return{id,fingerprint:settlementSourceHash(financialFields)}}).sort((a,b)=>a.id.localeCompare(b.id)),
+    students:sr.map(x=>({id:x.s?.id||'',total:+x.total||0,charged:+x.charged||0,h:+x.h||0,abs:+x.abs||0,lessonAmount:+x.lessonAmount||0,campAmount:+x.campAmount||0,amount:+x.amount||0})).sort((a,b)=>a.id.localeCompare(b.id)),
+    teachers:tr.map(x=>({id:x.t?.id||'',count:+x.count||0,h:+x.h||0,expected:+x.expected||0,amount:+x.amount||0,revenue:+x.revenue||0,payrollMode:x.payroll?.mode||'',baseSalary:x.payroll?.baseSalary??null,hourlyRate:x.payroll?.hourlyRate??null,overtimeRate:x.payroll?.overtimeRate??null,deductionRate:x.payroll?.deductionRate??null})).sort((a,b)=>a.id.localeCompare(b.id))
+  };
+  return{totals,source,sourceHash:settlementSourceHash({totals,source})};
+}
+function createLockedSettlementRecord(month,scope,data,at=new Date().toISOString()){
+  const snapshot=settlementSnapshotPayload(data);
+  return{id:`${month}::${scope}`,month,branchId:scope,savedAt:at,lockedAt:at,locked:true,formulaVersion:'settlement-v1',...snapshot.totals,snapshot,adjustments:[]};
+}
+function appendSettlementAdjustment(record,data,at=new Date().toISOString()){
+  const current=settlementSnapshotPayload(data),adjustments=Array.isArray(record.adjustments)?record.adjustments:[],previousAdjustment=adjustments[adjustments.length-1],previous=previousAdjustment?previousAdjustment.currentTotals:(record.snapshot?.totals||{totalLessons:record.totalLessons,totalHours:record.totalHours,totalRevenue:record.totalRevenue,leaveCount:record.leaveCount,leaveRate:record.leaveRate,payroll:record.payroll});
+  const previousHash=adjustments.length?adjustments[adjustments.length-1].sourceHash:record.snapshot?.sourceHash;
+  if(!previousHash){record.snapshot={totals:{...previous},source:current.source,sourceHash:current.sourceHash};record.locked=true;record.lockedAt=record.lockedAt||record.savedAt||at;record.adjustments=adjustments;return false}
+  if(previousHash===current.sourceHash)return false;
+  const delta={};for(const key of ['totalLessons','totalHours','totalRevenue','leaveCount','leaveRate','payroll'])delta[key]=(+current.totals[key]||0)-(+previous[key]||0);
+  const previousSource=previousAdjustment?.currentSource||record.snapshot?.source||{lessons:[]},beforeIds=new Set((previousSource.lessons||[]).map(x=>`${x.id}:${JSON.stringify(x)}`)),afterIds=new Set((current.source.lessons||[]).map(x=>`${x.id}:${JSON.stringify(x)}`));
+  const affectedLessonIds=[...new Set([...(previousSource.lessons||[]).filter(x=>!afterIds.has(`${x.id}:${JSON.stringify(x)}`)).map(x=>x.id),...(current.source.lessons||[]).filter(x=>!beforeIds.has(`${x.id}:${JSON.stringify(x)}`)).map(x=>x.id)])].filter(Boolean).sort();
+  adjustments.push({id:`adj-${record.id||record.month}-${at}-${current.sourceHash}`,createdAt:at,type:'post-lock-data-change',sourceHash:current.sourceHash,affectedLessonIds,previousTotals:{...previous},currentTotals:{...current.totals},currentSource:{lessons:current.source.lessons},delta});
+  record.locked=true;record.lockedAt=record.lockedAt||record.savedAt||at;record.adjustments=adjustments;return true;
+}
+
 function monthlySettlementSnapshot(m){
   const ls=db.lessons.filter(l=>l.date.startsWith(m));
   const actualLessons=ls.filter(lessonCountsAsTaught);

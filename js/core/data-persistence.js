@@ -106,7 +106,9 @@ function normalizeLessonStates(){db.lessons=(db.lessons||[]).map(l=>{const state
 function saveDB(options={}){
  let saveError=null;
  try{
-  normalizeLessonStates();db=normalizeBranchData(db);localStorage.setItem(LS_KEY,JSON.stringify(db));
+  normalizeLessonStates();db=normalizeBranchData(db);
+  try{window.__danbridgeReconcileLockedSettlements?.()}catch(error){console.error('Settlement adjustment reconciliation failed:',error)}
+  localStorage.setItem(LS_KEY,JSON.stringify(db));
   try{if(!options.skipRender)(options.calendarOnly?renderCalendar():renderAll())}
   catch(error){
    console.error('Saved data, but a view renderer failed:',error);

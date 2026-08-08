@@ -64,6 +64,21 @@ const branchSettlement = context.settlementSummaryTotals([{ total: 2, charged: 1
 assert.equal(branchSettlement.totalLessons, 2, 'branch settlement counts all formal lessons');
 assert.equal(branchSettlement.leaveRate, 100, 'branch settlement leave rate cannot exceed 100%');
 
+const lockedAt = '2026-09-01T00:00:00.000Z';
+const lockedData = { sr: [{ s: { id: 's1' }, total: 1, charged: 1, h: 1, abs: 0, lessonAmount: 200, campAmount: 0, amount: 200 }], tr: [{ t: { id: 't1' }, count: 1, h: 1, expected: 1, amount: 100, revenue: 200, payroll: { mode: 'hourly', hourlyRate: 100 } }], lessons: [lesson()] };
+const lockedRecord = context.createLockedSettlementRecord('2026-08', 'all', lockedData, lockedAt);
+assert.equal(lockedRecord.locked, true, 'monthly settlement is locked');
+assert.equal(lockedRecord.totalRevenue, 200, 'locked settlement stores original revenue');
+assert.equal(context.appendSettlementAdjustment(lockedRecord, lockedData, '2026-09-01T00:01:00.000Z'), false, 'unchanged data does not create an adjustment');
+const changedData = { ...lockedData, sr: [{ ...lockedData.sr[0], amount: 400, lessonAmount: 400 }], lessons: [lesson({ price: 400 })] };
+assert.equal(context.appendSettlementAdjustment(lockedRecord, changedData, '2026-09-01T00:02:00.000Z'), true, 'post-lock change creates an adjustment');
+assert.equal(lockedRecord.totalRevenue, 200, 'adjustment never overwrites original revenue');
+assert.equal(lockedRecord.adjustments[0].delta.totalRevenue, 200, 'adjustment stores revenue delta');
+assert.deepEqual([...lockedRecord.adjustments[0].affectedLessonIds], ['l1'], 'adjustment identifies the changed lesson');
+assert.equal(context.appendSettlementAdjustment(lockedRecord, changedData, '2026-09-01T00:03:00.000Z'), false, 'repeated save does not duplicate an adjustment');
+assert.equal(context.appendSettlementAdjustment(lockedRecord, lockedData, '2026-09-01T00:04:00.000Z'), true, 'reverting data creates a compensating adjustment');
+assert.equal(lockedRecord.adjustments[1].delta.totalRevenue, -200, 'compensating adjustment stores negative delta');
+
 context.db.makeups = [];
 const source = lesson({ id: 'leave-source', status: '學生請假', teacherReportStatus: 'student_leave', branchId: 'a' });
 const makeup = context.addMakeupForLesson(source);

@@ -77,8 +77,8 @@
     return{m,scope,revenue,lessonRevenue,campRevenue,fixed,one,fixedTotal,oneTimeTotal,payrollRows,payroll,totalExpenses,profit:revenue-totalExpenses,branchRevenue:branchBreakdown(lessons)};
   };
 
-  window.settleData=function(){
-    const m=window.__danbridgeFinanceWorkspaceMonth||$('settleMonth').value||monthNow(),scope=allowedScope(scopes.settlement),ls=scopedLessons(scope,m),campRows=summerCampRegistrationRows(m,scope);
+  function settlementDataFor(m,scope){
+    scope=allowedScope(scope);const ls=scopedLessons(scope,m),campRows=summerCampRegistrationRows(m,scope);
     const studentIds=new Set([...ls.map(l=>l.studentId),...campRows.map(r=>r.studentId)]),teacherIds=new Set(ls.flatMap(l=>lessonTeacherIds(l)));
     const sr=(db.students||[]).filter(s=>recordMatchesBranch(s,scope,studentIds)).map(s=>{
       const x=ls.filter(l=>l.studentId===s.id),chargedLessons=studentChargeableTutoringLessons(s.id,m,'all',ls),abs=x.filter(l=>['學生請假','老師請假','取消','停課'].includes(l.status));
@@ -92,7 +92,8 @@
       return{t,count:paid.length,h,expected,diff,weeks,amount,revenue:teacherCompanyRevenue(t,m,ls),payroll,branches:branchBreakdown(paid,t.id),companyWide:true};
     });
     return{sr,tr,scope,m,lessons:ls};
-  };
+  }
+  window.settleData=function(){return settlementDataFor(window.__danbridgeFinanceWorkspaceMonth||$('settleMonth').value||monthNow(),allowedScope(scopes.settlement))};
 
   const baseDashboard=window.renderDashboard;
   window.renderDashboard=function(){
@@ -148,19 +149,27 @@
 
   window.saveMonthlySettlement=function(){
     const month=$('settleMonth').value||monthNow(),scope=allowedScope(scopes.settlement),data=settleData();
-    const {totalLessons,leaveCount,leaveRate}=settlementSummaryTotals(data.sr),totalHours=data.tr.reduce((n,x)=>n+x.h,0),totalRevenue=data.sr.reduce((n,x)=>n+x.amount,0),payroll=data.tr.reduce((n,x)=>n+x.amount,0);
-    const record={id:`${month}::${scope}`,month,branchId:scope,savedAt:new Date().toISOString(),totalLessons,totalHours,totalRevenue,leaveCount,leaveRate,payroll};
-    db.settlementRecords||=[];const i=db.settlementRecords.findIndex(x=>(x.id||`${x.month}::${x.branchId||'all'}`)===record.id);snapshot();
-    if(i>=0)db.settlementRecords[i]=record;else db.settlementRecords.push(record);saveDB();renderSettlementHistory();toast(`${monthLabel(month)}｜${scopeLabel(scope)} 結算紀錄已${i>=0?'更新':'儲存'}`);
+    const id=`${month}::${scope}`;db.settlementRecords||=[];const existing=db.settlementRecords.find(x=>(x.id||`${x.month}::${x.branchId||'all'}`)===id);
+    if(existing){toast(`${monthLabel(month)}｜${scopeLabel(scope)} 已鎖定，原始月結不會被覆寫`);return}
+    snapshot();db.settlementRecords.push(createLockedSettlementRecord(month,scope,data));saveDB();renderSettlementHistory();toast(`${monthLabel(month)}｜${scopeLabel(scope)} 月結已鎖定`);
+  };
+  window.__danbridgeReconcileLockedSettlements=function(){
+    if(ctx().role!=='owner')return false;let changed=false;
+    for(const record of db.settlementRecords||[]){
+      const scope=record.branchId||'all';
+      if(!record.month)continue;
+      changed=appendSettlementAdjustment(record,settlementDataFor(record.month,scope))||changed;
+    }
+    return changed;
   };
   window.renderSettlementHistory=function(){
     const box=$('settlementHistoryRows');if(!box)return;const current=allowedScope(scopes.settlement);
     const rows=[...(db.settlementRecords||[])].filter(r=>current==='all'||(r.branchId||'all')===current).sort((a,b)=>b.month.localeCompare(a.month));
-    box.innerHTML=rows.map(r=>{const rs=r.branchId||'all',key=encodeURIComponent(r.id||`${r.month}::${rs}`);return `<tr><td><b>${esc(monthLabel(r.month))}</b><div class="small">${esc(scopeLabel(rs))}</div></td><td>${new Date(r.savedAt).toLocaleString('zh-TW')}</td><td>${r.totalLessons} 堂</td><td>${fmtHours(r.totalHours)} hr</td><td>${money(r.totalRevenue)}</td><td>${r.leaveCount} 堂</td><td>${(+r.leaveRate||0).toFixed(1)}%</td><td>${money(r.payroll)}</td><td class="row-actions"><button class="btn" onclick="loadSettlementRecord('${r.month}','${rs}')">檢視</button><button class="btn danger" onclick="deleteSettlementRecord('${key}')">刪除</button></td></tr>`}).join('')||'<tr><td colspan="9" class="small">此範圍尚未儲存結算紀錄。</td></tr>';
+    box.innerHTML=rows.map(r=>{const rs=r.branchId||'all',adjustments=r.adjustments||[],latest=adjustments[adjustments.length-1],delta=latest?.delta;return `<tr><td><b>${esc(monthLabel(r.month))}</b><div class="small">${esc(scopeLabel(rs))}｜已鎖定</div></td><td>${new Date(r.lockedAt||r.savedAt).toLocaleString('zh-TW')}</td><td>${r.totalLessons} 堂</td><td>${fmtHours(r.totalHours)} hr</td><td>${money(r.totalRevenue)}</td><td>${r.leaveCount} 堂</td><td>${(+r.leaveRate||0).toFixed(1)}%</td><td>${money(r.payroll)}</td><td class="row-actions"><button class="btn" onclick="loadSettlementRecord('${r.month}','${rs}')">檢視</button>${adjustments.length?`<div class="small">${adjustments.length} 筆調整<br>最新：收入 ${delta.totalRevenue>=0?'+':''}${money(delta.totalRevenue)}／薪資 ${delta.payroll>=0?'+':''}${money(delta.payroll)}</div>`:'<div class="small">尚無調整</div>'}</td></tr>`}).join('')||'<tr><td colspan="9" class="small">此範圍尚未儲存結算紀錄。</td></tr>';
   };
   window.loadSettlementRecord=function(month,scope='all'){renderSettlementMonthOptions();$('settleMonth').value=month;if(ctx().role==='owner'){scopes.settlement=scope;syncSelectors()}renderSettlement();$('settlement').scrollIntoView({behavior:'smooth',block:'start'})};
-  window.deleteSettlementRecord=function(encodedKey){const key=decodeURIComponent(encodedKey),record=(db.settlementRecords||[]).find(r=>(r.id||`${r.month}::${r.branchId||'all'}`)===key);if(!record||!confirm(`確定刪除 ${record.month}｜${scopeLabel(record.branchId||'all')} 的結算紀錄？課程資料不會刪除。`))return;snapshot();db.settlementRecords=(db.settlementRecords||[]).filter(r=>(r.id||`${r.month}::${r.branchId||'all'}`)!==key);saveDB();renderSettlementHistory();toast('結算紀錄已刪除')};
+  window.deleteSettlementRecord=function(){toast('月結已鎖定，不可刪除')};
 
   document.addEventListener('DOMContentLoaded',syncSelectors);
-  window.DanbridgeBranchBusiness={scopes,setScope,syncSelectors,defaultExpenseBranch,scopeLabel,scopedLessons,branchBreakdown};
+  window.DanbridgeBranchBusiness={scopes,setScope,syncSelectors,defaultExpenseBranch,scopeLabel,scopedLessons,branchBreakdown,settlementDataFor};
 })();
