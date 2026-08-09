@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.13.9';
+const APP_RELEASE='20.14.0';
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const cloud=getFirestore(app);
@@ -300,10 +300,26 @@ async function removeCloudTeacherAccess(email,teacherName='老師'){
    alert('刪除失敗：'+(e?.message||e));
  }
 }
+async function setCloudAccessActive(email,active){
+ if(cloudRole!=='owner')return;
+ email=String(email||'').trim().toLowerCase();if(!email)return;
+ const action=active?'重新啟用':'停權';
+ if(!confirm(`確定要${action} ${email}？\n${active?'原本的角色與資料範圍會恢復。':'帳號會立即失去存取權，但綁定與歷史紀錄會保留。'}`))return;
+ try{
+  cloudStatus(`正在${action}帳號…`,'pending');invalidateCompanyAccessCache();
+  await setDoc(doc(cloud,'companyAccess',email),{active,updatedAt:serverTimestamp()},{merge:true});
+  const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));
+  await Promise.all(userQs.docs.map(u=>setDoc(u.ref,{active,updatedAt:serverTimestamp()},{merge:true})));
+  await Promise.all([listCloudTeacherAccess(),listCloudBranchManagerAccess()]);
+  if(active)publishRoleViewsWithRetry();
+  cloudStatus(`帳號已${action}`,'ok');
+ }catch(e){console.error(e);cloudStatus(`${action}帳號失敗`,'error');alert(`${action}失敗：`+(e?.message||e))}
+}
 async function listCloudTeacherAccess(){
  const box=document.getElementById('cloudTeacherAccessList');if(!box||cloudRole!=='owner')return;
  const [qs,logins]=await Promise.all([getDocs(query(collection(cloud,'companyAccess'),where('companyId','==',COMPANY_ID))),lastLoginByEmail()]);
- box.innerHTML=qs.docs.filter(d=>d.data()?.role==='teacher').map(d=>{const x=d.data();const email=String(x.email||d.id).toLowerCase(),last=logins.get(email)?.label||'尚未登入';return `<div class="backup-item"><div class="info"><b>${x.teacherName||'老師'}</b><div class="small">${email}<br>最後登入：${escapeHTML(last)}</div></div><div class="row-actions"><span class="pill ${x.active===false?'red':'green'}">${x.active===false?'停用':'啟用'}</span><button type="button" class="btn danger cloud-access-delete" data-email="${email.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}" data-name="${String(x.teacherName||'老師').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}">刪除權限</button></div></div>`}).join('')||'<span class="small">尚未建立老師 Gmail 權限。</span>';
+ box.innerHTML=qs.docs.filter(d=>d.data()?.role==='teacher').map(d=>{const x=d.data();const email=String(x.email||d.id).toLowerCase(),last=logins.get(email)?.label||'尚未登入',active=x.active!==false;return `<div class="backup-item"><div class="info"><b>${x.teacherName||'老師'}</b><div class="small">${email}<br>最後登入：${escapeHTML(last)}</div></div><div class="row-actions"><span class="pill ${active?'green':'red'}">${active?'啟用':'停權'}</span><button type="button" class="btn cloud-access-toggle" data-email="${escapeHTML(email)}" data-active="${active?'true':'false'}">${active?'停權':'重新啟用'}</button><button type="button" class="btn danger cloud-access-delete" data-email="${email.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}" data-name="${String(x.teacherName||'老師').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}">刪除權限</button></div></div>`}).join('')||'<span class="small">尚未建立老師 Gmail 權限。</span>';
+ box.querySelectorAll('.cloud-access-toggle').forEach(btn=>btn.onclick=()=>setCloudAccessActive(btn.dataset.email,btn.dataset.active!=='true'));
  box.querySelectorAll('.cloud-access-delete').forEach(btn=>btn.onclick=()=>removeCloudTeacherAccess(btn.dataset.email,btn.dataset.name));
 }
 
@@ -417,7 +433,8 @@ function escapeHTML(value=''){return String(value).replace(/&/g,'&amp;').replace
 function renderCloudBranchManagerList(records=branchManagerAccessCache,logins=new Map()){
  const box=document.getElementById('cloudBranchManagerList');if(!box||cloudRole!=='owner')return;
  branchManagerAccessCache=Array.isArray(records)?records:[];
- box.innerHTML=branchManagerAccessCache.map(x=>{const email=String(x.email||x.id||'').toLowerCase(),last=logins.get(email)?.label||'尚未登入';return `<div class="backup-item branch-access-item"><div class="info"><b>${escapeHTML((x.branchNames||x.branchIds||[]).join('、')||'未指定校區')}</b><div class="small" title="${escapeHTML(email)}">${escapeHTML(email)}｜${escapeHTML(x.teacherName||x.managerName||'未綁定老師')}｜可回報本人課程<br>最後登入：${escapeHTML(last)}</div></div><button type="button" class="btn danger branch-access-delete" data-email="${escapeHTML(email)}">刪除權限</button></div>`}).join('')||'<span class="small">尚未建立校區管理者。</span>';
+ box.innerHTML=branchManagerAccessCache.map(x=>{const email=String(x.email||x.id||'').toLowerCase(),last=logins.get(email)?.label||'尚未登入',active=x.active!==false;return `<div class="backup-item branch-access-item"><div class="info"><b>${escapeHTML((x.branchNames||x.branchIds||[]).join('、')||'未指定校區')}</b><div class="small" title="${escapeHTML(email)}">${escapeHTML(email)}｜${escapeHTML(x.teacherName||x.managerName||'未綁定老師')}｜可回報本人課程<br>最後登入：${escapeHTML(last)}</div></div><div class="row-actions"><span class="pill ${active?'green':'red'}">${active?'啟用':'停權'}</span><button type="button" class="btn branch-access-toggle" data-email="${escapeHTML(email)}" data-active="${active?'true':'false'}">${active?'停權':'重新啟用'}</button><button type="button" class="btn danger branch-access-delete" data-email="${escapeHTML(email)}">刪除權限</button></div></div>`}).join('')||'<span class="small">尚未建立校區管理者。</span>';
+ box.querySelectorAll('.branch-access-toggle').forEach(btn=>btn.onclick=()=>setCloudAccessActive(btn.dataset.email,btn.dataset.active!=='true'));
  box.querySelectorAll('.branch-access-delete').forEach(btn=>btn.onclick=()=>removeCloudBranchManagerAccess(btn.dataset.email));
 }
 async function listCloudBranchManagerAccess(){

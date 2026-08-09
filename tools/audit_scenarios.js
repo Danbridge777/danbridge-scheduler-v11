@@ -118,7 +118,9 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.13\.9'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.14\.0'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*companyAccess[\s\S]*\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension preserves access records and synchronizes user profiles');
+assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /async function recordSuccessfulLogin\(user,profile\)[\s\S]*lastLoginAt:serverTimestamp\(\)/, 'authorized login records its successful time');
 assert.match(cloudSource, /await ensureProfile\(user\);try\{await recordSuccessfulLogin\(user,profile\)\}/, 'last login is written only after authorization succeeds');
 assert.match(cloudSource, /最後登入時間更新失敗[\s\S]*applyRoleUI\(profile,user\)/, 'a login timestamp failure does not block an authorized account');

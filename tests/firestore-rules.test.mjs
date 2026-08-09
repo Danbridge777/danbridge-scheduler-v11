@@ -89,6 +89,16 @@ describe('Owner 權限', () => {
     await assertSucceeds(setDoc(doc(db, 'companyAccess/new@example.com'), { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'new-teacher' }));
   });
 
+  test('Owner 停權後立即阻止存取，重新啟用後恢復原老師範圍', async () => {
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    const teacher = auth('teacher-uid', TEACHER_EMAIL);
+    const accessRef = doc(owner, `companyAccess/${TEACHER_EMAIL}`);
+    await assertSucceeds(updateDoc(accessRef, { active: false }));
+    await assertFails(getDoc(doc(teacher, `companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`)));
+    await assertSucceeds(updateDoc(accessRef, { active: true }));
+    await assertSucceeds(getDoc(doc(teacher, `companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`)));
+  });
+
   test('Owner 課表寫入會同步到另一個即時監聽客戶端', async () => {
     const writer = auth('owner-writer', OWNER_EMAIL);
     const reader = auth('owner-reader', OWNER_EMAIL);
