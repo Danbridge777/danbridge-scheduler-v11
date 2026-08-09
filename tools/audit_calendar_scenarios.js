@@ -266,11 +266,17 @@ context.db.lessons = [lesson({ id: 'existing' })];
 assert.equal(context.conflictDetail(lesson({ id: 'blank-date', date: '2026-08-04' }), ''), null, 'different date is not a conflict');
 assert.equal(context.conflictDetail(lesson({ id: 'adjacent', start: '11:00', end: '12:00' }), ''), null, 'adjacent time is not a conflict');
 assert.equal(context.conflictDetail(lesson({ id: 'student-hit', start: '10:30', end: '11:30' }), '').type, '學生', 'same student overlap blocks');
+const studentConflict = context.conflictDetail(lesson({ id: 'student-source', start: '10:30', end: '11:30' }), '');
+assert.equal(studentConflict.name, 'Student One', 'student conflict identifies the exact student');
+assert.equal(studentConflict.lesson.id, 'existing', 'student conflict returns the blocking lesson as its message source');
 assert.equal(
   context.conflictDetail(lesson({ id: 'room-hit', studentId: 's2', start: '10:30', end: '11:30' }), '').type,
   '教室',
   'same onsite room overlap blocks'
 );
+const roomConflict = context.conflictDetail(lesson({ id: 'room-source', studentId: 's2', start: '10:30', end: '11:30' }), '');
+assert.equal(roomConflict.name, 'Branch A A', 'room conflict identifies the exact branch and room');
+assert.equal(roomConflict.lesson.id, 'existing', 'room conflict returns the blocking lesson as its message source');
 assert.equal(
   context.conflictDetail(lesson({ id: 'free', studentId: 's2', room: 'B', start: '10:30', end: '11:30' }), ''),
   null,
@@ -279,4 +285,14 @@ assert.equal(
 context.db.lessons[0].status = '取消';
 assert.equal(context.conflictDetail(lesson({ id: 'cancelled-slot' }), ''), null, 'cancelled lesson does not block an empty slot');
 
-console.log('PASS: teacher-scoped week/month/selection copy, calendar date mapping, and conflict boundaries.');
+// Cross-midnight lessons are invalid, and a shared co-teacher is detected regardless of primary-teacher order.
+assert.equal(context.shiftTime('23:30', 60), null, 'a one-hour lesson cannot wrap into the next date');
+assert.match(courseSource, /拖曳後課程會跨過午夜，已取消/, 'single-lesson dragging rejects a cross-midnight result');
+context.db.lessons = [lesson({ id: 'co-teaching-existing', studentId: 's2', room: 'B', teacherId: 't1', teacherIds: ['t1', 't2'] })];
+const coTeacherConflict = context.teacherConflictDetail(lesson({ id: 'co-teaching-candidate', studentId: 's1', room: 'C', teacherId: 't2', teacherIds: ['t2'] }), '');
+assert.equal(coTeacherConflict.teacherId, 't2', 'a shared co-teacher is detected even when they are not the existing primary teacher');
+assert.equal(coTeacherConflict.name, 'Teacher Two', 'the teacher warning identifies the exact shared teacher');
+assert.equal(coTeacherConflict.lesson.id, 'co-teaching-existing', 'the teacher warning returns the blocking lesson as its message source');
+assert.equal(context.conflictDetail(lesson({ id: 'co-teaching-candidate', studentId: 's1', room: 'C', teacherId: 't2', teacherIds: ['t2'] }), ''), null, 'teacher overlap remains a warning rather than a student or room block');
+
+console.log('PASS: teacher-scoped copy, calendar dates, cross-midnight rejection, co-teaching, and conflict sources.');
