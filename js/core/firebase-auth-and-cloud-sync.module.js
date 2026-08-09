@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.14.0';
+const APP_RELEASE='20.14.1';
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const cloud=getFirestore(app);
@@ -268,14 +268,25 @@ async function renderCloudUserManager(){
    const teacherId=sel.value,email=document.getElementById('cloudTeacherEmail').value.trim().toLowerCase();
    if(!teacherId||!email)return alert('請選老師並輸入 Gmail');
    const t=window.__danbridgeGetDB().teachers.find(x=>x.id===teacherId);
+   const existing=await getDoc(doc(cloud,'companyAccess',email));
+   if(!confirmCloudRoleTransition(existing,'teacher',email))return;
+   const payload={email,role:'teacher',companyId:COMPANY_ID,teacherId,teacherName:teacherBadgeName(t),active:true,branchIds:deleteField(),branchNames:deleteField(),managerName:deleteField(),readOnly:deleteField(),canSubmitOwnReports:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()};
    invalidateCompanyAccessCache();
-   await setDoc(doc(cloud,'companyAccess',email),{email,role:'teacher',companyId:COMPANY_ID,teacherId,teacherName:teacherBadgeName(t),active:true,updatedAt:serverTimestamp()},{merge:true});
-   try{const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));await Promise.all(userQs.docs.map(u=>setDoc(u.ref,{active:true,role:'teacher',teacherId,teacherName:teacherBadgeName(t),updatedAt:serverTimestamp()},{merge:true})))}catch(e){console.warn('重新啟用老師帳號失敗：',e)}
+   await setDoc(doc(cloud,'companyAccess',email),payload,{merge:true});
+   try{const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));await Promise.all(userQs.docs.map(u=>setDoc(u.ref,payload,{merge:true})))}catch(e){console.warn('同步老師帳號資料失敗：',e)}
    await setDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email),{db:filteredTeacherDB(window.__danbridgeGetDB(),teacherId),updatedAt:serverTimestamp(),teacherId,email},{merge:false});
+   await deleteDoc(doc(cloud,'companies',COMPANY_ID,'branchViews',email)).catch(()=>{});
    alert('老師權限與專屬課表已建立。請老師使用此 Gmail 登入。');
-   document.getElementById('cloudTeacherEmail').value='';await listCloudTeacherAccess();
+   document.getElementById('cloudTeacherEmail').value='';await Promise.all([listCloudTeacherAccess(),listCloudBranchManagerAccess()]);
  };
  await listCloudTeacherAccess();
+}
+function confirmCloudRoleTransition(existing,targetRole,email){
+ if(!existing?.exists?.())return true;
+ const currentRole=String(existing.data()?.role||'');
+ if(!currentRole||currentRole===targetRole)return true;
+ const labels={teacher:'老師',branch_manager:'校區管理者'};
+ return confirm(`這個 Gmail 目前是「${labels[currentRole]||currentRole}」。\n確定要變更為「${labels[targetRole]||targetRole}」嗎？\n\n變更後舊角色的資料範圍會立即移除，該帳號若正在使用會被登出。`);
 }
 async function removeCloudTeacherAccess(email,teacherName='老師'){
  if(cloudRole!=='owner')return;
@@ -363,8 +374,10 @@ async function saveCloudBranchManagerAccess(){
    const branches=window.__danbridgeGetDB()?.branches||window.DanbridgeAccess?.DEFAULT_BRANCHES||[];
    const branchNames=branches.filter(b=>branchIds.includes(b.id)).map(b=>b.name);
    const existing=await getDoc(doc(cloud,'companyAccess',email));
-   if(existing.exists()&&existing.data()?.role==='teacher'){
-     throw new Error('這個 Gmail 已經綁定為老師帳號，請先刪除老師權限後再設定為校區管理者。');
+   if(!confirmCloudRoleTransition(existing,'branch_manager',email)){
+     branchManagerFormStatus('已取消角色變更。','');
+     cloudStatus('已取消角色變更','ok');
+     return;
    }
    const managerTeacher=(window.__danbridgeGetDB()?.teachers||[]).find(t=>t.id===teacherId);
    if(!managerTeacher)throw new Error('找不到所選老師，請重新選擇。');
@@ -378,6 +391,7 @@ async function saveCloudBranchManagerAccess(){
      const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));
      await Promise.all(userQs.docs.map(u=>setDoc(u.ref,payload,{merge:true})));
    }catch(e){console.warn('同步既有使用者資料失敗：',e)}
+   await deleteDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email)).catch(()=>{});
    // 不再把儲存成功綁在 branchViews / teacherViews 上。
    // 舊 Firebase 規則若不允許這些路徑，主權限仍已完整儲存在 companyAccess。
    // 先更新本機畫面，不等待下一次 Firestore 查詢或快取刷新。
@@ -386,7 +400,7 @@ async function saveCloudBranchManagerAccess(){
    if(emailInput)emailInput.value='';
    const managerTeacherSelect=document.getElementById('cloudBranchManagerTeacher');if(managerTeacherSelect)managerTeacherSelect.value='';
    document.querySelectorAll('#cloudBranchChoices input[type="checkbox"]').forEach(x=>x.checked=false);
-   listCloudBranchManagerAccess();
+   await Promise.all([listCloudBranchManagerAccess(),listCloudTeacherAccess()]);
    branchManagerFormStatus('校區管理者權限已建立。','ok');
    cloudStatus('校區管理者權限已建立','ok');
  }catch(e){

@@ -99,6 +99,19 @@ describe('Owner 權限', () => {
     await assertSucceeds(getDoc(doc(teacher, `companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`)));
   });
 
+  test('Owner 變更角色後舊角色範圍立即失效且只開放新角色範圍', async () => {
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    const member = auth('teacher-uid', TEACHER_EMAIL);
+    const accessRef = doc(owner, `companyAccess/${TEACHER_EMAIL}`);
+    await assertSucceeds(getDoc(doc(member, `companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`)));
+    await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/branchViews/${TEACHER_EMAIL}`)));
+    await assertSucceeds(updateDoc(accessRef, { role: 'branch_manager', branchIds: ['branch-a'] }));
+    await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`)));
+    await assertSucceeds(getDoc(doc(member, `companies/${COMPANY_ID}/branchViews/${TEACHER_EMAIL}`)));
+    await assertSucceeds(getDoc(doc(member, `companies/${COMPANY_ID}/lessonMeta/lesson-manager`)));
+    await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/lessonMeta/lesson-other`)));
+  });
+
   test('Owner 課表寫入會同步到另一個即時監聽客戶端', async () => {
     const writer = auth('owner-writer', OWNER_EMAIL);
     const reader = auth('owner-reader', OWNER_EMAIL);
