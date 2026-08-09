@@ -118,6 +118,11 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
+assert.match(cloudSource, /const APP_RELEASE='20\.13\.5'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /function setSignedOutIsolation\(locked\)[\s\S]*el\.inert=true;el\.setAttribute\('aria-hidden','true'\)/, 'signed-out content is removed from keyboard and accessibility navigation');
+assert.match(cloudSource, /sensitiveIds=\['notificationList'[\s\S]*'courseDrawerBody'\]/, 'signed-out isolation clears notification and course-detail content');
+assert.match(cloudSource, /function showCloudApp\(\)\{setSignedOutIsolation\(false\)/, 'authorized login restores the isolated application UI');
+assert.match(cloudSource, /function showCloudLogin\(\)[\s\S]*setSignedOutIsolation\(true\)/, 'logout applies signed-out isolation after rebuilding the login screen');
 const signatureStart = cloudSource.indexOf('function roleAccessSignature');
 const signatureEnd = cloudSource.indexOf('function applyRoleUI');
 vm.runInContext(cloudSource.slice(signatureStart, signatureEnd), context);

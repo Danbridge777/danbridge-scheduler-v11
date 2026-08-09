@@ -1,4 +1,4 @@
-const CACHE_NAME='danbridge-v11-sync-retry-guards-40';
+const CACHE_NAME='danbridge-v11-signed-out-isolation-41';
 const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{

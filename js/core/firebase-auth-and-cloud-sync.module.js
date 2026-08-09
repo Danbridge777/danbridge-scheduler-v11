@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.7.0';
+const APP_RELEASE='20.13.5';
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const cloud=getFirestore(app);
@@ -151,8 +151,24 @@ function setAuthCard(message='Sign in with your authorized Google account to con
  document.getElementById('googleCloudLogin').onclick=async()=>{const btn=document.getElementById('googleCloudLogin');btn.disabled=true;btn.querySelector('.auth-google-label').textContent='Signing in…';try{await signInWithPopup(auth,provider)}catch(e){console.error(e);if(['auth/popup-blocked','auth/cancelled-popup-request','auth/popup-closed-by-user'].includes(e.code)){try{await signInWithRedirect(auth,provider);return}catch(e2){showCloudLoginError(e2.message)}}else showCloudLoginError(e.message);btn.disabled=false;btn.querySelector('.auth-google-label').textContent='Continue with Google'}};
 }
 function showCloudLoginError(msg){const e=document.getElementById('cloudLoginError');if(e){e.textContent=msg;e.classList.add('show')}}
-function showCloudApp(){document.body.classList.remove('auth-locked');document.getElementById('authScreen')?.classList.add('hidden')}
-function showCloudLogin(){document.body.classList.add('auth-locked');document.getElementById('authScreen')?.classList.remove('hidden');setAuthCard()}
+function setSignedOutIsolation(locked){
+ const screen=document.getElementById('authScreen');
+ if(locked){
+  window.DanbridgeNotifications?.close?.();window.closeCourseDrawer?.();document.body.classList.remove('notification-center-open','course-drawer-open','lesson-paste-mode');
+  const scheduleModal=document.getElementById('scheduleNotificationModal');if(scheduleModal)scheduleModal.hidden=true;
+  currentScheduleNotification=null;
+  const sensitiveIds=['notificationList','notificationSummary','notificationFooter','scheduleNotificationBody','courseDrawerTitle','courseDrawerSubtitle','courseDrawerBody'];
+  sensitiveIds.forEach(id=>{const el=document.getElementById(id);if(!el)return;if(id==='notificationSummary')el.textContent='登入後顯示通知';else if(id==='notificationFooter')el.textContent='尚未更新';else el.replaceChildren()});
+  const badge=document.getElementById('notificationCount');if(badge){badge.textContent='0';badge.hidden=true}
+ }
+ [...document.body.children].forEach(el=>{
+  if(el===screen||['SCRIPT','STYLE','LINK'].includes(el.tagName))return;
+  if(locked){el.dataset.authIsolated='1';el.inert=true;el.setAttribute('aria-hidden','true')}
+  else if(el.dataset.authIsolated==='1'){el.inert=false;el.removeAttribute('aria-hidden');delete el.dataset.authIsolated}
+ });
+}
+function showCloudApp(){setSignedOutIsolation(false);document.body.classList.remove('auth-locked');document.getElementById('authScreen')?.classList.add('hidden')}
+function showCloudLogin(){document.body.classList.add('auth-locked');document.getElementById('authScreen')?.classList.remove('hidden');setAuthCard();setSignedOutIsolation(true)}
 
 async function ensureProfile(user){
  const emailKey=(user.email||'').trim().toLowerCase();
