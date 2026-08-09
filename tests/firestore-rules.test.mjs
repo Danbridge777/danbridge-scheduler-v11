@@ -112,6 +112,13 @@ describe('Owner 權限', () => {
 });
 
 describe('老師權限', () => {
+  test('老師只能更新自己的登入時間與公開帳號資訊', async () => {
+    const db = auth('teacher-uid', TEACHER_EMAIL);
+    const ref = doc(db, 'users/teacher-uid');
+    await assertSucceeds(updateDoc(ref, { displayName: 'Teacher', photoURL: '', lastLoginAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(ref, { role: 'owner', updatedAt: serverTimestamp() }));
+  });
+
   test('老師只能讀取自己的檢視、課程 metadata 與回報', async () => {
     const db = auth('teacher-uid', TEACHER_EMAIL);
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`)));

@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.13.5';
+const APP_RELEASE='20.13.6';
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const cloud=getFirestore(app);
@@ -211,6 +211,27 @@ async function ensureProfile(user){
    canSubmitOwnReports:a.canSubmitOwnReports!==false
  };
 }
+async function recordSuccessfulLogin(user,profile){
+ const email=String(user?.email||profile?.email||'').trim().toLowerCase();
+ if(!user?.uid||!email)return;
+ const payload={email,displayName:user.displayName||profile?.displayName||'',photoURL:user.photoURL||'',role:profile.role,companyId:COMPANY_ID,active:profile.active!==false,lastLoginAt:serverTimestamp(),updatedAt:serverTimestamp()};
+ if(profile.teacherId)payload.teacherId=String(profile.teacherId);
+ if(profile.teacherName)payload.teacherName=profile.teacherName;
+ if(profile.managerName)payload.managerName=profile.managerName;
+ if(Array.isArray(profile.branchIds))payload.branchIds=profile.branchIds;
+ if(Array.isArray(profile.branchNames))payload.branchNames=profile.branchNames;
+ if(profile.role==='branch_manager'){payload.readOnly=true;payload.canSubmitOwnReports=profile.canSubmitOwnReports!==false}
+ await setDoc(doc(cloud,'users',user.uid),payload,{merge:true});
+}
+function loginTimeValue(value){
+ const date=value?.toDate?.()||new Date(value||0);
+ return Number.isNaN(date.getTime())||date.getTime()<=0?'尚未登入':date.toLocaleString('zh-TW');
+}
+async function lastLoginByEmail(){
+ const result=new Map(),qs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID)));
+ qs.docs.forEach(d=>{const x=d.data(),email=String(x.email||'').trim().toLowerCase(),time=x.lastLoginAt?.toMillis?.()||new Date(x.lastLoginAt||0).getTime()||0,old=result.get(email);if(email&&(!old||time>old.time))result.set(email,{time,label:loginTimeValue(x.lastLoginAt)})});
+ return result;
+}
 function teacherBadgeName(t){return String(t?.displayName||t?.name||'').trim()}
 
 function filteredTeacherDB(source,teacherId){
@@ -281,8 +302,8 @@ async function removeCloudTeacherAccess(email,teacherName='老師'){
 }
 async function listCloudTeacherAccess(){
  const box=document.getElementById('cloudTeacherAccessList');if(!box||cloudRole!=='owner')return;
- const qs=await getDocs(query(collection(cloud,'companyAccess'),where('companyId','==',COMPANY_ID)));
- box.innerHTML=qs.docs.map(d=>{const x=d.data();const email=String(x.email||d.id).toLowerCase();return `<div class="backup-item"><div class="info"><b>${x.teacherName||'老師'}</b><div class="small">${email}</div></div><div class="row-actions"><span class="pill ${x.active===false?'red':'green'}">${x.active===false?'停用':'啟用'}</span><button type="button" class="btn danger cloud-access-delete" data-email="${email.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}" data-name="${String(x.teacherName||'老師').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}">刪除權限</button></div></div>`}).join('')||'<span class="small">尚未建立老師 Gmail 權限。</span>';
+ const [qs,logins]=await Promise.all([getDocs(query(collection(cloud,'companyAccess'),where('companyId','==',COMPANY_ID))),lastLoginByEmail()]);
+ box.innerHTML=qs.docs.filter(d=>d.data()?.role==='teacher').map(d=>{const x=d.data();const email=String(x.email||d.id).toLowerCase(),last=logins.get(email)?.label||'尚未登入';return `<div class="backup-item"><div class="info"><b>${x.teacherName||'老師'}</b><div class="small">${email}<br>最後登入：${escapeHTML(last)}</div></div><div class="row-actions"><span class="pill ${x.active===false?'red':'green'}">${x.active===false?'停用':'啟用'}</span><button type="button" class="btn danger cloud-access-delete" data-email="${email.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}" data-name="${String(x.teacherName||'老師').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}">刪除權限</button></div></div>`}).join('')||'<span class="small">尚未建立老師 Gmail 權限。</span>';
  box.querySelectorAll('.cloud-access-delete').forEach(btn=>btn.onclick=()=>removeCloudTeacherAccess(btn.dataset.email,btn.dataset.name));
 }
 
@@ -393,17 +414,17 @@ async function renderBranchManagerAccess(){
 }
 let branchManagerAccessCache=[];
 function escapeHTML(value=''){return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
-function renderCloudBranchManagerList(records=branchManagerAccessCache){
+function renderCloudBranchManagerList(records=branchManagerAccessCache,logins=new Map()){
  const box=document.getElementById('cloudBranchManagerList');if(!box||cloudRole!=='owner')return;
  branchManagerAccessCache=Array.isArray(records)?records:[];
- box.innerHTML=branchManagerAccessCache.map(x=>{const email=String(x.email||x.id||'').toLowerCase();return `<div class="backup-item branch-access-item"><div class="info"><b>${escapeHTML((x.branchNames||x.branchIds||[]).join('、')||'未指定校區')}</b><div class="small" title="${escapeHTML(email)}">${escapeHTML(email)}｜${escapeHTML(x.teacherName||x.managerName||'未綁定老師')}｜可回報本人課程</div></div><button type="button" class="btn danger branch-access-delete" data-email="${escapeHTML(email)}">刪除權限</button></div>`}).join('')||'<span class="small">尚未建立校區管理者。</span>';
+ box.innerHTML=branchManagerAccessCache.map(x=>{const email=String(x.email||x.id||'').toLowerCase(),last=logins.get(email)?.label||'尚未登入';return `<div class="backup-item branch-access-item"><div class="info"><b>${escapeHTML((x.branchNames||x.branchIds||[]).join('、')||'未指定校區')}</b><div class="small" title="${escapeHTML(email)}">${escapeHTML(email)}｜${escapeHTML(x.teacherName||x.managerName||'未綁定老師')}｜可回報本人課程<br>最後登入：${escapeHTML(last)}</div></div><button type="button" class="btn danger branch-access-delete" data-email="${escapeHTML(email)}">刪除權限</button></div>`}).join('')||'<span class="small">尚未建立校區管理者。</span>';
  box.querySelectorAll('.branch-access-delete').forEach(btn=>btn.onclick=()=>removeCloudBranchManagerAccess(btn.dataset.email));
 }
 async function listCloudBranchManagerAccess(){
  const box=document.getElementById('cloudBranchManagerList');if(!box||cloudRole!=='owner')return;
  try{
-   const qs=await getDocs(query(collection(cloud,'companyAccess'),where('companyId','==',COMPANY_ID),where('role','==','branch_manager')));
-   renderCloudBranchManagerList(qs.docs.map(d=>({id:d.id,...d.data()})));
+   const [qs,logins]=await Promise.all([getDocs(query(collection(cloud,'companyAccess'),where('companyId','==',COMPANY_ID),where('role','==','branch_manager'))),lastLoginByEmail()]);
+   renderCloudBranchManagerList(qs.docs.map(d=>({id:d.id,...d.data()})),logins);
  }catch(e){
    console.error('listCloudBranchManagerAccess failed:',e);
    if(!branchManagerAccessCache.length)box.innerHTML='<span class="small" style="color:#b91c1c">管理者清單讀取失敗，請重新整理後再試。</span>';
@@ -1353,7 +1374,7 @@ onAuthStateChanged(auth,async user=>{
  unsubscribeAccessGuard?.();unsubscribeAccessGuard=null;
  if(!user){lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true});showCloudLogin();cloudStatus('尚未登入');return}
  try{
-   cloudStatus('正在載入權限…');const profile=await ensureProfile(user);applyRoleUI(profile,user);showCloudApp();
+   cloudStatus('正在載入權限…');const profile=await ensureProfile(user);try{await recordSuccessfulLogin(user,profile)}catch(e){console.warn('最後登入時間更新失敗：',e);reportOperationalError(e,{category:'cloud-write',area:'access-guard',retryable:true})}applyRoleUI(profile,user);showCloudApp();
    if(profile.role==='owner'){subscribeOwner();setTimeout(()=>{renderCloudUserManager();renderBranchManagerAccess()},0)}else if(profile.role==='teacher')subscribeTeacher();else if(profile.role==='branch_manager')subscribeBranchManager();else throw new Error('不支援的角色：'+profile.role);subscribeRoleAccessGuard();subscribeLessonReports();subscribeScheduleNotifications();
  }catch(e){console.error(e);await signOut(auth);showCloudLogin();showCloudLoginError(e.message);cloudStatus(e.message,'error')}
 });
