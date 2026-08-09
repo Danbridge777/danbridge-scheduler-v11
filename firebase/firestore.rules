@@ -112,7 +112,7 @@ service cloud.firestore {
     }
 
     match /companies/{companyId}/teacherViews/{email} {
-      allow read: if isOwner() || (signedIn() && email == emailKey() && activeMember(companyId));
+      allow read: if isOwner() || (signedIn() && email == emailKey() && isTeacher(companyId));
       allow write: if isOwner();
     }
 

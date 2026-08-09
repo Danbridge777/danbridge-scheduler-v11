@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.13.6';
+const APP_RELEASE='20.13.7';
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const cloud=getFirestore(app);

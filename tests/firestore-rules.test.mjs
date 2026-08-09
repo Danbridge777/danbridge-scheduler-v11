@@ -43,6 +43,8 @@ async function seed() {
       [`companies/${COMPANY_ID}/data/main`, { privateValue: 'owner-only' }],
       [`companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`, { lessons: ['lesson-own'] }],
       [`companies/${COMPANY_ID}/teacherViews/${OTHER_TEACHER_EMAIL}`, { lessons: ['lesson-other'] }],
+      [`companies/${COMPANY_ID}/teacherViews/${MANAGER_EMAIL}`, { lessons: ['stale-teacher-view'] }],
+      [`companies/${COMPANY_ID}/branchViews/${TEACHER_EMAIL}`, { branchIds: ['branch-a'] }],
       [`companies/${COMPANY_ID}/branchViews/${MANAGER_EMAIL}`, { branchIds: ['branch-a'] }],
       [`companies/${COMPANY_ID}/lessonMeta/lesson-own`, { active: true, teacherIds: ['teacher-1'], branchId: 'branch-a', editableFrom: Timestamp.fromMillis(now - 60_000), editableUntil: Timestamp.fromMillis(now + 60_000) }],
       [`companies/${COMPANY_ID}/lessonMeta/lesson-other`, { active: true, teacherIds: ['teacher-2'], branchId: 'branch-b', editableFrom: Timestamp.fromMillis(now - 60_000), editableUntil: Timestamp.fromMillis(now + 60_000) }],
@@ -123,6 +125,7 @@ describe('老師權限', () => {
     const db = auth('teacher-uid', TEACHER_EMAIL);
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`)));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/teacherViews/${OTHER_TEACHER_EMAIL}`)));
+    await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/branchViews/${TEACHER_EMAIL}`)));
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/lessonMeta/lesson-own`)));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/lessonMeta/lesson-other`)));
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/lessonReports/lesson-own`)));
@@ -183,6 +186,7 @@ describe('校區管理者權限', () => {
   test('管理者只能讀取綁定校區的資料', async () => {
     const db = auth('manager-uid', MANAGER_EMAIL);
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/branchViews/${MANAGER_EMAIL}`)));
+    await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/teacherViews/${MANAGER_EMAIL}`)));
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/lessonMeta/lesson-manager`)));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/lessonMeta/lesson-other`)));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/data/main`)));
