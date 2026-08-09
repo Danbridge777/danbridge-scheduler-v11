@@ -78,7 +78,9 @@ function toggleSelectionMode(force){
   updateSelectionCount();
   window.DanbridgeCalendarInteractions?.refresh?.();
 }
+function calendarOwnerCanEdit(){const role=document.body.dataset.cloudRole||window.DanbridgeAccess?.getContext?.().role||window.currentCloudRole?.()||'';return !role||role==='owner'}
 function toggleLessonSelection(id){
+  if(!calendarOwnerCanEdit())return;
   if(!id)return;
   selectionMode=true;
   if(selectedLessonIds.has(id))selectedLessonIds.delete(id);else selectedLessonIds.add(id);
@@ -87,6 +89,7 @@ function toggleLessonSelection(id){
   window.DanbridgeCalendarInteractions?.refresh?.();
 }
 function selectVisibleLessons(){
+  if(!calendarOwnerCanEdit())return;
   selectionMode=true;
   selectedLessonIds.clear();
   document.querySelectorAll('#calendarCanvas [data-id]').forEach(el=>selectedLessonIds.add(el.dataset.id));
@@ -100,6 +103,7 @@ function clearLessonSelection(){
   window.DanbridgeCalendarInteractions?.refresh?.();
 }
 function copySelectedLessons(){
+  if(!calendarOwnerCanEdit())return alert('目前帳號沒有修改課表的權限。');
   const source=calendarTeacherScopedLessons(db.lessons.filter(l=>selectedLessonIds.has(l.id)&&!['取消','停課'].includes(l.status)));
   if(!source.length)return alert('請先框選或按住 Control／Command 點選要複製的課程。');
   const monthKeys=[...new Set(source.map(l=>l.date.slice(0,7)))];
@@ -118,6 +122,7 @@ function copySelectedLessons(){
   alert(`已複製 ${added} 堂到 ${toMonth}${skipped?`，略過 ${skipped} 堂重複或撞課課程`:''}。`);
 }
 function deleteSelectedLessons(){
+  if(!calendarOwnerCanEdit())return alert('目前帳號沒有修改課表的權限。');
   const ids=[...selectedLessonIds];
   if(!ids.length)return alert('請先選取要刪除的課程。');
   if(!confirm(`確定刪除已選取的 ${ids.length} 堂課？`))return;
@@ -182,6 +187,7 @@ function setPasteHoverTarget(el){
   if(pasteClickMode&&el)el.classList.add('paste-click-target');
 }
 function beginPasteClickMode(count){
+  if(!calendarOwnerCanEdit())return;
   pasteClickMode=true;
   document.body.classList.add('lesson-paste-mode');
   const banner=$('pasteModeBanner'),msg=$('pasteModeMessage');
@@ -200,6 +206,7 @@ function cancelPasteClickMode(clearClipboard=false){
   }
 }
 function copyCurrentSelection(){
+  if(!calendarOwnerCanEdit())return false;
   const rows=calendarTeacherScopedLessons(db.lessons.filter(l=>selectedLessonIds.has(l.id)));
   if(!rows.length)return false;
   /* 每次複製都完全覆蓋舊剪貼簿，第一次 Ctrl+C 也直接生效。 */
@@ -226,6 +233,7 @@ function contextCopyLessons(){
 function getLessonClipboard(){if(lessonClipboard.length)return lessonClipboard;try{return JSON.parse(localStorage.getItem('danbridge_lesson_clipboard')||'[]')}catch{return[]}}
 function exitSelectionAfterPaste(){selectedLessonIds.clear();selectionMode=false;const bar=$('selectionBar'),btn=$('selectionModeBtn');bar?.classList.add('hidden');if(btn)btn.textContent='部分選取';updateSelectionCount()}
 function contextPasteLessons(){
+  if(!calendarOwnerCanEdit())return alert('目前帳號沒有修改課表的權限。');
   const rows=getLessonClipboard();
   if(!rows.length){hideCalendarContextMenu();return alert('目前沒有已複製的課程。')}
   if(!contextPasteTarget?.date){hideCalendarContextMenu();return alert('請先把滑鼠移到要貼上的日期格或時間格，再按 Ctrl+V。')}
@@ -266,6 +274,7 @@ function resolveKeyboardPasteTarget(){
   return null;
 }
 function handleCalendarShortcuts(e){
+  if(!calendarOwnerCanEdit())return;
   const tag=(e.target?.tagName||'').toLowerCase();
   if(['input','textarea','select'].includes(tag)||e.target?.isContentEditable)return;
   if(e.key==='Escape'){

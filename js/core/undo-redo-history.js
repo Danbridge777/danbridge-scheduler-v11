@@ -8,6 +8,8 @@
     if(isTypingTarget(e.target))return;
     const mod=e.ctrlKey||e.metaKey;
     if(!mod)return;
+    const role=document.body.dataset.cloudRole||window.DanbridgeAccess?.getContext?.().role||window.currentCloudRole?.()||'';
+    if(role&&role!=='owner')return;
     const key=(e.key||'').toLowerCase();
     if(key==='z'){
       e.preventDefault();

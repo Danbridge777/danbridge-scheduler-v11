@@ -118,7 +118,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.13\.7'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.13\.8'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /async function recordSuccessfulLogin\(user,profile\)[\s\S]*lastLoginAt:serverTimestamp\(\)/, 'authorized login records its successful time');
 assert.match(cloudSource, /await ensureProfile\(user\);try\{await recordSuccessfulLogin\(user,profile\)\}/, 'last login is written only after authorization succeeds');
 assert.match(cloudSource, /最後登入時間更新失敗[\s\S]*applyRoleUI\(profile,user\)/, 'a login timestamp failure does not block an authorized account');
@@ -126,6 +126,13 @@ assert.match(cloudSource, /最後登入：\$\{escapeHTML\(last\)\}/, 'account ma
 assert.match(cloudSource, /filter\(d=>d\.data\(\)\?\.role==='teacher'\)/, 'teacher access list excludes branch managers');
 const rulesSource = fs.readFileSync(path.join(root, 'firebase/firestore.rules'), 'utf8');
 assert.match(rulesSource, /match \/companies\/\{companyId\}\/teacherViews\/\{email\}[\s\S]*email == emailKey\(\) && isTeacher\(companyId\)/, 'teacher views require the teacher role, not only active membership');
+assert.match(cloudSource, /profile\.role==='branch_manager'[\s\S]*#v18Fab,#v18FabMenu[\s\S]*e\.inert=true;e\.setAttribute\('aria-hidden','true'\)/, 'branch manager owner-only controls are hidden and removed from accessibility navigation');
+assert.match(cloudSource, /#drafts,#camps,#winterCamps,#data,#security'[\s\S]*e\.inert=true;e\.setAttribute\('aria-hidden','true'\)/, 'branch manager forbidden sections are inert and hidden');
+assert.match(cloudSource, /function installRoleInteractionGuards\(\)[\s\S]*cloudRole==='branch_manager'[\s\S]*stopImmediatePropagation/, 'branch manager calendar context and empty-cell selection events are blocked in capture phase');
+const roleCss = fs.readFileSync(path.join(root, 'css/core/73-v20014-role-responsive-ux.css'), 'utf8');
+assert.match(roleCss, /body\[data-role-ux="branch_manager"\] #v18Fab[\s\S]*body\[data-role-ux="branch_manager"\] #finance button[\s\S]*display:none!important/, 'dynamic owner controls stay hidden after branch view rerenders');
+const schedulerSource = fs.readFileSync(path.join(root, 'js/modules/calendar/scheduler-ui.js'), 'utf8');
+assert.match(schedulerSource, /function handleCalendarShortcuts\(e\)\{\s*if\(!calendarOwnerCanEdit\(\)\)return/, 'branch manager calendar shortcuts stop before any action');
 assert.match(cloudSource, /function setSignedOutIsolation\(locked\)[\s\S]*el\.inert=true;el\.setAttribute\('aria-hidden','true'\)/, 'signed-out content is removed from keyboard and accessibility navigation');
 assert.match(cloudSource, /sensitiveIds=\['notificationList'[\s\S]*'courseDrawerBody'\]/, 'signed-out isolation clears notification and course-detail content');
 assert.match(cloudSource, /function showCloudApp\(\)\{setSignedOutIsolation\(false\)/, 'authorized login restores the isolated application UI');

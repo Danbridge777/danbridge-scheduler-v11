@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.13.7';
+const APP_RELEASE='20.13.8';
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const cloud=getFirestore(app);
@@ -722,6 +722,12 @@ function roleAccessSignature(value={}){
  const branchIds=(Array.isArray(value.branchIds)?value.branchIds:[]).map(String).sort();
  return JSON.stringify({role:String(value.role||''),teacherId:String(value.teacherId||''),branchIds,readOnly:value.readOnly===true,canSubmitOwnReports:value.canSubmitOwnReports!==false});
 }
+function installRoleInteractionGuards(){
+ if(document.documentElement.dataset.roleInteractionGuards==='1')return;
+ document.documentElement.dataset.roleInteractionGuards='1';
+ document.addEventListener('contextmenu',event=>{if(cloudRole==='branch_manager'&&event.target.closest?.('#calendarCanvas')){event.preventDefault();event.stopImmediatePropagation()}},true);
+ document.addEventListener('mousedown',event=>{if(cloudRole==='branch_manager'&&event.button===0&&event.target.closest?.('#calendarCanvas')&&!event.target.closest?.('[data-id],button,input,select'))event.stopImmediatePropagation()},true);
+}
 function applyRoleUI(profile,user){
  const normalizedRole=String(profile?.role||'').trim().toLowerCase();
  cloudRole=normalizedRole;cloudTeacherId=profile.teacherId==null?'':String(profile.teacherId);cloudBranchIds=Array.isArray(profile.branchIds)?profile.branchIds:[];cloudUid=user.uid;cloudEmailKey=(user.email||'').trim().toLowerCase();window.__danbridgeLessonIdMigrationAuthority=cloudRole==='owner';
@@ -782,16 +788,17 @@ function applyRoleUI(profile,user){
  }else if(profile.role==='branch_manager'){
    applyingCloud=true;window.__danbridgeSetDB(emptyDB());window.renderAll?.();applyingCloud=false;
    const allowedTabs=new Set(['dashboard','students','teachers','calendar','lessons','makeups','settlement','finance']);
-   document.querySelectorAll('nav button[data-tab]').forEach(b=>{const allowed=allowedTabs.has(b.dataset.tab);b.hidden=!allowed;b.style.setProperty('display',allowed?'':'none',allowed?'':'important');if(!allowed)b.tabIndex=-1;else b.removeAttribute('tabindex')});
+   document.querySelectorAll('nav button[data-tab]').forEach(b=>{const allowed=allowedTabs.has(b.dataset.tab);b.hidden=!allowed;b.style.setProperty('display',allowed?'':'none',allowed?'':'important');b.setAttribute('aria-hidden',allowed?'false':'true');b.inert=!allowed;if(!allowed)b.tabIndex=-1;else b.removeAttribute('tabindex')});
    const active=document.querySelector('main section.active');if(active&&!allowedTabs.has(active.id))switchTab('dashboard');
-   document.querySelectorAll('.owner-only-action,.floating-actions,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#students button,#teachers button,#lessons .toolbar button,#makeups button,#settlement button,#finance button').forEach(e=>e.style.setProperty('display','none','important'));
+   document.querySelectorAll('.owner-only-action,.v20-owner-action,.floating-actions,#v18Fab,#v18FabMenu,.v181-lesson-undo,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#students button,#teachers button,#lessons .toolbar button,#makeups button,#settlement button,#finance button,#lessonModal,#smartSchedulerModal,#batchModal,#v20ReplaceModal,#v20HistoryModal').forEach(e=>{e.hidden=true;e.inert=true;e.setAttribute('aria-hidden','true');e.style.setProperty('display','none','important')});
    // 課程清單保留查看入口；點到本人授課課程時會開啟課堂回報，其他課程維持唯讀詳情。
-   document.querySelectorAll('#drafts,#camps,#winterCamps,#data,#security').forEach(e=>{e.hidden=true;e.classList.remove('active');e.style.setProperty('display','none','important')});
+   document.querySelectorAll('#drafts,#camps,#winterCamps,#data,#security').forEach(e=>{e.hidden=true;e.inert=true;e.setAttribute('aria-hidden','true');e.classList.remove('active');e.style.setProperty('display','none','important')});
    window.DanbridgeRoleResponsive?.apply?.();
  }else{
    const ownerTabLabels={dashboard:'總覽',students:'學生／家長',teachers:'老師',calendar:'拖曳課表',lessons:'課程紀錄',makeups:'補課中心',camps:'冬／夏令營',finance:'公司財務',data:'備份／iPad',security:'安全設定'};
-   document.querySelectorAll('nav button[data-tab]').forEach(b=>{b.hidden=false;b.classList.remove('teacher-nav-hidden');b.style.removeProperty('display');b.removeAttribute('aria-hidden');b.removeAttribute('tabindex');if(ownerTabLabels[b.dataset.tab])b.textContent=ownerTabLabels[b.dataset.tab]});
-   document.querySelectorAll('#students,#teachers,#drafts,#makeups,#camps,#winterCamps,#settlement,#finance,#data,#security').forEach(e=>{e.hidden=false;e.style.removeProperty('display')});
+   document.querySelectorAll('nav button[data-tab]').forEach(b=>{b.hidden=false;b.inert=false;b.classList.remove('teacher-nav-hidden');b.style.removeProperty('display');b.removeAttribute('aria-hidden');b.removeAttribute('tabindex');if(ownerTabLabels[b.dataset.tab])b.textContent=ownerTabLabels[b.dataset.tab]});
+   document.querySelectorAll('#students,#teachers,#drafts,#makeups,#camps,#winterCamps,#settlement,#finance,#data,#security').forEach(e=>{e.hidden=false;e.inert=false;e.removeAttribute('aria-hidden');e.style.removeProperty('display')});
+   document.querySelectorAll('.owner-only-action,.v20-owner-action,#v18Fab,#v18FabMenu,#lessonModal,#smartSchedulerModal,#batchModal,#v20ReplaceModal,#v20HistoryModal').forEach(e=>{e.hidden=false;e.inert=false;e.removeAttribute('aria-hidden');e.style.removeProperty('display')});
    document.querySelectorAll('.owner-only-action,.owner-v33-only,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar .day-add,#lessons .toolbar button,#dashboard .row-actions').forEach(e=>{e.hidden=false;e.style.removeProperty('display')});
    document.querySelectorAll('#calendarTeacherFilter,#calendarLocationFilter,#calendarStudentFilter,#calendarRoomFilter,#calendarStateFilter,#filterStudent,#filterTeacher').forEach(e=>{const target=e.closest('.calendar-field,#lessons .toolbar>div')||e;target.hidden=false;target.style.removeProperty('display');target.classList.remove('teacher-redundant-filter')});
    const analysis=document.getElementById('calendarAnalysis');if(analysis){analysis.hidden=false;analysis.style.removeProperty('display')}
@@ -1369,6 +1376,7 @@ installCloudSave();
 installTeacherReportUI();
 installClassFocusMode();
 installBranchManagerAccessEvents();
+installRoleInteractionGuards();
 onAuthStateChanged(auth,async user=>{
  unsubscribeState?.();unsubscribeState=null;unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;scheduleNotificationDocuments=[];lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();
  unsubscribeAccessGuard?.();unsubscribeAccessGuard=null;
