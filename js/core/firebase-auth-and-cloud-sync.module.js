@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.14.2';
+const APP_RELEASE='20.15.0';
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const cloud=getFirestore(app);
@@ -262,24 +262,36 @@ async function renderCloudUserManager(){
  const sec=document.getElementById('security');if(!sec)return;
  let card=document.getElementById('cloudUserManager');
  if(!card){card=document.createElement('div');card.id='cloudUserManager';card.className='card col-4';sec.querySelector('.grid')?.appendChild(card)}
- card.innerHTML=`<h2>老師帳號</h2><div class="small">選擇老師並綁定 Gmail。老師登入後只能查看自己的課表。</div><label>老師</label><select id="cloudTeacherSelect"></select><label>老師 Gmail</label><input id="cloudTeacherEmail" type="email" placeholder="teacher@gmail.com"><br><button class="btn primary" id="saveCloudTeacherAccess">新增／更新老師權限</button><div id="cloudTeacherAccessList" class="backup-list" style="margin-top:12px"></div>`;
+ card.innerHTML=`<h2>老師帳號</h2><div class="small">選擇老師並邀請 Gmail。受邀帳號首次成功登入後會顯示「已加入」，且只能查看自己的課表。</div><label>老師</label><select id="cloudTeacherSelect"></select><label>老師 Gmail</label><input id="cloudTeacherEmail" type="email" placeholder="teacher@gmail.com"><br><button class="btn primary" id="saveCloudTeacherAccess">建立／更新老師邀請</button><div id="cloudTeacherAccessList" class="backup-list" style="margin-top:12px"></div>`;
  const sel=document.getElementById('cloudTeacherSelect');sel.innerHTML='<option value="">請選擇老師</option>'+window.__danbridgeGetDB().teachers.map(t=>`<option value="${t.id}">${teacherBadgeName(t)||t.name}</option>`).join('');
  document.getElementById('saveCloudTeacherAccess').onclick=async()=>{
    const teacherId=sel.value,email=document.getElementById('cloudTeacherEmail').value.trim().toLowerCase();
-   if(!teacherId||!email)return alert('請選老師並輸入 Gmail');
+   if(!teacherId||!validGmailAddress(email))return alert('請選老師並輸入有效的 Gmail');
    const t=window.__danbridgeGetDB().teachers.find(x=>x.id===teacherId);
    const existing=await getDoc(doc(cloud,'companyAccess',email));
    if(!confirmCloudRoleTransition(existing,'teacher',email))return;
    const payload={email,role:'teacher',companyId:COMPANY_ID,teacherId,teacherName:teacherBadgeName(t),active:true,branchIds:deleteField(),branchNames:deleteField(),managerName:deleteField(),readOnly:deleteField(),canSubmitOwnReports:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()};
+   if(!existing.exists()){payload.invitedAt=serverTimestamp();payload.invitedBy=cloudEmailKey||OWNER_EMAIL}
    invalidateCompanyAccessCache();
    await setDoc(doc(cloud,'companyAccess',email),payload,{merge:true});
    try{const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));await Promise.all(userQs.docs.map(u=>setDoc(u.ref,payload,{merge:true})))}catch(e){console.warn('同步老師帳號資料失敗：',e)}
    await setDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email),{db:filteredTeacherDB(window.__danbridgeGetDB(),teacherId),updatedAt:serverTimestamp(),teacherId,email},{merge:false});
    await deleteDoc(doc(cloud,'companies',COMPANY_ID,'branchViews',email)).catch(()=>{});
-   alert('老師權限與專屬課表已建立。請老師使用此 Gmail 登入。');
+   alert(existing.exists()?'老師邀請與專屬課表已更新。':'老師邀請已建立。請複製登入邀請給老師。');
    document.getElementById('cloudTeacherEmail').value='';await Promise.all([listCloudTeacherAccess(),listCloudBranchManagerAccess()]);
  };
  await listCloudTeacherAccess();
+}
+function cloudInvitationState(active,hasLogin){
+ if(!active)return {label:'停權',className:'red'};
+ return hasLogin?{label:'已加入',className:'green'}:{label:'待首次登入',className:'blue'};
+}
+async function copyCloudLoginInvitation(email){
+ if(cloudRole!=='owner')return;
+ const normalized=String(email||'').trim().toLowerCase();if(!normalized)return;
+ const message=`Danbridge 已開放 ${normalized} 登入。請使用這個 Google 帳號前往 ${location.origin} 登入。`;
+ try{await navigator.clipboard.writeText(message);cloudStatus('登入邀請已複製','ok')}
+ catch(e){console.error('copy invitation failed',e);alert(message)}
 }
 function confirmCloudRoleTransition(existing,targetRole,email){
  if(!existing?.exists?.())return true;
@@ -330,7 +342,8 @@ async function setCloudAccessActive(email,active){
 async function listCloudTeacherAccess(){
  const box=document.getElementById('cloudTeacherAccessList');if(!box||cloudRole!=='owner')return;
  const [qs,logins]=await Promise.all([getDocs(query(collection(cloud,'companyAccess'),where('companyId','==',COMPANY_ID))),lastLoginByEmail()]);
- box.innerHTML=qs.docs.filter(d=>d.data()?.role==='teacher').map(d=>{const x=d.data();const email=String(x.email||d.id).toLowerCase(),last=logins.get(email)?.label||'尚未登入',active=x.active!==false;return `<div class="backup-item"><div class="info"><b>${x.teacherName||'老師'}</b><div class="small">${email}<br>最後登入：${escapeHTML(last)}</div></div><div class="row-actions"><span class="pill ${active?'green':'red'}">${active?'啟用':'停權'}</span><button type="button" class="btn cloud-access-toggle" data-email="${escapeHTML(email)}" data-active="${active?'true':'false'}">${active?'停權':'重新啟用'}</button><button type="button" class="btn danger cloud-access-delete" data-email="${email.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}" data-name="${String(x.teacherName||'老師').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}">刪除權限</button></div></div>`}).join('')||'<span class="small">尚未建立老師 Gmail 權限。</span>';
+ box.innerHTML=qs.docs.filter(d=>d.data()?.role==='teacher').map(d=>{const x=d.data();const email=String(x.email||d.id).toLowerCase(),login=logins.get(email),last=login?.label||'尚未登入',active=x.active!==false,state=cloudInvitationState(active,!!login);return `<div class="backup-item"><div class="info"><b>${escapeHTML(x.teacherName||'老師')}</b><div class="small">${escapeHTML(email)}<br>最後登入：${escapeHTML(last)}</div></div><div class="row-actions"><span class="pill ${state.className}">${state.label}</span><button type="button" class="btn cloud-invitation-copy" data-email="${escapeHTML(email)}">複製登入邀請</button><button type="button" class="btn cloud-access-toggle" data-email="${escapeHTML(email)}" data-active="${active?'true':'false'}">${active?'停權':'重新啟用'}</button><button type="button" class="btn danger cloud-access-delete" data-email="${escapeHTML(email)}" data-name="${escapeHTML(x.teacherName||'老師')}">刪除權限</button></div></div>`}).join('')||'<span class="small">尚未建立老師 Gmail 邀請。</span>';
+ box.querySelectorAll('.cloud-invitation-copy').forEach(btn=>btn.onclick=()=>copyCloudLoginInvitation(btn.dataset.email));
  box.querySelectorAll('.cloud-access-toggle').forEach(btn=>btn.onclick=()=>setCloudAccessActive(btn.dataset.email,btn.dataset.active!=='true'));
  box.querySelectorAll('.cloud-access-delete').forEach(btn=>btn.onclick=()=>removeCloudTeacherAccess(btn.dataset.email,btn.dataset.name));
 }
@@ -386,6 +399,7 @@ async function saveCloudBranchManagerAccess(){
    // 將管理者可讀取的校區快照直接存進自己的 companyAccess 文件。
    // 這條路徑已被現有登入規則允許，避免新 branchViews 路徑因規則尚未部署而失敗。
    const payload={email,role:'branch_manager',companyId:COMPANY_ID,branchIds,branchNames,teacherId,teacherName:teacherBadgeName(managerTeacher),managerName:teacherBadgeName(managerTeacher),active:true,readOnly:true,canSubmitOwnReports:true,scopedDb,scopedUpdatedAt:serverTimestamp(),updatedAt:serverTimestamp()};
+   if(!existing.exists()){payload.invitedAt=serverTimestamp();payload.invitedBy=cloudEmailKey||OWNER_EMAIL}
    invalidateCompanyAccessCache();
    await setDoc(doc(cloud,'companyAccess',email),payload,{merge:true});
    try{
@@ -402,14 +416,14 @@ async function saveCloudBranchManagerAccess(){
    const managerTeacherSelect=document.getElementById('cloudBranchManagerTeacher');if(managerTeacherSelect)managerTeacherSelect.value='';
    document.querySelectorAll('#cloudBranchChoices input[type="checkbox"]').forEach(x=>x.checked=false);
    await Promise.all([listCloudBranchManagerAccess(),listCloudTeacherAccess()]);
-   branchManagerFormStatus('校區管理者權限已建立。','ok');
-   cloudStatus('校區管理者權限已建立','ok');
+   branchManagerFormStatus(existing.exists()?'校區管理者邀請已更新。':'校區管理者邀請已建立，可複製登入邀請。','ok');
+   cloudStatus(existing.exists()?'校區管理者邀請已更新':'校區管理者邀請已建立','ok');
  }catch(e){
    console.error('saveCloudBranchManagerAccess failed:',e);
    branchManagerFormStatus('儲存失敗：'+(e?.message||e),'error');
    cloudStatus('儲存校區管理者權限失敗','error');
  }finally{
-   if(saveButton){saveButton.dataset.saving='0';saveButton.disabled=false;saveButton.textContent='新增／更新管理者權限'}
+   if(saveButton){saveButton.dataset.saving='0';saveButton.disabled=false;saveButton.textContent='建立／更新管理者邀請'}
  }
 }
 function installBranchManagerAccessEvents(){
@@ -448,7 +462,8 @@ function escapeHTML(value=''){return String(value).replace(/&/g,'&amp;').replace
 function renderCloudBranchManagerList(records=branchManagerAccessCache,logins=new Map()){
  const box=document.getElementById('cloudBranchManagerList');if(!box||cloudRole!=='owner')return;
  branchManagerAccessCache=Array.isArray(records)?records:[];
- box.innerHTML=branchManagerAccessCache.map(x=>{const email=String(x.email||x.id||'').toLowerCase(),last=logins.get(email)?.label||'尚未登入',active=x.active!==false;return `<div class="backup-item branch-access-item"><div class="info"><b>${escapeHTML((x.branchNames||x.branchIds||[]).join('、')||'未指定校區')}</b><div class="small" title="${escapeHTML(email)}">${escapeHTML(email)}｜${escapeHTML(x.teacherName||x.managerName||'未綁定老師')}｜可回報本人課程<br>最後登入：${escapeHTML(last)}</div></div><div class="row-actions"><span class="pill ${active?'green':'red'}">${active?'啟用':'停權'}</span><button type="button" class="btn branch-access-toggle" data-email="${escapeHTML(email)}" data-active="${active?'true':'false'}">${active?'停權':'重新啟用'}</button><button type="button" class="btn danger branch-access-delete" data-email="${escapeHTML(email)}">刪除權限</button></div></div>`}).join('')||'<span class="small">尚未建立校區管理者。</span>';
+ box.innerHTML=branchManagerAccessCache.map(x=>{const email=String(x.email||x.id||'').toLowerCase(),login=logins.get(email),last=login?.label||'尚未登入',active=x.active!==false,state=cloudInvitationState(active,!!login);return `<div class="backup-item branch-access-item"><div class="info"><b>${escapeHTML((x.branchNames||x.branchIds||[]).join('、')||'未指定校區')}</b><div class="small" title="${escapeHTML(email)}">${escapeHTML(email)}｜${escapeHTML(x.teacherName||x.managerName||'未綁定老師')}｜可回報本人課程<br>最後登入：${escapeHTML(last)}</div></div><div class="row-actions"><span class="pill ${state.className}">${state.label}</span><button type="button" class="btn cloud-invitation-copy" data-email="${escapeHTML(email)}">複製登入邀請</button><button type="button" class="btn branch-access-toggle" data-email="${escapeHTML(email)}" data-active="${active?'true':'false'}">${active?'停權':'重新啟用'}</button><button type="button" class="btn danger branch-access-delete" data-email="${escapeHTML(email)}">刪除權限</button></div></div>`}).join('')||'<span class="small">尚未建立校區管理者邀請。</span>';
+ box.querySelectorAll('.cloud-invitation-copy').forEach(btn=>btn.onclick=()=>copyCloudLoginInvitation(btn.dataset.email));
  box.querySelectorAll('.branch-access-toggle').forEach(btn=>btn.onclick=()=>setCloudAccessActive(btn.dataset.email,btn.dataset.active!=='true'));
  box.querySelectorAll('.branch-access-delete').forEach(btn=>btn.onclick=()=>removeCloudBranchManagerAccess(btn.dataset.email));
 }

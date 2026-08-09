@@ -264,10 +264,10 @@
   </div>
   <div id="cloudUserManager" class="card col-4">
     <h2>老師帳號</h2>
-    <div class="small">選擇老師並綁定 Gmail。老師登入後只能查看自己的課表。</div>
+    <div class="small">選擇老師並邀請 Gmail。首次成功登入後會顯示「已加入」，且只能查看自己的課表。</div>
     <label>老師</label><select id="cloudTeacherSelect"><option value="">請選擇老師</option></select>
     <label>老師 Gmail</label><input id="cloudTeacherEmail" type="email" placeholder="teacher@gmail.com">
-    <br><button class="btn primary" id="saveCloudTeacherAccess">新增／更新老師權限</button>
+    <br><button class="btn primary" id="saveCloudTeacherAccess">建立／更新老師邀請</button>
     <div id="cloudTeacherAccessList" class="backup-list" style="margin-top:12px"></div>
   </div>
   <div id="cloudBranchManager" class="card col-4 branch-manager-access-card">
@@ -276,7 +276,7 @@
     <label>管理者 Gmail</label><input id="cloudBranchManagerEmail" type="email" placeholder="manager@gmail.com">
     <label>對應老師身分</label><select id="cloudBranchManagerTeacher"><option value="">請選擇管理者本人</option></select>
     <label>可查看校區</label><div id="cloudBranchChoices" class="check-grid branch-choice-grid"></div>
-    <br><button type="button" class="btn primary" id="saveCloudBranchManager">新增／更新管理者權限</button>
+    <br><button type="button" class="btn primary" id="saveCloudBranchManager">建立／更新管理者邀請</button>
     <div id="cloudBranchManagerStatus" class="small" role="status" aria-live="polite" style="display:none;margin-top:8px"></div>
     <div id="cloudBranchManagerList" class="backup-list" style="margin-top:12px"></div>
   </div>
@@ -418,7 +418,7 @@
 
 <script src="./js/ui/accessibility-baseline.js?v=20.12.0"></script>
 
-<script type="module" src="./js/core/firebase-auth-and-cloud-sync.module.js?v=20.14.2"></script>
+<script type="module" src="./js/core/firebase-auth-and-cloud-sync.module.js?v=20.15.0"></script>
 
 
 <script src="./js/core/pwa-installation.js"></script>

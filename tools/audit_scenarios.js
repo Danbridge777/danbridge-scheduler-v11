@@ -118,7 +118,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.14\.2'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.15\.0'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*companyAccess[\s\S]*\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension preserves access records and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');
@@ -127,6 +127,9 @@ assert.match(cloudSource, /role:'branch_manager'[\s\S]*deleteDoc\(doc\(cloud,'co
 assert.match(cloudSource, /async function removeCloudTeacherAccess[\s\S]*teacherViews[\s\S]*branchViews/, 'deleting teacher access removes both possible scoped views');
 assert.match(cloudSource, /async function removeCloudBranchManagerAccess\(email\)\{\s*if\(cloudRole!=='owner'\)return;/, 'branch-manager deletion has an explicit owner guard');
 assert.match(cloudSource, /async function recordSuccessfulLogin\(user,profile\)[\s\S]*lastLoginAt:serverTimestamp\(\)/, 'authorized login records its successful time');
+assert.match(cloudSource, /if\(!existing\.exists\(\)\)\{payload\.invitedAt=serverTimestamp\(\);payload\.invitedBy=cloudEmailKey\|\|OWNER_EMAIL\}/, 'only a new account records its original invitation metadata');
+assert.match(cloudSource, /function cloudInvitationState\(active,hasLogin\)[\s\S]*停權[\s\S]*已加入[\s\S]*待首次登入/, 'invitation status distinguishes pending, accepted, and suspended accounts');
+assert.match(cloudSource, /async function copyCloudLoginInvitation\(email\)[\s\S]*navigator\.clipboard\.writeText\(message\)/, 'owner can copy a login invitation without sending account data');
 assert.match(cloudSource, /await ensureProfile\(user\);try\{await recordSuccessfulLogin\(user,profile\)\}/, 'last login is written only after authorization succeeds');
 assert.match(cloudSource, /最後登入時間更新失敗[\s\S]*applyRoleUI\(profile,user\)/, 'a login timestamp failure does not block an authorized account');
 assert.match(cloudSource, /最後登入：\$\{escapeHTML\(last\)\}/, 'account management displays the last successful login');

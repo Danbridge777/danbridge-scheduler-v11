@@ -24,6 +24,7 @@ const TEACHER_EMAIL = 'teacher@example.com';
 const OTHER_TEACHER_EMAIL = 'other@example.com';
 const MANAGER_EMAIL = 'manager@example.com';
 const INACTIVE_EMAIL = 'inactive@example.com';
+const INVITED_EMAIL = 'invited@example.com';
 
 let testEnv;
 
@@ -39,11 +40,13 @@ async function seed() {
       [`companyAccess/${OTHER_TEACHER_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-2' }],
       [`companyAccess/${MANAGER_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'branch_manager', teacherId: 'manager-teacher', branchIds: ['branch-a'] }],
       [`companyAccess/${INACTIVE_EMAIL}`, { active: false, companyId: COMPANY_ID, role: 'teacher', teacherId: 'inactive-teacher' }],
+      [`companyAccess/${INVITED_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1', invitedBy: OWNER_EMAIL, invitedAt: Timestamp.now() }],
       ['users/teacher-uid', { email: TEACHER_EMAIL, active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1' }],
       ['users/manager-uid', { email: MANAGER_EMAIL, active: true, companyId: COMPANY_ID, role: 'branch_manager', teacherId: 'manager-teacher', branchIds: ['branch-a'] }],
       [`companies/${COMPANY_ID}/data/main`, { privateValue: 'owner-only' }],
       [`companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`, { teacherId: 'teacher-1', lessons: ['lesson-own'] }],
       [`companies/${COMPANY_ID}/teacherViews/${OTHER_TEACHER_EMAIL}`, { teacherId: 'teacher-2', lessons: ['lesson-other'] }],
+      [`companies/${COMPANY_ID}/teacherViews/${INVITED_EMAIL}`, { teacherId: 'teacher-1', lessons: ['lesson-own'] }],
       [`companies/${COMPANY_ID}/teacherViews/${MANAGER_EMAIL}`, { teacherId: 'manager-teacher', lessons: ['stale-teacher-view'] }],
       [`companies/${COMPANY_ID}/branchViews/${TEACHER_EMAIL}`, { branchIds: ['branch-a'] }],
       [`companies/${COMPANY_ID}/branchViews/${MANAGER_EMAIL}`, { branchIds: ['branch-a'] }],
@@ -79,6 +82,17 @@ describe('未登入與停權帳號', () => {
   test('停權老師不能讀取老師檢視', async () => {
     const db = auth('inactive-uid', INACTIVE_EMAIL);
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/teacherViews/${INACTIVE_EMAIL}`)));
+  });
+});
+
+describe('帳號邀請', () => {
+  test('只有受邀 Gmail 能完成首次登入紀錄並讀取其綁定檢視', async () => {
+    const invited = auth('invited-uid', INVITED_EMAIL);
+    await assertSucceeds(setDoc(doc(invited, 'users/invited-uid'), { email: INVITED_EMAIL, active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1', displayName: 'Invited Teacher', lastLoginAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+    await assertSucceeds(getDoc(doc(invited, `companies/${COMPANY_ID}/teacherViews/${INVITED_EMAIL}`)));
+    const uninvited = auth('uninvited-uid', 'uninvited@example.com');
+    await assertFails(setDoc(doc(uninvited, 'users/uninvited-uid'), { email: 'uninvited@example.com', active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1' }));
+    await assertFails(getDoc(doc(uninvited, `companies/${COMPANY_ID}/teacherViews/${INVITED_EMAIL}`)));
   });
 });
 
