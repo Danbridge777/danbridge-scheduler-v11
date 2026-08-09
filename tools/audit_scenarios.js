@@ -106,6 +106,18 @@ assert.match(branchBusinessSource, /data=settlementDataFor\(month,scope\)/, 'set
 assert.doesNotMatch(branchBusinessSource, /window\.settleData=function\(\)\{return settlementDataFor\(window\.__danbridgeFinanceWorkspaceMonth/, 'finance workspace month cannot override settlement month');
 
 const cloudSource = fs.readFileSync(path.join(root, 'js/core/firebase-auth-and-cloud-sync.module.js'), 'utf8');
+const syncDecisionStart = cloudSource.indexOf('function dataHash');
+const syncDecisionEnd = cloudSource.indexOf('function safeErrorCode');
+vm.runInContext(cloudSource.slice(syncDecisionStart, syncDecisionEnd), context);
+assert.equal(context.ownerSnapshotDecision('local-new','cloud-old','local-new','cloud-old'),'ignore-dirty','an older cloud snapshot cannot overwrite an unconfirmed local mutation');
+assert.equal(context.ownerSnapshotDecision('local-new','local-new','local-new','cloud-old'),'apply','the cloud confirmation matching the dirty local hash is applied');
+assert.equal(context.ownerSnapshotDecision('','same','same','same'),'unchanged','an already applied cloud snapshot does not trigger another render');
+assert.deepEqual({...context.ownerUploadConfirmation(4,4,'uploaded','uploaded')},{clearDirty:true,queueNext:false},'a confirmed upload clears the local dirty state');
+assert.deepEqual({...context.ownerUploadConfirmation(4,5,'uploaded','newer-local')},{clearDirty:false,queueNext:true},'a newer local mutation remains dirty and queues another upload');
+assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one second');
+assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
+assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
+assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
 const signatureStart = cloudSource.indexOf('function roleAccessSignature');
 const signatureEnd = cloudSource.indexOf('function applyRoleUI');
 vm.runInContext(cloudSource.slice(signatureStart, signatureEnd), context);

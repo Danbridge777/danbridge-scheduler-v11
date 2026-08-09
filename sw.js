@@ -1,4 +1,4 @@
-const CACHE_NAME='danbridge-v11-calendar-conflict-boundaries-39';
+const CACHE_NAME='danbridge-v11-sync-retry-guards-40';
 const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{

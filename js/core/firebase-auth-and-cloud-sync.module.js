@@ -88,6 +88,9 @@ function persistCurrentLocalView(){try{localStorage.setItem(localRoleCacheKey(),
 let cloudStatusHideTimer=null;
 function cloudStatus(text,kind=''){let el=document.getElementById('firebaseCloudStatus');if(!el){el=document.createElement('div');el.id='firebaseCloudStatus';el.style.cssText='position:fixed;left:12px;bottom:12px;z-index:10001;padding:8px 11px;border-radius:10px;background:#172033;color:#fff;font-size:12px;font-weight:800;box-shadow:0 8px 20px rgba(0,0,0,.2);pointer-events:none';document.body.appendChild(el)}clearTimeout(cloudStatusHideTimer);el.hidden=false;el.textContent=text;el.dataset.kind=kind||'';el.style.background=kind==='error'?'#991b1b':kind==='ok'?'#18794e':kind==='pending'?'#9a6700':kind==='offline'?'#475569':'#172033';if(kind==='ok')cloudStatusHideTimer=setTimeout(()=>{if(el.dataset.kind==='ok')el.hidden=true},2200)}
 function dataHash(value){try{const text=JSON.stringify(value||{});let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)+':'+text.length}catch{return String(Date.now())}}
+function ownerSnapshotDecision(localDirty,incoming,current,lastCloud){if(localDirty&&incoming!==localDirty)return'ignore-dirty';if(incoming===lastCloud&&incoming===current)return'unchanged';return'apply'}
+function ownerUploadConfirmation(uploadMutationVersion,currentMutationVersion,uploadedHash,latestHash){const confirmed=uploadMutationVersion===currentMutationVersion&&uploadedHash===latestHash;return{clearDirty:confirmed,queueNext:!confirmed}}
+function ownerRetryDelay(retryCount){return Math.min(30000,1000*Math.pow(2,Math.min(Math.max(0,retryCount),5)))}
 function safeErrorCode(error){
  const raw=String(error?.code||error?.name||'unknown').toLowerCase();
  return raw.replace(/[^a-z0-9._/-]/g,'-').slice(0,80)||'unknown';
@@ -113,7 +116,7 @@ function flushOperationalErrors(){while(errorEventQueue.length)void sendOperatio
 window.addEventListener('error',event=>reportOperationalError(event.error||{name:'window-error'}));
 window.addEventListener('unhandledrejection',event=>reportOperationalError(event.reason||{name:'promise-rejection'},{area:'promise'}));
 function withSyncTimeout(promise,ms=15000){return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('雲端連線逾時，將自動重試')),ms))])}
-function scheduleOwnerRetry(){clearTimeout(ownerRetryTimer);if(cloudRole!=='owner'||!ownerUploadQueued)return;const delay=Math.min(30000,1000*Math.pow(2,Math.min(ownerRetryCount,5)));ownerRetryTimer=setTimeout(()=>uploadOwnerState(),delay)}
+function scheduleOwnerRetry(){clearTimeout(ownerRetryTimer);if(cloudRole!=='owner'||!ownerUploadQueued)return;ownerRetryTimer=setTimeout(()=>uploadOwnerState(),ownerRetryDelay(ownerRetryCount))}
 function setOfflineStatus(){if(!navigator.onLine){cloudStatus('目前離線；所有變更已先保存在這台裝置，恢復網路後會自動同步。','offline')}}
 function setAuthCard(message='Sign in with your authorized Google account to continue.'){
  const screen=document.getElementById('authScreen');
@@ -1135,8 +1138,9 @@ async function uploadOwnerState(force=false){
    await withSyncTimeout(setDoc(doc(cloud,'companies',COMPANY_ID,'data','main'),{db:current,updatedAt:serverTimestamp(),updatedBy:cloudUid,clientHash:hash},{merge:false}),7000);
    lastUploadedHash=hash;lastCloudSnapshotHash=hash;ownerRetryCount=0;
    const latestHash=dataHash(window.__danbridgeGetDB());
-   if(localMutationVersion===uploadMutationVersion&&latestHash===hash){localDirtyHash='';}
-   else{ownerUploadQueued=true;}
+   const confirmation=ownerUploadConfirmation(uploadMutationVersion,localMutationVersion,hash,latestHash);
+   if(confirmation.clearDirty)localDirtyHash='';
+   if(confirmation.queueNext)ownerUploadQueued=true;
    cloudStatus(localDirtyHash?'目前變更已同步，另有新變更準備同步…':'已同步到雲端','ok');
 
    // 主資料成功後立即發布各角色檢視，不等待通知文件完成。
@@ -1205,12 +1209,13 @@ function subscribeOwner(){
    const currentHash=dataHash(window.__danbridgeGetDB());
    // 本機尚有未確認上傳的修改時，任何不同版本的遠端快照都視為舊資料。
    // 這可防止拖曳、編輯或批次操作在 debounce / 網路延遲期間被倒灌復原。
-   if(localDirtyHash&&incomingHash!==localDirtyHash){
+   const snapshotDecision=ownerSnapshotDecision(localDirtyHash,incomingHash,currentHash,lastCloudSnapshotHash);
+   if(snapshotDecision==='ignore-dirty'){
      cloudStatus('本機變更等待雲端確認，已忽略較舊的雲端資料…','pending');
      if(!ownerUploadInFlight){clearTimeout(syncTimer);syncTimer=setTimeout(()=>uploadOwnerState(),80);}
      return;
    }
-   if(incomingHash===lastCloudSnapshotHash&&incomingHash===currentHash)return;
+   if(snapshotDecision==='unchanged')return;
    applyingCloud=true;
    window.__danbridgeSetDB(deepCopy(incoming));
    applyCachedLessonReportsToCurrentDB();
