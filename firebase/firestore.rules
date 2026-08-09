@@ -112,12 +112,21 @@ service cloud.firestore {
     }
 
     match /companies/{companyId}/teacherViews/{email} {
-      allow read: if isOwner() || (signedIn() && email == emailKey() && isTeacher(companyId));
+      allow read: if isOwner() || (signedIn()
+        && email == emailKey()
+        && isTeacher(companyId)
+        && resource.data.teacherId is string
+        && resource.data.teacherId == ownTeacherId());
       allow write: if isOwner();
     }
 
     match /companies/{companyId}/branchViews/{email} {
-      allow read: if isOwner() || (signedIn() && email == emailKey() && isManager(companyId));
+      allow read: if isOwner() || (signedIn()
+        && email == emailKey()
+        && isManager(companyId)
+        && resource.data.branchIds is list
+        && resource.data.branchIds.hasOnly(effectiveBranchIds())
+        && effectiveBranchIds().hasOnly(resource.data.branchIds));
       allow write: if isOwner();
     }
 

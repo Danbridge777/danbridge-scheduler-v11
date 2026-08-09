@@ -9,6 +9,7 @@ import {
 import {
   Timestamp,
   doc,
+  deleteDoc,
   getDoc,
   onSnapshot,
   serverTimestamp,
@@ -41,9 +42,9 @@ async function seed() {
       ['users/teacher-uid', { email: TEACHER_EMAIL, active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1' }],
       ['users/manager-uid', { email: MANAGER_EMAIL, active: true, companyId: COMPANY_ID, role: 'branch_manager', teacherId: 'manager-teacher', branchIds: ['branch-a'] }],
       [`companies/${COMPANY_ID}/data/main`, { privateValue: 'owner-only' }],
-      [`companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`, { lessons: ['lesson-own'] }],
-      [`companies/${COMPANY_ID}/teacherViews/${OTHER_TEACHER_EMAIL}`, { lessons: ['lesson-other'] }],
-      [`companies/${COMPANY_ID}/teacherViews/${MANAGER_EMAIL}`, { lessons: ['stale-teacher-view'] }],
+      [`companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`, { teacherId: 'teacher-1', lessons: ['lesson-own'] }],
+      [`companies/${COMPANY_ID}/teacherViews/${OTHER_TEACHER_EMAIL}`, { teacherId: 'teacher-2', lessons: ['lesson-other'] }],
+      [`companies/${COMPANY_ID}/teacherViews/${MANAGER_EMAIL}`, { teacherId: 'manager-teacher', lessons: ['stale-teacher-view'] }],
       [`companies/${COMPANY_ID}/branchViews/${TEACHER_EMAIL}`, { branchIds: ['branch-a'] }],
       [`companies/${COMPANY_ID}/branchViews/${MANAGER_EMAIL}`, { branchIds: ['branch-a'] }],
       [`companies/${COMPANY_ID}/lessonMeta/lesson-own`, { active: true, teacherIds: ['teacher-1'], branchId: 'branch-a', editableFrom: Timestamp.fromMillis(now - 60_000), editableUntil: Timestamp.fromMillis(now + 60_000) }],
@@ -110,6 +111,54 @@ describe('Owner 權限', () => {
     await assertSucceeds(getDoc(doc(member, `companies/${COMPANY_ID}/branchViews/${TEACHER_EMAIL}`)));
     await assertSucceeds(getDoc(doc(member, `companies/${COMPANY_ID}/lessonMeta/lesson-manager`)));
     await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/lessonMeta/lesson-other`)));
+  });
+
+  test('管理者轉為老師時舊校區範圍失效，老師檢視必須符合新綁定', async () => {
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    const member = auth('manager-uid', MANAGER_EMAIL);
+    const accessRef = doc(owner, `companyAccess/${MANAGER_EMAIL}`);
+    await assertSucceeds(getDoc(doc(member, `companies/${COMPANY_ID}/branchViews/${MANAGER_EMAIL}`)));
+    await assertSucceeds(updateDoc(accessRef, { role: 'teacher', teacherId: 'teacher-1' }));
+    await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/branchViews/${MANAGER_EMAIL}`)));
+    await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/teacherViews/${MANAGER_EMAIL}`)));
+    await assertSucceeds(setDoc(doc(owner, `companies/${COMPANY_ID}/teacherViews/${MANAGER_EMAIL}`), { teacherId: 'teacher-1', lessons: ['lesson-own'] }));
+    await assertSucceeds(getDoc(doc(member, `companies/${COMPANY_ID}/teacherViews/${MANAGER_EMAIL}`)));
+  });
+
+  test('更換老師綁定時舊老師資料立即失效', async () => {
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    const member = auth('teacher-uid', TEACHER_EMAIL);
+    const accessRef = doc(owner, `companyAccess/${TEACHER_EMAIL}`);
+    await assertSucceeds(updateDoc(accessRef, { teacherId: 'teacher-2' }));
+    await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`)));
+    await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/lessonMeta/lesson-own`)));
+    await assertSucceeds(getDoc(doc(member, `companies/${COMPANY_ID}/lessonMeta/lesson-other`)));
+    await assertSucceeds(setDoc(doc(owner, `companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`), { teacherId: 'teacher-2', lessons: ['lesson-other'] }));
+    await assertSucceeds(getDoc(doc(member, `companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`)));
+  });
+
+  test('管理者校區範圍變更時舊校區檢視立即失效', async () => {
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    const member = auth('manager-uid', MANAGER_EMAIL);
+    const accessRef = doc(owner, `companyAccess/${MANAGER_EMAIL}`);
+    const viewRef = doc(owner, `companies/${COMPANY_ID}/branchViews/${MANAGER_EMAIL}`);
+    await assertSucceeds(updateDoc(accessRef, { branchIds: ['branch-a', 'branch-b'] }));
+    await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/branchViews/${MANAGER_EMAIL}`)));
+    await assertSucceeds(setDoc(viewRef, { branchIds: ['branch-a', 'branch-b'] }));
+    await assertSucceeds(getDoc(doc(member, `companies/${COMPANY_ID}/branchViews/${MANAGER_EMAIL}`)));
+    await assertSucceeds(updateDoc(accessRef, { branchIds: ['branch-a'] }));
+    await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/branchViews/${MANAGER_EMAIL}`)));
+    await assertSucceeds(getDoc(doc(member, `companies/${COMPANY_ID}/lessonMeta/lesson-manager`)));
+    await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/lessonMeta/lesson-other`)));
+  });
+
+  test('刪除權限文件後所有舊角色資料立即拒絕', async () => {
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    const member = auth('teacher-uid', TEACHER_EMAIL);
+    await assertSucceeds(deleteDoc(doc(owner, `companyAccess/${TEACHER_EMAIL}`)));
+    await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`)));
+    await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/lessonMeta/lesson-own`)));
+    await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/scheduleNotifications/teacher-notice`)));
   });
 
   test('Owner 課表寫入會同步到另一個即時監聽客戶端', async () => {

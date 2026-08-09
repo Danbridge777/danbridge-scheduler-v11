@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.14.1';
+const APP_RELEASE='20.14.2';
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const cloud=getFirestore(app);
@@ -301,7 +301,8 @@ async function removeCloudTeacherAccess(email,teacherName='老師'){
    invalidateCompanyAccessCache();
    await Promise.all([
      deleteDoc(doc(cloud,'companyAccess',email)),
-     deleteDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email))
+     deleteDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email)),
+     deleteDoc(doc(cloud,'companies',COMPANY_ID,'branchViews',email))
    ]);
    await listCloudTeacherAccess();
    cloudStatus('老師權限已刪除','ok');
@@ -462,6 +463,7 @@ async function listCloudBranchManagerAccess(){
  }
 }
 async function removeCloudBranchManagerAccess(email){
+ if(cloudRole!=='owner')return;
  if(!confirm(`確定刪除 ${email} 的校區管理權限？`))return;
  const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));
  await Promise.all(userQs.docs.map(u=>setDoc(u.ref,{active:false,updatedAt:serverTimestamp()},{merge:true})));
