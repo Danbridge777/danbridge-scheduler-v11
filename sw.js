@@ -1,5 +1,5 @@
-const CACHE_NAME='danbridge-v11-internal-role-stats-62';
-const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
+const CACHE_NAME='danbridge-v11-pwa-update-63';
+const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./css/core/77-pwa-install-and-update.css?v=20.18.0','./js/core/pwa-installation.js?v=20.18.0'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(

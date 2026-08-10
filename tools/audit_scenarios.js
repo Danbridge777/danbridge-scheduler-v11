@@ -390,4 +390,15 @@ const interactionSource = fs.readFileSync(path.join(root, 'js/modules/calendar/m
 assert.match(interactionSource, /selectedRenderedIds\(\)/, 'multi drag intersects selection with rendered cards');
 assert.doesNotMatch(interactionSource, /moveLessonsTo\([^\n]+\);else moveLessonTo\([^\n]+\);\s*finishSelection\(\)/, 'successful drops do not clear the same selection twice');
 
+const pwaSource = fs.readFileSync(path.join(root, 'js/core/pwa-installation.js'), 'utf8');
+const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.webmanifest'), 'utf8'));
+assert.equal(manifest.id, './', 'PWA has a stable app identity across future start URL changes');
+assert.equal(manifest.display, 'standalone', 'installed PWA opens as an app window');
+assert.deepEqual(manifest.icons.map(icon=>icon.sizes), ['192x192','512x512'], 'PWA exposes both required install icon sizes');
+assert.match(pwaSource, /reg\.waiting&&navigator\.serviceWorker\.controller\)offerUpdate/, 'an already waiting update is offered without silently replacing the running app');
+assert.match(pwaSource, /worker\.state==='installed'&&navigator\.serviceWorker\.controller/, 'a newly downloaded update is offered only to an existing installation');
+assert.match(pwaSource, /navigator\.serviceWorker\.addEventListener\('controllerchange'/, 'accepted updates reload exactly when the new worker takes control');
+assert.doesNotMatch(pwaSource, /reg\.waiting\)reg\.waiting\.postMessage/, 'PWA no longer silently activates a waiting version');
+assert.match(pwaSource, /document\.addEventListener\('click'[\s\S]*#pwaInstallBtn/, 'install action survives header and role UI rerenders through delegated handling');
+
 console.log(`PASS: ${matrix.length} accounting states, settlement rates, role scopes, notifications, live access guards, and single/multi calendar dragging.`);

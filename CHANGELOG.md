@@ -1041,3 +1041,9 @@
 - Calendar rendering no longer runs settlement-month setup before drawing the month or week view.
 - Full application rendering now paints the calendar before initializing unrelated sections, so their errors cannot leave the current schedule DOM stale.
 - Drag, paste, delete, and lesson edits therefore display from the mutated in-memory database before cloud synchronization begins.
+# V20.18.0 — 可安裝 PWA 與安全更新提示
+
+- 老師可從系統頂端直接安裝，iPhone／iPad 會顯示清楚的 Safari「加入主畫面」步驟。
+- 新版本下載完成後顯示「立即更新／稍後」提示，不再在使用途中靜默切換程式版本。
+- 接受更新後只重新載入一次；已儲存的 Firebase 資料與角色權限不受影響。
+- 補齊穩定的 PWA 識別、分類、顯示模式與安裝資源快取。

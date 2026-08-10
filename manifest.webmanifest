@@ -1,12 +1,16 @@
 {
-  "name": "Danbridge Operations",
-  "short_name": "Danbridge Ops",
+  "id": "./",
+  "name": "Danbridge 課表系統",
+  "short_name": "Danbridge",
   "description": "Danbridge 多校區教育營運、課務、財務與師資管理系統",
   "lang": "zh-TW",
+  "dir": "ltr",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
+  "categories": ["education", "business", "productivity"],
+  "prefer_related_applications": false,
   "background_color": "#f4f6f9",
   "theme_color": "#6b5005",
   "icons": [
