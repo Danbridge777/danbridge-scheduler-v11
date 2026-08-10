@@ -37,7 +37,7 @@ const context = {
   dragState: null,
   crypto: { randomUUID: () => `00000000-0000-4000-8000-${String(++nextId).padStart(12, '0')}` },
   document: {
-    body: { classList: { add() {}, remove() {} } },
+    body: { dataset: {}, classList: { add() {}, remove() {} } },
     querySelectorAll: () => [],
     getElementById: id => elements[id] || null
   },

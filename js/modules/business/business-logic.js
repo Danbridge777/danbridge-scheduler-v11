@@ -134,6 +134,10 @@ function teacherPayableHourLessons(t,rows){
   });
 }
 
+function teacherActualHours(t,rows){
+  return teacherPayableHourLessons(t,rows).reduce((sum,l)=>sum+hours(l.start,l.end),0);
+}
+
 function payrollNumber(raw){
   if(raw===null||raw===undefined||raw==='')return null;
   const value=Number(raw);
@@ -166,7 +170,6 @@ function calculateTeacherPayroll(t,m,paid){
   const amount=configured?Math.max(0,baseSalary+addition-deduction):0;
   return{teacher:t,month:m,mode,rows,actualHours,paidHours,expectedHours,diff,baseSalary,overtimeHours,shortHours,overtimeRate,deductionRate,hourlyRate:null,addition,deduction,amount,configured};
 }
-function teacherPayrollAmount(t,m,paid){return calculateTeacherPayroll(t,m,paid).amount}
 function teacherPayrollFormulaText(result){
   if(result.mode==='hourly')return result.paidHours===result.actualHours?`純時薪：${fmtHours(result.paidHours)} hr × ${money(result.hourlyRate||0)}`:`純時薪：計薪 ${fmtHours(result.paidHours)} hr × ${money(result.hourlyRate||0)}（課表 ${fmtHours(result.actualHours)} hr）`;
   if(!result.configured)return '薪資設定未完成：請填固定底薪、超時時薪與不足扣款時薪';

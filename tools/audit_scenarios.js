@@ -149,7 +149,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.15\.6'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.15\.7'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*companyAccess[\s\S]*\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension preserves access records and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');
@@ -198,7 +198,7 @@ assert.equal(originalSignature, context.roleAccessSignature({ ...originalAccess,
 assert.notEqual(originalSignature, context.roleAccessSignature({ ...originalAccess, branchIds: ['a'] }), 'branch changes revoke access');
 assert.notEqual(originalSignature, context.roleAccessSignature({ ...originalAccess, teacherId: 't2' }), 'teacher changes revoke access');
 assert.notEqual(originalSignature, context.roleAccessSignature({ ...originalAccess, canSubmitOwnReports: false }), 'report policy changes revoke access');
-const filterStart = cloudSource.indexOf('function filteredTeacherDB');
+const filterStart = cloudSource.indexOf('function lessonTeacherIds');
 const filterEnd = cloudSource.indexOf('async function renderCloudUserManager');
 assert.ok(filterStart >= 0 && filterEnd > filterStart);
 vm.runInContext(cloudSource.slice(filterStart, filterEnd), context);
@@ -210,13 +210,20 @@ const scopedSource = {
 };
 const teacherView = context.filteredTeacherDB(scopedSource, 't1');
 assert.deepEqual(Array.from(teacherView.lessons, row => row.id), ['own-a']);
+assert.deepEqual(Array.from(teacherView.students,row=>row.id), ['s1']);
+assert.deepEqual(Array.from(teacherView.teachers,row=>row.id), ['t1']);
 assert.equal(teacherView.students[0].parent, undefined);
 assert.equal(teacherView.lessons[0].paymentStatus, undefined);
 assert.equal(teacherView.teachers[0].rate, undefined);
 assert.deepEqual(Array.from(teacherView.fixedExpenses), []);
+const legacyTeacherView = context.filteredTeacherDB({...scopedSource,lessons:[lesson({id:'legacy-own',teacherId:'t1',teacherIds:[]})]}, 't1');
+assert.deepEqual(Array.from(legacyTeacherView.lessons,row=>row.id), ['legacy-own'], 'an empty legacy teacherIds list falls back to the primary teacher');
 const branchView = context.filteredBranchDB(scopedSource, ['a']);
 assert.deepEqual(Array.from(branchView.lessons, row => row.id), ['own-a']);
+assert.deepEqual(Array.from(branchView.students,row=>row.id), ['s1']);
+assert.deepEqual(Array.from(branchView.teachers,row=>row.id), ['t1']);
 assert.deepEqual(Array.from(branchView.fixedExpenses, row => row.id), ['expense']);
+assert.deepEqual(Array.from(branchView.collectionRecords,row=>row.id), ['payment']);
 
 const notificationStart = cloudSource.indexOf('const SCHEDULE_NOTIFICATION_FIELDS');
 const notificationEnd = cloudSource.indexOf('async function publishScheduleChangeNotifications');
@@ -239,6 +246,8 @@ assert.doesNotMatch(notificationRules, /teacherId == ownTeacherId\(\)/);
 assert.match(cloudSource, /roleAccessSignature\(access\)===cloudRoleAccessSignature/);
 
 const notificationCenterSource = fs.readFileSync(path.join(root, 'js/modules/notifications/notification-center.js'), 'utf8');
+assert.match(notificationCenterSource, /actual=teacherActualHours\(t,rows\)/, 'weekly short-hours notifications use the same formal timetable hours as payroll');
+assert.doesNotMatch(notificationCenterSource, /actual=.*lessonCountsForTeacherPay/, 'weekly short-hours notifications never exclude a formal no-pay lesson from actual hours');
 const notificationHelperStart = notificationCenterSource.indexOf('const addDays=');
 const notificationHelperEnd = notificationCenterSource.indexOf('const readKey=');
 vm.runInContext(notificationCenterSource.slice(notificationHelperStart, notificationHelperEnd), context);

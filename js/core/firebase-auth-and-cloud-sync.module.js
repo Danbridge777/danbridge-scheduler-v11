@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.15.6';
+const APP_RELEASE='20.15.7';
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const cloud=getFirestore(app);
@@ -234,8 +234,14 @@ async function lastLoginByEmail(){
 }
 function teacherBadgeName(t){return String(t?.displayName||t?.name||'').trim()}
 
+function lessonTeacherIds(lesson){
+ const ids=Array.isArray(lesson?.teacherIds)&&lesson.teacherIds.length?lesson.teacherIds:[lesson?.teacherId];
+ return [...new Set(ids.filter(Boolean).map(String))];
+}
+
 function filteredTeacherDB(source,teacherId){
- const lessons=(source.lessons||[]).filter(l=>!l.isDraft&&(Array.isArray(l.teacherIds)?l.teacherIds:[l.teacherId]).includes(teacherId));
+ teacherId=String(teacherId||'');
+ const lessons=(source.lessons||[]).filter(l=>!l.isDraft&&lessonTeacherIds(l).includes(teacherId));
  const safeLessons=lessons.map(l=>{const {paymentStatus,chargeStudent,payTeacher,draftOriginal,...safe}=l;return safe});
  const studentIds=new Set(lessons.map(l=>l.studentId));
  const lessonIds=new Set(lessons.map(l=>String(l.id)));
@@ -249,7 +255,7 @@ function filteredBranchDB(source,branchIds){
  const allowed=new Set(Array.isArray(branchIds)?branchIds:[]);
  const lessons=(source.lessons||[]).filter(l=>!l.isDraft&&allowed.has(lessonBranchId(l)));
  const studentIds=new Set(lessons.map(l=>l.studentId));
- const teacherIds=new Set(lessons.flatMap(l=>Array.isArray(l.teacherIds)&&l.teacherIds.length?l.teacherIds:[l.teacherId]).filter(Boolean));
+ const teacherIds=new Set(lessons.flatMap(lessonTeacherIds));
  const branches=(source.branches||window.DanbridgeAccess?.DEFAULT_BRANCHES||[]).filter(b=>allowed.has(b.id));
  const lessonById=new Map((source.lessons||[]).map(l=>[String(l.id),l]));
  const students=(source.students||[]).filter(st=>studentIds.has(st.id)||(st.branchIds||[]).some(id=>allowed.has(id)));
@@ -497,7 +503,7 @@ async function removeCloudBranchManagerAccess(email){
 const REPORT_STATUS_LABELS={completed:'已完成',student_leave:'學生請假',teacher_leave:'老師請假',no_show:'缺席',makeup_completed:'補課完成'};
 const REPORT_TO_LESSON_STATUS={completed:'已上課',student_leave:'學生請假',teacher_leave:'老師請假',no_show:'缺席',makeup_completed:'補課完成'};
 function reportStatusLabel(v){return REPORT_STATUS_LABELS[v]||'尚未回報'}
-function lessonBelongsToTeacher(l,teacherId){return (Array.isArray(l?.teacherIds)?l.teacherIds:[l?.teacherId]).filter(Boolean).includes(teacherId)}
+function lessonBelongsToTeacher(l,teacherId){return lessonTeacherIds(l).includes(String(teacherId||''))}
 function canUseTeacherReporting(){return cloudRole==='owner'||((cloudRole==='teacher'||cloudRole==='branch_manager')&&!!cloudTeacherId)}
 function canActAsTeacherForLesson(lesson){return !!lesson&&!!cloudTeacherId&&(cloudRole==='teacher'||cloudRole==='branch_manager')&&lessonBelongsToTeacher(lesson,cloudTeacherId)}
 function lessonReportDeadline(lesson){
@@ -605,7 +611,7 @@ async function saveTeacherReport(){
  const btn=document.getElementById('saveTeacherReportBtn');btn.disabled=true;btn.textContent='儲存中…';
  try{
    const trustedMeta=await getTrustedLessonMeta(lessonId);
-   const lessonTeacherId=(Array.isArray(lesson.teacherIds)?lesson.teacherIds:[lesson.teacherId]).filter(Boolean)[0]||'';
+   const lessonTeacherId=lessonTeacherIds(lesson)[0]||'';
    const reporterName=(document.body.dataset.cloudDisplayName||auth.currentUser?.displayName||auth.currentUser?.email||'').trim();
    const trustedDeadline=trustedMeta.editableUntil?.toDate?.()||null;
    const report={companyId:COMPANY_ID,lessonId,branchId:trustedMeta.branchId,teacherId:cloudRole==='owner'?(cloudTeacherId||lessonTeacherId):cloudTeacherId,teacherUid:cloudUid,teacherEmail:auth.currentUser?.email?.toLowerCase()||'',teacherName:reporterName,reportedByRole:cloudRole,reportedForTeacherIds:Array.isArray(trustedMeta.teacherIds)?trustedMeta.teacherIds:[],isOwnerReport:cloudRole==='owner',status,content:document.getElementById('teacherReportContent').value.trim(),homework:document.getElementById('teacherReportHomework').value.trim(),feedback:document.getElementById('teacherReportFeedback').value.trim(),note:document.getElementById('teacherReportNote').value.trim(),editableUntil:trustedMeta.editableUntil,editableUntilClient:trustedDeadline?.toISOString()||'',updatedAt:serverTimestamp(),updatedAtClient:new Date().toISOString()};
@@ -894,7 +900,7 @@ async function publishLessonMeta(){
    const deadline=lessonReportDeadline(lesson);
    const [y,m,d]=String(lesson.date||'').split('-').map(Number);
    const editableFrom=new Date(y,m-1,d,0,0,0,0);
-   const teacherIds=(Array.isArray(lesson.teacherIds)?lesson.teacherIds:[lesson.teacherId]).filter(Boolean).map(String).sort();
+   const teacherIds=lessonTeacherIds(lesson).sort();
    if(!deadline||Number.isNaN(editableFrom.getTime())||!teacherIds.length)return;
    const lessonId=String(lesson.id);
    nextIds.add(lessonId);
@@ -1022,7 +1028,6 @@ async function cleanupExpiredScheduleNotifications(){
   if(expired.length)await Promise.all(expired.map(d=>deleteDoc(d.ref)));
  }catch(e){scheduleNotificationCleanupStarted=false;console.error('Schedule notification retention cleanup failed',e);reportOperationalError(e,{category:'cloud-write',area:'notification-retention',retryable:true})}
 }
-function lessonTeacherIds(lesson){return (Array.isArray(lesson?.teacherIds)?lesson.teacherIds:[lesson?.teacherId]).filter(Boolean).map(String)}
 function lessonFingerprintForNotification(lesson){return SCHEDULE_NOTIFICATION_FIELDS.map(k=>String(lesson?.[k]??'')).join('|')+'|'+lessonTeacherIds(lesson).slice().sort().join(',')}
 function lessonDisplayName(lesson,sourceDb){
  const student=(sourceDb?.students||[]).find(s=>String(s.id)===String(lesson?.studentId));
