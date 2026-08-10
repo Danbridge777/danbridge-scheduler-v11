@@ -79,7 +79,7 @@
     const fixedTotal=fixed.reduce((a,x)=>a+(+x.amount||0),0),oneTimeTotal=one.reduce((a,x)=>a+(+x.amount||0),0);
     const tids=new Set(lessons.flatMap(l=>lessonTeacherIds(l)));
     const payrollRows=(db.teachers||[]).filter(t=>recordMatchesBranch(t,scope,tids)).map(t=>{
-      const paid=lessons.filter(l=>lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherPay(l));
+      const paid=lessons.filter(l=>lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherHours(l));
       const payroll=calculateTeacherPayroll(t,m,paid),h=payroll.actualHours,amount=payroll.amount;
       return{teacher:t,h,amount,revenue:teacherCompanyRevenue(t,m,lessons),payroll,branches:branchBreakdown(paid,t.id)};
     });
@@ -96,7 +96,7 @@
       return{s,total:x.length,charged:chargedLessons.length,h:chargedLessons.reduce((a,l)=>a+hours(l.start,l.end),0),abs:abs.length,rate:x.length?abs.length/x.length*100:0,lessonAmount,campAmount,amount:lessonAmount+campAmount};
     });
     const tr=(db.teachers||[]).filter(t=>recordMatchesBranch(t,scope,teacherIds)).map(t=>{
-      const paid=ls.filter(l=>lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherPay(l)),payroll=calculateTeacherPayroll(t,m,paid),h=payroll.actualHours;
+      const paid=ls.filter(l=>lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherHours(l)),payroll=calculateTeacherPayroll(t,m,paid),h=payroll.actualHours;
       const expected=payroll.expectedHours,diff=payroll.diff,weeks=teacherWeekBreakdownForLessons(t,m,paid);
       const amount=payroll.amount;
       return{t,count:paid.length,h,expected,diff,weeks,amount,revenue:teacherCompanyRevenue(t,m,ls),payroll,branches:branchBreakdown(paid,t.id),companyWide:true};

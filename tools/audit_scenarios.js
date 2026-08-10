@@ -56,6 +56,10 @@ for (const [name, row, charge, pay] of matrix) {
 const coTeaching = lesson({ teacherIds: ['t1', 't2'] });
 assert.equal(context.lessonCharge(coTeaching), 200, 'co-teaching charges the student once');
 assert.equal(context.lessonPay(coTeaching), 250, 'co-teaching pays both teachers');
+context.db.lessons = matrix.map(([, row], index) => ({ ...row, id: `hours-matrix-${index}` }));
+const formalHoursMatrix = context.calculateTeacherPayroll(context.db.teachers[0], '2026-08');
+assert.equal(formalHoursMatrix.actualHours, 8, 'every formal timetable status counts toward teacher hours; only the draft is excluded');
+assert.equal(formalHoursMatrix.paidHours, 7, 'an explicitly unpaid formal lesson remains in hours but not paid hours');
 
 context.db.teachers = [{ id: 't1', name: 'One', rate: 100 }];
 context.db.lessons = [
@@ -66,6 +70,10 @@ assert.equal(context.calculateTeacherPayroll(context.db.teachers[0], '2026-08').
 assert.equal(context.calculateTeacherPayroll(context.db.teachers[0], '2026-08').amount, 150, 'August payroll amount follows August hours');
 assert.equal(context.calculateTeacherPayroll(context.db.teachers[0], '2026-09').actualHours, 2, 'switching to September uses only September lessons');
 assert.equal(context.calculateTeacherPayroll(context.db.teachers[0], '2026-09').amount, 200, 'September payroll amount follows September hours');
+context.db.lessons.push(lesson({ id: 'sep-unpaid', date: '2026-09-06', start: '13:00', end: '14:30', status: '未上課', payTeacher: 'no' }));
+const septemberWithUnpaid = context.calculateTeacherPayroll(context.db.teachers[0], '2026-09');
+assert.equal(septemberWithUnpaid.actualHours, 3.5, 'every formal timetable lesson counts toward teacher hours even when explicitly unpaid');
+assert.equal(septemberWithUnpaid.amount, 200, 'an explicitly unpaid lesson adds hours but not hourly pay');
 
 context.effectiveCampId = row => row.campId || '';
 context.sameCampSlot = (a, b) => a.campId === b.campId && a.date === b.date && a.start === b.start && a.end === b.end;
@@ -141,7 +149,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.15\.3'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.15\.4'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*companyAccess[\s\S]*\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension preserves access records and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');

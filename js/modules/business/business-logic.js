@@ -7,6 +7,7 @@ function lessonMakeupId(l){const explicit=String(l?.makeupId||'').trim();if(expl
 function lessonIsLinkedMakeup(l){return !!(l?.isMakeup||lessonMakeupId(l)||l?.sourceLessonId)}
 function lessonOutcome(l){return String(l?.teacherReportStatus||l?.status||'')}
 function lessonCountsAsTaught(l){return ['completed','makeup_completed','已上課','補課完成'].includes(lessonOutcome(l))}
+function lessonCountsForTeacherHours(l){return !!l&&!l.isDraft}
 function lessonCountsForTeacherPay(l){return !!l&&!l.isDraft&&l.payTeacher!=='no'}
 function lessonCountsForStudentCharge(l){if(!l||l.isDraft||l.chargeStudent==='no'||lessonIsLinkedMakeup(l))return false;return !['teacher_leave','老師請假','取消','停課'].includes(lessonOutcome(l))}
 function lessonCharge(l){if(!lessonCountsForStudentCharge(l))return 0;const s=student(l.studentId),rate=Number(s.rate)||0,duration=hours(l.start,l.end);return rate*duration}
@@ -121,15 +122,15 @@ function countTeacherWorkDaysInRange(t,start,end){const set=new Set((t.workDays|
 
 function teacherExpectedHours(t,m){const days=(t.workDays||[]).length,weekly=+t.minWeeklyHours||0;if(!days||!weekly)return 0;const r=monthDateRange(m),count=countTeacherWorkDaysInRange(t,r.start,r.end);return weekly/days*count}
 
-function teacherPaidLessons(t,m){return db.lessons.filter(l=>l.date.startsWith(m)&&lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherPay(l))}
+function teacherPaidLessons(t,m){return db.lessons.filter(l=>l.date.startsWith(m)&&lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherHours(l))}
 
 function teacherPayableHourLessons(t,rows){
   const source=rows||teacherPaidLessons(t,'');
   return source.filter(l=>{
-    if(!lessonCountsForTeacherPay(l)||!lessonTeacherIds(l).includes(t.id))return false;
+    if(!lessonCountsForTeacherHours(l)||!lessonTeacherIds(l).includes(t.id))return false;
     if(!effectiveCampId(l))return true;
     const index=db.lessons.indexOf(l);
-    return !db.lessons.some((other,otherIndex)=>otherIndex<index&&lessonCountsForTeacherPay(other)&&sameCampSlot(l,other)&&lessonTeacherIds(other).includes(t.id));
+    return !db.lessons.some((other,otherIndex)=>otherIndex<index&&lessonCountsForTeacherHours(other)&&sameCampSlot(l,other)&&lessonTeacherIds(other).includes(t.id));
   });
 }
 
@@ -149,24 +150,25 @@ function calculateTeacherPayroll(t,m,paid){
   const rows=paid||teacherPaidLessons(t,m);
   const hourRows=teacherPayableHourLessons(t,rows);
   const actualHours=hourRows.reduce((a,l)=>a+hours(l.start,l.end),0);
+  const paidHours=hourRows.filter(lessonCountsForTeacherPay).reduce((a,l)=>a+hours(l.start,l.end),0);
   const mode=teacherPayrollMode(t);
   const expectedHours=teacherExpectedHours(t,m);
   const diff=actualHours-expectedHours;
   if(mode==='hourly'){
     const hourlyRate=payrollNumber(t?.rate)??0;
     const amount=rows.reduce((a,l)=>a+lessonTeacherPay(l,t.id),0);
-    return{teacher:t,month:m,mode,rows,actualHours,expectedHours:0,diff:actualHours,baseSalary:null,overtimeHours:0,shortHours:0,overtimeRate:null,deductionRate:null,hourlyRate,addition:amount,deduction:0,amount,configured:hourlyRate>0};
+    return{teacher:t,month:m,mode,rows,actualHours,paidHours,expectedHours:0,diff:actualHours,baseSalary:null,overtimeHours:0,shortHours:0,overtimeRate:null,deductionRate:null,hourlyRate,addition:amount,deduction:0,amount,configured:hourlyRate>0};
   }
   const baseSalary=teacherBaseSalary(t),overtimeRate=teacherOvertimeRate(t),deductionRate=teacherDeductionRate(t);
   const overtimeHours=Math.max(0,diff),shortHours=Math.max(0,-diff);
   const addition=overtimeHours*(overtimeRate??0),deduction=shortHours*(deductionRate??0);
   const configured=baseSalary!==null&&overtimeRate!==null&&deductionRate!==null;
   const amount=configured?Math.max(0,baseSalary+addition-deduction):0;
-  return{teacher:t,month:m,mode,rows,actualHours,expectedHours,diff,baseSalary,overtimeHours,shortHours,overtimeRate,deductionRate,hourlyRate:null,addition,deduction,amount,configured};
+  return{teacher:t,month:m,mode,rows,actualHours,paidHours,expectedHours,diff,baseSalary,overtimeHours,shortHours,overtimeRate,deductionRate,hourlyRate:null,addition,deduction,amount,configured};
 }
 function teacherPayrollAmount(t,m,paid){return calculateTeacherPayroll(t,m,paid).amount}
 function teacherPayrollFormulaText(result){
-  if(result.mode==='hourly')return `純時薪：${fmtHours(result.actualHours)} hr × ${money(result.hourlyRate||0)}`;
+  if(result.mode==='hourly')return result.paidHours===result.actualHours?`純時薪：${fmtHours(result.paidHours)} hr × ${money(result.hourlyRate||0)}`:`純時薪：計薪 ${fmtHours(result.paidHours)} hr × ${money(result.hourlyRate||0)}（課表 ${fmtHours(result.actualHours)} hr）`;
   if(!result.configured)return '薪資設定未完成：請填固定底薪、超時時薪與不足扣款時薪';
   if(result.diff>0)return `底薪 ${money(result.baseSalary)}＋超時 ${fmtHours(result.overtimeHours)} hr × ${money(result.overtimeRate)}`;
   if(result.diff<0)return `底薪 ${money(result.baseSalary)}－不足 ${fmtHours(result.shortHours)} hr × ${money(result.deductionRate)}`;
