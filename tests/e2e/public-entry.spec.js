@@ -5,7 +5,8 @@ const BUSINESS_RELEASE = '20.17.0';
 const TEACHER_KPI_RELEASE = '20.15.8';
 const BRANCH_SCOPE_RELEASE = '20.15.9';
 const ROLE_UX_RELEASE = '20.17.1';
-const PWA_RELEASE = '20.18.0';
+const PWA_RELEASE = '20.18.2';
+const PWA_STYLE_RELEASE = '20.18.0';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
   await page.route('https://www.gstatic.com/**', route => route.abort());
@@ -30,9 +31,11 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/core/pwa-installation.js?v=${PWA_RELEASE}`);
   const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(elements => elements.map(element => element.getAttribute('href')));
   expect(styles).toContain(`./css/core/73-v20014-role-responsive-ux.css?v=${ROLE_UX_RELEASE}`);
-  expect(styles).toContain(`./css/core/77-pwa-install-and-update.css?v=${PWA_RELEASE}`);
+  expect(styles).toContain(`./css/core/77-pwa-install-and-update.css?v=${PWA_STYLE_RELEASE}`);
   const manifest = await page.locator('link[rel="manifest"]').getAttribute('href');
   expect(manifest).toBe('./manifest.webmanifest');
+  const appleIcon = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
+  expect(appleIcon).toBe('./icon-192.png?v=20.18.1');
 });
 
 test('public entry has no horizontal viewport overflow', async ({ page }) => {

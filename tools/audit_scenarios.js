@@ -394,10 +394,14 @@ const pwaSource = fs.readFileSync(path.join(root, 'js/core/pwa-installation.js')
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.webmanifest'), 'utf8'));
 assert.equal(manifest.id, './', 'PWA has a stable app identity across future start URL changes');
 assert.equal(manifest.display, 'standalone', 'installed PWA opens as an app window');
-assert.deepEqual(manifest.icons.map(icon=>icon.sizes), ['192x192','512x512'], 'PWA exposes both required install icon sizes');
+assert.deepEqual(manifest.icons.filter(icon=>icon.purpose==='any').map(icon=>icon.sizes), ['192x192','512x512','1024x1024'], 'PWA exposes feather icons for standard launch surfaces');
+assert.deepEqual(manifest.icons.filter(icon=>icon.purpose==='maskable').map(icon=>icon.sizes), ['192x192','512x512'], 'PWA exposes separately padded feather icons for masked Android surfaces');
 assert.match(pwaSource, /reg\.waiting&&navigator\.serviceWorker\.controller\)offerUpdate/, 'an already waiting update is offered without silently replacing the running app');
 assert.match(pwaSource, /worker\.state==='installed'&&navigator\.serviceWorker\.controller/, 'a newly downloaded update is offered only to an existing installation');
 assert.match(pwaSource, /navigator\.serviceWorker\.addEventListener\('controllerchange'/, 'accepted updates reload exactly when the new worker takes control');
+assert.match(pwaSource, /function reloadAcceptedUpdate\(\)\{\s*if\(!reloadForAcceptedUpdate\|\|refreshing\)return/, 'first Service Worker installation cannot trigger an unsolicited page reload');
+assert.match(pwaSource, /reloadForAcceptedUpdate=true;[\s\S]*worker\.postMessage/, 'reload permission is set only when the user accepts the update');
+assert.match(pwaSource, /worker\.state==='activated'\)reloadAcceptedUpdate\(\)/, 'accepted update also reloads on the worker activation event when controllerchange is delayed');
 assert.doesNotMatch(pwaSource, /reg\.waiting\)reg\.waiting\.postMessage/, 'PWA no longer silently activates a waiting version');
 assert.match(pwaSource, /document\.addEventListener\('click'[\s\S]*#pwaInstallBtn/, 'install action survives header and role UI rerenders through delegated handling');
 

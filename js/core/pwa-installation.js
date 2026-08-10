@@ -2,6 +2,7 @@
 (function(){
   let deferredInstallPrompt=null;
   let refreshing=false;
+  let reloadForAcceptedUpdate=false;
   const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
   const isStandalone=window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
 
@@ -44,12 +45,22 @@
     return banner;
   }
 
+  function reloadAcceptedUpdate(){
+    if(!reloadForAcceptedUpdate||refreshing)return;
+    refreshing=true;
+    window.location.reload();
+  }
+
   function offerUpdate(worker){
     if(!worker)return;
     const banner=updateBanner();
     banner.hidden=false;
     banner.querySelector('.pwa-update-now').onclick=()=>{
       banner.querySelector('.pwa-update-now').disabled=true;
+      reloadForAcceptedUpdate=true;
+      worker.addEventListener('statechange',()=>{
+        if(worker.state==='activated')reloadAcceptedUpdate();
+      });
       worker.postMessage({type:'SKIP_WAITING'});
     };
   }
@@ -103,9 +114,7 @@
     if(btn&&isIOS&&!isStandalone){btn.style.display='';btn.textContent='加入主畫面';}
     if('serviceWorker' in navigator){
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
-        if(refreshing)return;
-        refreshing=true;
-        window.location.reload();
+        reloadAcceptedUpdate();
       });
       navigator.serviceWorker.register('./sw.js',{scope:'./'}).then(reg=>{
         reg.update().catch(()=>{});
