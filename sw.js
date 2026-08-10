@@ -1,4 +1,4 @@
-const CACHE_NAME='danbridge-v11-teacher-all-timetable-hours-58';
+const CACHE_NAME='danbridge-v11-ipad-navigation-audit-59';
 const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{

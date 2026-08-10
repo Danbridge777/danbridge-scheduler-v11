@@ -79,7 +79,18 @@ body[data-role-ux="teacher"] header .danbridge-language-toggle:hover{background:
   body:not(.auth-locked)>header{padding:18px 22px!important}
   body:not(.auth-locked)>main{padding:18px!important}
   body:not(.auth-locked)>nav{gap:5px!important;padding:9px 12px!important}
-  body:not(.auth-locked)>nav button{min-height:46px!important;padding:8px 12px!important}
+  body:not(.auth-locked)>nav button{min-height:46px!important;margin-top:0!important;padding:8px 12px!important;position:relative!important}
+  body:not(.auth-locked)>nav button::before{display:block!important;position:static!important;inset:auto!important;width:auto!important;height:auto!important;margin:0!important;transform:none!important;pointer-events:none!important}
+  body:not(.auth-locked)>nav button[data-tab="dashboard"]::before{content:"⌂"!important}
+  body:not(.auth-locked)>nav button[data-tab="students"]::before{content:"◉"!important}
+  body:not(.auth-locked)>nav button[data-tab="teachers"]::before{content:"♙"!important}
+  body:not(.auth-locked)>nav button[data-tab="calendar"]::before{content:"▦"!important}
+  body:not(.auth-locked)>nav button[data-tab="lessons"]::before{content:"✓"!important}
+  body:not(.auth-locked)>nav button[data-tab="makeups"]::before{content:"↻"!important}
+  body:not(.auth-locked)>nav button[data-tab="camps"]::before{content:"☀"!important}
+  body:not(.auth-locked)>nav button[data-tab="finance"]::before{content:"$"!important}
+  body:not(.auth-locked)>nav button[data-tab="data"]::before{content:"⇩"!important}
+  body:not(.auth-locked)>nav button[data-tab="security"]::before{content:"⚙"!important}
   .v32-dashboard-grid,.finance-layout{grid-template-columns:1fr!important}
   .crm-form-grid,.finance-form-row,.finance-form-row.one-time{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   .calendar-toolbar-row{gap:9px!important}
