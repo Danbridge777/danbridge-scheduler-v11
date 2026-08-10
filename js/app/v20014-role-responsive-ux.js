@@ -4,6 +4,21 @@
   const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>Array.from(r.querySelectorAll(s));
   const role=()=>window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role||'';
 
+  function hideForRole(element){
+    if(!element)return;
+    element.dataset.roleResponsiveHidden='1';
+    element.hidden=true;
+    element.style.setProperty('display','none','important');
+  }
+
+  function restoreRoleResponsiveControls(){
+    $$('[data-role-responsive-hidden="1"]').forEach(element=>{
+      element.hidden=false;
+      element.style.removeProperty('display');
+      delete element.dataset.roleResponsiveHidden;
+    });
+  }
+
   function lessonHours(rows){return rows.reduce((sum,l)=>sum+(typeof hours==='function'?hours(l.start,l.end):0),0)}
   function teacherStats(){
     if(role()!=='teacher'||typeof db==='undefined')return;
@@ -108,10 +123,11 @@
   function apply(){
     const current=role();
     document.body.dataset.roleUx=current;
+    if(current==='owner')restoreRoleResponsiveControls();
     if(current==='teacher'){
       const labels={dashboard:'我的總覽',calendar:'我的課表',lessons:'課程回報'};
       $$('nav button[data-tab]').forEach(button=>{const allowed=Object.prototype.hasOwnProperty.call(labels,button.dataset.tab);button.hidden=!allowed;button.style.setProperty('display',allowed?'':'none',allowed?'':'important');if(allowed)button.textContent=labels[button.dataset.tab]});
-      $$('.owner-only-action,.owner-v33-only,.branch-scope-bar,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#calendar .day-add,#calendarAnalysis,#lessons .toolbar button,#courseDrawerEditBtn').forEach(el=>{el.hidden=true;el.style.setProperty('display','none','important')});
+      $$('.owner-only-action,.owner-v33-only,.branch-scope-bar,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#calendar .day-add,#calendarAnalysis,#lessons .toolbar button,#courseDrawerEditBtn').forEach(hideForRole);
       $$('.floating-actions').forEach(el=>el.remove());
       teacherStats();
       $$('#calendar .lesson .meta').forEach(meta=>{meta.textContent=meta.textContent.replace(/｜(?:✓已繳|未繳)/g,'')});
@@ -121,7 +137,7 @@
     if(current==='branch_manager'){
       const allowedTabs=new Set(['dashboard','students','teachers','calendar','lessons','makeups','settlement','finance']);
       $$('nav button[data-tab]').forEach(button=>{const allowed=allowedTabs.has(button.dataset.tab);button.hidden=!allowed;button.style.setProperty('display',allowed?'':'none',allowed?'':'important')});
-      $$('.owner-only-action,.floating-actions,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#calendar .day-add,#courseDrawerEditBtn,#students .grid>.card.col-4,#teachers .grid>.card.col-4,#finance .finance-form-row').forEach(el=>{el.hidden=true;el.style.setProperty('display','none','important')});
+      $$('.owner-only-action,.floating-actions,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#calendar .day-add,#courseDrawerEditBtn,#students .grid>.card.col-4,#teachers .grid>.card.col-4,#finance .finance-form-row').forEach(hideForRole);
     }
     labelLessonRows();
   }
@@ -141,7 +157,7 @@
       const wrapped=function(){originalCalendar();installMobileCalendarClipboard()};wrapped.__mobileClipboard=true;window.renderCalendar=wrapped;
     }
     installMobileCalendarClipboard();
-    window.DanbridgeRoleResponsive={apply,teacherStats,teacherConvenience,installCampDateScroller,installMobileCalendarClipboard};
+    window.DanbridgeRoleResponsive={apply,restoreRoleResponsiveControls,teacherStats,teacherConvenience,installCampDateScroller,installMobileCalendarClipboard};
     /* 可否拖曳由課程卡建立時依即時角色決定，避免舊角色在全頁捕獲階段誤擋老闆。 */
     /* 老師與校區管理者的課表修改權限由單一課表控制器處理，不再全頁攔截日期格點擊。 */
     apply();

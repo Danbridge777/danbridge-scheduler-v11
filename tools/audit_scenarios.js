@@ -118,7 +118,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.15\.0'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.15\.1'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*companyAccess[\s\S]*\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension preserves access records and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');
@@ -130,6 +130,12 @@ assert.match(cloudSource, /async function recordSuccessfulLogin\(user,profile\)[
 assert.match(cloudSource, /if\(!existing\.exists\(\)\)\{payload\.invitedAt=serverTimestamp\(\);payload\.invitedBy=cloudEmailKey\|\|OWNER_EMAIL\}/, 'only a new account records its original invitation metadata');
 assert.match(cloudSource, /function cloudInvitationState\(active,hasLogin\)[\s\S]*停權[\s\S]*已加入[\s\S]*待首次登入/, 'invitation status distinguishes pending, accepted, and suspended accounts');
 assert.match(cloudSource, /async function copyCloudLoginInvitation\(email\)[\s\S]*navigator\.clipboard\.writeText\(message\)/, 'owner can copy a login invitation without sending account data');
+const roleResponsiveSource = fs.readFileSync(path.join(root, 'js/app/v20014-role-responsive-ux.js'), 'utf8');
+const courseOperationsSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course-operations.js'), 'utf8');
+assert.match(roleResponsiveSource, /function hideForRole\(element\)[\s\S]*roleResponsiveHidden='1'/, 'responsive role hiding records which controls it owns');
+assert.match(roleResponsiveSource, /if\(current==='owner'\)restoreRoleResponsiveControls\(\)/, 'owner role restores controls hidden by the responsive role layer');
+assert.match(cloudSource, /if\(cloudRole==='owner'\)\{[\s\S]*restoreRoleIsolated\(\);[\s\S]*DanbridgeRoleResponsive\?\.restoreRoleResponsiveControls\?\.\(\)/, 'owner login immediately restores both role-isolation layers');
+assert.match(courseOperationsSource, /if\(ownerCanEdit\)\{editBtn\.style\.removeProperty\('display'\);delete editBtn\.dataset\.roleResponsiveHidden\}/, 'opening a lesson as owner defensively restores its edit button');
 assert.match(cloudSource, /await ensureProfile\(user\);try\{await recordSuccessfulLogin\(user,profile\)\}/, 'last login is written only after authorization succeeds');
 assert.match(cloudSource, /最後登入時間更新失敗[\s\S]*applyRoleUI\(profile,user\)/, 'a login timestamp failure does not block an authorized account');
 assert.match(cloudSource, /最後登入：\$\{escapeHTML\(last\)\}/, 'account management displays the last successful login');
@@ -143,7 +149,7 @@ assert.match(cloudSource, /#drafts,#camps,#winterCamps,#data,#security'[\s\S]*ma
 assert.match(cloudSource, /function installRoleInteractionGuards\(\)[\s\S]*cloudRole==='branch_manager'[\s\S]*stopImmediatePropagation/, 'branch manager calendar context and empty-cell selection events are blocked in capture phase');
 assert.match(cloudSource, /function markRoleIsolated\(element\)[\s\S]*element\.dataset\.roleIsolated='1'[\s\S]*element\.inert=true/, 'role-hidden controls carry a reversible isolation marker');
 assert.match(cloudSource, /function restoreRoleIsolated\(\)[\s\S]*\[data-role-isolated="1"\][\s\S]*delete element\.dataset\.roleIsolated/, 'owner login removes only role isolation state');
-assert.match(cloudSource, /document\.body\.dataset\.roleUx=cloudRole;\s*if\(cloudRole==='owner'\)restoreRoleIsolated\(\)/, 'owner restoration happens before owner controls are rendered');
+assert.match(cloudSource, /document\.body\.dataset\.roleUx=cloudRole;\s*if\(cloudRole==='owner'\)\{\s*restoreRoleIsolated\(\);[\s\S]*restoreRoleResponsiveControls/, 'owner restoration happens before owner controls are rendered');
 const roleCss = fs.readFileSync(path.join(root, 'css/core/73-v20014-role-responsive-ux.css'), 'utf8');
 assert.match(roleCss, /body\[data-role-ux="branch_manager"\] #v18Fab[\s\S]*body\[data-role-ux="branch_manager"\] #finance button[\s\S]*display:none!important/, 'dynamic owner controls stay hidden after branch view rerenders');
 const schedulerSource = fs.readFileSync(path.join(root, 'js/modules/calendar/scheduler-ui.js'), 'utf8');
@@ -244,7 +250,6 @@ assert.match(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\
 assert.doesNotMatch(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.totalExpenses\)/, 'expense management total excludes teacher payroll');
 assert.match(branchBusinessSource, /expenseTotalScope'\)\.textContent=scopeLabel\(scope\)/, 'expense total identifies the selected branch scope');
 
-const courseOperationsSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course-operations.js'), 'utf8');
 const moveOperationsStart = courseOperationsSource.indexOf('let calendarMoveSaveTimer');
 assert.ok(moveOperationsStart >= 0, 'calendar move operations are available');
 context.addMinutes = (time, delta) => { const [h, m] = time.split(':').map(Number); const value = h * 60 + m + delta; return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; };

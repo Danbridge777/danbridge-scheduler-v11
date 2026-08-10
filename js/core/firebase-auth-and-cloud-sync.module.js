@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.15.0';
+const APP_RELEASE='20.15.1';
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const cloud=getFirestore(app);
@@ -803,7 +803,10 @@ function applyRoleUI(profile,user){
  document.body.classList.toggle('branch-manager-cloud-role',profile.role==='branch_manager');
  document.body.dataset.cloudRole=cloudRole;
  document.body.dataset.roleUx=cloudRole;
- if(cloudRole==='owner')restoreRoleIsolated();
+ if(cloudRole==='owner'){
+   restoreRoleIsolated();
+   window.DanbridgeRoleResponsive?.restoreRoleResponsiveControls?.();
+ }
  window.ensureTeacherHoursMetric?.();
 
  const teacherOnly=profile.role==='teacher';

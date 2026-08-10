@@ -106,6 +106,7 @@ function openCourseDrawer(id){
   const editBtn=$('courseDrawerEditBtn');
   const ownerCanEdit=!role||role==='owner';
   editBtn.hidden=!ownerCanEdit;
+  if(ownerCanEdit){editBtn.style.removeProperty('display');delete editBtn.dataset.roleResponsiveHidden}
   editBtn.onclick=ownerCanEdit?()=>{const lessonId=activeCourseDrawerId;closeCourseDrawer();openLessonModal(todayStr(),'16:00',lessonId)}:null;
   $('courseDrawerBackdrop').classList.add('show');$('courseDrawer').classList.add('show');$('courseDrawer').setAttribute('aria-hidden','false');document.body.classList.add('course-drawer-open');
 }
