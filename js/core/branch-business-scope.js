@@ -58,15 +58,17 @@
   function defaultExpenseBranch(){const c=ctx();return c.role==='branch_manager'?(c.branchIds[0]||'unassigned'):(scopes.finance!=='all'?scopes.finance:(branches()[0]?.id||'unassigned'))}
   function branchBreakdown(lessons,teacherId){
     const grouped=new Map();
-    lessons.filter(l=>!teacherId||lessonTeacherIds(l).includes(teacherId)).forEach(l=>{
+    const teacherRecord=teacherId?teacher(teacherId):null;
+    const rows=teacherRecord?teacherPayableHourLessons(teacherRecord,lessons):lessons;
+    rows.filter(l=>!teacherId||lessonTeacherIds(l).includes(teacherId)).forEach(l=>{
       const id=branchId(l),row=grouped.get(id)||{branchId:id,h:0,amount:0,count:0};
       row.h+=hours(l.start,l.end);row.amount+=teacherId?lessonTeacherPay(l,teacherId):timetableRevenueCharge(l);row.count++;grouped.set(id,row);
     });
     return [...grouped.values()].sort((a,b)=>scopeLabel(a.branchId).localeCompare(scopeLabel(b.branchId),'zh-Hant'));
   }
   function teacherWeekBreakdownForLessons(t,m,paid){
-    const r=monthDateRange(m),daily=(+t.minWeeklyHours||0)/Math.max(1,(t.workDays||[]).length),rows=[];let cursor=new Date(r.start);cursor.setDate(cursor.getDate()-((cursor.getDay()+6)%7));
-    while(cursor<=r.end){const ws=new Date(cursor),we=new Date(cursor);we.setDate(we.getDate()+6);const from=ws<r.start?r.start:ws,to=we>r.end?r.end:we,workCount=countTeacherWorkDaysInRange(t,from,to),expected=daily*workCount;const actual=paid.filter(l=>{const d=new Date(l.date+'T00:00:00');return d>=from&&d<=to}).reduce((a,l)=>a+hours(l.start,l.end),0);rows.push({from:localDate(from),to:localDate(to),expected,actual,diff:actual-expected});cursor.setDate(cursor.getDate()+7)}return rows;
+    const r=monthDateRange(m),daily=(+t.minWeeklyHours||0)/Math.max(1,(t.workDays||[]).length),hourRows=teacherPayableHourLessons(t,paid),rows=[];let cursor=new Date(r.start);cursor.setDate(cursor.getDate()-((cursor.getDay()+6)%7));
+    while(cursor<=r.end){const ws=new Date(cursor),we=new Date(cursor);we.setDate(we.getDate()+6);const from=ws<r.start?r.start:ws,to=we>r.end?r.end:we,workCount=countTeacherWorkDaysInRange(t,from,to),expected=daily*workCount;const actual=hourRows.filter(l=>{const d=new Date(l.date+'T00:00:00');return d>=from&&d<=to}).reduce((a,l)=>a+hours(l.start,l.end),0);rows.push({from:localDate(from),to:localDate(to),expected,actual,diff:actual-expected});cursor.setDate(cursor.getDate()+7)}return rows;
   }
 
   window.financeData=function(m){

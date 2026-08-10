@@ -7,7 +7,7 @@ function lessonMakeupId(l){const explicit=String(l?.makeupId||'').trim();if(expl
 function lessonIsLinkedMakeup(l){return !!(l?.isMakeup||lessonMakeupId(l)||l?.sourceLessonId)}
 function lessonOutcome(l){return String(l?.teacherReportStatus||l?.status||'')}
 function lessonCountsAsTaught(l){return ['completed','makeup_completed','已上課','補課完成'].includes(lessonOutcome(l))}
-function lessonCountsForTeacherPay(l){if(!l||l.isDraft||l.payTeacher==='no')return false;return lessonCountsAsTaught(l)||['no_show','缺席'].includes(lessonOutcome(l))}
+function lessonCountsForTeacherPay(l){return !!l&&!l.isDraft&&l.payTeacher!=='no'}
 function lessonCountsForStudentCharge(l){if(!l||l.isDraft||l.chargeStudent==='no'||lessonIsLinkedMakeup(l))return false;return !['teacher_leave','老師請假','取消','停課'].includes(lessonOutcome(l))}
 function lessonCharge(l){if(!lessonCountsForStudentCharge(l))return 0;const s=student(l.studentId),rate=Number(s.rate)||0,duration=hours(l.start,l.end);return rate*duration}
 
@@ -123,6 +123,16 @@ function teacherExpectedHours(t,m){const days=(t.workDays||[]).length,weekly=+t.
 
 function teacherPaidLessons(t,m){return db.lessons.filter(l=>l.date.startsWith(m)&&lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherPay(l))}
 
+function teacherPayableHourLessons(t,rows){
+  const source=rows||teacherPaidLessons(t,'');
+  return source.filter(l=>{
+    if(!lessonCountsForTeacherPay(l)||!lessonTeacherIds(l).includes(t.id))return false;
+    if(!effectiveCampId(l))return true;
+    const index=db.lessons.indexOf(l);
+    return !db.lessons.some((other,otherIndex)=>otherIndex<index&&lessonCountsForTeacherPay(other)&&sameCampSlot(l,other)&&lessonTeacherIds(other).includes(t.id));
+  });
+}
+
 function payrollNumber(raw){
   if(raw===null||raw===undefined||raw==='')return null;
   const value=Number(raw);
@@ -137,7 +147,8 @@ function teacherPayrollMode(t){
 }
 function calculateTeacherPayroll(t,m,paid){
   const rows=paid||teacherPaidLessons(t,m);
-  const actualHours=rows.reduce((a,l)=>a+hours(l.start,l.end),0);
+  const hourRows=teacherPayableHourLessons(t,rows);
+  const actualHours=hourRows.reduce((a,l)=>a+hours(l.start,l.end),0);
   const mode=teacherPayrollMode(t);
   const expectedHours=teacherExpectedHours(t,m);
   const diff=actualHours-expectedHours;
@@ -162,7 +173,7 @@ function teacherPayrollFormulaText(result){
   return `固定底薪 ${money(result.baseSalary)}`;
 }
 
-function teacherWeekBreakdown(t,m){const r=monthDateRange(m),daily=(+t.minWeeklyHours||0)/Math.max(1,(t.workDays||[]).length),rows=[];let cursor=new Date(r.start);cursor.setDate(cursor.getDate()-((cursor.getDay()+6)%7));while(cursor<=r.end){const ws=new Date(cursor),we=new Date(cursor);we.setDate(we.getDate()+6);const from=ws<r.start?r.start:ws,to=we>r.end?r.end:we,workCount=countTeacherWorkDaysInRange(t,from,to),expected=daily*workCount;const actual=teacherPaidLessons(t,m).filter(l=>{const d=new Date(l.date+'T00:00:00');return d>=from&&d<=to}).reduce((a,l)=>a+hours(l.start,l.end),0);rows.push({from:localDate(from),to:localDate(to),expected,actual,diff:actual-expected});cursor.setDate(cursor.getDate()+7)}return rows}
+function teacherWeekBreakdown(t,m){const r=monthDateRange(m),daily=(+t.minWeeklyHours||0)/Math.max(1,(t.workDays||[]).length),paid=teacherPayableHourLessons(t,teacherPaidLessons(t,m)),rows=[];let cursor=new Date(r.start);cursor.setDate(cursor.getDate()-((cursor.getDay()+6)%7));while(cursor<=r.end){const ws=new Date(cursor),we=new Date(cursor);we.setDate(we.getDate()+6);const from=ws<r.start?r.start:ws,to=we>r.end?r.end:we,workCount=countTeacherWorkDaysInRange(t,from,to),expected=daily*workCount;const actual=paid.filter(l=>{const d=new Date(l.date+'T00:00:00');return d>=from&&d<=to}).reduce((a,l)=>a+hours(l.start,l.end),0);rows.push({from:localDate(from),to:localDate(to),expected,actual,diff:actual-expected});cursor.setDate(cursor.getDate()+7)}return rows}
 
 function diffClass(n){return n<-.001?'hours-short':n>.001?'hours-over':'hours-even'}
 

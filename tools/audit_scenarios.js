@@ -40,13 +40,14 @@ context.db.teachers = [{ id: 't1', name: 'One', rate: 100 }, { id: 't2', name: '
 const lesson = (overrides = {}) => ({ id: 'l1', studentId: 's1', teacherId: 't1', teacherIds: ['t1'], date: '2026-08-05', start: '10:00', end: '11:00', status: '已上課', ...overrides });
 const matrix = [
   ['completed', lesson({ teacherReportStatus: 'completed' }), 200, 100],
-  ['student leave', lesson({ status: '學生請假', teacherReportStatus: 'student_leave' }), 200, 0],
-  ['teacher leave', lesson({ status: '老師請假', teacherReportStatus: 'teacher_leave' }), 0, 0],
+  ['student leave', lesson({ status: '學生請假', teacherReportStatus: 'student_leave' }), 200, 100],
+  ['teacher leave', lesson({ status: '老師請假', teacherReportStatus: 'teacher_leave' }), 0, 100],
   ['no show', lesson({ status: '缺席', teacherReportStatus: 'no_show' }), 200, 100],
-  ['cancelled', lesson({ status: '取消' }), 0, 0],
-  ['suspended', lesson({ status: '停課' }), 0, 0],
+  ['cancelled', lesson({ status: '取消' }), 0, 100],
+  ['suspended', lesson({ status: '停課' }), 0, 100],
   ['makeup completed', lesson({ id: 'm1', status: '補課完成', teacherReportStatus: 'makeup_completed', isMakeup: true }), 0, 100],
-  ['draft', lesson({ isDraft: true }), 0, 0]
+  ['draft', lesson({ isDraft: true }), 0, 0],
+  ['explicitly unpaid teacher', lesson({ payTeacher: 'no' }), 200, 0]
 ];
 for (const [name, row, charge, pay] of matrix) {
   assert.equal(context.lessonCharge(row), charge, `${name}: student charge`);
@@ -55,6 +56,28 @@ for (const [name, row, charge, pay] of matrix) {
 const coTeaching = lesson({ teacherIds: ['t1', 't2'] });
 assert.equal(context.lessonCharge(coTeaching), 200, 'co-teaching charges the student once');
 assert.equal(context.lessonPay(coTeaching), 250, 'co-teaching pays both teachers');
+
+context.db.teachers = [{ id: 't1', name: 'One', rate: 100 }];
+context.db.lessons = [
+  lesson({ id: 'aug-a', date: '2026-08-05', start: '10:00', end: '11:30', status: '未上課' }),
+  lesson({ id: 'sep-a', date: '2026-09-05', start: '10:00', end: '12:00', status: '未上課' })
+];
+assert.equal(context.calculateTeacherPayroll(context.db.teachers[0], '2026-08').actualHours, 1.5, 'August payroll uses every formal August timetable lesson');
+assert.equal(context.calculateTeacherPayroll(context.db.teachers[0], '2026-08').amount, 150, 'August payroll amount follows August hours');
+assert.equal(context.calculateTeacherPayroll(context.db.teachers[0], '2026-09').actualHours, 2, 'switching to September uses only September lessons');
+assert.equal(context.calculateTeacherPayroll(context.db.teachers[0], '2026-09').amount, 200, 'September payroll amount follows September hours');
+
+context.effectiveCampId = row => row.campId || '';
+context.sameCampSlot = (a, b) => a.campId === b.campId && a.date === b.date && a.start === b.start && a.end === b.end;
+context.db.lessons = [
+  lesson({ id: 'camp-a', campId: 'SC', date: '2026-08-06', start: '09:00', end: '12:00' }),
+  lesson({ id: 'camp-b', campId: 'SC', date: '2026-08-06', start: '09:00', end: '12:00' })
+];
+const campPayroll = context.calculateTeacherPayroll(context.db.teachers[0], '2026-08');
+assert.equal(campPayroll.actualHours, 3, 'one teacher teaching parallel classes in the same camp slot counts hours once');
+assert.equal(campPayroll.amount, 300, 'parallel camp classes do not duplicate teacher pay');
+context.effectiveCampId = () => '';
+context.sameCampSlot = () => false;
 
 context.db.lessons = matrix.map(([, row], index) => ({ ...row, id: `matrix-${index}` }));
 context.db.teachers = [];
@@ -118,7 +141,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.15\.1'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.15\.2'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*companyAccess[\s\S]*\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension preserves access records and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');
