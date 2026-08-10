@@ -32,9 +32,10 @@
 #students .crm-form-grid input,#students .crm-form-grid select,#students .crm-form-grid textarea{min-height:40px!important;border-color:#d6e1eb!important;background:#fff!important;font-size:13px!important}
 #students .crm-form-grid textarea{min-height:72px!important}
 #students .card.col-8{padding:18px!important}
-#students .card.col-8>.toolbar{position:sticky!important;top:0!important;z-index:5!important;grid-template-columns:auto minmax(260px,460px)!important;padding:16px 18px!important;margin-bottom:12px!important;border:1px solid #dbe5ee!important;background:#f5f8fb!important;box-shadow:none!important}
+#students .card.col-8>.toolbar{position:sticky!important;top:0!important;z-index:5!important;grid-template-columns:auto minmax(240px,1fr) minmax(180px,260px)!important;padding:16px 18px!important;margin-bottom:12px!important;border:1px solid #dbe5ee!important;background:#f5f8fb!important;box-shadow:none!important}
 #students .card.col-8>.toolbar h2{font-size:22px!important}
-#students #crmSearch{height:42px!important;min-height:42px!important}
+#students #crmSearch,#students #crmTeacherFilter{height:42px!important;min-height:42px!important}
+#students .crm-teacher-filter-field{min-width:0}
 #students .table-wrap{border:1px solid #dce6ef!important;border-radius:14px!important}
 #students thead th{height:48px!important;padding:11px 13px!important;background:#eaf2f8!important;color:#35526a!important;font-size:11px!important;letter-spacing:.04em!important}
 #students tbody td{padding:14px 13px!important;border-bottom:1px solid #e8eef3!important;font-size:13px!important;vertical-align:middle!important}

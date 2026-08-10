@@ -149,7 +149,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.15\.4'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.15\.5'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*companyAccess[\s\S]*\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension preserves access records and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');
@@ -280,6 +280,13 @@ assert.match(financeArchitectureSource, /function setNativeMonthValue\(id,value\
 assert.doesNotMatch(financeArchitectureSource, /function setNativeMonthValue\(id,value\)\{const el=\$\(id\)/, 'month synchronization never treats an ID as an element tag selector');
 assert.match(financeArchitectureSource, /\['financeMonth','settleMonth','teacherKpiMonth','oneTimeExpenseMonth'\]\.forEach\(id=>setNativeMonthValue\(id,value\)\)/, 'one workspace month change synchronizes every downstream monthly renderer');
 assert.match(financeArchitectureSource, /id="expenseTotalAmount"/, 'expense management includes its own total card');
+const studentsCrmSource = fs.readFileSync(path.join(root, 'js/modules/students/students-crm.js'), 'utf8');
+assert.match(studentsCrmSource, /id="crmTeacherFilter"[\s\S]*全部老師/, 'student CRM exposes an all-teacher filter');
+vm.runInContext(studentsCrmSource, context);
+const crmStudents = [{ name: 'Amy', parent: 'Lin', preferredTeacherId: 't1' }, { name: 'Bob', parent: 'Chen', preferredTeacherId: 't2' }, { name: 'Ann', parent: 'Wu', preferredTeacherId: '' }].map(context.studentDefaults);
+assert.deepEqual(crmStudents.filter(s => context.studentMatchesCrmFilters(s, '', 't1')).map(s => s.name), ['Amy'], 'teacher filtering returns only students assigned to that exact teacher');
+assert.deepEqual(crmStudents.filter(s => context.studentMatchesCrmFilters(s, 'lin', 't1')).map(s => s.name), ['Amy'], 'teacher and text filters combine without widening results');
+assert.deepEqual(crmStudents.filter(s => context.studentMatchesCrmFilters(s, '', '')).map(s => s.name), ['Amy', 'Bob', 'Ann'], 'clearing the teacher filter restores all visible students');
 assert.match(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.fixedTotal\+d\.oneTimeTotal\)/, 'expense management totals only fixed and one-time expenses');
 assert.doesNotMatch(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.totalExpenses\)/, 'expense management total excludes teacher payroll');
 assert.match(branchBusinessSource, /expenseTotalScope'\)\.textContent=scopeLabel\(scope\)/, 'expense total identifies the selected branch scope');
