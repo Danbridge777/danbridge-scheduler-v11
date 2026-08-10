@@ -61,7 +61,8 @@
       if(current)positions[current]=window.scrollY;
       writeScroll(positions);
       original(tab);
-      requestAnimationFrame(()=>window.scrollTo({top:+readScroll()[tab]||0,behavior:'auto'}));
+      const targetTop=matchMedia('(max-width:700px)').matches?0:(+readScroll()[tab]||0);
+      requestAnimationFrame(()=>window.scrollTo({top:targetTop,behavior:'auto'}));
     }
     wrapped.__v1822=true;
     window.switchTab=wrapped;

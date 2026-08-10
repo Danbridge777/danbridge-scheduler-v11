@@ -184,6 +184,11 @@ assert.match(cloudSource, /document\.body\.dataset\.roleUx=cloudRole;\s*if\(clou
 const roleCss = fs.readFileSync(path.join(root, 'css/core/73-v20014-role-responsive-ux.css'), 'utf8');
 assert.match(roleCss, /@media \(min-width:701px\) and \(max-width:1100px\)[\s\S]*body:not\(\.auth-locked\)>nav button\{[^}]*margin-top:0!important/, 'tablet navigation removes desktop sidebar group margins so every visible tab remains clickable');
 assert.match(roleCss, /max-width:1100px\)[\s\S]*nav button\[data-tab="students"\]::before\{content:"◉"!important\}/, 'tablet navigation restores button icons instead of desktop group headings');
+assert.match(roleCss, /grid-template-columns:repeat\(5,minmax\(0,1fr\)\)!important/, 'owner tablet navigation uses a readable five-column grid');
+assert.match(roleCss, /body:not\(\.auth-locked\)>nav::before,body:not\(\.auth-locked\)>nav::after\{display:none!important;content:none!important\}/, 'tablet navigation removes overlapping desktop brand labels');
+assert.match(roleCss, /body\[data-active-section\]:not\(\[data-active-section="dashboard"\]\):not\(\[data-active-section="calendar"\]\):not\(\[data-active-section="lessons"\]\) #v18Fab/, 'quick add stays off form-heavy pages');
+const usabilitySource = fs.readFileSync(path.join(root, 'js/app/v1822-usability-polish.js'), 'utf8');
+assert.match(usabilitySource, /targetTop=matchMedia\('\(max-width:700px\)'\)\.matches\?0:/, 'mobile section changes always start at the new page top');
 assert.match(roleCss, /body\[data-role-ux="branch_manager"\] #v18Fab[\s\S]*body\[data-role-ux="branch_manager"\] #finance button[\s\S]*display:none!important/, 'dynamic owner controls stay hidden after branch view rerenders');
 const schedulerSource = fs.readFileSync(path.join(root, 'js/modules/calendar/scheduler-ui.js'), 'utf8');
 assert.match(schedulerSource, /function handleCalendarShortcuts\(e\)\{\s*if\(!calendarOwnerCanEdit\(\)\)return/, 'branch manager calendar shortcuts stop before any action');

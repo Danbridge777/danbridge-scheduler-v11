@@ -78,8 +78,9 @@ body[data-role-ux="teacher"] header .danbridge-language-toggle:hover{background:
 @media (min-width:701px) and (max-width:1100px){
   body:not(.auth-locked)>header{padding:18px 22px!important}
   body:not(.auth-locked)>main{padding:18px!important}
-  body:not(.auth-locked)>nav{gap:5px!important;padding:9px 12px!important}
-  body:not(.auth-locked)>nav button{min-height:46px!important;margin-top:0!important;padding:8px 12px!important;position:relative!important}
+  body:not(.auth-locked)>nav{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:6px!important;height:auto!important;min-height:0!important;padding:9px 12px!important;overflow:visible!important}
+  body:not(.auth-locked)>nav::before,body:not(.auth-locked)>nav::after{display:none!important;content:none!important}
+  body:not(.auth-locked)>nav button{width:100%!important;min-width:0!important;min-height:46px!important;margin-top:0!important;padding:8px 7px!important;position:relative!important;white-space:normal!important}
   body:not(.auth-locked)>nav button::before{display:block!important;position:static!important;inset:auto!important;width:auto!important;height:auto!important;margin:0!important;transform:none!important;pointer-events:none!important}
   body:not(.auth-locked)>nav button[data-tab="dashboard"]::before{content:"⌂"!important}
   body:not(.auth-locked)>nav button[data-tab="students"]::before{content:"◉"!important}
@@ -93,12 +94,14 @@ body[data-role-ux="teacher"] header .danbridge-language-toggle:hover{background:
   body:not(.auth-locked)>nav button[data-tab="security"]::before{content:"⚙"!important}
   .v32-dashboard-grid,.finance-layout{grid-template-columns:1fr!important}
   .crm-form-grid,.finance-form-row,.finance-form-row.one-time{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #students .crm-form-grid>div{padding:4px 2px!important;border:0!important;border-radius:0!important;background:transparent!important}
   .calendar-toolbar-row{gap:9px!important}
   .calendar-toolbar-filters{grid-template-columns:repeat(3,minmax(0,1fr))!important}
   .modal{width:min(680px,calc(100vw - 32px))!important;max-height:calc(100dvh - 32px)!important}
   .course-drawer{width:min(560px,72vw)!important}
-  body[data-role-ux="teacher"]>nav{justify-content:center!important;overflow:hidden!important}
-  body[data-role-ux="teacher"]>nav button{flex:0 1 220px!important;min-width:150px!important;min-height:52px!important}
+  body[data-role-ux="teacher"]>nav{grid-template-columns:repeat(3,minmax(0,1fr))!important;justify-content:center!important;overflow:hidden!important}
+  body[data-role-ux="teacher"]>nav button{min-width:0!important;min-height:52px!important}
+  body[data-role-ux="branch_manager"]>nav{grid-template-columns:repeat(4,minmax(0,1fr))!important}
   body[data-role-ux="teacher"] #dashboard .v32-kpis{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-auto-rows:1fr!important;overflow:visible!important}
   body[data-role-ux="teacher"] #dashboard .metric{display:flex!important;flex:initial!important;align-items:center!important;justify-content:center!important;flex-direction:column!important;width:100%!important;min-width:0!important;height:100%!important;text-align:center!important}
   body[data-role-ux="teacher"] #dashboard .v32-header-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important}
@@ -113,6 +116,7 @@ body[data-role-ux="teacher"] header .danbridge-language-toggle:hover{background:
   body:not(.auth-locked):has(>#firebaseCloudStatus:not([hidden]))>header{padding-top:calc(54px + env(safe-area-inset-top))!important}
   body:not(.auth-locked)>main{padding:12px 10px calc(var(--mobile-nav-h,78px) + 26px + env(safe-area-inset-bottom))!important}
   body:not(.auth-locked)>nav{overflow-x:auto!important;overscroll-behavior-x:contain!important}
+  #students .crm-form-grid>div{padding:3px 0!important;border:0!important;border-radius:0!important;background:transparent!important}
   body[data-role-ux="teacher"]>nav{--mobile-nav-columns:3;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:4px!important;width:100dvw!important;max-width:100dvw!important;padding:6px max(6px,env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left))!important;overflow-x:hidden!important;box-sizing:border-box!important}
   body[data-role-ux="teacher"]>nav button{display:flex!important;align-items:center!important;justify-content:center!important;flex-direction:column!important;gap:3px!important;min-width:0!important;width:100%!important;max-width:100%!important;height:100%!important;margin:0!important;padding:7px 3px!important;box-sizing:border-box!important;text-align:center!important;line-height:1.15!important;white-space:normal!important;overflow-wrap:anywhere!important}
   body[data-role-ux="teacher"]>nav button::before{position:static!important;display:block!important;margin:0 auto 2px!important;text-align:center!important;transform:none!important}
@@ -331,6 +335,9 @@ body[data-role-ux="teacher"] header .danbridge-language-toggle:hover{background:
   /* Lesson-card dates sit in the visual centre of the value column. */
   #lessons tbody td:first-child>.lesson-cell-value{text-align:center!important;font-variant-numeric:tabular-nums!important}
 }
+
+body[data-active-section]:not([data-active-section="dashboard"]):not([data-active-section="calendar"]):not([data-active-section="lessons"]) #v18Fab,
+body[data-active-section]:not([data-active-section="dashboard"]):not([data-active-section="calendar"]):not([data-active-section="lessons"]) #v18FabMenu{display:none!important}
 
 @media (max-width:420px){
   body[data-role-ux="teacher"] #dashboard .v32-eyebrow{font-size:8.5px!important;letter-spacing:.1em!important}

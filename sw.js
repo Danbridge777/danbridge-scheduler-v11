@@ -1,4 +1,4 @@
-const CACHE_NAME='danbridge-v11-ipad-navigation-audit-59';
+const CACHE_NAME='danbridge-v11-three-device-ux-60';
 const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
