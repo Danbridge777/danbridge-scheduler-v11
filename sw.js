@@ -1,4 +1,4 @@
-const CACHE_NAME='danbridge-v11-student-teacher-filter-54';
+const CACHE_NAME='danbridge-v11-student-teacher-schedule-filter-55';
 const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{

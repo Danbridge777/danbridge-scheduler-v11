@@ -149,7 +149,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.15\.5'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.15\.6'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*companyAccess[\s\S]*\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension preserves access records and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');
@@ -283,10 +283,11 @@ assert.match(financeArchitectureSource, /id="expenseTotalAmount"/, 'expense mana
 const studentsCrmSource = fs.readFileSync(path.join(root, 'js/modules/students/students-crm.js'), 'utf8');
 assert.match(studentsCrmSource, /id="crmTeacherFilter"[\s\S]*全部老師/, 'student CRM exposes an all-teacher filter');
 vm.runInContext(studentsCrmSource, context);
-const crmStudents = [{ name: 'Amy', parent: 'Lin', preferredTeacherId: 't1' }, { name: 'Bob', parent: 'Chen', preferredTeacherId: 't2' }, { name: 'Ann', parent: 'Wu', preferredTeacherId: '' }].map(context.studentDefaults);
-assert.deepEqual(crmStudents.filter(s => context.studentMatchesCrmFilters(s, '', 't1')).map(s => s.name), ['Amy'], 'teacher filtering returns only students assigned to that exact teacher');
-assert.deepEqual(crmStudents.filter(s => context.studentMatchesCrmFilters(s, 'lin', 't1')).map(s => s.name), ['Amy'], 'teacher and text filters combine without widening results');
-assert.deepEqual(crmStudents.filter(s => context.studentMatchesCrmFilters(s, '', '')).map(s => s.name), ['Amy', 'Bob', 'Ann'], 'clearing the teacher filter restores all visible students');
+const crmStudents = [{ id: 'crm-a', name: 'Amy', parent: 'Lin', preferredTeacherId: 't1' }, { id: 'crm-b', name: 'Bob', parent: 'Chen', preferredTeacherId: '' }, { id: 'crm-c', name: 'Ann', parent: 'Wu', preferredTeacherId: '' }, { id: 'crm-d', name: 'Cara', parent: 'Ho', preferredTeacherId: '' }].map(context.studentDefaults);
+context.db.lessons = [lesson({ id: 'crm-lesson', studentId: 'crm-b', teacherId: 't1', teacherIds: ['t1'] }), lesson({ id: 'crm-co-lesson', studentId: 'crm-c', teacherId: 't2', teacherIds: ['t2', 't1'] }), lesson({ id: 'crm-draft', studentId: 'crm-d', teacherId: 't1', teacherIds: ['t1'], isDraft: true })];
+assert.deepEqual(crmStudents.filter(s => context.studentMatchesCrmFilters(s, '', 't1')).map(s => s.name), ['Bob', 'Ann'], 'teacher filtering follows primary and co-teaching timetable assignments, excluding fixed-only and draft-only relationships');
+assert.deepEqual(crmStudents.filter(s => context.studentMatchesCrmFilters(s, 'chen', 't1')).map(s => s.name), ['Bob'], 'teacher and text filters combine without widening results');
+assert.deepEqual(crmStudents.filter(s => context.studentMatchesCrmFilters(s, '', '')).map(s => s.name), ['Amy', 'Bob', 'Ann', 'Cara'], 'clearing the teacher filter restores all visible students');
 assert.match(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.fixedTotal\+d\.oneTimeTotal\)/, 'expense management totals only fixed and one-time expenses');
 assert.doesNotMatch(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.totalExpenses\)/, 'expense management total excludes teacher payroll');
 assert.match(branchBusinessSource, /expenseTotalScope'\)\.textContent=scopeLabel\(scope\)/, 'expense total identifies the selected branch scope');
