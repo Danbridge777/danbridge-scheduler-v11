@@ -12,6 +12,7 @@
     return branchId(record);
   };
   const financeScopeMatch=(record,scope,resolver=financeBranchId)=>{const id=resolver(record);return scope==='all'?id!=='unassigned':id===scope};
+  const financeLessonScopeMatch=(record,scope,resolver=financeBranchId)=>scope==='all'||resolver(record)===scope;
   const allowedScope=value=>{const c=ctx();if(c.role==='branch_manager')return c.branchIds[0]||'unassigned';if(c.role==='teacher')return'all';return value||'all'};
   const match=(record,scope)=>scope==='all'||branchId(record)===scope;
   const scopeLabel=scope=>scope==='all'?'全部校區':(branches().find(b=>b.id===scope)?.name||'未歸屬校區');
@@ -72,7 +73,7 @@
   }
 
   window.financeData=function(m){
-    m=window.__danbridgeFinanceWorkspaceMonth||m;const scope=allowedScope(scopes.finance),lessons=(db.lessons||[]).filter(l=>!l.isDraft&&l.date.startsWith(m)&&financeScopeMatch(l,scope)),lessonRevenue=lessons.reduce((a,l)=>a+timetableRevenueCharge(l),0),campRevenue=summerCampRegistrationRevenue(m,scope),revenue=lessonRevenue+campRevenue;
+    m=window.__danbridgeFinanceWorkspaceMonth||m;const scope=allowedScope(scopes.finance),lessons=(db.lessons||[]).filter(l=>!l.isDraft&&l.date.startsWith(m)&&financeLessonScopeMatch(l,scope)),lessonRevenue=lessons.reduce((a,l)=>a+timetableRevenueCharge(l),0),campRevenue=summerCampRegistrationRevenue(m,scope),revenue=lessonRevenue+campRevenue;
     const expenseMatch=x=>financeScopeMatch(x,scope,r=>r?.branchId||'unassigned');
     const fixed=(db.fixedExpenses||[]).filter(x=>fixedExpenseApplies(x,m)&&expenseMatch(x));
     const one=(db.oneTimeExpenses||[]).filter(x=>x.month===m&&expenseMatch(x));

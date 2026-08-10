@@ -286,6 +286,9 @@ context.financeBranches = [{ id: 'river', rooms: ['R101', 'R102'] }, { id: 'muse
 assert.equal(vm.runInContext("financeBranchId({room:'R101',branchId:'unassigned'},financeBranches)", context), 'river', 'finance scope derives the branch from an exact room match');
 assert.equal(vm.runInContext("financeScopeMatch({room:'R101'},'all',row=>financeBranchId(row,financeBranches))", context), true, 'all branches includes assigned room records');
 assert.equal(vm.runInContext("financeScopeMatch({branchId:'unassigned'},'all',row=>row.branchId)", context), false, 'all branches excludes unassigned records');
+assert.equal(vm.runInContext("financeLessonScopeMatch({branchId:'unassigned'},'all',row=>row.branchId)", context), true, 'all-branch teacher hours include unassigned formal timetable lessons');
+assert.equal(vm.runInContext("financeLessonScopeMatch({branchId:'unassigned'},'river',row=>row.branchId)", context), false, 'a single branch excludes lessons outside that branch');
+assert.match(branchBusinessSource, /lessons=\(db\.lessons\|\|\[\]\)\.filter\(l=>!l\.isDraft&&l\.date\.startsWith\(m\)&&financeLessonScopeMatch\(l,scope\)\)/, 'finance payroll uses the lesson scope that retains every formal all-branch timetable lesson');
 assert.match(branchBusinessSource, /expenseScope\.innerHTML=optionsHTML\(true,false\)/, 'expense scope offers all real branches without unassigned');
 assert.match(fs.readFileSync(path.join(root, 'index.html'), 'utf8'), /id="financeTotalExpenses"/, 'finance overview includes a total expenses metric');
 const financeArchitectureSource = fs.readFileSync(path.join(root, 'js/app/v18-information-architecture.js'), 'utf8');

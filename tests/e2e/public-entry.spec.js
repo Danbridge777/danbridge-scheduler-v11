@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
 const TEACHER_KPI_RELEASE = '20.15.8';
+const BRANCH_SCOPE_RELEASE = '20.15.9';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
   await page.route('https://www.gstatic.com/**', route => route.abort());
@@ -21,6 +22,7 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/modules/notifications/notification-center.js?v=${RELEASE}`);
   expect(sources).toContain(`./js/core/firebase-auth-and-cloud-sync.module.js?v=${RELEASE}`);
   expect(sources).toContain(`./js/modules/teachers/teacher-kpi.js?v=${TEACHER_KPI_RELEASE}`);
+  expect(sources).toContain(`./js/core/branch-business-scope.js?v=${BRANCH_SCOPE_RELEASE}`);
 });
 
 test('public entry has no horizontal viewport overflow', async ({ page }) => {
