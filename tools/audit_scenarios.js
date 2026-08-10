@@ -248,6 +248,10 @@ assert.match(cloudSource, /roleAccessSignature\(access\)===cloudRoleAccessSignat
 const notificationCenterSource = fs.readFileSync(path.join(root, 'js/modules/notifications/notification-center.js'), 'utf8');
 assert.match(notificationCenterSource, /actual=teacherActualHours\(t,rows\)/, 'weekly short-hours notifications use the same formal timetable hours as payroll');
 assert.doesNotMatch(notificationCenterSource, /actual=.*lessonCountsForTeacherPay/, 'weekly short-hours notifications never exclude a formal no-pay lesson from actual hours');
+const teacherKpiSource = fs.readFileSync(path.join(root, 'js/modules/teachers/teacher-kpi.js'), 'utf8');
+assert.match(teacherKpiSource, /active=typeof teacherPayableHourLessons==='function'[\s\S]*teacherPayableHourLessons\(t,ls\)/, 'teacher KPI hours use the same formal timetable lesson set as payroll');
+assert.doesNotMatch(teacherKpiSource, /active=ls\.filter\(lessonCountsAsTaught\)/, 'teacher KPI never falls back to completed-only hours');
+assert.match(teacherKpiSource, /revenue:teacherCompanyRevenue\(t,month,ls\)/, 'teacher KPI revenue uses every formal timetable lesson for the selected month');
 const notificationHelperStart = notificationCenterSource.indexOf('const addDays=');
 const notificationHelperEnd = notificationCenterSource.indexOf('const readKey=');
 vm.runInContext(notificationCenterSource.slice(notificationHelperStart, notificationHelperEnd), context);

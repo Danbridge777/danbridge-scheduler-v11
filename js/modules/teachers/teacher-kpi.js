@@ -21,12 +21,14 @@
     if(c.role==='teacher'){teachers=teachers.filter(t=>t.id===c.teacherId);lessons=lessons.filter(l=>lessonTeachers(l).includes(c.teacherId))}
     return teachers.map(t=>{
       const ls=lessons.filter(l=>lessonTeachers(l).includes(t.id));
-      const active=ls.filter(lessonCountsAsTaught);
+      const active=typeof teacherPayableHourLessons==='function'
+        ?teacherPayableHourLessons(t,ls)
+        :ls.filter(l=>typeof lessonCountsForTeacherHours==='function'?lessonCountsForTeacherHours(l):!l.isDraft);
       const leave=ls.filter(l=>['學生請假','老師請假','取消','停課'].includes(l.status));
       const makeup=ls.filter(l=>l.teacherReportStatus==='makeup_completed'||l.status==='補課完成'||l.isMakeup);
       const reportable=active.filter(l=>l.date<=todayStr());
       const reported=reportable.filter(l=>['completed','makeup_completed'].includes(l.teacherReportStatus));
-      return{t,students:new Set(active.map(l=>l.studentId)).size,count:active.length,hours:active.reduce((a,l)=>a+hours(l.start,l.end),0),revenue:teacherCompanyRevenue(t,month,active),leaveRate:pct(leave.length,ls.length),makeupRate:pct(makeup.length,active.length),reportRate:pct(reported.length,reportable.length),branches:new Set(active.map(branchId)).size};
+      return{t,students:new Set(active.map(l=>l.studentId)).size,count:active.length,hours:active.reduce((a,l)=>a+hours(l.start,l.end),0),revenue:teacherCompanyRevenue(t,month,ls),leaveRate:pct(leave.length,ls.length),makeupRate:pct(makeup.length,active.length),reportRate:pct(reported.length,reportable.length),branches:new Set(active.map(branchId)).size};
     }).sort((a,b)=>b.hours-a.hours||a.t.name.localeCompare(b.t.name,'zh-Hant'));
   }
   window.renderTeacherKpi=function(){
