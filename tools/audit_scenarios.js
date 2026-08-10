@@ -141,7 +141,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.15\.2'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.15\.3'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*companyAccess[\s\S]*\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension preserves access records and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');
@@ -268,6 +268,9 @@ assert.equal(vm.runInContext("financeScopeMatch({branchId:'unassigned'},'all',ro
 assert.match(branchBusinessSource, /expenseScope\.innerHTML=optionsHTML\(true,false\)/, 'expense scope offers all real branches without unassigned');
 assert.match(fs.readFileSync(path.join(root, 'index.html'), 'utf8'), /id="financeTotalExpenses"/, 'finance overview includes a total expenses metric');
 const financeArchitectureSource = fs.readFileSync(path.join(root, 'js/app/v18-information-architecture.js'), 'utf8');
+assert.match(financeArchitectureSource, /function setNativeMonthValue\(id,value\)\{const el=document\.getElementById\(id\)/, 'workspace month updates the real hidden finance, settlement and KPI controls by ID');
+assert.doesNotMatch(financeArchitectureSource, /function setNativeMonthValue\(id,value\)\{const el=\$\(id\)/, 'month synchronization never treats an ID as an element tag selector');
+assert.match(financeArchitectureSource, /\['financeMonth','settleMonth','teacherKpiMonth','oneTimeExpenseMonth'\]\.forEach\(id=>setNativeMonthValue\(id,value\)\)/, 'one workspace month change synchronizes every downstream monthly renderer');
 assert.match(financeArchitectureSource, /id="expenseTotalAmount"/, 'expense management includes its own total card');
 assert.match(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.fixedTotal\+d\.oneTimeTotal\)/, 'expense management totals only fixed and one-time expenses');
 assert.doesNotMatch(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.totalExpenses\)/, 'expense management total excludes teacher payroll');

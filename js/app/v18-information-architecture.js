@@ -20,8 +20,8 @@
     return el;
   }
   function move(el,to){if(el&&to)to.append(el)}
-  function setNativeMonthValue(id,value){const el=$(id);if(!el)return;if(el.tagName==='SELECT'&&![...el.options].some(o=>o.value===value)){const option=document.createElement('option');option.value=value;option.textContent=value;el.append(option)}el.value=value}
-  function financeWorkspaceMonth(){return window.__danbridgeFinanceWorkspaceMonth||$('#v187FinanceMonthOverview')?.value||$('financeMonth')?.value||$('settleMonth')?.value||$('teacherKpiMonth')?.value||monthNow()}
+  function setNativeMonthValue(id,value){const el=document.getElementById(id);if(!el)return;if(el.tagName==='SELECT'&&![...el.options].some(o=>o.value===value)){const option=document.createElement('option');option.value=value;option.textContent=value;el.append(option)}el.value=value}
+  function financeWorkspaceMonth(){return window.__danbridgeFinanceWorkspaceMonth||$('#v187FinanceMonthOverview')?.value||$('#financeMonth')?.value||$('#settleMonth')?.value||$('#teacherKpiMonth')?.value||monthNow()}
   function setFinanceWorkspaceMonth(value,render=true){
     if(!/^\d{4}-\d{2}$/.test(value||''))return;window.__danbridgeFinanceWorkspaceMonth=value;$$('.v187-finance-month').forEach(input=>input.value=value);
     ['financeMonth','settleMonth','teacherKpiMonth','oneTimeExpenseMonth'].forEach(id=>setNativeMonthValue(id,value));
