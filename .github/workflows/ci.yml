@@ -53,5 +53,11 @@ jobs:
       - name: Run Firestore Rules tests
         run: DANBRIDGE_JAVA_HOME="$JAVA_HOME" npm run test:rules
 
+      - name: Install browser for end-to-end tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser smoke tests
+        run: npm run test:e2e
+
       - name: Audit dependencies
         run: npm audit --audit-level=low

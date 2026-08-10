@@ -5,3 +5,5 @@ __MACOSX/
 node_modules/
 .npm-cache/
 firestore-debug.log
+playwright-report/
+test-results/
