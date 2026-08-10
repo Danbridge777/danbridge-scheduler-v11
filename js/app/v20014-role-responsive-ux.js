@@ -3,6 +3,7 @@
   'use strict';
   const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>Array.from(r.querySelectorAll(s));
   const role=()=>window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role||'';
+  const accessContext=()=>window.DanbridgeAccess?.getContext?.()||{};
 
   function hideForRole(element){
     if(!element)return;
@@ -23,18 +24,39 @@
   function teacherStats(){
     if(role()!=='teacher'||typeof db==='undefined')return;
     const month=typeof monthNow==='function'?monthNow():new Date().toISOString().slice(0,7);
-    const rows=(db.lessons||[]).filter(l=>!l.isDraft&&l.date?.startsWith(month)&&!['取消','停課'].includes(l.status));
+    const teacherId=accessContext().teacherId,currentTeacher=(db.teachers||[]).find(t=>t.id===teacherId)||(db.teachers||[])[0];
+    const rows=(db.lessons||[]).filter(l=>!l.isDraft&&l.date?.startsWith(month)&&(!teacherId||lessonTeacherIds(l).includes(teacherId)));
+    const payroll=currentTeacher&&typeof calculateTeacherPayroll==='function'?calculateTeacherPayroll(currentTeacher,month,rows):null;
     const completed=rows.filter(l=>typeof lessonCountsAsTaught==='function'?lessonCountsAsTaught(l):(l.status==='已上課'||l.teacherReportStatus==='completed'||l.teacherReportStatus==='makeup_completed'));
     const reported=rows.filter(l=>l.teacherReportStatus==='completed'||l.teacherReportStatus==='makeup_completed');
     const metric=$('#mTeacherHours');
-    if(metric){metric.textContent=`${lessonHours(completed).toFixed(1)} 小時`;const note=metric.closest('.metric')?.querySelector('small');if(note)note.textContent=`實授 ${completed.length} 堂｜排定 ${rows.length} 堂`;}
+    if(metric){metric.textContent=`${(payroll?.actualHours??lessonHours(rows)).toFixed(1)} 小時`;const card=metric.closest('.metric'),label=card?.querySelector('span'),note=card?.querySelector('small');if(label)label.textContent='本月課表時數';if(note)note.textContent=`計薪 ${(payroll?.paidHours??0).toFixed(1)} 小時｜${rows.length} 堂正式課`;}
+    const studentMetric=$('#mStudents');if(studentMetric){studentMetric.textContent=new Set(rows.map(l=>l.studentId).filter(Boolean)).size;const card=studentMetric.closest('.metric'),label=card?.querySelector('span'),note=card?.querySelector('small');if(label)label.textContent='我的學生';if(note)note.textContent='依本月正式課表';}
     if($('#mLessons'))$('#mLessons').textContent=rows.length;
-    if($('#v32MonthCompleted'))$('#v32MonthCompleted').textContent=`${completed.length} 堂已完成`;
+    if($('#v32MonthCompleted'))$('#v32MonthCompleted').textContent=`${reported.length} 堂已回報`;
     const insights=$('#v32Insights');
     if(insights){
       const pending=rows.filter(l=>l.status==='已上課'&&!l.teacherReportStatus).length;
-      insights.innerHTML=`<div class="v32-insight ${pending?'danger':'good'}"><span class="v32-insight-dot"></span><div><b>${pending?`${pending} 堂等待課堂回報`:'本月回報已完成'}</b><span>實授 ${lessonHours(completed).toFixed(1)} 小時｜排定 ${lessonHours(rows).toFixed(1)} 小時</span></div></div>`;
+      const diff=payroll?.mode==='fixed'&&Number.isFinite(payroll.diff)?`｜最低工時差 ${payroll.diff>=0?'+':''}${payroll.diff.toFixed(1)} 小時`:'';
+      insights.innerHTML=`<div class="v32-insight ${pending?'danger':'good'}"><span class="v32-insight-dot"></span><div><b>${pending?`${pending} 堂等待課堂回報`:'本月回報已完成'}</b><span>正式課表 ${(payroll?.actualHours??lessonHours(rows)).toFixed(1)} 小時｜計薪 ${(payroll?.paidHours??0).toFixed(1)} 小時${diff}</span></div></div>`;
     }
+  }
+
+  function branchManagerStats(){
+    if(role()!=='branch_manager'||typeof db==='undefined')return;
+    const month=typeof monthNow==='function'?monthNow():new Date().toISOString().slice(0,7),allowed=new Set(accessContext().branchIds||[]),rows=(db.lessons||[]).filter(l=>!l.isDraft&&l.date?.startsWith(month)&&(!allowed.size||allowed.has(window.DanbridgeAccess?.recordBranchId?.(l)||l.branchId)));
+    const labels=[['#mStudents','校區學生','依目前授權校區'],['#mTeachers','校區老師','依目前授權校區'],['#mLessons','本月正式課','不含草稿課'],['#mMakeups','待補課','尚未完成安排']];
+    labels.forEach(([selector,title,note])=>{const value=$(selector),card=value?.closest('.metric');if(card?.querySelector('span'))card.querySelector('span').textContent=title;if(card?.querySelector('small'))card.querySelector('small').textContent=note;});
+    const metric=$('#mTeacherHours');if(metric){metric.textContent=`${lessonHours(rows).toFixed(1)} 小時`;const card=metric.closest('.metric');if(card?.querySelector('span'))card.querySelector('span').textContent='本月課表時數';if(card?.querySelector('small'))card.querySelector('small').textContent=`${rows.length} 堂正式課`;}
+  }
+
+  function branchManagerConvenience(){
+    if(role()!=='branch_manager')return;
+    const actions=$('#dashboard .v32-header-actions');if(!actions)return;
+    const first=actions.querySelector('button:not(.owner-only-action)');if(first)first.textContent='查看校區課表';
+    [['managerLessonShortcut','課程紀錄','lessons'],['managerMakeupShortcut','補課中心','makeups'],['managerFinanceShortcut','校區財務','finance']].forEach(([id,label,tab])=>{
+      if($('#'+id,actions))return;const button=document.createElement('button');button.id=id;button.type='button';button.className='btn manager-shortcut';button.textContent=label;button.addEventListener('click',()=>window.switchTab?.(tab));actions.appendChild(button);
+    });
   }
 
   function labelLessonRows(){
@@ -138,6 +160,7 @@
       const allowedTabs=new Set(['dashboard','students','teachers','calendar','lessons','makeups','settlement','finance']);
       $$('nav button[data-tab]').forEach(button=>{const allowed=allowedTabs.has(button.dataset.tab);button.hidden=!allowed;button.style.setProperty('display',allowed?'':'none',allowed?'':'important')});
       $$('.owner-only-action,.floating-actions,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#calendar .day-add,#courseDrawerEditBtn,#students .grid>.card.col-4,#teachers .grid>.card.col-4,#finance .finance-form-row').forEach(hideForRole);
+      branchManagerStats();branchManagerConvenience();
     }
     labelLessonRows();
   }
@@ -157,7 +180,7 @@
       const wrapped=function(){originalCalendar();installMobileCalendarClipboard()};wrapped.__mobileClipboard=true;window.renderCalendar=wrapped;
     }
     installMobileCalendarClipboard();
-    window.DanbridgeRoleResponsive={apply,restoreRoleResponsiveControls,teacherStats,teacherConvenience,installCampDateScroller,installMobileCalendarClipboard};
+    window.DanbridgeRoleResponsive={apply,restoreRoleResponsiveControls,teacherStats,teacherConvenience,branchManagerStats,branchManagerConvenience,installCampDateScroller,installMobileCalendarClipboard};
     /* 可否拖曳由課程卡建立時依即時角色決定，避免舊角色在全頁捕獲階段誤擋老闆。 */
     /* 老師與校區管理者的課表修改權限由單一課表控制器處理，不再全頁攔截日期格點擊。 */
     apply();

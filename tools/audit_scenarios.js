@@ -17,7 +17,7 @@ const context = {
     const minutes = value => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
     return (minutes(end) - minutes(start)) / 60;
   },
-  lessonTeacherIds(lesson) { return (lesson.teacherIds || [lesson.teacherId]).filter(Boolean); },
+  lessonTeacherIds(lesson) { return [...new Set((lesson.teacherIds || [lesson.teacherId]).filter(Boolean))]; },
   effectiveCampId: () => '',
   sameCampSlot: () => false,
   summerRegistrationTotal: row => Number(row.totalFee) || 0,
@@ -74,7 +74,30 @@ context.db.lessons.push(lesson({ id: 'sep-unpaid', date: '2026-09-06', start: '1
 const septemberWithUnpaid = context.calculateTeacherPayroll(context.db.teachers[0], '2026-09');
 assert.equal(septemberWithUnpaid.actualHours, 3.5, 'every formal timetable lesson counts toward teacher hours even when explicitly unpaid');
 assert.equal(septemberWithUnpaid.amount, 200, 'an explicitly unpaid lesson adds hours but not hourly pay');
+assert.equal(septemberWithUnpaid.formulaVersion, 'teacher-payroll-v1-formal-timetable', 'payroll results identify the exact formula contract');
 
+const fixedTeacher = { id: 'fixed', name: 'Fixed', payrollMode: 'fixed', baseSalary: 43000, overtimeRate: 500, deductionRate: 300, minWeeklyHours: 40, workDays: [1, 2, 3, 4, 5] };
+context.db.teachers = [fixedTeacher];
+context.db.lessons = Array.from({ length: 21 }, (_, index) => lesson({ id: `leap-${index}`, teacherId: 'fixed', teacherIds: ['fixed'], date: `2028-02-${String(index + 1).padStart(2, '0')}`, start: '09:00', end: '17:00', status: '未上課' }));
+const leapMonthPayroll = context.calculateTeacherPayroll(fixedTeacher, '2028-02');
+assert.equal(leapMonthPayroll.expectedHours, 168, 'leap-year February counts its exact Monday-to-Friday workdays');
+assert.equal(leapMonthPayroll.actualHours, 168, 'all formal leap-month timetable hours are included');
+assert.equal(leapMonthPayroll.amount, 43000, 'fixed salary stays at base salary when actual and expected hours match');
+context.db.lessons.pop();
+const leapMonthShort = context.calculateTeacherPayroll(fixedTeacher, '2028-02');
+assert.equal(leapMonthShort.shortHours, 8, 'one missing full workday produces an eight-hour shortage');
+assert.equal(leapMonthShort.amount, 40600, 'fixed salary shortage uses the configured deduction rate');
+context.db.lessons.push(lesson({ id: 'march-boundary', teacherId: 'fixed', teacherIds: ['fixed'], date: '2028-03-01', start: '09:00', end: '21:00', status: '未上課' }));
+assert.equal(context.calculateTeacherPayroll(fixedTeacher, '2028-02').actualHours, 160, 'the next month never leaks into the selected payroll month');
+
+context.db.teachers = Array.from({ length: 100 }, (_, index) => ({ id: `stress-t${index}`, name: `Stress ${index}`, rate: 357 }));
+context.db.lessons = context.db.teachers.flatMap((teacherRow, teacherIndex) => Array.from({ length: 31 }, (_, day) => lesson({ id: `stress-${teacherIndex}-${day}`, teacherId: teacherRow.id, teacherIds: [teacherRow.id, teacherRow.id], date: `2026-07-${String(day + 1).padStart(2, '0')}`, start: '09:00', end: '10:30', status: '未上課' })));
+const stressPayroll = context.db.teachers.map(teacherRow => context.calculateTeacherPayroll(teacherRow, '2026-07'));
+assert.ok(stressPayroll.every(row => row.actualHours === 46.5), '100 teachers retain exact hours across 3,100 formal lessons');
+assert.ok(stressPayroll.every(row => row.amount === 31 * 1.5 * 357), '100 teachers retain exact hourly pay without duplicate teacher IDs doubling salary');
+assert.equal(stressPayroll.reduce((sum, row) => sum + row.actualHours, 0), 4650, 'large-month payroll total remains deterministic');
+
+context.db.teachers = [{ id: 't1', name: 'One', rate: 100 }];
 context.effectiveCampId = row => row.campId || '';
 context.sameCampSlot = (a, b) => a.campId === b.campId && a.date === b.date && a.start === b.start && a.end === b.end;
 context.db.lessons = [
@@ -99,6 +122,7 @@ const lockedAt = '2026-09-01T00:00:00.000Z';
 const lockedData = { m: '2026-08', scope: 'all', sr: [{ s: { id: 's1' }, total: 1, charged: 1, h: 1, abs: 0, lessonAmount: 200, campAmount: 0, amount: 200 }], tr: [{ t: { id: 't1' }, count: 1, h: 1, expected: 1, amount: 100, revenue: 200, payroll: { mode: 'hourly', hourlyRate: 100 } }], lessons: [lesson()] };
 const lockedRecord = context.createLockedSettlementRecord('2026-08', 'all', lockedData, lockedAt);
 assert.equal(lockedRecord.locked, true, 'monthly settlement is locked');
+assert.equal(lockedRecord.payrollFormulaVersion, 'teacher-payroll-v1-formal-timetable', 'locked settlements record the payroll formula version');
 assert.equal(lockedRecord.id, '2026-08::all', 'settlement identity combines its exact month and scope');
 assert.notEqual(context.createLockedSettlementRecord('2026-08', 'branch-a', { ...lockedData, scope: 'branch-a' }, lockedAt).id, lockedRecord.id, 'the same month in another branch is not a duplicate');
 assert.throws(() => context.createLockedSettlementRecord('2026-07', 'all', lockedData, lockedAt), /month mismatch/, 'a snapshot cannot be stored under the wrong month');
@@ -164,6 +188,9 @@ assert.match(cloudSource, /async function copyCloudLoginInvitation\(email\)[\s\S
 const roleResponsiveSource = fs.readFileSync(path.join(root, 'js/app/v20014-role-responsive-ux.js'), 'utf8');
 const courseOperationsSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course-operations.js'), 'utf8');
 assert.match(roleResponsiveSource, /function hideForRole\(element\)[\s\S]*roleResponsiveHidden='1'/, 'responsive role hiding records which controls it owns');
+assert.match(roleResponsiveSource, /function teacherStats\(\)[\s\S]*lessonTeacherIds\(l\)\.includes\(teacherId\)[\s\S]*calculateTeacherPayroll\(currentTeacher,month,rows\)[\s\S]*本月課表時數[\s\S]*計薪/, 'teacher dashboard defensively scopes lessons to the signed-in teacher and uses the same payroll calculation');
+assert.match(roleResponsiveSource, /function branchManagerStats\(\)[\s\S]*allowed=new Set\(accessContext\(\)\.branchIds[\s\S]*recordBranchId[\s\S]*校區學生[\s\S]*本月課表時數/, 'branch manager dashboard defensively scopes statistics to authorized branches');
+assert.match(roleResponsiveSource, /function branchManagerConvenience\(\)[\s\S]*managerLessonShortcut[\s\S]*managerMakeupShortcut[\s\S]*managerFinanceShortcut/, 'branch manager dashboard exposes read-only shortcuts to its allowed modules');
 assert.match(roleResponsiveSource, /if\(current==='owner'\)restoreRoleResponsiveControls\(\)/, 'owner role restores controls hidden by the responsive role layer');
 assert.match(cloudSource, /if\(cloudRole==='owner'\)\{[\s\S]*restoreRoleIsolated\(\);[\s\S]*DanbridgeRoleResponsive\?\.restoreRoleResponsiveControls\?\.\(\)/, 'owner login immediately restores both role-isolation layers');
 assert.match(courseOperationsSource, /if\(ownerCanEdit\)\{editBtn\.style\.removeProperty\('display'\);delete editBtn\.dataset\.roleResponsiveHidden\}/, 'opening a lesson as owner defensively restores its edit button');

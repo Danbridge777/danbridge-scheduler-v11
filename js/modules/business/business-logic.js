@@ -150,6 +150,7 @@ function teacherPayrollMode(t){
   if(t?.payrollMode==='fixed'||t?.payrollMode==='hourly')return t.payrollMode;
   return teacherBaseSalary(t)!==null?'fixed':'hourly';
 }
+const TEACHER_PAYROLL_FORMULA_VERSION='teacher-payroll-v1-formal-timetable';
 function calculateTeacherPayroll(t,m,paid){
   const rows=paid||teacherPaidLessons(t,m);
   const hourRows=teacherPayableHourLessons(t,rows);
@@ -161,14 +162,14 @@ function calculateTeacherPayroll(t,m,paid){
   if(mode==='hourly'){
     const hourlyRate=payrollNumber(t?.rate)??0;
     const amount=rows.reduce((a,l)=>a+lessonTeacherPay(l,t.id),0);
-    return{teacher:t,month:m,mode,rows,actualHours,paidHours,expectedHours:0,diff:actualHours,baseSalary:null,overtimeHours:0,shortHours:0,overtimeRate:null,deductionRate:null,hourlyRate,addition:amount,deduction:0,amount,configured:hourlyRate>0};
+    return{teacher:t,month:m,formulaVersion:TEACHER_PAYROLL_FORMULA_VERSION,mode,rows,actualHours,paidHours,expectedHours:0,diff:actualHours,baseSalary:null,overtimeHours:0,shortHours:0,overtimeRate:null,deductionRate:null,hourlyRate,addition:amount,deduction:0,amount,configured:hourlyRate>0};
   }
   const baseSalary=teacherBaseSalary(t),overtimeRate=teacherOvertimeRate(t),deductionRate=teacherDeductionRate(t);
   const overtimeHours=Math.max(0,diff),shortHours=Math.max(0,-diff);
   const addition=overtimeHours*(overtimeRate??0),deduction=shortHours*(deductionRate??0);
   const configured=baseSalary!==null&&overtimeRate!==null&&deductionRate!==null;
   const amount=configured?Math.max(0,baseSalary+addition-deduction):0;
-  return{teacher:t,month:m,mode,rows,actualHours,paidHours,expectedHours,diff,baseSalary,overtimeHours,shortHours,overtimeRate,deductionRate,hourlyRate:null,addition,deduction,amount,configured};
+  return{teacher:t,month:m,formulaVersion:TEACHER_PAYROLL_FORMULA_VERSION,mode,rows,actualHours,paidHours,expectedHours,diff,baseSalary,overtimeHours,shortHours,overtimeRate,deductionRate,hourlyRate:null,addition,deduction,amount,configured};
 }
 function teacherPayrollFormulaText(result){
   if(result.mode==='hourly')return result.paidHours===result.actualHours?`純時薪：${fmtHours(result.paidHours)} hr × ${money(result.hourlyRate||0)}`:`純時薪：計薪 ${fmtHours(result.paidHours)} hr × ${money(result.hourlyRate||0)}（課表 ${fmtHours(result.actualHours)} hr）`;
@@ -204,7 +205,7 @@ function createLockedSettlementRecord(month,scope,data,at=new Date().toISOString
   if(data?.m&&data.m!==month)throw new Error(`Settlement month mismatch: ${month} !== ${data.m}`);
   if(data?.scope&&data.scope!==scope)throw new Error(`Settlement scope mismatch: ${scope} !== ${data.scope}`);
   const snapshot=settlementSnapshotPayload(data);
-  return{id:`${month}::${scope}`,month,branchId:scope,savedAt:at,lockedAt:at,locked:true,formulaVersion:'settlement-v1',...snapshot.totals,snapshot,adjustments:[]};
+  return{id:`${month}::${scope}`,month,branchId:scope,savedAt:at,lockedAt:at,locked:true,formulaVersion:'settlement-v1',payrollFormulaVersion:TEACHER_PAYROLL_FORMULA_VERSION,...snapshot.totals,snapshot,adjustments:[]};
 }
 function appendSettlementAdjustment(record,data,at=new Date().toISOString()){
   if(data?.m&&data.m!==record.month)throw new Error(`Settlement adjustment month mismatch: ${record.month} !== ${data.m}`);
