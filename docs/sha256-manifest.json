@@ -1,11 +1,11 @@
 {
   ".firebaserc": "4bdc28543826edd638db8df62f91b6b4f43d4cc58619b103d8f6b01c96710070",
-  ".github/workflows/ci.yml": "08fc361405e0ca6901cc0f50ac3a4193f763cc2b53d90fe51a73cf4156af648c",
+  ".github/workflows/ci.yml": "9566a9a4f4e134249af532aef11f4ee9450357d1554102cd711d455ef9c43cf6",
   ".gitignore": "99437f76cde881f723a2b2c3211a3fb28f7a67bdcdde43f5cbc20d2aeac31a3e",
   ".nojekyll": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
   ".npmrc": "8f65a38bcd4e6fefd454f51ae9c3bd1c130d23a63164d60fb15fdaf852bde871",
   "404.html": "b77b97fe780d35d18248abd1d2f42f444afbabe43f6abcd8fa8ebb3d47825eee",
-  "CHANGELOG.md": "967f989e80cbf3686de82675f3ffb2a678c305598b4f7d8f33f56126bfc4b616",
+  "CHANGELOG.md": "d4092d08a37b37f35dc6f74259be0a4f628ecfa272e25a95760b361f0163c635",
   "README.md": "98b4d24f4558f93c2754a4424fafcdf0cae2d632daa256bac00d033036b79653",
   "assets/images/danbridge-gold-feather-v2.png": "162bb9147eda3db5e681423dc5741cf35cc18a439e1fed655c5917f9f6f0dee2",
   "css/calendar/16-danbridge-v38-drag-ux.css": "03f07d972ccd5e432cea2110579986f7603c82149175ffa56e06a91b9f37acbe",
@@ -145,12 +145,13 @@
   "manifest.webmanifest": "994d0eebd35796661562d1553b7a9194b2bcd1f455c5d4f5902177db51256b5c",
   "package-lock.json": "ef380a15d82b409c953e1c1cb5b1c5ff0bd727c69855da4ea5653c5e4b34a653",
   "package.json": "d4a29d20e43416a2c3083888b324dd3191738783ac079454e8244961b599e7c6",
-  "playwright.config.js": "8b26b546ea0c31cc6bf83bab668b8110ffe6701b7a30cc6f62d778052c6b7274",
+  "playwright.config.js": "4ecb8abe8c4b8e4044f664c8d9b4677c9d34fbbc1ccb652cf12948ede863df24",
   "sw.js": "d095e2c6ac0fd20fe57f93621b38d91355eb25d19d57c000a371bf3eab4ba5d3",
   "tests/e2e/public-entry.spec.js": "7f1889ddeaa638280f8976b58e2b3425eaaba3dc2a2e98d8ea295a05afd78545",
   "tests/firestore-rules.test.mjs": "f7b767e6ae7d3f1aa6f984bd635526ecc0e44cf07ea39c371b78a5ba1deb351f",
   "tools/audit_calendar_scenarios.js": "df4f6d35db6ae22c6bf4c5b2fc30ba15fc1575f75d93d7a5114474b9127e32d5",
   "tools/audit_scenarios.js": "0d15aa87c845e4cb910837aea6c4eebd0f732fed45da07fc968b43b80db17d66",
+  "tools/e2e_static_server.js": "835f20e57610aa6609dbbba1cef67f85f77e9670d32a3edfcdb4d1176de55667",
   "tools/run_firestore_rules_tests.mjs": "398300d9b7c564ec97c2a95d06671a343d3f936a4182fe88ccfa5271f85e7556",
   "tools/validate_project.py": "53152f4b186019a75b84b24d9e28df321f9d91772486112251fec2da831101e6"
 }

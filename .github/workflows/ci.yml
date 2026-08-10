@@ -54,7 +54,7 @@ jobs:
         run: DANBRIDGE_JAVA_HOME="$JAVA_HOME" npm run test:rules
 
       - name: Install browser for end-to-end tests
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Run browser smoke tests
         run: npm run test:e2e

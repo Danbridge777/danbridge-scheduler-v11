@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-08-10 — Safari 與 iPad Safari 自動驗收矩陣
+
+- Playwright E2E 新增桌面 WebKit 與 iPad WebKit，與既有桌機、iPad、手機 Chromium 共用相同驗收條件。
+- CI 同時安裝 Chromium 與 WebKit，避免只在 Chromium 通過、到 Safari 才發現登入隔離、版本或溢出問題。
+
 ## 2026-08-10 — 自動瀏覽器煙霧測試與乾淨部署內容
 
 - 新增 Playwright E2E，使用桌機、iPad 與手機三種視窗驗證未登入內容鎖定、核心資源版本及水平溢出。
