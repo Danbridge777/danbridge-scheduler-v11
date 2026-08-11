@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.23.2';
+const APP_RELEASE='20.24.0';
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
@@ -341,12 +341,13 @@ async function listEmergencyOwners(){
  const box=document.getElementById('emergencyOwnerList');if(!box||cloudRole!=='owner')return;
  try{
   const qs=await getDocs(query(collection(cloud,'companyAccess'),where('companyId','==',COMPANY_ID),where('role','==','owner')));
-  const rows=qs.docs.map(d=>({id:d.id,...d.data()}));box.innerHTML=rows.length?rows.map(x=>{const email=String(x.email||x.id).toLowerCase(),active=x.active!==false;return`<div class="backup-item"><div class="info"><b>${escapeHTML(x.displayName||'備援 Owner')}</b><div class="small">${escapeHTML(email)}</div></div><div class="row-actions"><span class="pill ${active?'green':'red'}">${active?'已啟用':'已停權'}</span><button type="button" class="btn emergency-owner-toggle" data-email="${escapeHTML(email)}" data-active="${active?'true':'false'}">${active?'停權':'重新啟用'}</button></div></div>`}).join(''):'<span class="small">尚未建立備援 Owner。</span>';
+  const primary=cloudEmailKey===OWNER_EMAIL,rows=qs.docs.map(d=>({id:d.id,...d.data()}));box.innerHTML=rows.length?rows.map(x=>{const email=String(x.email||x.id).toLowerCase(),active=x.active!==false,isPrimary=email===OWNER_EMAIL;return`<div class="backup-item"><div class="info"><b>${escapeHTML(isPrimary?'主要 Owner':(x.displayName||'備援 Owner'))}</b><div class="small">${escapeHTML(email)}</div></div><div class="row-actions"><span class="pill ${active?'green':'red'}">${active?'已啟用':'已停權'}</span>${isPrimary||!primary?'<span class="pill blue">受保護</span>':`<button type="button" class="btn emergency-owner-toggle" data-email="${escapeHTML(email)}" data-active="${active?'true':'false'}">${active?'停權':'重新啟用'}</button>`}</div></div>`}).join(''):'<span class="small">尚未建立備援 Owner。</span>';
   box.querySelectorAll('.emergency-owner-toggle').forEach(button=>button.onclick=async()=>{await setCloudAccessActive(button.dataset.email,button.dataset.active!=='true');await listEmergencyOwners()});
  }catch(e){console.error('listEmergencyOwners failed',e);emergencyOwnerStatus('備援 Owner 清單讀取失敗，請稍後重試。','error');box.innerHTML='<span class="small">讀取失敗，請稍後重試。</span>'}
 }
 async function saveEmergencyOwner(){
  if(cloudRole!=='owner')return;
+ if(cloudEmailKey!==OWNER_EMAIL)return emergencyOwnerStatus('只有主要 Owner 可以新增或更新其他 Owner。','error');
  const email=String(document.getElementById('emergencyOwnerEmail')?.value||'').trim().toLowerCase(),displayName=String(document.getElementById('emergencyOwnerName')?.value||'備援 Owner').trim()||'備援 Owner';
  if(!validGmailAddress(email))return emergencyOwnerStatus('請輸入有效的 Gmail。','error');
  if(email===OWNER_EMAIL||email===cloudEmailKey)return emergencyOwnerStatus('主要 Owner 或目前登入帳號不需要重複加入。','error');
@@ -459,6 +460,7 @@ async function removeCloudTeacherAccess(email,teacherName='老師'){
 async function setCloudAccessActive(email,active){
  if(cloudRole!=='owner')return;
  email=String(email||'').trim().toLowerCase();if(!email)return;
+ if(email===OWNER_EMAIL)return alert('主要 Owner 帳號受保護，不能停權。');
  const action=active?'重新啟用':'停權';
  if(!confirm(`確定要${action} ${email}？\n${active?'原本的角色與資料範圍會恢復。':'帳號會立即失去存取權，但綁定與歷史紀錄會保留。'}`))return;
  try{

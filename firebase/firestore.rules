@@ -3,6 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null && request.auth.token.email is string; }
     function emailKey() { return request.auth.token.email.lower(); }
+    function isPrimaryOwner() { return signedIn() && emailKey() == 'a0965487920@gmail.com'; }
     function ownerProfileExists() {
       return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
@@ -11,7 +12,7 @@ service cloud.firestore {
     }
     function isOwner() {
       return signedIn() && (
-        emailKey() == 'a0965487920@gmail.com'
+        isPrimaryOwner()
         || (ownerProfileExists()
           && ownerProfile().active != false
           && ownerProfile().companyId == 'danbridge'
@@ -67,11 +68,15 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isOwner());
       allow create: if signedIn() && request.auth.uid == uid
-        && (isOwner() || (accessExists()
+        && (isPrimaryOwner() || (isOwner() && request.resource.data.role != 'owner') || (accessExists()
           && request.resource.data.email.lower() == emailKey()
           && request.resource.data.companyId == access().companyId
           && request.resource.data.role == access().role));
-      allow update: if isOwner() || (
+      allow update: if isPrimaryOwner() || (isOwner()
+        && resource.data.email.lower() != 'a0965487920@gmail.com'
+        && request.resource.data.email.lower() != 'a0965487920@gmail.com'
+        && resource.data.role != 'owner'
+        && request.resource.data.role != 'owner') || (
         signedIn() && request.auth.uid == uid
         && request.resource.data.role == resource.data.role
         && request.resource.data.companyId == resource.data.companyId
@@ -93,12 +98,23 @@ service cloud.firestore {
           'teacherId','teacherName','managerName','branchIds','branchNames','readOnly','canSubmitOwnReports'
         ])
       );
-      allow delete: if isOwner();
+      allow delete: if isPrimaryOwner() || (isOwner()
+        && resource.data.email.lower() != 'a0965487920@gmail.com'
+        && resource.data.role != 'owner');
     }
 
     match /companyAccess/{email} {
       allow read: if isOwner() || (signedIn() && email == emailKey());
-      allow write: if isOwner();
+      allow create: if isPrimaryOwner() || (isOwner()
+        && email != 'a0965487920@gmail.com'
+        && request.resource.data.role != 'owner');
+      allow update: if isPrimaryOwner() || (isOwner()
+        && email != 'a0965487920@gmail.com'
+        && resource.data.role != 'owner'
+        && request.resource.data.role != 'owner');
+      allow delete: if isPrimaryOwner() || (isOwner()
+        && email != 'a0965487920@gmail.com'
+        && resource.data.role != 'owner');
     }
 
     // 稽核事件位於公司 wildcard 之外，避免 Owner 的公司資料寫入權限覆蓋不可變限制。

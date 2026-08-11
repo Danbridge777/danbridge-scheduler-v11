@@ -117,6 +117,16 @@ describe('Owner 權限', () => {
     await assertFails(getDoc(doc(backup, `companies/${COMPANY_ID}/data/main`)));
   });
 
+  test('備援 Owner 有完整營運權限但不能控制主要 Owner 或建立第三個 Owner', async () => {
+    const backup = auth('backup-owner-uid', BACKUP_OWNER_EMAIL);
+    await assertSucceeds(setDoc(doc(backup, 'users/backup-owner-uid'), { email: BACKUP_OWNER_EMAIL, displayName: 'Backup Owner', active: true, companyId: COMPANY_ID, role: 'owner', lastLoginAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(backup, `companies/${COMPANY_ID}/data/backup-owner-write`), { ok: true }));
+    await assertFails(setDoc(doc(backup, 'companyAccess/third-owner@gmail.com'), { email: 'third-owner@gmail.com', active: true, companyId: COMPANY_ID, role: 'owner' }));
+    await assertFails(setDoc(doc(backup, 'companyAccess/third-teacher@gmail.com'), { email: 'third-teacher@gmail.com', active: true, companyId: COMPANY_ID, role: 'owner' }));
+    await assertFails(setDoc(doc(backup, `companyAccess/${OWNER_EMAIL}`), { email: OWNER_EMAIL, active: false, companyId: COMPANY_ID, role: 'owner' }));
+    await assertFails(updateDoc(doc(backup, 'users/owner-uid'), { active: false }));
+  });
+
   test('Owner 停權後立即阻止存取，重新啟用後恢復原老師範圍', async () => {
     const owner = auth('owner-uid', OWNER_EMAIL);
     const teacher = auth('teacher-uid', TEACHER_EMAIL);
