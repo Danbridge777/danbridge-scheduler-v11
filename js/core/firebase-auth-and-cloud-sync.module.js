@@ -766,11 +766,11 @@ function installTeacherReportUI(){
 }
 function subscribeLessonReports(){
  unsubscribeReports?.();unsubscribeReports=null;
+ if(cloudRole==='teacher')return;
  if(cloudRole!=='owner'&&!canUseTeacherReporting())return;
  const reportsRef=collection(cloud,'companies',COMPANY_ID,'lessonReports');
  let qy=reportsRef;
- if(cloudRole==='teacher')qy=query(reportsRef,where('reportedForTeacherIds','array-contains',cloudTeacherId));
- else if(cloudRole==='branch_manager'){
+ if(cloudRole==='branch_manager'){
    if(!cloudBranchIds.length)return;
    qy=cloudBranchIds.length===1?query(reportsRef,where('branchId','==',cloudBranchIds[0])):query(reportsRef,where('branchId','in',cloudBranchIds.slice(0,30)));
  }
