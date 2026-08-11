@@ -77,14 +77,20 @@ const applicationSource = fs.readFileSync(path.join(root, 'js/modules/applicatio
 assert.match(applicationSource, /createFreshLessonCopy\(lesson,\{date:shiftDate\(lesson\.date,7\)/, 'weekly copy uses the fresh lesson contract');
 assert.match(applicationSource, /createFreshLessonCopy\(lesson,\{date:newDate/, 'monthly copy uses the fresh lesson contract');
 const cloudSyncSource = fs.readFileSync(path.join(root, 'js/core/firebase-auth-and-cloud-sync.module.js'), 'utf8');
-const copiedReportGuardStart = cloudSyncSource.indexOf('function reportIsNewForCopiedLesson');
+const copiedReportGuardStart = cloudSyncSource.indexOf('function lessonReportLocalToday');
 const copiedReportGuardEnd = cloudSyncSource.indexOf('function applyCachedLessonReportsToCurrentDB', copiedReportGuardStart);
 assert.ok(copiedReportGuardStart >= 0 && copiedReportGuardEnd > copiedReportGuardStart, 'copied lesson report guard is installed before cloud reports are merged');
 vm.runInContext(cloudSyncSource.slice(copiedReportGuardStart, copiedReportGuardEnd), context);
 const copiedAt = new Date(Date.now() - 60_000).toISOString();
 const futureDate = `${new Date().getFullYear() + 1}-01-01`;
 assert.equal(context.reportIsNewForCopiedLesson({ date: futureDate, copyCreatedAt: copiedAt }, { updatedAtClient: new Date(Date.now() - 120_000).toISOString() }), false, 'a report older than a future copy can never attach to that copied lesson');
-assert.equal(context.reportIsNewForCopiedLesson({ date: futureDate, copyCreatedAt: copiedAt }, { updatedAtClient: new Date().toISOString() }), true, 'a genuinely new report submitted after the copy remains valid');
+assert.equal(context.reportIsNewForCopiedLesson({ date: futureDate, copyCreatedAt: copiedAt }, { updatedAtClient: new Date().toISOString() }), false, 'even a newly timestamped report cannot attach before a future lesson date');
+const todayDate = context.lessonReportLocalToday();
+assert.equal(context.reportIsNewForCopiedLesson({ date: todayDate, copyCreatedAt: copiedAt }, { updatedAtClient: new Date().toISOString() }), true, 'a genuinely new report submitted today after a today-copy remains valid');
+const staleFutureLesson={date:futureDate,status:'已上課',teacherReportStatus:'completed',teacherReportContent:'舊內容',teacherReportUpdatedAt:new Date(Date.now()-86_400_000).toISOString()};
+const cleanFutureLesson=context.stripPrematureLessonReport(staleFutureLesson);
+assert.equal(cleanFutureLesson.status,'未上課','a future lesson carrying an old outcome returns to an unreported state');
+assert.equal(Object.keys(cleanFutureLesson).some(key=>key.startsWith('teacherReport')),false,'all previous report fields are removed from future teacher and manager views');
 assert.match(cloudSyncSource, /canViewLessonReport\(lesson\)&&reportIsNewForCopiedLesson\(lesson,report\)/, 'cloud report merging enforces the copied lesson lifecycle guard');
 for(const [teacherId,teacherName] of [['t1','Wendy'],['t2','Kim'],['t3','Maria'],['t4','Daniel']]){
   const teacherSource={...reportedSource,id:`reported-${teacherId}`,teacherId,teacherIds:[teacherId],teacherName};
@@ -92,7 +98,7 @@ for(const [teacherId,teacherName] of [['t1','Wendy'],['t2','Kim'],['t3','Maria']
   assert.equal(teacherCopy.teacherId,teacherId,`${teacherName} copy preserves the assigned teacher`);
   assert.equal(teacherCopy.status,'未上課',`${teacherName} future copy starts unreported`);
   assert.equal(Object.keys(teacherCopy).some(key=>key.startsWith('teacherReport')),false,`${teacherName} future copy contains no previous report field`);
-  assert.equal(context.reportIsNewForCopiedLesson(teacherCopy,{updatedAtClient:new Date(Date.now()-120_000).toISOString()}),false,`${teacherName} future copy rejects a report older than the copy`);
+  assert.equal(context.reportIsNewForCopiedLesson(teacherCopy,{updatedAtClient:new Date().toISOString()}),false,`${teacherName} future copy rejects every report before its lesson date`);
 }
 const teacherCardPrivacyStart=applicationSource.indexOf('const lessonCardWithOwnerFinance');
 const teacherCardPrivacyEnd=applicationSource.indexOf('function weekMonday',teacherCardPrivacyStart);

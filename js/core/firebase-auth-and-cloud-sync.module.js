@@ -242,7 +242,7 @@ function lessonTeacherIds(lesson){
 function filteredTeacherDB(source,teacherId){
  teacherId=String(teacherId||'');
  const lessons=(source.lessons||[]).filter(l=>!l.isDraft&&lessonTeacherIds(l).includes(teacherId));
- const safeLessons=lessons.map(l=>{const {paymentStatus,chargeStudent,payTeacher,draftOriginal,...safe}=l;return safe});
+ const safeLessons=lessons.map(stripPrematureLessonReport).map(l=>{const {paymentStatus,chargeStudent,payTeacher,draftOriginal,...safe}=l;return safe});
  const studentIds=new Set(lessons.map(l=>l.studentId));
  const lessonIds=new Set(lessons.map(l=>String(l.id)));
  const students=(source.students||[]).filter(s=>studentIds.has(s.id)).map(s=>({id:s.id,name:s.name||'',courseType:s.courseType||'',preferredTeacherId:String(s.preferredTeacherId||'')===String(teacherId)?String(teacherId):''}));
@@ -253,7 +253,7 @@ function filteredTeacherDB(source,teacherId){
 function lessonBranchId(l){return l?.branchId||window.DanbridgeAccess?.branchIdFromLocation?.(l?.location||'')||'art_museum'}
 function filteredBranchDB(source,branchIds){
  const allowed=new Set(Array.isArray(branchIds)?branchIds:[]);
- const lessons=(source.lessons||[]).filter(l=>!l.isDraft&&allowed.has(lessonBranchId(l)));
+ const lessons=(source.lessons||[]).filter(l=>!l.isDraft&&allowed.has(lessonBranchId(l))).map(stripPrematureLessonReport);
  const studentIds=new Set(lessons.map(l=>l.studentId));
  const teacherIds=new Set(lessons.flatMap(lessonTeacherIds));
  const branches=(source.branches||window.DanbridgeAccess?.DEFAULT_BRANCHES||[]).filter(b=>allowed.has(b.id));
@@ -551,12 +551,29 @@ function applyReportToLesson(lesson,report){
  return changed;
 }
 
+function lessonReportLocalToday(){const now=new Date();return`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`}
+function lessonReportTimestamp(report){return report?.updatedAt?.toMillis?.()||Date.parse(report?.updatedAtClient||report?.teacherReportUpdatedAt||'')}
+function reportIsAllowedForLessonDate(lesson,reportedAt){
+ const today=lessonReportLocalToday(),date=String(lesson?.date||'');
+ if(date>today)return false;
+ if(date<today)return true;
+ if(!Number.isFinite(reportedAt))return false;
+ const time=new Date(reportedAt),reportedDate=`${time.getFullYear()}-${String(time.getMonth()+1).padStart(2,'0')}-${String(time.getDate()).padStart(2,'0')}`;
+ return reportedDate===today;
+}
+function stripPrematureLessonReport(lesson){
+ const copy={...(lesson||{})},reportedAt=lessonReportTimestamp(copy);
+ if(reportIsAllowedForLessonDate(copy,reportedAt))return copy;
+ const reportKeys=Object.keys(copy).filter(key=>key.startsWith('teacherReport'));
+ reportKeys.forEach(key=>delete copy[key]);
+ if(reportKeys.length&&String(copy.date||'')>=lessonReportLocalToday()&&['已上課','學生請假','老師請假','缺席','補課完成'].includes(copy.status))copy.status='未上課';
+ return copy;
+}
 function reportIsNewForCopiedLesson(lesson,report){
+ const reportedAt=lessonReportTimestamp(report);
+ if(!reportIsAllowedForLessonDate(lesson,reportedAt))return false;
  if(!lesson?.copyCreatedAt)return true;
- const now=new Date(),today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
- if(String(lesson.date||'')<today)return true;
  const copiedAt=Date.parse(lesson.copyCreatedAt);
- const reportedAt=report?.updatedAt?.toMillis?.()||Date.parse(report?.updatedAtClient||'');
  return Number.isFinite(copiedAt)&&Number.isFinite(reportedAt)&&reportedAt>=copiedAt;
 }
 
