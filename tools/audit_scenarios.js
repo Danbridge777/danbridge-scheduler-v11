@@ -272,7 +272,9 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.23\.0'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.23\.1'/, 'operational errors identify the current deployed release');
+const convenienceSource=fs.readFileSync(path.join(root,'js/app/v18-convenience-suite.js'),'utf8');
+assert.match(convenienceSource,/push\('校區',branchName\(old\.branchId\),branchName\(branchId\)\)/,'lesson change confirmations display branch names instead of internal IDs');
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*setCompanyAccessWithAudit\(email,\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension atomically audits the preserved access record and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');

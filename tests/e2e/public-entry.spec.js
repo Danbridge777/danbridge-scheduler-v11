@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.23.0';
+const CLOUD_RELEASE = '20.23.1';
 const APP_SHELL_RELEASE = '20.19.5';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
