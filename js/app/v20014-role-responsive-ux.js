@@ -145,6 +145,8 @@
   function apply(){
     const current=role();
     document.body.dataset.roleUx=current;
+    if(current!=='branch_manager')$$('.manager-shortcut').forEach(button=>button.remove());
+    if(current!=='teacher')$('#teacherReportShortcut')?.remove();
     if(current==='owner')restoreRoleResponsiveControls();
     if(current==='teacher'){
       const labels={dashboard:'我的總覽',calendar:'我的課表',lessons:'課程回報'};

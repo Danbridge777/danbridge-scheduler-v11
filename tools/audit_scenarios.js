@@ -266,6 +266,8 @@ assert.match(cloudSource, /if\(!existing\.exists\(\)\)\{payload\.invitedAt=serve
 assert.match(cloudSource, /function cloudInvitationState\(active,hasLogin\)[\s\S]*停權[\s\S]*已加入[\s\S]*待首次登入/, 'invitation status distinguishes pending, accepted, and suspended accounts');
 assert.match(cloudSource, /async function copyCloudLoginInvitation\(email\)[\s\S]*navigator\.clipboard\.writeText\(message\)/, 'owner can copy a login invitation without sending account data');
 const roleResponsiveSource = fs.readFileSync(path.join(root, 'js/app/v20014-role-responsive-ux.js'), 'utf8');
+assert.match(roleResponsiveSource, /if\(current!==\x27branch_manager\x27\)\$\$\(\x27\.manager-shortcut\x27\)\.forEach\(button=>button\.remove\(\)\)/, 'teacher and owner dashboards remove branch-manager shortcuts left by a previous login');
+assert.match(roleResponsiveSource, /if\(current!==\x27teacher\x27\)\$\(\x27#teacherReportShortcut\x27\)\?\.remove\(\)/, 'owner and branch-manager dashboards remove the teacher report shortcut left by a previous login');
 const courseOperationsSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course-operations.js'), 'utf8');
 assert.match(roleResponsiveSource, /function hideForRole\(element\)[\s\S]*roleResponsiveHidden='1'/, 'responsive role hiding records which controls it owns');
 assert.match(roleResponsiveSource, /function teacherStats\(\)[\s\S]*lessonTeacherIds\(l\)\.includes\(teacherId\)[\s\S]*calculateTeacherPayroll\(currentTeacher,month,rows\)[\s\S]*本月課表時數[\s\S]*計薪/, 'teacher dashboard defensively scopes lessons to the signed-in teacher and uses the same payroll calculation');
