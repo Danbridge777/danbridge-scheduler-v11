@@ -120,10 +120,14 @@ function createFreshLessonCopy(source,overrides={}){
   delete copy.sourceLessonId;
   delete copy.scheduledLessonId;
   delete copy.isMakeup;
+  delete copy.copySourceLessonId;
+  delete copy.copyCreatedAt;
   if(typeof copy.note==='string')copy.note=copy.note.replace(/(?:^|｜|\s)MAKEUP:[^｜\s]+/g,'').trim();
   copy.seriesId='';
   copy.status='未上課';
   copy.paymentStatus='unpaid';
+  copy.copySourceLessonId=String(source?.id||'');
+  copy.copyCreatedAt=new Date().toISOString();
   Object.assign(copy,overrides);
   copy.id=overrides.id||createLessonId();
   return copy;

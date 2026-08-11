@@ -36,7 +36,7 @@ vm.runInContext(fs.readFileSync(path.join(root, 'js/modules/business/business-lo
 vm.runInContext(fs.readFileSync(path.join(root, 'js/modules/makeups/makeup-management.js'), 'utf8'), context);
 
 context.db.students = [{ id: 's1', name: 'Student', rate: 200, parent: 'Private', contact: '0900' }];
-context.db.teachers = [{ id: 't1', name: 'One', rate: 100 }, { id: 't2', name: 'Two', rate: 150 }];
+context.db.teachers = [{ id: 't1', name: 'Wendy', rate: 100 }, { id: 't2', name: 'Kim', rate: 150 }];
 const lesson = (overrides = {}) => ({ id: 'l1', studentId: 's1', teacherId: 't1', teacherIds: ['t1'], date: '2026-08-05', start: '10:00', end: '11:00', status: '已上課', ...overrides });
 const schedulerCopySource = fs.readFileSync(path.join(root, 'js/modules/calendar/scheduler-ui.js'), 'utf8');
 const freshCopyStart = schedulerCopySource.indexOf('function createFreshLessonCopy');
@@ -60,6 +60,8 @@ assert.equal(freshCopy.status, '未上課', 'copied lesson starts as a new unrep
 assert.equal(freshCopy.paymentStatus, 'unpaid', 'copied lesson starts with fresh payment state');
 assert.equal(freshCopy.seriesId, '', 'copied lesson is not linked to the old repeating series');
 assert.equal(freshCopy.note, '原備註', 'copied lesson removes a legacy makeup token hidden in its note');
+assert.equal(freshCopy.copySourceLessonId, reportedSource.id, 'copied lesson records only its source identity, not its source report');
+assert.ok(Number.isFinite(Date.parse(freshCopy.copyCreatedAt)), 'copied lesson records when its fresh report lifecycle begins');
 for(const key of Object.keys(reportedSource).filter(key=>key.startsWith('teacherReport'))){
   assert.equal(Object.hasOwn(freshCopy,key),false,`copied lesson removes ${key}`);
 }
@@ -74,6 +76,24 @@ assert.match(schedulerCopySource, /function calendarTeacherTargetChanged\(\)[\s\
 const applicationSource = fs.readFileSync(path.join(root, 'js/modules/application-and-business-features.js'), 'utf8');
 assert.match(applicationSource, /createFreshLessonCopy\(lesson,\{date:shiftDate\(lesson\.date,7\)/, 'weekly copy uses the fresh lesson contract');
 assert.match(applicationSource, /createFreshLessonCopy\(lesson,\{date:newDate/, 'monthly copy uses the fresh lesson contract');
+const cloudSyncSource = fs.readFileSync(path.join(root, 'js/core/firebase-auth-and-cloud-sync.module.js'), 'utf8');
+const copiedReportGuardStart = cloudSyncSource.indexOf('function reportIsNewForCopiedLesson');
+const copiedReportGuardEnd = cloudSyncSource.indexOf('function applyCachedLessonReportsToCurrentDB', copiedReportGuardStart);
+assert.ok(copiedReportGuardStart >= 0 && copiedReportGuardEnd > copiedReportGuardStart, 'copied lesson report guard is installed before cloud reports are merged');
+vm.runInContext(cloudSyncSource.slice(copiedReportGuardStart, copiedReportGuardEnd), context);
+const copiedAt = new Date(Date.now() - 60_000).toISOString();
+const futureDate = `${new Date().getFullYear() + 1}-01-01`;
+assert.equal(context.reportIsNewForCopiedLesson({ date: futureDate, copyCreatedAt: copiedAt }, { updatedAtClient: new Date(Date.now() - 120_000).toISOString() }), false, 'a report older than a future copy can never attach to that copied lesson');
+assert.equal(context.reportIsNewForCopiedLesson({ date: futureDate, copyCreatedAt: copiedAt }, { updatedAtClient: new Date().toISOString() }), true, 'a genuinely new report submitted after the copy remains valid');
+assert.match(cloudSyncSource, /canViewLessonReport\(lesson\)&&reportIsNewForCopiedLesson\(lesson,report\)/, 'cloud report merging enforces the copied lesson lifecycle guard');
+for(const [teacherId,teacherName] of [['t1','Wendy'],['t2','Kim'],['t3','Maria'],['t4','Daniel']]){
+  const teacherSource={...reportedSource,id:`reported-${teacherId}`,teacherId,teacherIds:[teacherId],teacherName};
+  const teacherCopy=context.createFreshLessonCopy(teacherSource,{date:futureDate});
+  assert.equal(teacherCopy.teacherId,teacherId,`${teacherName} copy preserves the assigned teacher`);
+  assert.equal(teacherCopy.status,'未上課',`${teacherName} future copy starts unreported`);
+  assert.equal(Object.keys(teacherCopy).some(key=>key.startsWith('teacherReport')),false,`${teacherName} future copy contains no previous report field`);
+  assert.equal(context.reportIsNewForCopiedLesson(teacherCopy,{updatedAtClient:new Date(Date.now()-120_000).toISOString()}),false,`${teacherName} future copy rejects a report older than the copy`);
+}
 const teacherCardPrivacyStart=applicationSource.indexOf('const lessonCardWithOwnerFinance');
 const teacherCardPrivacyEnd=applicationSource.indexOf('function weekMonday',teacherCardPrivacyStart);
 assert.ok(teacherCardPrivacyStart>=0&&teacherCardPrivacyEnd>teacherCardPrivacyStart,'teacher calendar privacy wrapper is installed before calendar use');

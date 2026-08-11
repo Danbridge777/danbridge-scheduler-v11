@@ -551,13 +551,22 @@ function applyReportToLesson(lesson,report){
  return changed;
 }
 
+function reportIsNewForCopiedLesson(lesson,report){
+ if(!lesson?.copyCreatedAt)return true;
+ const now=new Date(),today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+ if(String(lesson.date||'')<today)return true;
+ const copiedAt=Date.parse(lesson.copyCreatedAt);
+ const reportedAt=report?.updatedAt?.toMillis?.()||Date.parse(report?.updatedAtClient||'');
+ return Number.isFinite(copiedAt)&&Number.isFinite(reportedAt)&&reportedAt>=copiedAt;
+}
+
 function applyCachedLessonReportsToCurrentDB(){
  const local=window.__danbridgeGetDB?.();
  if(!local||!Array.isArray(local.lessons)||!Array.isArray(lessonReportDocuments)||!lessonReportDocuments.length)return false;
  let changed=false;
  for(const report of lessonReportDocuments){
    const lesson=local.lessons.find(x=>x.id===(report.lessonId||report.id));
-   if(lesson&&canViewLessonReport(lesson))changed=applyReportToLesson(lesson,report)||changed;
+   if(lesson&&canViewLessonReport(lesson)&&reportIsNewForCopiedLesson(lesson,report))changed=applyReportToLesson(lesson,report)||changed;
  }
  return changed;
 }
