@@ -86,7 +86,24 @@ header .header-auth-actions{display:flex!important;align-items:center!important;
 @media(max-width:700px){.danbridge-language-toggle{min-width:44px;height:38px;padding-inline:10px}.danbridge-language-toggle.is-floating{right:10px;top:8px}}
 
 /* V18.7 synchronized finance workspace month selector. */
-.v187-finance-month-bar{display:flex;align-items:end;justify-content:center;gap:16px;margin:-2px 0 18px;padding:13px 16px;border:1px solid #d9e5ee;border-radius:13px;background:#f5f9fc}
-.v187-finance-month-bar label{display:grid;gap:6px;min-width:230px}.v187-finance-month-bar label span{color:#49657b;font-size:11px;font-weight:850;letter-spacing:.06em;text-align:center}.v187-finance-month-bar input{width:100%;height:42px;min-height:42px;border-color:#cddce8!important;border-radius:10px!important;background:#fff!important;font-size:15px!important;font-weight:800!important;text-align:center!important}
-.v187-finance-month-bar small{max-width:430px;padding-bottom:10px;color:#667d91;font-size:12px;line-height:1.4}.v187-native-month-hidden{display:none!important}
-@media(max-width:600px){.v187-finance-month-bar{display:grid;grid-template-columns:1fr;gap:8px}.v187-finance-month-bar label{min-width:0}.v187-finance-month-bar small{text-align:center;padding:0}}
+.v187-finance-month-bar{display:grid;grid-template-columns:minmax(260px,320px) minmax(0,430px);align-items:end;justify-content:center;gap:28px;margin:-2px 0 18px;padding:13px 24px;border:1px solid #d9e5ee;border-radius:13px;background:#f5f9fc}
+.v187-finance-month-bar label{display:grid;gap:6px;min-width:0}.v187-finance-month-bar label span{color:#49657b;font-size:11px;font-weight:850;letter-spacing:.06em;text-align:center}.v187-finance-month-bar input{box-sizing:border-box;width:100%;height:42px;min-height:42px;padding:0 18px 0 54px!important;border-color:#cddce8!important;border-radius:10px!important;background:#fff!important;font-size:15px!important;font-weight:800!important;text-align:left!important}
+.v187-finance-month-bar small{min-width:0;padding:0 0 10px 12px;color:#667d91;font-size:12px;line-height:1.4}.v187-native-month-hidden{display:none!important}
+@media(max-width:800px){.v187-finance-month-bar{grid-template-columns:1fr;gap:8px;padding-inline:16px}.v187-finance-month-bar small{text-align:center;padding:0}}
+
+#lessonModal .modal>.grid:first-of-type{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px!important}
+#lessonModal .modal>.grid:first-of-type>.col-6{grid-column:span 1!important;min-width:0!important}
+#lessonModal #startTime,#lessonModal #endTime{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important}
+@media(max-width:520px){#lessonModal .modal>.grid:first-of-type{grid-template-columns:1fr!important}#lessonModal .modal>.grid:first-of-type>.col-6{grid-column:1!important}}
+@media(hover:none) and (pointer:coarse){#calendarCanvas .lesson,#calendarCanvas .week-event{min-height:36px!important;padding-block:9px!important}}
+
+/* Use one document-level vertical scroll for every signed-in role. */
+@media(min-width:1100px){
+  body:not(.auth-locked)>nav{overflow:visible!important;overscroll-behavior:auto!important;scrollbar-width:none!important}
+  body:not(.auth-locked)>nav::-webkit-scrollbar{display:none!important}
+  #students.active{height:auto!important;min-height:0!important;overflow:visible!important;padding-bottom:initial!important}
+  #students.active>.grid,#students.active>.grid>.card{height:auto!important;min-height:0!important}
+  #students.active>.grid>.card.col-4,#students.active>.grid>.card.col-8{overflow:visible!important;overscroll-behavior:auto!important;scrollbar-gutter:auto!important;touch-action:auto!important}
+  #students.active>.grid>.card.col-8{display:block!important}
+  #students.active>.grid>.card.col-8>.table-wrap{overflow-x:auto!important;overflow-y:visible!important;overscroll-behavior:auto!important;scrollbar-gutter:auto!important;touch-action:pan-x pan-y!important}
+}

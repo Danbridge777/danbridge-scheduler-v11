@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.24.2';
+const APP_RELEASE='20.25.0';
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
@@ -136,6 +136,9 @@ async function setCompanyAccessWithAudit(email,payload,detail,merge=true){
 async function deleteCompanyAccessWithAudit(email,detail){
  const audit=immutableAuditRecord(detail),accessRef=doc(cloud,'companyAccess',email);await runTransaction(cloud,async transaction=>{const existing=await transaction.get(audit.ref);transaction.delete(accessRef);if(!existing.exists())transaction.set(audit.ref,audit.payload)});
 }
+async function deleteOwnerAccessWithAudit(email,userRefs,detail){
+ const audit=immutableAuditRecord(detail),accessRef=doc(cloud,'companyAccess',email);await runTransaction(cloud,async transaction=>{const existing=await transaction.get(audit.ref);userRefs.forEach(userRef=>transaction.set(userRef,{active:false,role:'revoked',updatedAt:serverTimestamp()},{merge:true}));transaction.delete(accessRef);if(!existing.exists())transaction.set(audit.ref,audit.payload)});
+}
 async function listImmutableAudit(){
  const box=document.getElementById('immutableAuditList');if(!box||cloudRole!=='owner')return;
  try{const qs=await getDocs(query(collection(cloud,'companyAudit'),where('companyId','==',COMPANY_ID))),rows=qs.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.toMillis?.()||0)-(a.createdAt?.toMillis?.()||0)).slice(0,50);box.innerHTML=rows.length?rows.map(x=>`<div class="backup-item"><div class="info"><b>${escapeHTML(x.action||'操作')}</b><div class="small">${escapeHTML(x.actorEmail||x.actorUid||'Owner')}｜${escapeHTML(formatNotificationTimestamp(x.createdAt)||'時間確認中')}<br>${escapeHTML(x.targetType||'system')}：${escapeHTML(x.targetId||'—')}｜${Number(x.totalChanges)||0} 筆變更</div></div><span class="pill blue">不可覆寫</span></div>`).join(''):'<span class="small">尚無不可覆寫稽核紀錄。</span>'}catch(e){console.error('listImmutableAudit failed',e);box.innerHTML='<span class="small">稽核紀錄暫時無法讀取。</span>'}
@@ -252,7 +255,7 @@ async function ensureProfile(user){
  if(a.role==='branch_manager'&&(!Array.isArray(a.branchIds)||!a.branchIds.length))throw new Error('No branch has been assigned to this manager account.');
  return {
    email:user.email,
-   displayName:user.displayName||'',
+   displayName:a.displayName||user.displayName||'',
    role:a.role,
    companyId:a.companyId,
    active:true,
@@ -341,9 +344,20 @@ async function listEmergencyOwners(){
  const box=document.getElementById('emergencyOwnerList');if(!box||cloudRole!=='owner')return;
  try{
   const qs=await getDocs(query(collection(cloud,'companyAccess'),where('companyId','==',COMPANY_ID),where('role','==','owner')));
-  const primary=cloudEmailKey===OWNER_EMAIL,rows=qs.docs.map(d=>({id:d.id,...d.data()}));box.innerHTML=rows.length?rows.map(x=>{const email=String(x.email||x.id).toLowerCase(),active=x.active!==false,isPrimary=email===OWNER_EMAIL;return`<div class="backup-item"><div class="info"><b>${escapeHTML(isPrimary?'主要 Owner':(x.displayName||'備援 Owner'))}</b><div class="small">${escapeHTML(email)}</div></div><div class="row-actions"><span class="pill ${active?'green':'red'}">${active?'已啟用':'已停權'}</span>${isPrimary||!primary?'<span class="pill blue">受保護</span>':`<button type="button" class="btn emergency-owner-toggle" data-email="${escapeHTML(email)}" data-active="${active?'true':'false'}">${active?'停權':'重新啟用'}</button>`}</div></div>`}).join(''):'<span class="small">尚未建立備援 Owner。</span>';
+  const primary=cloudEmailKey===OWNER_EMAIL,rows=qs.docs.map(d=>({id:d.id,...d.data()}));box.innerHTML=rows.length?rows.map(x=>{const email=String(x.email||x.id).toLowerCase(),active=x.active!==false,isPrimary=email===OWNER_EMAIL;return`<div class="backup-item"><div class="info"><b>${escapeHTML(isPrimary?'主要 Owner':(x.displayName||'備援 Owner'))}</b><div class="small">${escapeHTML(email)}</div></div><div class="row-actions"><span class="pill ${active?'green':'red'}">${active?'已啟用':'已停權'}</span>${isPrimary||!primary?'<span class="pill blue">受保護</span>':`<button type="button" class="btn emergency-owner-toggle" data-email="${escapeHTML(email)}" data-active="${active?'true':'false'}">${active?'停權':'重新啟用'}</button><button type="button" class="btn danger emergency-owner-delete" data-email="${escapeHTML(email)}">刪除</button>`}</div></div>`}).join(''):'<span class="small">尚未建立備援 Owner。</span>';
   box.querySelectorAll('.emergency-owner-toggle').forEach(button=>button.onclick=async()=>{await setCloudAccessActive(button.dataset.email,button.dataset.active!=='true');await listEmergencyOwners()});
+  box.querySelectorAll('.emergency-owner-delete').forEach(button=>button.onclick=async()=>{await deleteEmergencyOwner(button.dataset.email);await listEmergencyOwners()});
  }catch(e){console.error('listEmergencyOwners failed',e);emergencyOwnerStatus('備援 Owner 清單讀取失敗，請稍後重試。','error');box.innerHTML='<span class="small">讀取失敗，請稍後重試。</span>'}
+}
+async function deleteEmergencyOwner(email){
+ if(cloudEmailKey!==OWNER_EMAIL)return emergencyOwnerStatus('只有主要 Owner 可以刪除其他 Owner。','error');
+ email=String(email||'').trim().toLowerCase();if(!email||email===OWNER_EMAIL)return;
+ if(!confirm(`確定永久刪除 ${email} 的 Owner 登入權限？\n此帳號會立即失去所有 Danbridge 存取權。`))return;
+ try{
+  const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));
+  await deleteOwnerAccessWithAudit(email,userQs.docs.map(userDoc=>userDoc.ref),{action:'backup-owner-deleted',category:'access',targetType:'account',targetId:email,changedFields:['active','role'],totalChanges:1});
+  invalidateCompanyAccessCache();emergencyOwnerStatus('備援 Owner 權限已刪除。','ok');await listImmutableAudit();
+ }catch(e){console.error(e);emergencyOwnerStatus('刪除備援 Owner 失敗：'+(e?.message||e),'error')}
 }
 async function saveEmergencyOwner(){
  if(cloudRole!=='owner')return;
@@ -1013,11 +1027,11 @@ function applyRoleUI(profile,user){
  cloudRoleAccessSignature=cloudRole==='owner'?'':roleAccessSignature({...profile,role:cloudRole,teacherId:cloudTeacherId,branchIds:cloudBranchIds});
  if(cloudRole==='owner'){const current=window.__danbridgeGetDB?.();if(current)window.__danbridgeSetDB(deepCopy(current));}
  window.DanbridgeAccess?.setContext({role:cloudRole,branchIds:cloudBranchIds,teacherId:cloudTeacherId,email:cloudEmailKey,readOnly:profile.readOnly===true||cloudRole==='branch_manager',canSubmitOwnReports:profile.canSubmitOwnReports!==false});
- const signedInName=(cloudRole==='owner'?OWNER_DISPLAY_NAME:cloudRole==='teacher'?(profile.teacherName||profile.displayName):cloudRole==='branch_manager'?(profile.managerName||profile.teacherName||profile.displayName):(profile.displayName||user.displayName))||user.displayName||user.email||'';
+ const signedInName=(cloudRole==='owner'?(cloudEmailKey===OWNER_EMAIL?OWNER_DISPLAY_NAME:(profile.displayName||user.displayName)):cloudRole==='teacher'?(profile.teacherName||profile.displayName):cloudRole==='branch_manager'?(profile.managerName||profile.teacherName||profile.displayName):(profile.displayName||user.displayName))||user.displayName||user.email||'';
  document.body.dataset.cloudDisplayName=String(signedInName).trim();
- if(cloudRole==='owner'&&profile.displayName!==OWNER_DISPLAY_NAME){
+ if(cloudRole==='owner'&&profile.displayName!==signedInName){
    const ownerRef=doc(cloud,'companies',COMPANY_ID,'accounts',user.uid);
-   setDoc(ownerRef,{displayName:OWNER_DISPLAY_NAME,updatedAt:serverTimestamp()},{merge:true}).catch(error=>console.warn('owner display name sync failed',error));
+   setDoc(ownerRef,{displayName:signedInName,updatedAt:serverTimestamp()},{merge:true}).catch(error=>console.warn('owner display name sync failed',error));
  }
  const header=document.querySelector('.header-auth-actions');
  if(header)header.innerHTML=`<span style="font-size:12px;font-weight:800">${window.DanbridgeAccess?.ROLE_LABELS?.[profile.role]||profile.role}｜${String(signedInName).trim()}</span>${profile.role==='owner'?'<button type="button" class="btn notification-bell" onclick="DanbridgeNotifications.open()" aria-label="開啟通知中心"><span class="notification-bell-icon">🔔</span><span id="notificationCount" class="notification-count" hidden>0</span></button>':''}<button type="button" class="btn" id="firebaseLogoutBtn">登出</button>`;

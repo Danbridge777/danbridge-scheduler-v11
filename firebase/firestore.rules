@@ -88,6 +88,19 @@ service cloud.firestore {
       ) || (
         signedIn() && request.auth.uid == uid
         && accessExists()
+        && access().active == true
+        && access().companyId == 'danbridge'
+        && access().role == 'owner'
+        && request.resource.data.email.lower() == emailKey()
+        && request.resource.data.companyId == 'danbridge'
+        && request.resource.data.role == 'owner'
+        && request.resource.data.active == true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName','photoURL','lastLoginAt','updatedAt','role','companyId','active'
+        ])
+      ) || (
+        signedIn() && request.auth.uid == uid
+        && accessExists()
         && request.resource.data.email.lower() == emailKey()
         && request.resource.data.companyId == access().companyId
         && request.resource.data.role == access().role

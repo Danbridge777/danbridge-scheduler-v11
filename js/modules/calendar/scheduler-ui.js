@@ -378,10 +378,12 @@ function attachDragHandlers(){
     el.addEventListener('dragend',()=>{el.classList.remove('dragging');dragState=null;document.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'))});
     el.addEventListener('pointerdown',e=>{
       if(e.pointerType==='mouse'||(selectionMode&&!selectedLessonIds.has(el.dataset.id)))return;
+      e.preventDefault();
       removeGlobalPointerListeners();
       pointerId=e.pointerId;startX=e.clientX;startY=e.clientY;dragStarted=false;suppressClick=false;
       touchDragIds=selectedLessonIds.has(el.dataset.id)?[...selectedLessonIds]:[el.dataset.id];
-    },{passive:true});
+      try{el.setPointerCapture(pointerId)}catch{}
+    },{passive:false});
     el.addEventListener('pointermove',e=>{
       if(pointerId!==e.pointerId)return;
       const moved=Math.hypot(e.clientX-startX,e.clientY-startY);

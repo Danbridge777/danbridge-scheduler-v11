@@ -127,6 +127,19 @@ describe('Owner 權限', () => {
     await assertFails(updateDoc(doc(backup, 'users/owner-uid'), { active: false }));
   });
 
+  test('舊管理者個人檔案可依正式備援 Owner 授權校正後讀取課程回報', async () => {
+    const primary = auth('owner-uid', OWNER_EMAIL);
+    const backup = auth('backup-owner-uid', BACKUP_OWNER_EMAIL);
+    await testEnv.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'users/backup-owner-uid'), { email: BACKUP_OWNER_EMAIL, displayName: 'Catherine', active: true, companyId: COMPANY_ID, role: 'branch_manager' });
+    });
+    await assertSucceeds(setDoc(doc(backup, 'users/backup-owner-uid'), { email: BACKUP_OWNER_EMAIL, displayName: 'Catherine', active: true, companyId: COMPANY_ID, role: 'owner', lastLoginAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true }));
+    await assertSucceeds(getDoc(doc(backup, `companies/${COMPANY_ID}/lessonReports/lesson-own`)));
+    await assertSucceeds(deleteDoc(doc(primary, `companyAccess/${BACKUP_OWNER_EMAIL}`)));
+    await assertSucceeds(updateDoc(doc(primary, 'users/backup-owner-uid'), { active: false, role: 'revoked' }));
+    await assertFails(getDoc(doc(backup, `companies/${COMPANY_ID}/lessonReports/lesson-own`)));
+  });
+
   test('Owner 停權後立即阻止存取，重新啟用後恢復原老師範圍', async () => {
     const owner = auth('owner-uid', OWNER_EMAIL);
     const teacher = auth('teacher-uid', TEACHER_EMAIL);

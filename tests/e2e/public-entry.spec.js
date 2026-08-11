@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.24.2';
+const CLOUD_RELEASE = '20.25.0';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -11,6 +11,9 @@ const ROLE_UX_STYLE_RELEASE = '20.24.2';
 const PWA_RELEASE = '20.18.3';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
+const LANGUAGE_RELEASE = '20.25.0';
+const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.0';
+const SCHEDULER_UI_RELEASE = '20.25.0';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
   await page.route('https://www.gstatic.com/**', route => route.abort());
@@ -35,9 +38,12 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/core/branch-business-scope.js?v=${BRANCH_SCOPE_RELEASE}`);
   expect(sources).toContain(`./js/app/v20014-role-responsive-ux.js?v=${ROLE_UX_RELEASE}`);
   expect(sources).toContain(`./js/core/pwa-installation.js?v=${PWA_RELEASE}`);
+  expect(sources).toContain(`./js/core/ui-language.js?v=${LANGUAGE_RELEASE}`);
+  expect(sources).toContain(`./js/modules/calendar/scheduler-ui.js?v=${SCHEDULER_UI_RELEASE}`);
   const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(elements => elements.map(element => element.getAttribute('href')));
   expect(styles).toContain(`./css/core/73-v20014-role-responsive-ux.css?v=${ROLE_UX_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/77-pwa-install-and-update.css?v=${PWA_STYLE_RELEASE}`);
+  expect(styles).toContain(`./css/core/67-v185-interface-clarity.css?v=${INTERFACE_CLARITY_STYLE_RELEASE}`);
   const manifest = await page.locator('link[rel="manifest"]').getAttribute('href');
   expect(manifest).toBe('./manifest.webmanifest');
   const appleIcon = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
@@ -51,6 +57,56 @@ test('teacher schedule hides the location legend', async ({ page }) => {
     element.dataset.roleUx = 'teacher';
   });
   await expect(page.locator('#calendar .location-legend')).toBeHidden();
+});
+
+test('English mode translates the major application workspaces', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await page.evaluate(() => window.DanbridgeLanguage.setLanguage('en'));
+  const translatedBody = await page.locator('body').textContent();
+  for (const label of ['Security', 'Smart Scheduling Assistant', 'Lesson Reports', 'Notification Center', 'Finance Center']) {
+    expect(translatedBody).toContain(label);
+  }
+  for (const untranslated of ['安全設定', '智慧排課助手', '課程回報', '通知中心', '財務中心']) {
+    expect(translatedBody).not.toContain(untranslated);
+  }
+});
+
+test('finance month helper stays clear of the month field', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  const boxes = await page.evaluate(() => {
+    const bar = document.createElement('div');
+    bar.className = 'v187-finance-month-bar';
+    bar.innerHTML = '<label><span>資料月份</span><input type="month" value="2026-08"></label><small>切換後自動更新財務、老師 KPI、學生收款與支出資料</small>';
+    document.body.appendChild(bar);
+    const input = bar.querySelector('input').getBoundingClientRect();
+    const helper = bar.querySelector('small').getBoundingClientRect();
+    const result = { inputRight: input.right, inputBottom: input.bottom, helperLeft: helper.left, helperTop: helper.top };
+    bar.remove();
+    return result;
+  });
+  expect(boxes.helperLeft >= boxes.inputRight || boxes.helperTop >= boxes.inputBottom).toBe(true);
+});
+
+test('iPad lesson start and end fields do not overlap', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  const boxes = await page.evaluate(() => {
+    const modal = document.querySelector('#lessonModal .modal');
+    modal.parentElement.classList.add('show');
+    const start = document.getElementById('startTime').getBoundingClientRect();
+    const end = document.getElementById('endTime').getBoundingClientRect();
+    return { startRight: start.right, startBottom: start.bottom, endLeft: end.left, endTop: end.top, startWidth: start.width, endWidth: end.width };
+  });
+  expect(boxes.endLeft >= boxes.startRight || boxes.endTop >= boxes.startBottom).toBe(true);
+  expect(Math.abs(boxes.startWidth - boxes.endWidth)).toBeLessThanOrEqual(2);
+});
+
+test('desktop roles use document scrolling instead of a sidebar scrollbar', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  const result = await page.evaluate(() => {
+    document.body.classList.remove('auth-locked');
+    return { width: window.innerWidth, overflow: getComputedStyle(document.querySelector('body > nav')).overflowY };
+  });
+  if (result.width >= 1100) expect(result.overflow).toBe('visible');
 });
 
 test('form fields do not show redundant placeholder hints', async ({ page }) => {
