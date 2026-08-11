@@ -15,6 +15,8 @@ const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
 const APP_RELEASE='20.15.7';
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
+const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
+const CLOUD_BACKUP_RETENTION_DAYS=30;
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const cloud=getFirestore(app);
@@ -76,6 +78,7 @@ const COMPANY_ACCESS_CACHE_TTL=30000;
 const errorEventQueue=[];
 const errorEventFingerprints=new Map();
 let errorEventCount=0;
+let dailyBackupTimer=null;
 let originalSaveDB=window.saveDB;
 const originalEditLesson=window.editLesson;
 
@@ -87,6 +90,16 @@ function localRoleCacheKey(){
  return `danbridge_scheduler_view_${cloudRole||'signed_out'}_${identity}`;
 }
 function persistCurrentLocalView(){try{localStorage.setItem(localRoleCacheKey(),JSON.stringify(window.__danbridgeGetDB()))}catch{}}
+function persistOwnerSyncRecovery(){
+ if(cloudRole!=='owner'||!localDirtyHash)return;
+ try{localStorage.setItem(OWNER_SYNC_RECOVERY_KEY,JSON.stringify({hash:localDirtyHash,mutationVersion:localMutationVersion,updatedAt:new Date().toISOString()}))}catch{}
+}
+function clearOwnerSyncRecovery(){try{localStorage.removeItem(OWNER_SYNC_RECOVERY_KEY)}catch{}}
+function restoreOwnerSyncRecovery(){
+ if(cloudRole!=='owner')return false;
+ try{const saved=JSON.parse(localStorage.getItem(OWNER_SYNC_RECOVERY_KEY)||'null'),currentHash=dataHash(window.__danbridgeGetDB?.());if(saved?.hash&&saved.hash===currentHash){localDirtyHash=saved.hash;localMutationVersion=Math.max(localMutationVersion,Number(saved.mutationVersion)||1);ownerUploadQueued=true;return true}if(saved?.hash)clearOwnerSyncRecovery()}catch{}
+ return false;
+}
 let cloudStatusHideTimer=null;
 function cloudStatus(text,kind=''){let el=document.getElementById('firebaseCloudStatus');if(!el){el=document.createElement('div');el.id='firebaseCloudStatus';el.style.cssText='position:fixed;left:12px;bottom:12px;z-index:10001;padding:8px 11px;border-radius:10px;background:#172033;color:#fff;font-size:12px;font-weight:800;box-shadow:0 8px 20px rgba(0,0,0,.2);pointer-events:none';document.body.appendChild(el)}clearTimeout(cloudStatusHideTimer);el.hidden=false;el.textContent=text;el.dataset.kind=kind||'';el.style.background=kind==='error'?'#991b1b':kind==='ok'?'#18794e':kind==='pending'?'#9a6700':kind==='offline'?'#475569':'#172033';if(kind==='ok')cloudStatusHideTimer=setTimeout(()=>{if(el.dataset.kind==='ok')el.hidden=true},2200)}
 function dataHash(value){try{const text=JSON.stringify(value||{});let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)+':'+text.length}catch{return String(Date.now())}}
@@ -158,8 +171,10 @@ function setSignedOutIsolation(locked){
  if(locked){
   window.DanbridgeNotifications?.close?.();window.closeCourseDrawer?.();document.body.classList.remove('notification-center-open','course-drawer-open','lesson-paste-mode');
   const scheduleModal=document.getElementById('scheduleNotificationModal');if(scheduleModal)scheduleModal.hidden=true;
+  const reportModal=document.getElementById('reportSubmissionNotificationModal');if(reportModal)reportModal.hidden=true;
   currentScheduleNotification=null;
-  const sensitiveIds=['notificationList','notificationSummary','notificationFooter','scheduleNotificationBody','courseDrawerTitle','courseDrawerSubtitle','courseDrawerBody'];
+  currentReportNotification=null;
+  const sensitiveIds=['notificationList','notificationSummary','notificationFooter','scheduleNotificationBody','reportSubmissionNotificationBody','courseDrawerTitle','courseDrawerSubtitle','courseDrawerBody','cloudBackupList','syncRecoveryErrors','emergencyOwnerList','emergencyOwnerStatus'];
   sensitiveIds.forEach(id=>{const el=document.getElementById(id);if(!el)return;if(id==='notificationSummary')el.textContent='登入後顯示通知';else if(id==='notificationFooter')el.textContent='尚未更新';else el.replaceChildren()});
   const badge=document.getElementById('notificationCount');if(badge){badge.textContent='0';badge.hidden=true}
  }
@@ -195,8 +210,8 @@ async function ensureProfile(user){
  const a=accessSnap.data()||{};
  if(a.active!==true)throw new Error('This account has been deactivated.');
  if(a.companyId!==COMPANY_ID)throw new Error('This account does not belong to Danbridge.');
- if(!['teacher','branch_manager'].includes(a.role))throw new Error('The role assigned to this account is not valid.');
- if(!a.teacherId)throw new Error('No teacher profile is linked to this account. Please ask the owner to update the account settings.');
+ if(!['owner','teacher','branch_manager'].includes(a.role))throw new Error('The role assigned to this account is not valid.');
+ if(a.role!=='owner'&&!a.teacherId)throw new Error('No teacher profile is linked to this account. Please ask the owner to update the account settings.');
  if(a.role==='branch_manager'&&(!Array.isArray(a.branchIds)||!a.branchIds.length))throw new Error('No branch has been assigned to this manager account.');
  return {
    email:user.email,
@@ -204,7 +219,7 @@ async function ensureProfile(user){
    role:a.role,
    companyId:a.companyId,
    active:true,
-   teacherId:String(a.teacherId),
+   teacherId:a.teacherId?String(a.teacherId):'',
    teacherName:a.teacherName||'',
    managerName:a.managerName||'',
    branchIds:Array.isArray(a.branchIds)?a.branchIds:[],
@@ -235,6 +250,78 @@ async function lastLoginByEmail(){
  return result;
 }
 function teacherBadgeName(t){return String(t?.displayName||t?.name||'').trim()}
+
+function resilienceStatus(message='',kind=''){
+ const el=document.getElementById('cloudBackupStatus');if(el){el.textContent=message||'尚未檢查';el.dataset.kind=kind}
+}
+function backupDayKey(date=new Date()){return`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`}
+function backupCounts(db={}){return{students:db.students?.length||0,teachers:db.teachers?.length||0,lessons:db.lessons?.length||0,makeups:db.makeups?.length||0}}
+async function listCloudSafetyBackups(){
+ const list=document.getElementById('cloudBackupList');if(!list||cloudRole!=='owner')return;
+ try{
+  const qs=await getDocs(collection(cloud,'companies',COMPANY_ID,'dailyBackups'));
+  const rows=qs.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(b.id).localeCompare(String(a.id))).slice(0,CLOUD_BACKUP_RETENTION_DAYS);
+  list.innerHTML=rows.length?rows.map(x=>{const verified=!!x.snapshot&&dataHash(x.snapshot)===x.hash;return`<div class="backup-item"><div class="info"><b>${escapeHTML(x.id)}</b><div class="small">學生 ${x.counts?.students||0}｜老師 ${x.counts?.teachers||0}｜課程 ${x.counts?.lessons||0}<br>${escapeHTML(formatNotificationTimestamp(x.createdAt)||'時間確認中')}</div></div><div class="row-actions"><span class="pill ${verified?'green':'red'}">${verified?'雜湊一致':'驗證失敗'}</span>${verified?`<button type="button" class="btn cloud-backup-restore" data-day="${escapeHTML(x.id)}">還原</button>`:''}</div></div>`}).join(''):'<span class="small">尚未建立雲端安全快照。</span>';
+  list.querySelectorAll('.cloud-backup-restore').forEach(button=>button.onclick=()=>restoreCloudSafetyBackup(button.dataset.day));
+  const today=rows.find(x=>x.id===backupDayKey());resilienceStatus(today?'今日雲端快照已完成':'今日尚未建立雲端快照',today?'ok':'pending');
+ }catch(e){console.error('listCloudSafetyBackups failed',e);resilienceStatus('雲端快照清單讀取失敗','error');list.innerHTML='<span class="small">讀取失敗，請稍後重試。</span>'}
+}
+async function restoreCloudSafetyBackup(day){
+ if(cloudRole!=='owner'||!/^\d{4}-\d{2}-\d{2}$/.test(String(day||'')))return;
+ try{const snap=await getDoc(doc(cloud,'companies',COMPANY_ID,'dailyBackups',day));if(!snap.exists())return alert('找不到這份雲端快照。');const backup=snap.data(),restored=backup.snapshot;if(!restored||dataHash(restored)!==backup.hash)return alert('快照雜湊驗證失敗，已阻止還原。');if(!confirm(`確定還原 ${day} 的雲端快照？\n學生 ${backup.counts?.students||0}、老師 ${backup.counts?.teachers||0}、課程 ${backup.counts?.lessons||0}\n\n目前資料會先建立本機版本，再由還原內容取代。`))return;window.snapshot?.();window.createVersion?.(`還原 ${day} 雲端快照前`);applyingCloud=true;window.__danbridgeSetDB(deepCopy(restored));persistCurrentLocalView();window.renderAll?.();applyingCloud=false;window.saveDB?.();cloudStatus(`已還原 ${day} 雲端快照，正在同步…`,'pending')}catch(e){console.error('restoreCloudSafetyBackup failed',e);alert('還原失敗：'+(e?.message||e))}
+}
+async function cleanupOldCloudBackups(){
+ if(cloudRole!=='owner')return;
+ const qs=await getDocs(collection(cloud,'companies',COMPANY_ID,'dailyBackups')),cutoff=new Date();cutoff.setDate(cutoff.getDate()-CLOUD_BACKUP_RETENTION_DAYS);
+ await Promise.allSettled(qs.docs.filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d.id)&&new Date(`${d.id}T00:00:00`)<cutoff).map(d=>deleteDoc(d.ref)));
+}
+async function createCloudSafetyBackup(force=false){
+ if(cloudRole!=='owner')return false;
+ const current=deepCopy(window.__danbridgeGetDB?.()),score=window.__danbridgeDataScore?.(current)||0;if(!score){resilienceStatus('資料為空，已阻止建立快照','error');return false}
+ const day=backupDayKey(),ref=doc(cloud,'companies',COMPANY_ID,'dailyBackups',day);
+ try{
+  if(!force&&(await getDoc(ref)).exists()){await listCloudSafetyBackups();return true}
+  resilienceStatus('正在建立今日雲端快照…','pending');
+  await setDoc(ref,{companyId:COMPANY_ID,day,snapshot:current,hash:dataHash(current),counts:backupCounts(current),schema:'danbridge-db-v1',environment:DANBRIDGE_ENVIRONMENT,createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false});
+  await cleanupOldCloudBackups();await listCloudSafetyBackups();cloudStatus('今日雲端安全快照已完成','ok');return true;
+ }catch(e){console.error('createCloudSafetyBackup failed',e);resilienceStatus('建立雲端快照失敗，系統會在下次連線重試','error');reportOperationalError(e,{category:'cloud-write',area:'owner-upload',retryable:true});return false}
+}
+function scheduleDailyCloudBackup(){clearTimeout(dailyBackupTimer);dailyBackupTimer=setTimeout(()=>createCloudSafetyBackup(false),1200)}
+async function renderSyncRecoveryCenter(){
+ if(cloudRole!=='owner')return;
+ const summary=document.getElementById('syncRecoverySummary'),errors=document.getElementById('syncRecoveryErrors');if(!summary||!errors)return;
+ const pending=[localDirtyHash&&'本機資料待上傳',ownerUploadInFlight&&'主資料同步中',ownerUploadQueued&&'主資料等待重試',roleViewPublishQueued&&'角色檢視等待重試',scheduleNotificationDeliveryJobs.size&&`${scheduleNotificationDeliveryJobs.size} 批課表通知待送`].filter(Boolean);
+ summary.textContent=`網路：${navigator.onLine?'正常':'離線'}｜${pending.length?pending.join('｜'):'目前沒有待處理項目'}`;summary.dataset.kind=pending.length?'pending':'ok';
+ try{const qs=await getDocs(collection(cloud,'companies',COMPANY_ID,'errorEvents')),rows=qs.docs.map(d=>d.data()).sort((a,b)=>(b.occurredAt?.toMillis?.()||0)-(a.occurredAt?.toMillis?.()||0)).slice(0,12);errors.innerHTML=rows.length?rows.map(x=>`<div class="backup-item"><div class="info"><b>${escapeHTML(x.area||'同步')}｜${escapeHTML(x.code||'unknown')}</b><div class="small">${escapeHTML(formatNotificationTimestamp(x.occurredAt)||'時間確認中')}｜${x.retryable?'可自動重試':'需人工檢查'}</div></div><span class="pill ${x.retryable?'blue':'red'}">${x.retryable?'已記錄':'注意'}</span></div>`).join(''):'<span class="small">目前沒有同步錯誤紀錄。</span>'}catch(e){errors.innerHTML='<span class="small">錯誤紀錄暫時無法讀取。</span>'}
+}
+async function retryAllOperationalSync(){
+ if(cloudRole!=='owner')return;
+ ownerUploadQueued=true;roleViewPublishQueued=true;cloudStatus('正在重試所有待處理同步…','pending');
+ await uploadOwnerState(true);publishRoleViewsWithRetry();scheduleDailyCloudBackup();setTimeout(renderSyncRecoveryCenter,500);
+}
+function emergencyOwnerStatus(message='',kind=''){const el=document.getElementById('emergencyOwnerStatus');if(el){el.textContent=message;el.dataset.kind=kind;el.style.display=message?'block':'none'}}
+async function listEmergencyOwners(){
+ const box=document.getElementById('emergencyOwnerList');if(!box||cloudRole!=='owner')return;
+ try{
+  const qs=await getDocs(query(collection(cloud,'companyAccess'),where('companyId','==',COMPANY_ID),where('role','==','owner')));
+  const rows=qs.docs.map(d=>({id:d.id,...d.data()}));box.innerHTML=rows.length?rows.map(x=>{const email=String(x.email||x.id).toLowerCase(),active=x.active!==false;return`<div class="backup-item"><div class="info"><b>${escapeHTML(x.displayName||'備援 Owner')}</b><div class="small">${escapeHTML(email)}</div></div><div class="row-actions"><span class="pill ${active?'green':'red'}">${active?'已啟用':'已停權'}</span><button type="button" class="btn emergency-owner-toggle" data-email="${escapeHTML(email)}" data-active="${active?'true':'false'}">${active?'停權':'重新啟用'}</button></div></div>`}).join(''):'<span class="small">尚未建立備援 Owner。</span>';
+  box.querySelectorAll('.emergency-owner-toggle').forEach(button=>button.onclick=async()=>{await setCloudAccessActive(button.dataset.email,button.dataset.active!=='true');await listEmergencyOwners()});
+ }catch(e){console.error('listEmergencyOwners failed',e);emergencyOwnerStatus('備援 Owner 清單讀取失敗，請稍後重試。','error');box.innerHTML='<span class="small">讀取失敗，請稍後重試。</span>'}
+}
+async function saveEmergencyOwner(){
+ if(cloudRole!=='owner')return;
+ const email=String(document.getElementById('emergencyOwnerEmail')?.value||'').trim().toLowerCase(),displayName=String(document.getElementById('emergencyOwnerName')?.value||'備援 Owner').trim()||'備援 Owner';
+ if(!validGmailAddress(email))return emergencyOwnerStatus('請輸入有效的 Gmail。','error');
+ if(email===OWNER_EMAIL||email===cloudEmailKey)return emergencyOwnerStatus('主要 Owner 或目前登入帳號不需要重複加入。','error');
+ if(!confirm(`確定授予 ${email} 完整 Owner 權限？此帳號可查看及修改所有課表、學生、財務與帳號設定。`))return;
+ try{const existing=await getDoc(doc(cloud,'companyAccess',email));if(existing.exists()&&existing.data()?.role!=='owner'&&!confirmCloudRoleTransition(existing,'owner',email))return;await setDoc(doc(cloud,'companyAccess',email),{email,displayName,role:'owner',companyId:COMPANY_ID,active:true,invitedAt:existing.exists()?existing.data()?.invitedAt||serverTimestamp():serverTimestamp(),invitedBy:cloudEmailKey,updatedAt:serverTimestamp()},{merge:false});await Promise.allSettled([deleteDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email)),deleteDoc(doc(cloud,'companies',COMPANY_ID,'branchViews',email))]);invalidateCompanyAccessCache();emergencyOwnerStatus('備援 Owner 已建立；首次 Google 登入後即可使用。','ok');await listEmergencyOwners()}catch(e){console.error(e);emergencyOwnerStatus('建立備援 Owner 失敗：'+(e?.message||e),'error')}
+}
+function installOperationalResilienceUI(){
+ if(cloudRole!=='owner')return;
+ const bind=(id,handler)=>{const button=document.getElementById(id);if(button)button.onclick=handler};
+ bind('createCloudBackupNow',()=>createCloudSafetyBackup(true));bind('refreshCloudBackups',listCloudSafetyBackups);bind('retryAllSync',retryAllOperationalSync);bind('refreshSyncRecovery',renderSyncRecoveryCenter);bind('saveEmergencyOwner',saveEmergencyOwner);
+ listCloudSafetyBackups();renderSyncRecoveryCenter();listEmergencyOwners();
+}
 
 function lessonTeacherIds(lesson){
  const ids=Array.isArray(lesson?.teacherIds)&&lesson.teacherIds.length?lesson.teacherIds:[lesson?.teacherId];
@@ -305,7 +392,7 @@ function confirmCloudRoleTransition(existing,targetRole,email){
  if(!existing?.exists?.())return true;
  const currentRole=String(existing.data()?.role||'');
  if(!currentRole||currentRole===targetRole)return true;
- const labels={teacher:'老師',branch_manager:'校區管理者'};
+ const labels={owner:'Owner',teacher:'老師',branch_manager:'校區管理者'};
  return confirm(`這個 Gmail 目前是「${labels[currentRole]||currentRole}」。\n確定要變更為「${labels[targetRole]||targetRole}」嗎？\n\n變更後舊角色的資料範圍會立即移除，該帳號若正在使用會被登出。`);
 }
 async function removeCloudTeacherAccess(email,teacherName='老師'){
@@ -342,7 +429,7 @@ async function setCloudAccessActive(email,active){
   await setDoc(doc(cloud,'companyAccess',email),{active,updatedAt:serverTimestamp()},{merge:true});
   const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));
   await Promise.all(userQs.docs.map(u=>setDoc(u.ref,{active,updatedAt:serverTimestamp()},{merge:true})));
-  await Promise.all([listCloudTeacherAccess(),listCloudBranchManagerAccess()]);
+  await Promise.all([listCloudTeacherAccess(),listCloudBranchManagerAccess(),listEmergencyOwners()]);
   if(active)publishRoleViewsWithRetry();
   cloudStatus(`帳號已${action}`,'ok');
  }catch(e){console.error(e);cloudStatus(`${action}帳號失敗`,'error');alert(`${action}失敗：`+(e?.message||e))}
@@ -887,6 +974,8 @@ function applyRoleUI(profile,user){
  if(cloudRole==='owner'){
    restoreRoleIsolated();
    window.DanbridgeRoleResponsive?.restoreRoleResponsiveControls?.();
+   restoreOwnerSyncRecovery();
+   setTimeout(installOperationalResilienceUI,0);
  }
  applyCalendarLocationRoleScope();
  window.ensureTeacherHoursMetric?.();
@@ -1325,7 +1414,7 @@ async function uploadOwnerState(force=false){
    lastUploadedHash=hash;lastCloudSnapshotHash=hash;ownerRetryCount=0;
    const latestHash=dataHash(window.__danbridgeGetDB());
    const confirmation=ownerUploadConfirmation(uploadMutationVersion,localMutationVersion,hash,latestHash);
-   if(confirmation.clearDirty)localDirtyHash='';
+   if(confirmation.clearDirty){localDirtyHash='';clearOwnerSyncRecovery()}else persistOwnerSyncRecovery();
    if(confirmation.queueNext)ownerUploadQueued=true;
    cloudStatus(localDirtyHash?'目前變更已同步，另有新變更準備同步…':'已同步到雲端','ok');
 
@@ -1334,6 +1423,7 @@ async function uploadOwnerState(force=false){
 
    queueScheduleChangeNotifications(previousPublished,current,hash);
    lastPublishedOwnerDB=deepCopy(current);ownerBaselineReady=true;
+   scheduleDailyCloudBackup();renderSyncRecoveryCenter();
    if(!legacyMigrationStarted){
      legacyMigrationStarted=true;
      migrateLegacyLessonCloudDocuments().catch(e=>console.error('Legacy lesson migration background task failed',e));
@@ -1342,6 +1432,7 @@ async function uploadOwnerState(force=false){
    console.error('Owner cloud sync failed at '+syncStage,e);reportOperationalError(e,{category:'cloud-write',area:'owner-upload',retryable:true});ownerUploadQueued=true;ownerRetryCount++;
    const retrying=navigator.onLine&&ownerRetryCount<3;
    cloudStatus((navigator.onLine?`雲端連線較慢（${syncStage}），系統正在自動重試：`:'目前離線，變更已保存在本機：')+(e.message||e),navigator.onLine?(retrying?'pending':'error'):'offline');
+   persistOwnerSyncRecovery();renderSyncRecoveryCenter();
    scheduleOwnerRetry();
  }finally{
    ownerUploadInFlight=false;
@@ -1352,6 +1443,7 @@ function queueOwnerCloudSave(){
  if(cloudRole!=='owner')return;
  localMutationVersion++;
  localDirtyHash=dataHash(window.__danbridgeGetDB());
+ persistOwnerSyncRecovery();
  ownerUploadQueued=true;
  cloudStatus(navigator.onLine?'變更已儲存，準備同步…':'變更已保存在本機；恢復網路後自動同步。',navigator.onLine?'pending':'offline');
  clearTimeout(syncTimer);syncTimer=setTimeout(()=>uploadOwnerState(),120);
@@ -1412,7 +1504,8 @@ function subscribeOwner(){
    applyingCloud=false;
    lastCloudSnapshotHash=incomingHash;lastUploadedHash=incomingHash;
    lastPublishedOwnerDB=deepCopy(incoming);ownerBaselineReady=true;
-   if(localDirtyHash===incomingHash)localDirtyHash='';
+   if(localDirtyHash===incomingHash){localDirtyHash='';clearOwnerSyncRecovery()}
+   scheduleDailyCloudBackup();renderSyncRecoveryCenter();
    cloudStatus(`雲端資料已更新：學生 ${incoming.students?.length||0}、老師 ${incoming.teachers?.length||0}、課程 ${incoming.lessons?.length||0}`,'ok');
  },err=>{console.error('owner snapshot',err);reportOperationalError(err,{category:'cloud-read',area:'owner-snapshot',retryable:true});cloudStatus('讀取雲端主資料失敗：'+(err.message||err),'error')});
 }
@@ -1510,7 +1603,7 @@ async function subscribeBranchManager(){
 
 
 window.addEventListener('offline',()=>setOfflineStatus());
-window.addEventListener('online',()=>{cloudStatus('網路已恢復，正在檢查待同步變更…','pending');if(cloudRole==='owner'){ownerUploadQueued=true;clearTimeout(ownerRetryTimer);uploadOwnerState()}else cloudStatus('網路已恢復，正在重新連線…','pending')});
+window.addEventListener('online',()=>{cloudStatus('網路已恢復，正在檢查待同步變更…','pending');if(cloudRole==='owner'){ownerUploadQueued=true;clearTimeout(ownerRetryTimer);uploadOwnerState();scheduleDailyCloudBackup();renderSyncRecoveryCenter()}else cloudStatus('網路已恢復，正在重新連線…','pending')});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cloudRole==='owner'&&ownerUploadQueued&&navigator.onLine)uploadOwnerState()});
 
 setAuthCard();
@@ -1522,7 +1615,7 @@ installRoleInteractionGuards();
 onAuthStateChanged(auth,async user=>{
  unsubscribeState?.();unsubscribeState=null;unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;scheduleNotificationDocuments=[];lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();
  unsubscribeAccessGuard?.();unsubscribeAccessGuard=null;
- if(!user){lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true});showCloudLogin();cloudStatus('尚未登入');return}
+ if(!user){lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);clearTimeout(dailyBackupTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true});showCloudLogin();cloudStatus('尚未登入');return}
  try{
    cloudStatus('正在載入權限…');const profile=await ensureProfile(user);try{await recordSuccessfulLogin(user,profile)}catch(e){console.warn('最後登入時間更新失敗：',e);reportOperationalError(e,{category:'cloud-write',area:'access-guard',retryable:true})}applyRoleUI(profile,user);showCloudApp();
    if(profile.role==='owner'){subscribeOwner();setTimeout(()=>{renderCloudUserManager();renderBranchManagerAccess()},0)}else if(profile.role==='teacher')subscribeTeacher();else if(profile.role==='branch_manager')subscribeBranchManager();else throw new Error('不支援的角色：'+profile.role);subscribeRoleAccessGuard();subscribeLessonReports();subscribeScheduleNotifications();

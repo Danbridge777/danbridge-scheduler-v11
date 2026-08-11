@@ -281,12 +281,23 @@
     <div id="cloudBranchManagerStatus" class="small" role="status" aria-live="polite" style="display:none;margin-top:8px"></div>
     <div id="cloudBranchManagerList" class="backup-list" style="margin-top:12px"></div>
   </div>
+  <div id="emergencyOwnerManager" class="card col-4">
+    <div class="role-card-heading"><div><span class="role-kicker">EMERGENCY ACCESS</span><h2>備援 Owner</h2></div><span class="pill red">完整權限</span></div>
+    <div class="small">建立第二個緊急管理帳號。此帳號具有全部校區、財務、課表與權限管理能力，請只加入可信任的 Gmail。</div>
+    <label>備援 Owner Gmail</label><input id="emergencyOwnerEmail" type="email">
+    <label>顯示名稱</label><input id="emergencyOwnerName">
+    <br><button type="button" class="btn primary" id="saveEmergencyOwner">建立／更新備援 Owner</button>
+    <div id="emergencyOwnerStatus" class="small" role="status" aria-live="polite" style="display:none;margin-top:8px"></div>
+    <div id="emergencyOwnerList" class="backup-list" style="margin-top:12px"></div>
+  </div>
 </div></section>
 
 <section id="finance"><div class="card"><div class="toolbar"><div><label>財務月份</label><select id="financeMonth" onchange="renderFinance()"></select></div><div><label>財務校區</label><select id="financeBranchScope" onchange="DanbridgeBranchBusiness.setScope('finance',this.value)"></select></div><button class="btn primary" onclick="renderFinance()">重新計算</button><button class="btn" onclick="copyFinanceSummary()">複製財務摘要</button></div><div class="finance-summary"><div class="finance-metric"><span>本月收入</span><b id="financeRevenue">NT$0</b></div><div class="finance-metric"><span>固定開銷</span><b id="financeFixedTotal">NT$0</b></div><div class="finance-metric"><span>一次性支出</span><b id="financeOneTimeTotal">NT$0</b></div><div class="finance-metric"><span>老師薪資總額</span><b id="financePayrollTotal">NT$0</b></div><div class="finance-metric finance-total-expenses"><span>總支出</span><b id="financeTotalExpenses">NT$0</b></div><div class="finance-metric"><span>本月淨利</span><b id="financeProfit">NT$0</b></div></div><div class="finance-layout"><div class="card"><h2>公司固定開銷</h2><div class="small">名稱與金額可自行設定；依起始月份到結束月份（留空表示持續）自動計入每月支出。</div><input type="hidden" id="fixedExpenseId"><div class="finance-form-row"><div><label>歸屬校區</label><select id="fixedExpenseBranch"></select></div><div><label>支出名稱</label><input id="fixedExpenseName" placeholder="例如：房租、電費、網路"></div><div><label>每月金額</label><input id="fixedExpenseAmount" type="number" min="0" step="1"></div><div><label>起始月份</label><select id="fixedExpenseStart"></select></div><div><label>結束月份</label><select id="fixedExpenseEnd"><option value="">持續</option></select></div><button class="btn primary" onclick="saveFixedExpense()">儲存</button></div><div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>名稱</th><th>每月金額</th><th>起始</th><th>結束</th><th>操作</th></tr></thead><tbody id="fixedExpenseRows"></tbody></table></div></div><div class="card"><h2>一次性支出</h2><div class="small">只計入指定月份，例如維修、設備、材料、裝潢或廣告費。</div><input type="hidden" id="oneTimeExpenseId"><div class="finance-form-row one-time"><div><label>歸屬校區</label><select id="oneTimeExpenseBranch"></select></div><div><label>支出名稱</label><input id="oneTimeExpenseName" placeholder="例如：冷氣維修、營隊材料"></div><div><label>金額</label><input id="oneTimeExpenseAmount" type="number" min="0" step="1"></div><div><label>月份</label><select id="oneTimeExpenseMonth"></select></div><button class="btn primary" onclick="saveOneTimeExpense()">儲存</button></div><div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>月份</th><th>名稱</th><th>金額</th><th>操作</th></tr></thead><tbody id="oneTimeExpenseRows"></tbody></table></div></div><div class="card"><h2>老師薪資明細（自動）</h2><div class="small">直接依正式課程、授課時數與每位老師的薪資設定自動加總，不能在此手動修改。</div><div id="financePayrollRows" class="finance-payroll-list"></div></div><div class="card"><h2>本月支出明細</h2><div id="financeExpenseBreakdown"></div><textarea id="financeSummaryText" readonly style="margin-top:12px;min-height:190px"></textarea></div></div></div></section>
 <section id="data"><div class="data-horizontal">
 <div class="card col-6"><h2>iCloud 匯出／匯入</h2><p><span class="sync-badge">✓ 半自動跨裝置同步</span></p><p class="small">在 Mac 匯出 JSON 並存到 iCloud Drive；在 iPad 按「匯入 JSON」選取同一份檔案。匯入前系統會先建立本機安全版本。</p><button class="btn primary" onclick="downloadBackup()">匯出最新資料</button> <button class="btn" onclick="document.getElementById('importFile').click()">匯入 JSON</button><input hidden type="file" id="importFile" accept=".json,application/json" onchange="importBackup(event)"><button class="btn ok" onclick="exportICS()">匯出 Apple Calendar</button><p class="small" id="lastBackupInfo"></p></div>
 <div class="card col-6"><h2>本機版本紀錄</h2><p class="small">每次匯入、清空及重要變更前會自動留下版本。最多保留 20 份，可直接復原。</p><button class="btn" onclick="createManualVersion()">立即建立版本</button> <button class="btn" onclick="renderBackupHistory()">重新整理</button><div id="backupHistory" class="backup-table-wrap" style="margin-top:12px"></div></div>
+<div class="card col-6"><h2>每日雲端安全快照</h2><p class="small">Owner 每天第一次連線時自動建立，保留最近 30 天；可手動立即建立及驗證內容。這是 Firebase 內的版本保護，不會取代跨平台外部備份。</p><div id="cloudBackupStatus" class="security-note">正在檢查今日快照…</div><div class="row-actions"><button class="btn primary" id="createCloudBackupNow">立即建立快照</button><button class="btn" id="refreshCloudBackups">重新整理</button></div><div id="cloudBackupList" class="backup-list" style="margin-top:12px"></div></div>
+<div class="card col-6"><h2>同步待處理中心</h2><p class="small">集中顯示本機待上傳、背景角色檢視、課表通知與最近同步錯誤。重新連線後會自動重試。</p><div id="syncRecoverySummary" class="security-note">正在檢查同步狀態…</div><div class="row-actions"><button class="btn primary" id="retryAllSync">立即重試全部</button><button class="btn" id="refreshSyncRecovery">重新整理</button></div><div id="syncRecoveryErrors" class="backup-list" style="margin-top:12px"></div></div>
 <div class="card data-integrity-card" style="grid-column:1/-1">
   <div class="data-integrity-head"><div><h2>資料完整性中心</h2><div class="small">檢查校區歸屬、課程關聯與舊資料格式，避免報表、權限和 KPI 計算錯誤。</div></div><span id="dataIntegrityBadge" class="integrity-badge">尚未檢查</span></div>
   <div id="dataIntegritySummary" class="integrity-summary"></div>
@@ -419,7 +430,7 @@
 
 <script src="./js/ui/accessibility-baseline.js?v=20.12.0"></script>
 
-<script type="module" src="./js/core/firebase-auth-and-cloud-sync.module.js?v=20.20.3"></script>
+<script type="module" src="./js/core/firebase-auth-and-cloud-sync.module.js?v=20.21.0"></script>
 
 
 <script src="./js/core/pwa-installation.js?v=20.18.2"></script>

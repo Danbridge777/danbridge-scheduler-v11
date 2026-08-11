@@ -20,6 +20,7 @@ import {
 const PROJECT_ID = 'danbridge-rules-test';
 const COMPANY_ID = 'danbridge';
 const OWNER_EMAIL = 'a0965487920@gmail.com';
+const BACKUP_OWNER_EMAIL = 'backup-owner@gmail.com';
 const TEACHER_EMAIL = 'teacher@example.com';
 const OTHER_TEACHER_EMAIL = 'other@example.com';
 const MANAGER_EMAIL = 'manager@example.com';
@@ -41,6 +42,7 @@ async function seed() {
       [`companyAccess/${MANAGER_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'branch_manager', teacherId: 'manager-teacher', branchIds: ['branch-a'] }],
       [`companyAccess/${INACTIVE_EMAIL}`, { active: false, companyId: COMPANY_ID, role: 'teacher', teacherId: 'inactive-teacher' }],
       [`companyAccess/${INVITED_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1', invitedBy: OWNER_EMAIL, invitedAt: Timestamp.now() }],
+      [`companyAccess/${BACKUP_OWNER_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'owner', displayName: 'Backup Owner', invitedBy: OWNER_EMAIL, invitedAt: Timestamp.now() }],
       ['users/teacher-uid', { email: TEACHER_EMAIL, active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1' }],
       ['users/manager-uid', { email: MANAGER_EMAIL, active: true, companyId: COMPANY_ID, role: 'branch_manager', teacherId: 'manager-teacher', branchIds: ['branch-a'] }],
       [`companies/${COMPANY_ID}/data/main`, { privateValue: 'owner-only' }],
@@ -102,6 +104,17 @@ describe('Owner 權限', () => {
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/data/main`)));
     await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/data/owner-write`), { ok: true }));
     await assertSucceeds(setDoc(doc(db, 'companyAccess/new@example.com'), { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'new-teacher' }));
+  });
+
+  test('受邀備援 Owner 首次登入後取得完整權限，停權後立即失效', async () => {
+    const primary = auth('owner-uid', OWNER_EMAIL);
+    const backup = auth('backup-owner-uid', BACKUP_OWNER_EMAIL);
+    await assertSucceeds(setDoc(doc(backup, 'users/backup-owner-uid'), { email: BACKUP_OWNER_EMAIL, displayName: 'Backup Owner', active: true, companyId: COMPANY_ID, role: 'owner', lastLoginAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+    await assertSucceeds(getDoc(doc(backup, `companies/${COMPANY_ID}/data/main`)));
+    await assertSucceeds(setDoc(doc(backup, `companies/${COMPANY_ID}/dailyBackups/2026-08-11`), { hash: 'verified', snapshot: { lessons: [] } }));
+    await assertSucceeds(updateDoc(doc(primary, `companyAccess/${BACKUP_OWNER_EMAIL}`), { active: false }));
+    await assertSucceeds(updateDoc(doc(primary, 'users/backup-owner-uid'), { active: false }));
+    await assertFails(getDoc(doc(backup, `companies/${COMPANY_ID}/data/main`)));
   });
 
   test('Owner 停權後立即阻止存取，重新啟用後恢復原老師範圍', async () => {
