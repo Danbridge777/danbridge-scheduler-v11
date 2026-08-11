@@ -21,6 +21,7 @@ const context = {
   effectiveCampId: () => '',
   sameCampSlot: () => false,
   summerRegistrationTotal: row => Number(row.totalFee) || 0,
+  money: value => `$${Number(value || 0).toLocaleString('en-US')}`,
   localDate: date => date.toISOString().slice(0, 10),
   uid: (() => { let value = 0; return () => `audit-${++value}`; })(),
   emptyDB: () => ({ students: [], teachers: [], lessons: [], makeups: [], changes: [], teacherGroups: [], winterTeacherGroups: [], summerCampClasses: [], summerCampRegistrations: [], winterCampRegistrations: [], winterCampClasses: [], settlementRecords: [], fixedExpenses: [], oneTimeExpenses: [], collectionRecords: [], branches: [] }),
@@ -42,6 +43,17 @@ assert.equal(context.teacherIncludedForMonth({ archivedAt: '2026-08-11T08:00:00.
 assert.equal(context.teacherIncludedForMonth({ archivedAt: '2026-08-11T08:00:00.000Z' }, '2026-09'), false, 'an archived teacher is excluded from later payroll months');
 assert.equal(context.teacherIncludedForMonth({ archivedAt: '2026-08-11T08:00:00.000Z' }, '2026-07'), true, 'historical payroll remains available before archival');
 const lesson = (overrides = {}) => ({ id: 'l1', studentId: 's1', teacherId: 't1', teacherIds: ['t1'], date: '2026-08-05', start: '10:00', end: '11:00', status: '已上課', ...overrides });
+context.db.students.push({id:'group-line',name:'團班學生',courseType:'團班',rate:300,parent:'Group Parent'});
+context.db.lessons=[lesson({id:'private-line'}),lesson({id:'group-line-lesson',studentId:'group-line',start:'14:00',end:'15:30'})];
+const privateLineData=context.studentMonthlyBillingData('s1','2026-08');
+const groupLineData=context.studentMonthlyBillingData('group-line','2026-08');
+assert.equal(privateLineData.privateAmount,200,'private tutoring remains in the general tutoring LINE subtotal');
+assert.equal(privateLineData.groupAmount,0,'private tutoring is never duplicated into the group LINE subtotal');
+assert.equal(groupLineData.privateAmount,0,'group lessons are excluded from the general tutoring LINE subtotal');
+assert.equal(groupLineData.groupAmount,450,'group lessons retain the original hourly charge in their own LINE subtotal');
+assert.match(context.studentBillingSections(groupLineData).join('\n'),/團班費用[\s\S]*共 1 堂／1\.5 小時[\s\S]*團班小計：\$450/,'group LINE text shows a distinct fee heading, lesson count, hours, and subtotal');
+assert.doesNotMatch(context.studentBillingSections(groupLineData).join('\n'),/一般家教/,'a group-only statement does not show an empty general tutoring section');
+context.db.lessons=[];
 const schedulerCopySource = fs.readFileSync(path.join(root, 'js/modules/calendar/scheduler-ui.js'), 'utf8');
 const freshCopyStart = schedulerCopySource.indexOf('function createFreshLessonCopy');
 const selectedCopyStart = schedulerCopySource.indexOf('function copySelectedLessons');
@@ -260,7 +272,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.22\.2'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.23\.0'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*setCompanyAccessWithAudit\(email,\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension atomically audits the preserved access record and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');

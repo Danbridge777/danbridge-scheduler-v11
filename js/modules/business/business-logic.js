@@ -54,10 +54,12 @@ function studentChargeableTutoringLessons(studentId,m,scope='all',sourceLessons=
 }
 function studentMonthlyBillingData(studentId,m,scope='all',campSeason='all'){
   const s=student(studentId),tutoringLessons=studentChargeableTutoringLessons(studentId,m,scope);
-  const tutoringHours=tutoringLessons.reduce((sum,l)=>sum+hours(l.start,l.end),0),tutoringRate=+s.rate||0,tutoringAmount=tutoringLessons.reduce((sum,l)=>sum+lessonCharge(l),0);
+  const groupLessons=tutoringLessons.filter(l=>student(l.studentId).courseType==='團班'),privateLessons=tutoringLessons.filter(l=>student(l.studentId).courseType!=='團班');
+  const privateHours=privateLessons.reduce((sum,l)=>sum+hours(l.start,l.end),0),privateAmount=privateLessons.reduce((sum,l)=>sum+lessonCharge(l),0),groupHours=groupLessons.reduce((sum,l)=>sum+hours(l.start,l.end),0),groupAmount=groupLessons.reduce((sum,l)=>sum+lessonCharge(l),0);
+  const tutoringHours=privateHours+groupHours,tutoringRate=+s.rate||0,tutoringAmount=privateAmount+groupAmount;
   const campRows=summerCampRegistrationRows(m,scope,campSeason).filter(r=>r.studentId===studentId),campAmount=campRows.reduce((sum,r)=>sum+summerRegistrationTotal(r),0);
   const campDates=[...new Set(campRows.flatMap(r=>r.dates||[]))].sort();
-  return{student:s,month:m,scope,tutoringLessons,tutoringHours,tutoringRate,tutoringAmount,campRows,campDates,campAmount,total:tutoringAmount+campAmount};
+  return{student:s,month:m,scope,tutoringLessons,tutoringHours,tutoringRate,tutoringAmount,privateLessons,privateHours,privateAmount,groupLessons,groupHours,groupAmount,campRows,campDates,campAmount,total:tutoringAmount+campAmount};
 }
 function billingNumber(n){const value=Math.round((+n||0)*100)/100;return Number.isInteger(value)?String(value):String(value.toFixed(2)).replace(/0+$/,'').replace(/\.$/,'')}
 function billingMonthLabel(m){const[y,month]=String(m||'').split('-').map(Number);return `${y} 年 ${month} 月`}
@@ -78,7 +80,8 @@ function billingFamilyStudents(studentId){
 }
 function studentBillingSections(d,includeName=false){
   const lines=[];if(includeName)lines.push(`${d.student.name||'學生'}`);
-  if(d.tutoringLessons.length)lines.push('家教',`共 ${billingNumber(d.tutoringHours)} 小時`,`${billingNumber(d.tutoringHours)} 小時 × ${money(d.tutoringRate)}`,`小計：${money(d.tutoringAmount)}`,'');
+  if(d.privateLessons.length)lines.push('一般家教',`共 ${d.privateLessons.length} 堂／${billingNumber(d.privateHours)} 小時`,`${billingNumber(d.privateHours)} 小時 × ${money(d.tutoringRate)}`,`家教小計：${money(d.privateAmount)}`,'');
+  if(d.groupLessons.length)lines.push('團班費用',`共 ${d.groupLessons.length} 堂／${billingNumber(d.groupHours)} 小時`,`${billingNumber(d.groupHours)} 小時 × ${money(d.tutoringRate)}`,`團班小計：${money(d.groupAmount)}`,'');
   if(d.campRows.length){['summer','winter'].forEach(season=>{const rows=d.campRows.filter(r=>campRegistrationSeason(r)===season);if(!rows.length)return;const dates=[...new Set(rows.flatMap(r=>r.dates||[]))].sort().map(date=>`${+date.slice(5,7)}/${+date.slice(8,10)}`).join('、'),amount=rows.reduce((sum,r)=>sum+summerRegistrationTotal(r),0);lines.push(season==='winter'?'冬令營':'夏令營',`報名日期：${dates}`,billingCampFormula(rows),`小計：${money(amount)}`,'')})}
   return lines;
 }
