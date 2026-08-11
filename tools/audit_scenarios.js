@@ -242,6 +242,7 @@ assert.match(appShellSource, /function installNavigationHandlers\(\)[\s\S]*tabHa
 assert.match(cloudSource, /function applyRoleUI\(profile,user\)[\s\S]*window\.installNavigationHandlers\?\.\(\);\s*\}/, 'every authenticated role reapplies navigation handlers after role-specific UI restrictions');
 assert.match(cloudSource, /function acknowledgeCurrentScheduleNotification\(\)[\s\S]*if\(modal\)modal\.hidden=true;\s*await Promise\.all/, 'acknowledging many schedule notifications releases the interface before cloud writes finish');
 assert.match(cloudSource, /function subscribeLessonReports\(\)\{\s*unsubscribeReports\?\.\(\);unsubscribeReports=null;\s*if\(cloudRole==='teacher'\)return;/, 'teachers use their isolated teacher view and never open a redundant company-wide report collection listener');
+assert.match(cloudSource, /function applyCalendarLocationRoleScope\(\)[\s\S]*cloudRole!=='branch_manager'[\s\S]*allowedBranches[\s\S]*option\.remove\(\)[\s\S]*applyCalendarLocationRoleScope\(\);/, 'branch managers only receive authorized branch locations while owner options remain restorable');
 assert.match(cloudSource, /if\(teacherOnly\)\{\s*delete document\.body\.dataset\.teacherWeekInitialized;/, 'every fresh teacher login resets the one-time current-week initialization');
 const syncDecisionStart = cloudSource.indexOf('function dataHash');
 const syncDecisionEnd = cloudSource.indexOf('function safeErrorCode');

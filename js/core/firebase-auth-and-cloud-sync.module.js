@@ -815,6 +815,19 @@ function markRoleIsolated(element){
 function restoreRoleIsolated(){
  document.querySelectorAll('[data-role-isolated="1"]').forEach(element=>{element.hidden=false;element.inert=false;element.removeAttribute('aria-hidden');element.style.removeProperty('display');delete element.dataset.roleIsolated});
 }
+function applyCalendarLocationRoleScope(){
+ const select=document.getElementById('calendarLocationFilter');
+ if(!select)return;
+ if(!select.dataset.ownerOptions)select.dataset.ownerOptions=select.innerHTML;
+ select.innerHTML=select.dataset.ownerOptions;
+ if(cloudRole!=='branch_manager')return;
+ const allowedBranches=new Set(cloudBranchIds.map(id=>window.DanbridgeAccess?.branchName?.(id)).filter(Boolean));
+ [...select.options].forEach(option=>{
+   const value=String(option.value||'');
+   if(value&&value!=='到府'&&value!=='線上課'&&!allowedBranches.has(value))option.remove();
+ });
+ if(![...select.options].some(option=>option.value===select.value))select.value='';
+}
 function applyRoleUI(profile,user){
  const normalizedRole=String(profile?.role||'').trim().toLowerCase();
  cloudRole=normalizedRole;cloudTeacherId=profile.teacherId==null?'':String(profile.teacherId);cloudBranchIds=Array.isArray(profile.branchIds)?profile.branchIds:[];cloudUid=user.uid;cloudEmailKey=(user.email||'').trim().toLowerCase();window.__danbridgeLessonIdMigrationAuthority=cloudRole==='owner';
@@ -839,6 +852,7 @@ function applyRoleUI(profile,user){
    restoreRoleIsolated();
    window.DanbridgeRoleResponsive?.restoreRoleResponsiveControls?.();
  }
+ applyCalendarLocationRoleScope();
  window.ensureTeacherHoursMetric?.();
 
  const teacherOnly=profile.role==='teacher';
