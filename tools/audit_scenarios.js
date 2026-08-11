@@ -256,8 +256,8 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.15\.7'/, 'operational errors identify the current deployed release');
-assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*companyAccess[\s\S]*\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension preserves access records and synchronizes user profiles');
+assert.match(cloudSource, /const APP_RELEASE='20\.21\.1'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*setCompanyAccessWithAudit\(email,\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension atomically audits the preserved access record and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');
 assert.match(cloudSource, /role:'teacher'[\s\S]*branchIds:deleteField\(\)[\s\S]*scopedDb:deleteField\(\)/, 'changing to teacher removes stale branch-manager scope');
@@ -317,7 +317,15 @@ assert.match(cloudSource, /CLOUD_BACKUP_RETENTION_DAYS=30[\s\S]*function cleanup
 assert.match(cloudSource, /function persistOwnerSyncRecovery\(\)[\s\S]*OWNER_SYNC_RECOVERY_KEY[\s\S]*function restoreOwnerSyncRecovery/, 'an unconfirmed owner mutation survives reload and can resume synchronization');
 assert.match(cloudSource, /function retryAllOperationalSync\(\)[\s\S]*uploadOwnerState\(true\)[\s\S]*publishRoleViewsWithRetry/, 'the recovery center retries main data and role-scoped views together');
 assert.match(cloudSource, /function saveEmergencyOwner\(\)[\s\S]*role:'owner'[\s\S]*companyAccess/, 'the primary owner can explicitly create a second full-access owner');
-assert.match(cloudSource, /sensitiveIds=\['notificationList'[\s\S]*'courseDrawerBody'[\s\S]*'cloudBackupList'[\s\S]*'emergencyOwnerStatus'\]/, 'signed-out isolation clears notifications, recovery details, and emergency-owner data');
+assert.match(cloudSource, /function buildImmutableDataAudit\(beforeDb,afterDb\)[\s\S]*AUDIT_COLLECTION_KEYS[\s\S]*entityChanges/, 'immutable audit summaries cover every business collection without storing full entity contents');
+assert.match(cloudSource, /function immutableAuditRecord\(detail=\{\}\)[\s\S]*actorUid:cloudUid[\s\S]*serverTimestamp[\s\S]*companyAudit/, 'immutable audit records bind the authenticated owner and server timestamp outside company data');
+assert.match(cloudSource, /function writeImmutableAudit\(detail=\{\}\)[\s\S]*runTransaction[\s\S]*transaction\.set\(audit\.ref/, 'owner audit writes are transactionally deduplicated');
+assert.match(cloudSource, /function uploadOwnerState\(force=false\)[\s\S]*buildImmutableDataAudit\(previousPublished,current\)[\s\S]*runTransaction[\s\S]*transaction\.set\(mainRef[\s\S]*transaction\.set\(audit\.ref/, 'owner main data and its immutable audit event commit in one Firestore transaction');
+assert.match(cloudSource, /function restoreCloudSafetyBackup\(day\)[\s\S]*action:'backup-restored'/, 'cloud backup restoration produces a dedicated immutable audit event');
+assert.match(cloudSource, /teacher-access-(?:updated|created)/, 'teacher account changes produce immutable access audit events');
+assert.match(cloudSource, /branch-access-(?:updated|created)/, 'branch-manager account changes produce immutable access audit events');
+assert.match(cloudSource, /account-disabled/, 'account activation changes produce immutable access audit events');
+assert.match(cloudSource, /sensitiveIds=\['notificationList'[\s\S]*'courseDrawerBody'[\s\S]*'cloudBackupList'[\s\S]*'emergencyOwnerStatus'[\s\S]*'immutableAuditList'\]/, 'signed-out isolation clears notifications, recovery details, emergency-owner data, and immutable audit entries');
 assert.match(cloudSource, /function showCloudApp\(\)\{setSignedOutIsolation\(false\)/, 'authorized login restores the isolated application UI');
 assert.match(cloudSource, /function showCloudLogin\(\)[\s\S]*setSignedOutIsolation\(true\)/, 'logout applies signed-out isolation after rebuilding the login screen');
 const signatureStart = cloudSource.indexOf('function roleAccessSignature');

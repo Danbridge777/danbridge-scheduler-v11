@@ -210,6 +210,19 @@ describe('Owner 權限', () => {
     unsubscribe?.();
     assert.equal(data.db.lessons[0].id, 'sync-lesson');
   });
+
+  test('稽核紀錄只能由 Owner 建立，建立後任何人都不能修改或刪除', async () => {
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    const teacher = auth('teacher-uid', TEACHER_EMAIL);
+    const ref = doc(owner, 'companyAudit/audit-immutable-1');
+    const payload = { companyId: COMPANY_ID, action: 'data-change', category: 'data', actorUid: 'owner-uid', actorEmail: OWNER_EMAIL, targetType: 'company-data', targetId: COMPANY_ID, changedFields: ['lessons.date'], entityChanges: ['lessons:update:lesson-own:date'], totalChanges: 1, truncated: false, beforeHash: 'before', afterHash: 'after', release: '20.21.1', environment: 'staging', createdAt: serverTimestamp() };
+    await assertSucceeds(setDoc(ref, payload));
+    await assertSucceeds(getDoc(ref));
+    await assertFails(updateDoc(ref, { action: 'tampered' }));
+    await assertFails(deleteDoc(ref));
+    await assertFails(setDoc(doc(teacher, 'companyAudit/teacher-forged'), { ...payload, actorUid: 'teacher-uid', actorEmail: TEACHER_EMAIL }));
+    await assertFails(getDoc(doc(teacher, 'companyAudit/audit-immutable-1')));
+  });
 });
 
 describe('老師權限', () => {

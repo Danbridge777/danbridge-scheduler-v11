@@ -290,6 +290,12 @@
     <div id="emergencyOwnerStatus" class="small" role="status" aria-live="polite" style="display:none;margin-top:8px"></div>
     <div id="emergencyOwnerList" class="backup-list" style="margin-top:12px"></div>
   </div>
+  <div class="card col-4">
+    <div class="role-card-heading"><div><span class="role-kicker">IMMUTABLE AUDIT</span><h2>不可覆寫稽核紀錄</h2></div><span class="pill blue">Owner 唯讀</span></div>
+    <div class="small">獨立保存主資料、月結、財務、還原與帳號權限操作。紀錄建立後，前端及 Owner 均不能修改或刪除。</div>
+    <button type="button" class="btn" id="refreshImmutableAudit">重新整理紀錄</button>
+    <div id="immutableAuditList" class="backup-list" style="margin-top:12px"></div>
+  </div>
 </div></section>
 
 <section id="finance"><div class="card"><div class="toolbar"><div><label>財務月份</label><select id="financeMonth" onchange="renderFinance()"></select></div><div><label>財務校區</label><select id="financeBranchScope" onchange="DanbridgeBranchBusiness.setScope('finance',this.value)"></select></div><button class="btn primary" onclick="renderFinance()">重新計算</button><button class="btn" onclick="copyFinanceSummary()">複製財務摘要</button></div><div class="finance-summary"><div class="finance-metric"><span>本月收入</span><b id="financeRevenue">NT$0</b></div><div class="finance-metric"><span>固定開銷</span><b id="financeFixedTotal">NT$0</b></div><div class="finance-metric"><span>一次性支出</span><b id="financeOneTimeTotal">NT$0</b></div><div class="finance-metric"><span>老師薪資總額</span><b id="financePayrollTotal">NT$0</b></div><div class="finance-metric finance-total-expenses"><span>總支出</span><b id="financeTotalExpenses">NT$0</b></div><div class="finance-metric"><span>本月淨利</span><b id="financeProfit">NT$0</b></div></div><div class="finance-layout"><div class="card"><h2>公司固定開銷</h2><div class="small">名稱與金額可自行設定；依起始月份到結束月份（留空表示持續）自動計入每月支出。</div><input type="hidden" id="fixedExpenseId"><div class="finance-form-row"><div><label>歸屬校區</label><select id="fixedExpenseBranch"></select></div><div><label>支出名稱</label><input id="fixedExpenseName" placeholder="例如：房租、電費、網路"></div><div><label>每月金額</label><input id="fixedExpenseAmount" type="number" min="0" step="1"></div><div><label>起始月份</label><select id="fixedExpenseStart"></select></div><div><label>結束月份</label><select id="fixedExpenseEnd"><option value="">持續</option></select></div><button class="btn primary" onclick="saveFixedExpense()">儲存</button></div><div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>名稱</th><th>每月金額</th><th>起始</th><th>結束</th><th>操作</th></tr></thead><tbody id="fixedExpenseRows"></tbody></table></div></div><div class="card"><h2>一次性支出</h2><div class="small">只計入指定月份，例如維修、設備、材料、裝潢或廣告費。</div><input type="hidden" id="oneTimeExpenseId"><div class="finance-form-row one-time"><div><label>歸屬校區</label><select id="oneTimeExpenseBranch"></select></div><div><label>支出名稱</label><input id="oneTimeExpenseName" placeholder="例如：冷氣維修、營隊材料"></div><div><label>金額</label><input id="oneTimeExpenseAmount" type="number" min="0" step="1"></div><div><label>月份</label><select id="oneTimeExpenseMonth"></select></div><button class="btn primary" onclick="saveOneTimeExpense()">儲存</button></div><div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>月份</th><th>名稱</th><th>金額</th><th>操作</th></tr></thead><tbody id="oneTimeExpenseRows"></tbody></table></div></div><div class="card"><h2>老師薪資明細（自動）</h2><div class="small">直接依正式課程、授課時數與每位老師的薪資設定自動加總，不能在此手動修改。</div><div id="financePayrollRows" class="finance-payroll-list"></div></div><div class="card"><h2>本月支出明細</h2><div id="financeExpenseBreakdown"></div><textarea id="financeSummaryText" readonly style="margin-top:12px;min-height:190px"></textarea></div></div></div></section>
@@ -430,7 +436,7 @@
 
 <script src="./js/ui/accessibility-baseline.js?v=20.12.0"></script>
 
-<script type="module" src="./js/core/firebase-auth-and-cloud-sync.module.js?v=20.21.0"></script>
+<script type="module" src="./js/core/firebase-auth-and-cloud-sync.module.js?v=20.21.1"></script>
 
 
 <script src="./js/core/pwa-installation.js?v=20.18.3"></script>

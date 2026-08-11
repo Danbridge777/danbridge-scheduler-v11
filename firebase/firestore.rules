@@ -101,6 +101,29 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
+    // 稽核事件位於公司 wildcard 之外，避免 Owner 的公司資料寫入權限覆蓋不可變限制。
+    match /companyAudit/{eventId} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly([
+          'companyId','action','category','actorUid','actorEmail','targetType','targetId',
+          'changedFields','entityChanges','totalChanges','truncated','beforeHash','afterHash',
+          'release','environment','createdAt'
+        ])
+        && request.resource.data.companyId == 'danbridge'
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.actorEmail == emailKey()
+        && request.resource.data.action is string
+        && request.resource.data.category in ['data','access','backup','system']
+        && request.resource.data.changedFields is list
+        && request.resource.data.entityChanges is list
+        && request.resource.data.totalChanges is int
+        && request.resource.data.truncated is bool
+        && request.resource.data.environment in ['production','staging']
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
     // Owner 對公司命名空間具有完整權限。Firestore 會將重疊 match 以 OR 判斷，
     // 因此 lessonMeta、lessonReports、teacherViews 等新增子集合不會因漏寫 match 而阻擋 Owner。
     match /companies/{companyId}/{document=**} {
