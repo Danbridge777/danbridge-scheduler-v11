@@ -294,6 +294,7 @@ assert.match(cloudSource, /function markRoleIsolated\(element\)[\s\S]*element\.d
 assert.match(cloudSource, /function restoreRoleIsolated\(\)[\s\S]*\[data-role-isolated="1"\][\s\S]*delete element\.dataset\.roleIsolated/, 'owner login removes only role isolation state');
 assert.match(cloudSource, /document\.body\.dataset\.roleUx=cloudRole;\s*if\(cloudRole==='owner'\)\{\s*restoreRoleIsolated\(\);[\s\S]*restoreRoleResponsiveControls/, 'owner restoration happens before owner controls are rendered');
 const roleCss = fs.readFileSync(path.join(root, 'css/core/73-v20014-role-responsive-ux.css'), 'utf8');
+assert.match(roleCss, /#calendar \.mobile-week-day\{display:block!important;/, 'mobile weekly day cards override the global hidden section rule');
 assert.match(roleCss, /@media \(min-width:701px\) and \(max-width:1100px\)[\s\S]*body:not\(\.auth-locked\)>nav button\{[^}]*margin-top:0!important/, 'tablet navigation removes desktop sidebar group margins so every visible tab remains clickable');
 assert.match(roleCss, /max-width:1100px\)[\s\S]*nav button\[data-tab="students"\]::before\{content:"◉"!important\}/, 'tablet navigation restores button icons instead of desktop group headings');
 assert.match(roleCss, /grid-template-columns:repeat\(5,minmax\(0,1fr\)\)!important/, 'owner tablet navigation uses a readable five-column grid');
