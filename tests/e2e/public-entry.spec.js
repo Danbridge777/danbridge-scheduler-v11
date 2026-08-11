@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.25.1';
+const CLOUD_RELEASE = '20.25.2';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -12,7 +12,7 @@ const PWA_RELEASE = '20.18.3';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
-const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.1';
+const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.2';
 const SCHEDULER_UI_RELEASE = '20.25.0';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
@@ -125,6 +125,47 @@ test('student teacher filter stays inside the viewport', async ({ page }) => {
   expect(result.exists).toBe(true);
   expect(result.left).toBeGreaterThanOrEqual(0);
   expect(result.right).toBeLessThanOrEqual(result.width);
+});
+
+test('lesson report dialog scrolls independently for every role and viewport', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  for (const role of ['owner', 'branch_manager', 'teacher']) {
+    const result = await page.evaluate(currentRole => {
+      document.body.classList.remove('auth-locked', 'teacher-cloud-role', 'branch-manager-cloud-role');
+      document.body.classList.toggle('teacher-cloud-role', currentRole === 'teacher');
+      document.body.classList.toggle('branch-manager-cloud-role', currentRole === 'branch_manager');
+      document.body.dataset.cloudRole = currentRole;
+      document.body.dataset.roleUx = currentRole;
+      const backdrop = document.getElementById('teacherReportModal');
+      const dialog = backdrop.querySelector('.modal');
+      backdrop.classList.add('show');
+      const style = getComputedStyle(dialog);
+      const rect = dialog.getBoundingClientRect();
+      const output = { overflowY: style.overflowY, top: rect.top, bottom: rect.bottom, viewportHeight: innerHeight };
+      backdrop.classList.remove('show');
+      return output;
+    }, role);
+    expect(['auto', 'scroll']).toContain(result.overflowY);
+    expect(result.top).toBeGreaterThanOrEqual(0);
+    expect(result.bottom).toBeLessThanOrEqual(result.viewportHeight + 1);
+  }
+});
+
+test('owner metric grids and numeric fields stay centered', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  const result = await page.evaluate(() => {
+    document.body.dataset.cloudRole = 'owner';
+    const metric = document.querySelector('.metric');
+    const number = document.getElementById('studentRate');
+    return {
+      metricAlign: metric ? getComputedStyle(metric).textAlign : '',
+      metricItems: metric ? getComputedStyle(metric).alignItems : '',
+      numberAlign: number ? getComputedStyle(number).textAlign : ''
+    };
+  });
+  expect(result.metricAlign).toBe('center');
+  expect(result.metricItems).toBe('center');
+  expect(result.numberAlign).toBe('center');
 });
 
 test('form fields do not show redundant placeholder hints', async ({ page }) => {

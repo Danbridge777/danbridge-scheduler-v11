@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.25.1';
+const APP_RELEASE='20.25.2';
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
@@ -807,6 +807,7 @@ async function getTrustedLessonMeta(lessonId){
  if(meta.active!==true)throw new Error('這堂課目前未啟用回報。');
  const teacherIds=(Array.isArray(meta.teacherIds)?meta.teacherIds:[]).filter(Boolean).map(String);
  if(!cloudUid)throw new Error('登入狀態尚未完成，請重新登入後再試。');
+ if(cloudRole==='owner')return {...meta,teacherIds};
  if(!cloudTeacherId)throw new Error('此帳號尚未綁定老師資料，請 Owner 重新儲存帳號設定。');
  if(!teacherIds.includes(String(cloudTeacherId)))throw new Error('雲端課程尚未綁定目前老師，請 Owner 登入後重新同步一次課表。');
  return {...meta,teacherIds};

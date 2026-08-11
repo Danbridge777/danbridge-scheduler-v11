@@ -109,3 +109,28 @@ header .header-auth-actions{display:flex!important;align-items:center!important;
   #students.active>.grid>.card.col-8{display:block!important}
   #students.active>.grid>.card.col-8>.table-wrap{overflow-x:auto!important;overflow-y:visible!important;overscroll-behavior:auto!important;scrollbar-gutter:auto!important;touch-action:pan-x pan-y!important}
 }
+
+/* V20.25.2 — consistent report scrolling and owner grid alignment. */
+body:has(#teacherReportModal.show){overflow:hidden!important;overscroll-behavior:none!important}
+#teacherReportModal{position:fixed!important;inset:0!important;box-sizing:border-box!important;overflow:hidden!important;overscroll-behavior:none!important}
+#teacherReportModal>.modal{display:block!important;max-height:calc(100dvh - 32px)!important;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-y!important;scrollbar-gutter:stable!important}
+#teacherReportModal .modal-head{position:sticky!important;top:0!important;z-index:8!important;margin-top:-1px!important;padding-top:1px!important;background:var(--card,#fff)!important}
+#teacherReportModal .report-status-option{box-sizing:border-box!important;align-items:center!important;justify-content:center!important;text-align:center!important}
+#teacherReportModal .report-status-option input{flex:0 0 auto!important}
+
+body[data-cloud-role="owner"] .metric,
+body[data-cloud-role="owner"] .finance-metric,
+body[data-cloud-role="owner"] .v181-summary-grid>div,
+body[data-cloud-role="owner"] .teacher-kpi-metric,
+body[data-cloud-role="owner"] .teacher-pay-stat{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;box-sizing:border-box!important;text-align:center!important}
+body[data-cloud-role="owner"] .metric>*,
+body[data-cloud-role="owner"] .finance-metric>*,
+body[data-cloud-role="owner"] .v181-summary-grid>div>*,
+body[data-cloud-role="owner"] .teacher-kpi-metric>*,
+body[data-cloud-role="owner"] .teacher-pay-stat>*{width:100%!important;max-width:100%!important;margin-inline:auto!important;text-align:center!important;font-variant-numeric:tabular-nums!important;overflow-wrap:anywhere!important}
+body[data-cloud-role="owner"] input[type="number"]{text-align:center!important;text-align-last:center!important;font-variant-numeric:tabular-nums!important}
+
+@media(max-width:700px){
+  #teacherReportModal{padding:calc(8px + env(safe-area-inset-top)) 8px calc(8px + env(safe-area-inset-bottom))!important}
+  #teacherReportModal>.modal{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;padding-bottom:calc(16px + env(safe-area-inset-bottom))!important;scrollbar-gutter:auto!important}
+}
