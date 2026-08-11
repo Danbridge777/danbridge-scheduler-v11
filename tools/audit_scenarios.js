@@ -274,6 +274,8 @@ assert.match(roleResponsiveSource, /if\(current!==\x27teacher\x27\)\$\(\x27#teac
 const courseOperationsSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course-operations.js'), 'utf8');
 assert.match(roleResponsiveSource, /function hideForRole\(element\)[\s\S]*roleResponsiveHidden='1'/, 'responsive role hiding records which controls it owns');
 assert.match(roleResponsiveSource, /function teacherStats\(\)[\s\S]*lessonTeacherIds\(l\)\.includes\(teacherId\)[\s\S]*calculateTeacherPayroll\(currentTeacher,month,rows\)[\s\S]*本月課表時數[\s\S]*計薪/, 'teacher dashboard defensively scopes lessons to the signed-in teacher and uses the same payroll calculation');
+assert.match(roleResponsiveSource, /function lessonNeedsReport\(lesson\)[\s\S]*lesson\.date<today[\s\S]*lesson\.date>today[\s\S]*lesson\.end/, 'teacher report summaries count overdue and ended-today lessons while excluding future lessons');
+assert.match(roleResponsiveSource, /rows\.filter\(lessonNeedsReport\)\.length/g, 'teacher dashboard and lesson list share the same pending-report rule');
 assert.match(roleResponsiveSource, /function branchManagerStats\(\)[\s\S]*allowed=new Set\(accessContext\(\)\.branchIds[\s\S]*recordBranchId[\s\S]*校區學生[\s\S]*本月課表時數/, 'branch manager dashboard defensively scopes statistics to authorized branches');
 assert.match(roleResponsiveSource, /function branchManagerConvenience\(\)[\s\S]*managerLessonShortcut[\s\S]*managerMakeupShortcut[\s\S]*managerFinanceShortcut/, 'branch manager dashboard exposes read-only shortcuts to its allowed modules');
 assert.match(roleResponsiveSource, /if\(current==='owner'\)restoreRoleResponsiveControls\(\)/, 'owner role restores controls hidden by the responsive role layer');
@@ -306,6 +308,9 @@ assert.match(roleCss, /body\[data-role-ux="branch_manager"\] #v18Fab[\s\S]*body\
 const schedulerSource = fs.readFileSync(path.join(root, 'js/modules/calendar/scheduler-ui.js'), 'utf8');
 assert.match(schedulerSource, /function handleCalendarShortcuts\(e\)\{\s*if\(!calendarOwnerCanEdit\(\)\)return/, 'branch manager calendar shortcuts stop before any action');
 assert.match(cloudSource, /function setSignedOutIsolation\(locked\)[\s\S]*el\.inert=true;el\.setAttribute\('aria-hidden','true'\)/, 'signed-out content is removed from keyboard and accessibility navigation');
+assert.match(cloudSource, /function notifyNewLessonReports\(reports\)[\s\S]*\['owner','branch_manager'\][\s\S]*teacherEmail[\s\S]*canViewLessonReport/, 'new report popups are limited to owner or the authorized branch manager and exclude the submitting account');
+assert.match(cloudSource, /function reportNotificationSeenKey\(\)[\s\S]*cloudEmailKey/, 'report popup acknowledgement is isolated per signed-in account');
+assert.match(cloudSource, /unsubscribeReports=onSnapshot[\s\S]*notifyNewLessonReports\(lessonReportDocuments\)[\s\S]*applyCachedLessonReportsToCurrentDB/, 'report notifications and local data updates share the same realtime Firestore stream');
 assert.match(cloudSource, /sensitiveIds=\['notificationList'[\s\S]*'courseDrawerBody'\]/, 'signed-out isolation clears notification and course-detail content');
 assert.match(cloudSource, /function showCloudApp\(\)\{setSignedOutIsolation\(false\)/, 'authorized login restores the isolated application UI');
 assert.match(cloudSource, /function showCloudLogin\(\)[\s\S]*setSignedOutIsolation\(true\)/, 'logout applies signed-out isolation after rebuilding the login screen');

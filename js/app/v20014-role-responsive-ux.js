@@ -21,6 +21,15 @@
   }
 
   function lessonHours(rows){return rows.reduce((sum,l)=>sum+(typeof hours==='function'?hours(l.start,l.end):0),0)}
+  function lessonNeedsReport(lesson){
+    if(!lesson||lesson.teacherReportStatus)return false;
+    if(new Set(['已上課','學生請假','老師請假','缺席','補課完成','取消','停課']).has(lesson.status))return false;
+    const today=typeof todayStr==='function'?todayStr():new Date().toISOString().slice(0,10);
+    if(lesson.date<today)return true;
+    if(lesson.date>today)return false;
+    const now=new Date(),currentTime=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    return String(lesson.end||'')<=currentTime;
+  }
   function teacherStats(){
     if(role()!=='teacher'||typeof db==='undefined')return;
     const month=typeof monthNow==='function'?monthNow():new Date().toISOString().slice(0,7);
@@ -36,7 +45,7 @@
     if($('#v32MonthCompleted'))$('#v32MonthCompleted').textContent=`${reported.length} 堂已回報`;
     const insights=$('#v32Insights');
     if(insights){
-      const pending=rows.filter(l=>l.status==='已上課'&&!l.teacherReportStatus).length;
+      const pending=rows.filter(lessonNeedsReport).length;
       const diff=payroll?.mode==='fixed'&&Number.isFinite(payroll.diff)?`｜最低工時差 ${payroll.diff>=0?'+':''}${payroll.diff.toFixed(1)} 小時`:'';
       insights.innerHTML=`<div class="v32-insight ${pending?'danger':'good'}"><span class="v32-insight-dot"></span><div><b>${pending?`${pending} 堂等待課堂回報`:'本月回報已完成'}</b><span>正式課表 ${(payroll?.actualHours??lessonHours(rows)).toFixed(1)} 小時｜計薪 ${(payroll?.paidHours??0).toFixed(1)} 小時${diff}</span></div></div>`;
     }
@@ -110,7 +119,7 @@
       if(!summary){summary=document.createElement('div');summary.id='teacherLessonSummary';summary.className='teacher-lesson-summary';lessonCard.querySelector('h2')?.after(summary)}
       const month=$('#lessonMonth')?.value||(typeof monthNow==='function'?monthNow():'');
       const rows=(db.lessons||[]).filter(l=>!l.isDraft&&(!month||l.date?.startsWith(month)));
-      const pending=rows.filter(l=>l.status==='已上課'&&!l.teacherReportStatus).length;
+      const pending=rows.filter(lessonNeedsReport).length;
       summary.innerHTML=`<b>${rows.length} 堂課程</b><span>${pending?`${pending} 堂等待回報`:'回報均已完成'}</span>`;
       summary.classList.toggle('has-pending',pending>0);
     }

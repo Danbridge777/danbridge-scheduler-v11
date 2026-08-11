@@ -14,6 +14,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
 const APP_RELEASE='20.15.7';
+const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T07:00:00.000Z');
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const cloud=getFirestore(app);
@@ -49,6 +50,7 @@ let scheduleNotificationCleanupStarted=false;
 let lastPublishedOwnerDB=null;
 let ownerBaselineReady=false;
 let lessonReportDocuments=[];
+let currentReportNotification=null;
 let ownerUploadInFlight=false;
 let ownerUploadQueued=false;
 let ownerRetryTimer=null;
@@ -577,6 +579,39 @@ function reportIsNewForCopiedLesson(lesson,report){
  return Number.isFinite(copiedAt)&&Number.isFinite(reportedAt)&&reportedAt>=copiedAt;
 }
 
+function reportNotificationSeenKey(){return`danbridge_report_notification_seen_v20201_${cloudEmailKey||cloudRole||'member'}`}
+function reportNotificationSeen(){try{return new Set(JSON.parse(localStorage.getItem(reportNotificationSeenKey())||'[]'))}catch{return new Set()}}
+function saveReportNotificationSeen(seen){try{localStorage.setItem(reportNotificationSeenKey(),JSON.stringify([...seen].slice(-300)))}catch{}}
+function reportNotificationSignature(report){return`${report.id||report.lessonId||''}:${lessonReportTimestamp(report)||0}`}
+function installReportNotificationUI(){
+ if(document.getElementById('reportSubmissionNotificationModal'))return;
+ const modal=document.createElement('div');
+ modal.id='reportSubmissionNotificationModal';modal.className='schedule-notification-backdrop';modal.hidden=true;
+ modal.innerHTML=`<div class="schedule-notification-dialog" role="dialog" aria-modal="true" aria-labelledby="reportSubmissionNotificationTitle"><div class="schedule-notification-head"><div><div class="schedule-notification-eyebrow">LESSON REPORT</div><h2 id="reportSubmissionNotificationTitle">課堂回報通知</h2></div></div><div id="reportSubmissionNotificationBody" class="schedule-notification-body"></div><div class="schedule-notification-actions"><button type="button" class="btn primary" id="reportSubmissionNotificationClose">知道了</button></div></div>`;
+ document.body.appendChild(modal);
+ document.getElementById('reportSubmissionNotificationClose').onclick=()=>{modal.hidden=true;currentReportNotification=null};
+}
+function openReportNotificationSource(index){
+ const item=currentReportNotification?.[index],lesson=item?.lesson;if(!lesson)return;
+ const month=document.getElementById('lessonMonth');if(month)month.value=String(lesson.date||'').slice(0,7);
+ const modal=document.getElementById('reportSubmissionNotificationModal');if(modal)modal.hidden=true;
+ window.switchTab?.('lessons');setTimeout(()=>{window.renderLessons?.();window.openLessonReport?.(lesson.id)},40);
+}
+function notifyNewLessonReports(reports){
+ if(!['owner','branch_manager'].includes(cloudRole))return;
+ const seen=reportNotificationSeen(),local=window.__danbridgeGetDB?.(),candidates=(reports||[]).filter(report=>{
+   const timestamp=lessonReportTimestamp(report),signature=reportNotificationSignature(report);
+   return timestamp>=REPORT_NOTIFICATION_STARTED_AT&&!seen.has(signature)&&String(report.teacherEmail||'').toLowerCase()!==cloudEmailKey;
+ }).map(report=>({report,lesson:local?.lessons?.find(lesson=>lesson.id===(report.lessonId||report.id))})).filter(item=>item.lesson&&canViewLessonReport(item.lesson));
+ if(!candidates.length)return;
+ candidates.forEach(({report})=>seen.add(reportNotificationSignature(report)));saveReportNotificationSeen(seen);
+ installReportNotificationUI();currentReportNotification=candidates;
+ const body=document.getElementById('reportSubmissionNotificationBody'),modal=document.getElementById('reportSubmissionNotificationModal');if(!body||!modal)return;
+ body.innerHTML=`<p class="schedule-notification-lead"><b>${candidates.length===1?`${escapeHTML(candidates[0].report.teacherName||'老師')} 已提交課堂回報`:`收到 ${candidates.length} 筆新課堂回報`}</b><span>內容已同步到課程紀錄、統計與薪資資料。</span></p><div class="schedule-notification-table-wrap"><table class="schedule-notification-table"><thead><tr><th>老師</th><th>日期時間</th><th>學生／課程</th><th>狀態</th><th>操作</th></tr></thead><tbody>${candidates.map(({report,lesson},index)=>`<tr><td>${escapeHTML(report.teacherName||'老師')}</td><td>${escapeHTML(`${lesson.date||''} ${lesson.start||''}–${lesson.end||''}`)}</td><td><b>${escapeHTML((window.__danbridgeGetDB?.().students||[]).find(student=>student.id===lesson.studentId)?.name||lesson.title||'課程')}</b></td><td>${escapeHTML(reportStatusLabel(report.status))}</td><td><button type="button" class="btn" data-report-notification-source="${index}">查看回報</button></td></tr>`).join('')}</tbody></table></div>`;
+ body.querySelectorAll('[data-report-notification-source]').forEach(button=>button.addEventListener('click',()=>openReportNotificationSource(Number(button.dataset.reportNotificationSource))));
+ modal.hidden=false;
+}
+
 function applyCachedLessonReportsToCurrentDB(){
  const local=window.__danbridgeGetDB?.();
  if(!local||!Array.isArray(local.lessons)||!Array.isArray(lessonReportDocuments)||!lessonReportDocuments.length)return false;
@@ -776,6 +811,7 @@ function subscribeLessonReports(){
  }
  unsubscribeReports=onSnapshot(qy,snap=>{
    lessonReportDocuments=snap.docs.map(d=>({id:d.id,...d.data()}));
+   notifyNewLessonReports(lessonReportDocuments);
    window.DanbridgeNotifications?.render?.();
    const local=window.__danbridgeGetDB();
    const changed=applyCachedLessonReportsToCurrentDB();
