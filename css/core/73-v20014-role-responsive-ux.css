@@ -372,3 +372,9 @@ body.teacher-cloud-role #lessonRows td[class^="status-"] .pill{display:none!impo
   transition:none!important;
   transform:none!important;
 }
+
+@media (max-width:700px){
+  body.teacher-cloud-role #calendar .calendar-toolbar-v16>.calendar-toolbar-row{gap:6px!important;padding:8px!important}
+  body.teacher-cloud-role #calendar .calendar-toolbar-tools{gap:6px!important;padding:8px!important}
+  body.teacher-cloud-role #calendar .calendar-toolbar-tools .btn{height:38px!important;min-height:38px!important;padding:5px 6px!important}
+}
