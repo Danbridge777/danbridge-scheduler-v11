@@ -120,7 +120,11 @@ function closeCourseDrawer(){
 
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('courseDrawer')?.classList.contains('show')){e.preventDefault();closeCourseDrawer()}},true);
 
-function editLesson(id){openCourseDrawer(id)}
+function editLesson(id){
+  const role=window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role||'';
+  if(!role||role==='owner')return openLessonModal(todayStr(),'16:00',id);
+  return openCourseDrawer(id);
+}
 
 function addMinutes(t,m){let[h,mi]=t.split(':').map(Number),n=h*60+mi+m;return `${String(Math.floor(n/60)%24).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`}
 

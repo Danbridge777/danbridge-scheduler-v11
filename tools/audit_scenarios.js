@@ -344,6 +344,18 @@ assert.match(branchBusinessSource, /expenseTotalScope'\)\.textContent=scopeLabel
 
 const moveOperationsStart = courseOperationsSource.indexOf('let calendarMoveSaveTimer');
 assert.ok(moveOperationsStart >= 0, 'calendar move operations are available');
+assert.match(courseOperationsSource, /function editLesson\(id\)\{[\s\S]*if\(!role\|\|role==='owner'\)return openLessonModal\(todayStr\(\),'16:00',id\)/, 'owner single-click opens the existing lesson directly in the edit modal');
+const editOperationStart = courseOperationsSource.indexOf('function editLesson(id)');
+context.openedLessonIds=[];context.openedDrawerIds=[];
+context.openLessonModal=(date,start,id)=>context.openedLessonIds.push(id);
+context.openCourseDrawer=id=>context.openedDrawerIds.push(id);
+context.window.currentCloudRole=()=> 'owner';
+vm.runInContext(courseOperationsSource.slice(editOperationStart, moveOperationsStart), context);
+context.editLesson('owner-single-click');
+assert.deepEqual(context.openedLessonIds,['owner-single-click'],'owner single-click passes the exact existing lesson ID into the edit modal');
+context.window.currentCloudRole=()=> 'teacher';
+context.editLesson('teacher-single-click');
+assert.deepEqual(context.openedDrawerIds,['teacher-single-click'],'non-owner fallback never receives owner edit access');
 context.addMinutes = (time, delta) => { const [h, m] = time.split(':').map(Number); const value = h * 60 + m + delta; return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`; };
 context.shiftDate = (date, delta) => { const value = new Date(`${date}T00:00:00`); value.setDate(value.getDate() + delta); return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; };
 context.shiftTime = context.addMinutes;
