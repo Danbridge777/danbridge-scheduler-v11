@@ -237,6 +237,7 @@ assert.doesNotMatch(branchBusinessSource, /window\.settleData=function\(\)\{retu
 
 const cloudSource = fs.readFileSync(path.join(root, 'js/core/firebase-auth-and-cloud-sync.module.js'), 'utf8');
 const appShellSource = fs.readFileSync(path.join(root, 'js/app/app-shell.js'), 'utf8');
+assert.match(appShellSource, /role==='teacher'&&id==='calendar'[\s\S]*mode\.value='week'[\s\S]*date\.value=todayStr\(\)/, 'opening the teacher schedule always resets it to the current Monday-to-Sunday week');
 assert.match(appShellSource, /function installNavigationHandlers\(\)[\s\S]*tabHandlerInstalled[\s\S]*addEventListener\('click'[\s\S]*closest\('button\[data-tab\]'\)[\s\S]*switchTab\(button\.dataset\.tab\)/, 'navigation uses one stable delegated handler that survives account and role switching');
 assert.match(cloudSource, /function applyRoleUI\(profile,user\)[\s\S]*window\.installNavigationHandlers\?\.\(\);\s*\}/, 'every authenticated role reapplies navigation handlers after role-specific UI restrictions');
 assert.match(cloudSource, /function acknowledgeCurrentScheduleNotification\(\)[\s\S]*if\(modal\)modal\.hidden=true;\s*await Promise\.all/, 'acknowledging many schedule notifications releases the interface before cloud writes finish');
