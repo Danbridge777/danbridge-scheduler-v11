@@ -58,7 +58,6 @@
     const rect=card.getBoundingClientRect();
     const ids=selectedLessonIds.has(card.dataset.id)?selectedRenderedIds():[card.dataset.id];
     controller.pointerDrag={pointerId:event.pointerId,id:card.dataset.id,ids,card,startX:event.clientX,startY:event.clientY,moved:false,grabX:event.clientX-rect.left,grabY:event.clientY-rect.top};
-    try{controller.canvas.setPointerCapture(event.pointerId)}catch{}
     return true;
   }
 
@@ -99,7 +98,7 @@
 
   function movePointerDrag(event){
     const state=controller.pointerDrag;if(!state||event.pointerId!==state.pointerId)return false;
-    if(!state.moved&&Math.hypot(event.clientX-state.startX,event.clientY-state.startY)>6){state.moved=true;dragState=state.id;createDragGhost(state,event);state.card.classList.add('dragging')}
+    if(!state.moved&&Math.hypot(event.clientX-state.startX,event.clientY-state.startY)>6){state.moved=true;dragState=state.id;try{controller.canvas.setPointerCapture(event.pointerId)}catch{}createDragGhost(state,event);state.card.classList.add('dragging')}
     if(!state.moved)return true;
     event.preventDefault();event.stopImmediatePropagation();moveDragGhost(event);clearDrop();
     const target=targetOf(document.elementFromPoint(event.clientX,event.clientY));

@@ -452,6 +452,10 @@ assert.equal(context.lastMoveSaveOptions.skipRender, true, 'drag persistence doe
 const interactionSource = fs.readFileSync(path.join(root, 'js/modules/calendar/marquee-multi-selection.js'), 'utf8');
 assert.match(interactionSource, /selectedRenderedIds\(\)/, 'multi drag intersects selection with rendered cards');
 assert.doesNotMatch(interactionSource, /moveLessonsTo\([^\n]+\);else moveLessonTo\([^\n]+\);\s*finishSelection\(\)/, 'successful drops do not clear the same selection twice');
+const pointerDragStartSource = interactionSource.slice(interactionSource.indexOf('function beginPointerDrag'), interactionSource.indexOf('const ghostStyleProperties'));
+const pointerDragMoveSource = interactionSource.slice(interactionSource.indexOf('function movePointerDrag'), interactionSource.indexOf('function endPointerDrag'));
+assert.doesNotMatch(pointerDragStartSource, /setPointerCapture/, 'a plain lesson-card click does not capture the pointer away from the card');
+assert.match(pointerDragMoveSource, /state\.moved=true[\s\S]*setPointerCapture/, 'pointer capture starts only after the gesture becomes a real drag');
 
 const pwaSource = fs.readFileSync(path.join(root, 'js/core/pwa-installation.js'), 'utf8');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.webmanifest'), 'utf8'));
