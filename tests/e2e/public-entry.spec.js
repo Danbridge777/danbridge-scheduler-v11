@@ -9,6 +9,7 @@ const ROLE_UX_RELEASE = '20.17.1';
 const ROLE_UX_STYLE_RELEASE = '20.17.2';
 const PWA_RELEASE = '20.18.2';
 const PWA_STYLE_RELEASE = '20.18.0';
+const CLEAN_FIELD_RELEASE = '20.19.0';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
   await page.route('https://www.gstatic.com/**', route => route.abort());
@@ -27,6 +28,7 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/modules/business/business-logic.js?v=${BUSINESS_RELEASE}`);
   expect(sources).toContain(`./js/modules/notifications/notification-center.js?v=${RELEASE}`);
   expect(sources).toContain(`./js/core/firebase-auth-and-cloud-sync.module.js?v=${CLOUD_RELEASE}`);
+  expect(sources).toContain(`./js/ui/clean-field-hints.js?v=${CLEAN_FIELD_RELEASE}`);
   expect(sources).toContain(`./js/modules/teachers/teacher-kpi.js?v=${TEACHER_KPI_RELEASE}`);
   expect(sources).toContain(`./js/core/branch-business-scope.js?v=${BRANCH_SCOPE_RELEASE}`);
   expect(sources).toContain(`./js/app/v20014-role-responsive-ux.js?v=${ROLE_UX_RELEASE}`);
@@ -38,6 +40,11 @@ test('critical teacher and finance resources load the current release', async ({
   expect(manifest).toBe('./manifest.webmanifest');
   const appleIcon = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
   expect(appleIcon).toBe('./icon-192.png?v=20.18.1');
+});
+
+test('form fields do not show redundant placeholder hints', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('[placeholder]')).toHaveCount(0);
 });
 
 test('public entry has no horizontal viewport overflow', async ({ page }) => {
