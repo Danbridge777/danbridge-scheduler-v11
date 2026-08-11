@@ -260,7 +260,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.22\.1'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.22\.2'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*setCompanyAccessWithAudit\(email,\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension atomically audits the preserved access record and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');
@@ -310,7 +310,11 @@ const usabilitySource = fs.readFileSync(path.join(root, 'js/app/v1822-usability-
 assert.match(usabilitySource, /targetTop=matchMedia\('\(max-width:700px\)'\)\.matches\?0:/, 'mobile section changes always start at the new page top');
 assert.match(roleCss, /body\[data-role-ux="branch_manager"\] #v18Fab[\s\S]*body\[data-role-ux="branch_manager"\] #finance button[\s\S]*display:none!important/, 'dynamic owner controls stay hidden after branch view rerenders');
 const schedulerSource = fs.readFileSync(path.join(root, 'js/modules/calendar/scheduler-ui.js'), 'utf8');
-assert.match(schedulerSource, /const DRAG_HOLD_MS=280, MOVE_CANCEL_PX=22/, 'iPad touch drag arms quickly while tolerating normal finger jitter');
+assert.match(schedulerSource, /const DRAG_START_PX=3/, 'iPad touch drag starts on movement without a long-press delay');
+assert.doesNotMatch(schedulerSource, /DRAG_HOLD_MS|setTimeout\(\(\)=>\{\s*dragStarted=true/, 'iPad touch drag has no long-press timer');
+assert.match(schedulerSource, /touchDragIds=selectedLessonIds\.has[\s\S]*if\(touchDragIds\.length>1\)moveLessonsTo/, 'iPad direct dragging preserves multi-selected lesson movement');
+const dragUxCss = fs.readFileSync(path.join(root, 'css/calendar/16-danbridge-v38-drag-ux.css'), 'utf8');
+assert.match(dragUxCss, /@media\(hover:none\)[\s\S]*#calendarCanvas \.lesson,#calendarCanvas \.week-event\{touch-action:none!important\}/, 'iPad lesson cards reserve touch movement for immediate dragging instead of Safari scrolling');
 assert.match(schedulerSource, /function handleCalendarShortcuts\(e\)\{\s*if\(!calendarOwnerCanEdit\(\)\)return/, 'branch manager calendar shortcuts stop before any action');
 assert.match(cloudSource, /function setSignedOutIsolation\(locked\)[\s\S]*el\.inert=true;el\.setAttribute\('aria-hidden','true'\)/, 'signed-out content is removed from keyboard and accessibility navigation');
 assert.match(cloudSource, /function notifyNewLessonReports\(reports\)[\s\S]*\['owner','branch_manager'\][\s\S]*teacherEmail[\s\S]*canViewLessonReport/, 'new report popups are limited to owner or the authorized branch manager and exclude the submitting account');

@@ -347,19 +347,18 @@ function handleCalendarShortcuts(e){
   }
 }
 function attachDragHandlers(){
-  /* iPad Safari 會在原地長按時回報細微 pointer 位移；過長等待加上過小容許值會在拖曳啟動前誤判為捲動。 */
-  const DRAG_HOLD_MS=280, MOVE_CANCEL_PX=22;
+  /* iPad 與桌面一致：移動即拖曳；極小位移門檻只用來保留單點編輯。 */
+  const DRAG_START_PX=3;
   const role=document.body.dataset.cloudRole||window.DanbridgeAccess?.getContext?.().role||window.currentCloudRole?.()||'';
   const canMove=!role||role==='owner';
   document.querySelectorAll('#calendarCanvas [data-id]').forEach(el=>{
     el.setAttribute('draggable',canMove&&!selectionMode?'true':'false');
-    let pointerId=null,startX=0,startY=0,dragStarted=false,suppressClick=false;
+    let pointerId=null,startX=0,startY=0,dragStarted=false,suppressClick=false,touchDragIds=[];
     let globalPointerCleanup=null;
     const removeGlobalPointerListeners=()=>{
       if(globalPointerCleanup){globalPointerCleanup();globalPointerCleanup=null}
     };
     const clearTouchDrag=()=>{
-      clearTimeout(touchTimer);touchTimer=null;
       el.classList.remove('drag-arming');
       if(!dragStarted)el.classList.remove('dragging');
       document.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'));
@@ -378,21 +377,19 @@ function attachDragHandlers(){
     el.addEventListener('dragstart',e=>{if(selectionMode){e.preventDefault();return}dragState=el.dataset.id;el.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',dragState)});
     el.addEventListener('dragend',()=>{el.classList.remove('dragging');dragState=null;document.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'))});
     el.addEventListener('pointerdown',e=>{
-      if(e.pointerType==='mouse'||selectionMode)return;
+      if(e.pointerType==='mouse'||(selectionMode&&!selectedLessonIds.has(el.dataset.id)))return;
       removeGlobalPointerListeners();
       pointerId=e.pointerId;startX=e.clientX;startY=e.clientY;dragStarted=false;suppressClick=false;
-      el.classList.add('drag-arming');
-      touchTimer=setTimeout(()=>{
-        dragStarted=true;suppressClick=true;dragState=el.dataset.id;
-        try{el.setPointerCapture(pointerId)}catch{}
-        el.classList.remove('drag-arming');el.classList.add('dragging');document.body.classList.add('touch-drag-active');
-        if(navigator.vibrate)navigator.vibrate(18);
-      },DRAG_HOLD_MS)
+      touchDragIds=selectedLessonIds.has(el.dataset.id)?[...selectedLessonIds]:[el.dataset.id];
     },{passive:true});
     el.addEventListener('pointermove',e=>{
       if(pointerId!==e.pointerId)return;
       const moved=Math.hypot(e.clientX-startX,e.clientY-startY);
-      if(!dragStarted&&moved>MOVE_CANCEL_PX){clearTouchDrag();pointerId=null;return}
+      if(!dragStarted&&moved>=DRAG_START_PX){
+        dragStarted=true;suppressClick=true;dragState=el.dataset.id;
+        try{el.setPointerCapture(pointerId)}catch{}
+        el.classList.add('dragging');document.body.classList.add('touch-drag-active');
+      }
       if(!dragStarted||!dragState)return;
       e.preventDefault();
       document.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'));
@@ -401,21 +398,19 @@ function attachDragHandlers(){
     },{passive:false});
     const finishPointer=e=>{
       if(pointerId!==e.pointerId)return;
-      clearTimeout(touchTimer);touchTimer=null;el.classList.remove('drag-arming');
       const wasDragging=dragStarted&&!!dragState;
       const target=wasDragging?document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-date]'):null;
       el.classList.remove('dragging');document.body.classList.remove('touch-drag-active');document.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'));
-      if(target)moveLessonTo(dragState,target.dataset.date,target.dataset.time);
-      dragState=null;dragStarted=false;pointerId=null;
+      if(target){if(touchDragIds.length>1)moveLessonsTo(touchDragIds,dragState,target.dataset.date,target.dataset.time||'');else moveLessonTo(dragState,target.dataset.date,target.dataset.time)}
+      dragState=null;dragStarted=false;pointerId=null;touchDragIds=[];
       removeGlobalPointerListeners();
     };
     const cancelPointer=e=>{
       if(pointerId!==e.pointerId)return;
-      clearTimeout(touchTimer);touchTimer=null;
       el.classList.remove('drag-arming','dragging');
       document.body.classList.remove('touch-drag-active');
       document.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'));
-      dragState=null;dragStarted=false;pointerId=null;suppressClick=true;
+      dragState=null;dragStarted=false;pointerId=null;touchDragIds=[];suppressClick=true;
       removeGlobalPointerListeners();
     };
     el.addEventListener('pointerup',finishPointer);

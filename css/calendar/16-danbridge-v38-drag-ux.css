@@ -12,4 +12,4 @@
 }
 body.touch-drag-active{user-select:none!important;-webkit-user-select:none!important;overscroll-behavior:none}
 body.touch-drag-active #calendarCanvas{touch-action:none!important}
-@media(hover:none){.lesson,.week-event{touch-action:pan-x pan-y}.lesson.dragging,.week-event.dragging{touch-action:none!important}}
+@media(hover:none){#calendarCanvas .lesson,#calendarCanvas .week-event{touch-action:none!important}.lesson.dragging,.week-event.dragging{touch-action:none!important}}
