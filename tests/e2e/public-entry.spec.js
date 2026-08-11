@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.25.3';
+const CLOUD_RELEASE = '20.25.4';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -12,7 +12,7 @@ const PWA_RELEASE = '20.18.3';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
-const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.3';
+const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.4';
 const SCHEDULER_UI_RELEASE = '20.25.0';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
@@ -196,6 +196,38 @@ test('owner metric grids and numeric fields stay centered', async ({ page }) => 
   expect(result.metricAlign).toBe('center');
   expect(result.metricItems).toBe('center');
   expect(result.numberAlign).toBe('center');
+});
+
+test('mobile lesson dates, record month and form controls use consistent typography', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  const result = await page.evaluate(() => {
+    const lessonDate = document.getElementById('lessonDate');
+    const lessonMonth = document.getElementById('lessonMonth');
+    const label = document.querySelector('#lessonModal label');
+    const input = document.getElementById('lessonTitle');
+    const button = document.querySelector('#lessonModal .btn');
+    const color = document.getElementById('teacherColor');
+    return {
+      dateAlign: getComputedStyle(lessonDate).textAlign,
+      monthAlign: getComputedStyle(lessonMonth).textAlign,
+      labelWeight: getComputedStyle(label).fontWeight,
+      inputWeight: getComputedStyle(input).fontWeight,
+      buttonWeight: getComputedStyle(button).fontWeight,
+      inputSize: getComputedStyle(input).fontSize,
+      buttonSize: getComputedStyle(button).fontSize,
+      colorWidth: color.getBoundingClientRect().width,
+      viewportWidth: innerWidth
+    };
+  });
+  expect(result.dateAlign).toBe('center');
+  expect(result.monthAlign).toBe('center');
+  if (result.viewportWidth <= 700) {
+    expect(result.labelWeight).toBe('700');
+    expect(result.inputWeight).toBe('700');
+    expect(result.buttonWeight).toBe('700');
+    expect(result.inputSize).toBe(result.buttonSize);
+  }
+  expect(result.colorWidth).toBeLessThanOrEqual(70);
 });
 
 test('form fields do not show redundant placeholder hints', async ({ page }) => {

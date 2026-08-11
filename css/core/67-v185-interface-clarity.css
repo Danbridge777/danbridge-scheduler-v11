@@ -144,3 +144,24 @@ body:has(#lessonModal.show){overflow:hidden!important;overscroll-behavior:none!i
   #lessonModal{padding:calc(8px + env(safe-area-inset-top)) 8px calc(8px + env(safe-area-inset-bottom))!important;align-items:stretch!important}
   #lessonModal>.modal{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;margin:0!important;padding-bottom:calc(20px + env(safe-area-inset-bottom))!important;border-radius:22px!important;scrollbar-gutter:auto!important}
 }
+
+/* V20.25.4 — centered native dates, compact color swatch, consistent mobile controls. */
+#lessonDate,#lessonMonth{position:relative!important;text-align:center!important;text-align-last:center!important;font-variant-numeric:tabular-nums!important}
+#lessonDate::-webkit-date-and-time-value,#lessonMonth::-webkit-date-and-time-value{display:block!important;width:100%!important;min-width:0!important;margin:0!important;padding:0!important;text-align:center!important}
+#lessonDate::-webkit-datetime-edit,#lessonMonth::-webkit-datetime-edit{display:flex!important;align-items:center!important;justify-content:center!important;width:100%!important;min-width:0!important;padding:0!important;text-align:center!important}
+#lessonDate::-webkit-datetime-edit-fields-wrapper,#lessonMonth::-webkit-datetime-edit-fields-wrapper{display:flex!important;align-items:center!important;justify-content:center!important;width:100%!important;min-width:0!important;padding:0!important}
+#lessonDate::-webkit-calendar-picker-indicator,#lessonMonth::-webkit-calendar-picker-indicator{position:absolute!important;right:14px!important;top:50%!important;transform:translateY(-50%)!important;margin:0!important}
+#teachers label:has(+ #teacherColor)::after{content:"點選下方色票更換";display:inline-block;margin-left:8px;color:#7b8796;font-size:12px;font-weight:700}
+#teachers #teacherColor{display:block!important;width:64px!important;min-width:64px!important;max-width:64px!important;height:48px!important;min-height:48px!important;margin:7px 0 12px!important;padding:5px!important;border:1px solid #cbd8e3!important;border-radius:14px!important;background:#fff!important;box-shadow:0 4px 12px rgba(31,67,92,.08)!important;cursor:pointer!important}
+#teachers #teacherColor::-webkit-color-swatch-wrapper{padding:0!important}
+#teachers #teacherColor::-webkit-color-swatch{border:0!important;border-radius:9px!important}
+
+@media(max-width:700px){
+  main section label,.modal label,.calendar-field label{font-size:15px!important;font-weight:700!important;line-height:1.45!important}
+  main section input,main section select,main section textarea,main section .btn,
+  .modal input,.modal select,.modal textarea,.modal .btn{font-size:16px!important;font-weight:700!important;line-height:1.45!important}
+  main section input::placeholder,main section textarea::placeholder,.modal input::placeholder,.modal textarea::placeholder{font-size:16px!important;font-weight:700!important}
+  #calendar .calendar-toolbar-v16 input,#calendar .calendar-toolbar-v16 select,#calendar .calendar-toolbar-v16 button{font-size:16px!important;font-weight:700!important}
+  #calendar .calendar-toolbar-v16 label,#calendar .calendar-toolbar-v16 .calendar-field label{font-size:15px!important;font-weight:700!important}
+  #teachers label:has(+ #teacherColor)::after{display:block;margin:3px 0 0;font-size:13px;font-weight:700}
+}

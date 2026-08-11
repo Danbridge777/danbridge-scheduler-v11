@@ -272,7 +272,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.25\.3'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.25\.4'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource,/cloudEmailKey!==OWNER_EMAIL[\s\S]*只有主要 Owner 可以新增或更新其他 Owner/,'only the primary owner can create or update backup owners');
 assert.match(cloudSource,/email===OWNER_EMAIL[\s\S]*主要 Owner 帳號受保護，不能停權/,'the primary owner cannot be disabled from the account UI');
 const convenienceSource=fs.readFileSync(path.join(root,'js/app/v18-convenience-suite.js'),'utf8');
@@ -552,6 +552,9 @@ assert.match(pointerDragMoveSource, /state\.moved=true[\s\S]*setPointerCapture/,
 
 const pwaSource = fs.readFileSync(path.join(root, 'js/core/pwa-installation.js'), 'utf8');
 assert.match(cloudSource, /if\(cloudRole==='owner'\)return \{\.\.\.meta,teacherIds\};[\s\S]*if\(!cloudTeacherId\)throw new Error/, 'every Owner can submit a lesson report without a linked teacher profile');
+assert.match(cloudSource, /const owners=\[\{email:OWNER_EMAIL[\s\S]*if\(a\.role==='owner'\)[\s\S]*for\(const owner of owners\)addRecipientItem/, 'every active Owner receives a large schedule-change notification');
+assert.match(cloudSource, /'paymentStatus','chargeStudent','payTeacher','campId'/, 'small billing, payroll and camp-code changes trigger schedule notifications');
+assert.match(cloudSource, /\['owner','teacher','branch_manager'\]\.includes\(cloudRole\)/, 'Owners, managers and teachers subscribe to large schedule notifications');
 assert(/worker\.state==='activated'\)return reloadAcceptedUpdate\(\)/.test(pwaSource), 'PWA update button must reload immediately when the worker already activated');
 assert(/setTimeout\(reloadAcceptedUpdate,1800\)/.test(pwaSource), 'PWA update button must have a reload fallback for Safari and installed apps');
 assert(/__danbridge_refresh/.test(pwaSource)&&/window\.location\.replace/.test(pwaSource), 'PWA accepted updates must reopen a cache-busted entry URL');
