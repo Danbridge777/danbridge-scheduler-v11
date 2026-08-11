@@ -239,6 +239,7 @@ const cloudSource = fs.readFileSync(path.join(root, 'js/core/firebase-auth-and-c
 const appShellSource = fs.readFileSync(path.join(root, 'js/app/app-shell.js'), 'utf8');
 assert.match(appShellSource, /function installNavigationHandlers\(\)[\s\S]*tabHandlerInstalled[\s\S]*addEventListener\('click'[\s\S]*closest\('button\[data-tab\]'\)[\s\S]*switchTab\(button\.dataset\.tab\)/, 'navigation uses one stable delegated handler that survives account and role switching');
 assert.match(cloudSource, /function applyRoleUI\(profile,user\)[\s\S]*window\.installNavigationHandlers\?\.\(\);\s*\}/, 'every authenticated role reapplies navigation handlers after role-specific UI restrictions');
+assert.match(cloudSource, /function acknowledgeCurrentScheduleNotification\(\)[\s\S]*if\(modal\)modal\.hidden=true;\s*await Promise\.all/, 'acknowledging many schedule notifications releases the interface before cloud writes finish');
 assert.match(cloudSource, /if\(teacherOnly\)\{\s*delete document\.body\.dataset\.teacherWeekInitialized;/, 'every fresh teacher login resets the one-time current-week initialization');
 const syncDecisionStart = cloudSource.indexOf('function dataHash');
 const syncDecisionEnd = cloudSource.indexOf('function safeErrorCode');

@@ -1232,8 +1232,8 @@ async function acknowledgeCurrentScheduleNotification(){
  const button=document.getElementById('scheduleNotificationAcknowledge');
  try{
    if(button){button.disabled=true;button.textContent='處理中…'}
-   await Promise.all(ids.map(id=>setDoc(doc(cloud,'companies',COMPANY_ID,'scheduleNotifications',id),{read:true,acknowledgedAt:serverTimestamp(),acknowledgedBy:cloudUid},{merge:true})));
    if(modal)modal.hidden=true;
+   await Promise.all(ids.map(id=>setDoc(doc(cloud,'companies',COMPANY_ID,'scheduleNotifications',id),{read:true,acknowledgedAt:serverTimestamp(),acknowledgedBy:cloudUid},{merge:true})));
  }catch(e){console.error('Acknowledge schedule notification failed',e);cloudStatus('通知確認失敗：'+(e?.message||e),'error')}
  finally{if(button){button.disabled=false;button.textContent='知道了'}}
 }
