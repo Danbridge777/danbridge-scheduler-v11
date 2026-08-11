@@ -35,6 +35,8 @@
 #students .card.col-8>.toolbar{position:sticky!important;top:0!important;z-index:5!important;grid-template-columns:auto minmax(240px,1fr) minmax(180px,260px)!important;padding:16px 18px!important;margin-bottom:12px!important;border:1px solid #dbe5ee!important;background:#f5f8fb!important;box-shadow:none!important}
 #students .card.col-8>.toolbar h2{font-size:22px!important}
 #students #crmSearch,#students #crmTeacherFilter{height:42px!important;min-height:42px!important}
+@media(min-width:1100px) and (max-width:1350px){#students .card.col-8>.toolbar{grid-template-columns:1fr!important}#students .card.col-8>.toolbar>div{min-width:0!important;width:100%!important}}
+@media(max-width:1099px){#students .card.col-8>.toolbar{grid-template-columns:1fr!important}#students .card.col-8>.toolbar>div{min-width:0!important;width:100%!important}}
 #students .crm-teacher-filter-field{min-width:0}
 #students .table-wrap{border:1px solid #dce6ef!important;border-radius:14px!important}
 #students thead th{height:48px!important;padding:11px 13px!important;background:#eaf2f8!important;color:#35526a!important;font-size:11px!important;letter-spacing:.04em!important}

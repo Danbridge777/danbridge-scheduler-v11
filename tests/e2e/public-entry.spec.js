@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.25.0';
+const CLOUD_RELEASE = '20.25.1';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -12,7 +12,7 @@ const PWA_RELEASE = '20.18.3';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
-const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.0';
+const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.1';
 const SCHEDULER_UI_RELEASE = '20.25.0';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
@@ -107,6 +107,24 @@ test('desktop roles use document scrolling instead of a sidebar scrollbar', asyn
     return { width: window.innerWidth, overflow: getComputedStyle(document.querySelector('body > nav')).overflowY };
   });
   if (result.width >= 1100) expect(result.overflow).toBe('visible');
+});
+
+test('student teacher filter stays inside the viewport', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  const result = await page.evaluate(() => {
+    document.body.classList.remove('auth-locked');
+    document.getElementById('authScreen')?.classList.add('hidden');
+    document.querySelectorAll('[data-auth-isolated]').forEach(element => {
+      element.inert = false;element.removeAttribute('aria-hidden');delete element.dataset.authIsolated;
+    });
+    window.switchTab('students');
+    const filter = document.getElementById('crmTeacherFilter');
+    const rect = filter.getBoundingClientRect();
+    return { exists: !!filter, left: rect.left, right: rect.right, width: innerWidth };
+  });
+  expect(result.exists).toBe(true);
+  expect(result.left).toBeGreaterThanOrEqual(0);
+  expect(result.right).toBeLessThanOrEqual(result.width);
 });
 
 test('form fields do not show redundant placeholder hints', async ({ page }) => {

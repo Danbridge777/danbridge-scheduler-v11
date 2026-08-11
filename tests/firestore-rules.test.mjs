@@ -360,6 +360,36 @@ describe('通知中心權限', () => {
       message: 'tampered'
     }));
   });
+
+  test('老師即時收到自己的通知與權限撤銷串流', async () => {
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    const teacher = auth('teacher-uid', TEACHER_EMAIL);
+    const marker = `live-notice-${Date.now()}`;
+    let unsubscribeNotice;
+    const noticeReceived = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('老師未在期限內收到自己的通知更新')), 3000);
+      unsubscribeNotice = onSnapshot(doc(teacher, `companies/${COMPANY_ID}/scheduleNotifications/teacher-notice`), snapshot => {
+        if (snapshot.data()?.message !== marker) return;
+        clearTimeout(timer);resolve(snapshot.data());
+      }, reject);
+    });
+    await assertSucceeds(updateDoc(doc(owner, `companies/${COMPANY_ID}/scheduleNotifications/teacher-notice`), { message: marker }));
+    assert.equal((await noticeReceived).message, marker);
+    unsubscribeNotice?.();
+
+    let unsubscribeAccess;
+    const revoked = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('權限撤銷未在期限內送達登入防護監聽')), 3000);
+      unsubscribeAccess = onSnapshot(doc(teacher, `companyAccess/${TEACHER_EMAIL}`), snapshot => {
+        if (snapshot.data()?.active !== false) return;
+        clearTimeout(timer);resolve(snapshot.data());
+      }, reject);
+    });
+    await assertSucceeds(updateDoc(doc(owner, `companyAccess/${TEACHER_EMAIL}`), { active: false }));
+    assert.equal((await revoked).active, false);
+    unsubscribeAccess?.();
+    await assertFails(getDoc(doc(teacher, `companies/${COMPANY_ID}/scheduleNotifications/teacher-notice`)));
+  });
 });
 
 describe('錯誤監控權限與隱私', () => {
