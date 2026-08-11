@@ -87,7 +87,7 @@ for(const key of ['makeupId','sourceLessonId','scheduledLessonId','isMakeup']){
 assert.match(schedulerCopySource, /createFreshLessonCopy\(old,\{date:mapDateByCalendarWeek/, 'selected month copy uses the fresh lesson contract');
 assert.match(schedulerCopySource, /createFreshLessonCopy\(old,\{date:targetDateStr,start:ns,end:ne/, 'clipboard paste uses the fresh lesson contract');
 assert.match(schedulerCopySource, /lessonClipboard=rows\.map\(l=>createFreshLessonCopy\(l,\{id:l\.id\}\)\)/, 'the clipboard itself never stores lesson report fields');
-assert.match(schedulerCopySource, /function ensureTeacherCalendarWeek\(\)[\s\S]*role!==\x27teacher\x27[\s\S]*calendarMode\x27\)\.value=\x27week\x27[\s\S]*calendarDate\x27\)\.value=todayStr\(\)/, 'teacher login starts on the current Monday-to-Sunday week');
+assert.match(schedulerCopySource, /function ensureTeacherCalendarMonth\(\)[\s\S]*role!==\x27teacher\x27[\s\S]*calendarMode\x27\)\.value=\x27month\x27[\s\S]*calendarDate\x27\)\.value=todayStr\(\)/, 'teacher login starts on the current month');
 assert.match(schedulerCopySource, /function calendarTeacherTargetChanged\(\)[\s\S]*if\(targetId\)\{\$\(\x27calendarMode\x27\)\.value=\x27week\x27;\$\(\x27calendarDate\x27\)\.value=todayStr\(\)\}/, 'choosing a teacher switches the schedule to the current week');
 const applicationSource = fs.readFileSync(path.join(root, 'js/modules/application-and-business-features.js'), 'utf8');
 assert.match(applicationSource, /createFreshLessonCopy\(lesson,\{date:shiftDate\(lesson\.date,7\)/, 'weekly copy uses the fresh lesson contract');
@@ -253,7 +253,7 @@ assert.doesNotMatch(branchBusinessSource, /window\.settleData=function\(\)\{retu
 
 const cloudSource = fs.readFileSync(path.join(root, 'js/core/firebase-auth-and-cloud-sync.module.js'), 'utf8');
 const appShellSource = fs.readFileSync(path.join(root, 'js/app/app-shell.js'), 'utf8');
-assert.match(appShellSource, /role==='teacher'&&id==='calendar'[\s\S]*mode\.value='week'[\s\S]*date\.value=todayStr\(\)/, 'opening the teacher schedule always resets it to the current Monday-to-Sunday week');
+assert.match(appShellSource, /if\(id==='calendar'\)[\s\S]*mode\.value='month'[\s\S]*date\.value=todayStr\(\)/, 'opening the schedule always starts on the current month');
 assert.match(appShellSource, /function installNavigationHandlers\(\)[\s\S]*tabHandlerInstalled[\s\S]*addEventListener\('click'[\s\S]*closest\('button\[data-tab\]'\)[\s\S]*switchTab\(button\.dataset\.tab\)/, 'navigation uses one stable delegated handler that survives account and role switching');
 assert.match(cloudSource, /function applyRoleUI\(profile,user\)[\s\S]*window\.installNavigationHandlers\?\.\(\);\s*\}/, 'every authenticated role reapplies navigation handlers after role-specific UI restrictions');
 assert.match(cloudSource, /function acknowledgeCurrentScheduleNotification\(\)[\s\S]*if\(modal\)modal\.hidden=true;\s*await Promise\.all/, 'acknowledging many schedule notifications releases the interface before cloud writes finish');
@@ -272,7 +272,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.23\.1'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.23\.2'/, 'operational errors identify the current deployed release');
 const convenienceSource=fs.readFileSync(path.join(root,'js/app/v18-convenience-suite.js'),'utf8');
 assert.match(convenienceSource,/push\('校區',branchName\(old\.branchId\),branchName\(branchId\)\)/,'lesson change confirmations display branch names instead of internal IDs');
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*setCompanyAccessWithAudit\(email,\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension atomically audits the preserved access record and synchronizes user profiles');
