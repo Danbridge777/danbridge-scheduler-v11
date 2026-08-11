@@ -343,6 +343,10 @@ body[data-role-ux="branch_manager"] #dashboard .teacher-hours-metric{display:blo
 body[data-active-section]:not([data-active-section="dashboard"]):not([data-active-section="calendar"]):not([data-active-section="lessons"]) #v18Fab,
 body[data-active-section]:not([data-active-section="dashboard"]):not([data-active-section="calendar"]):not([data-active-section="lessons"]) #v18FabMenu{display:none!important}
 
+/* Teachers never receive or see collection/payment state; owner and manager views are unchanged. */
+body.teacher-cloud-role #lessonRows td.status-已上課 .pill,
+body.teacher-cloud-role #lessonRows td[class^="status-"] .pill{display:none!important}
+
 @media (max-width:420px){
   body[data-role-ux="teacher"] #dashboard .v32-eyebrow{font-size:8.5px!important;letter-spacing:.1em!important}
   #teacherReportModal #startClassFocusBtn,#teacherReportModal #quickCompleteTeacherReportBtn,#teacherReportModal #saveTeacherReportBtn,#teacherReportModal #cancelTeacherReportBtn{width:100%!important;margin:4px 0!important}

@@ -9,7 +9,7 @@ const context = {
   console,
   db: { students: [], teachers: [], lessons: [], makeups: [], summerCampRegistrations: [], winterCampRegistrations: [] },
   window: {},
-  document: { getElementById: () => null },
+  document: { getElementById: () => null, body: { classList: { contains: () => false } } },
   localStorage: { getItem: () => null, setItem: () => {} },
   student(id) { return context.db.students.find(item => item.id === id) || {}; },
   teacher(id) { return context.db.teachers.find(item => item.id === id) || {}; },
@@ -74,6 +74,15 @@ assert.match(schedulerCopySource, /function calendarTeacherTargetChanged\(\)[\s\
 const applicationSource = fs.readFileSync(path.join(root, 'js/modules/application-and-business-features.js'), 'utf8');
 assert.match(applicationSource, /createFreshLessonCopy\(lesson,\{date:shiftDate\(lesson\.date,7\)/, 'weekly copy uses the fresh lesson contract');
 assert.match(applicationSource, /createFreshLessonCopy\(lesson,\{date:newDate/, 'monthly copy uses the fresh lesson contract');
+const teacherCardPrivacyStart=applicationSource.indexOf('const lessonCardWithOwnerFinance');
+const teacherCardPrivacyEnd=applicationSource.indexOf('function weekMonday',teacherCardPrivacyStart);
+assert.ok(teacherCardPrivacyStart>=0&&teacherCardPrivacyEnd>teacherCardPrivacyStart,'teacher calendar privacy wrapper is installed before calendar use');
+context.lessonCard=()=>'<span>學生｜老師｜課程｜✓已繳</span>';
+context.calendarIsTeacherView=()=>true;
+vm.runInContext(applicationSource.slice(teacherCardPrivacyStart,teacherCardPrivacyEnd),context);
+assert.equal(context.lessonCard({}),'<span>學生｜老師｜課程</span>','teacher calendar card never displays paid state');
+context.calendarIsTeacherView=()=>false;
+assert.equal(context.lessonCard({}),'<span>學生｜老師｜課程｜✓已繳</span>','owner calendar card keeps payment state');
 const matrix = [
   ['completed', lesson({ teacherReportStatus: 'completed' }), 200, 100],
   ['student leave', lesson({ status: '學生請假', teacherReportStatus: 'student_leave' }), 200, 100],
@@ -381,7 +390,8 @@ assert.match(branchBusinessSource, /expenseTotalScope'\)\.textContent=scopeLabel
 
 const moveOperationsStart = courseOperationsSource.indexOf('let calendarMoveSaveTimer');
 assert.ok(moveOperationsStart >= 0, 'calendar move operations are available');
-assert.match(courseOperationsSource, /function editLesson\(id\)\{[\s\S]*if\(!role\|\|role==='owner'\)return openLessonModal\(todayStr\(\),'16:00',id\)/, 'owner single-click opens the existing lesson directly in the edit modal');
+assert.match(courseOperationsSource, /function editLesson\(id\)\{[\s\S]*const restricted=role==='teacher'\|\|role==='branch_manager'[\s\S]*if\(!restricted\)return openLessonModal\(todayStr\(\),'16:00',id\)/, 'owner single-click opens the existing lesson directly in the edit modal even while role state is synchronizing');
+assert.doesNotMatch(courseOperationsSource.slice(courseOperationsSource.indexOf('function openLessonModal'),courseOperationsSource.indexOf('function saveLesson')), /disabled|readOnly/, 'owner lesson editor does not lock any schedule field');
 const editOperationStart = courseOperationsSource.indexOf('function editLesson(id)');
 context.openedLessonIds=[];context.openedDrawerIds=[];
 context.openLessonModal=(date,start,id)=>context.openedLessonIds.push(id);

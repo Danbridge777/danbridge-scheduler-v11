@@ -75,7 +75,11 @@ document.addEventListener('copy',e=>{
 
 
 
-
+const lessonCardWithOwnerFinance=lessonCard;
+lessonCard=function(l){
+  const html=lessonCardWithOwnerFinance(l);
+  return calendarIsTeacherView()?html.replace(/｜(?:✓已繳|未繳)(?=(?:｜|<))/g,''):html;
+};
 
 function weekMonday(dateStr){const d=new Date(dateStr+'T00:00:00'),day=d.getDay();d.setDate(d.getDate()-((day+6)%7));return d}
 function copyVisibleWeekToNextWeek(){
