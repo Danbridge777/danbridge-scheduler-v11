@@ -1,13 +1,13 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.25.5';
+const CLOUD_RELEASE = '20.25.6';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
 const ROLE_UX_RELEASE = '20.20.1';
-const ROLE_UX_STYLE_RELEASE = '20.24.2';
+const ROLE_UX_STYLE_RELEASE = '20.25.6';
 const PWA_RELEASE = '20.18.3';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
@@ -241,6 +241,46 @@ test('mobile lesson dates, record month and form controls use consistent typogra
     expect(result.inputSize).toBe(result.buttonSize);
   }
   expect(result.colorWidth).toBeLessThanOrEqual(70);
+});
+
+test('winter and summer registration month stays inside its card', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  const result = await page.evaluate(() => {
+    document.body.classList.remove('auth-locked');
+    const camps = document.getElementById('camps');
+    camps.classList.add('active');
+    const month = document.getElementById('summerRegistrationMonth');
+    const card = month.parentElement;
+    const label = card.querySelector(':scope > label');
+    const cardRect = card.getBoundingClientRect();
+    const labelRect = label.getBoundingClientRect();
+    const monthRect = month.getBoundingClientRect();
+    const style = getComputedStyle(card);
+    return {
+      cardLeft: cardRect.left,
+      cardRight: cardRect.right,
+      cardTop: cardRect.top,
+      cardBottom: cardRect.bottom,
+      labelLeft: labelRect.left,
+      labelTop: labelRect.top,
+      labelBottom: labelRect.bottom,
+      monthLeft: monthRect.left,
+      monthRight: monthRect.right,
+      monthBottom: monthRect.bottom,
+      paddingLeft: parseFloat(style.paddingLeft),
+      paddingTop: parseFloat(style.paddingTop),
+      monthAlign: getComputedStyle(month).textAlign
+    };
+  });
+  expect(result.paddingLeft).toBeGreaterThanOrEqual(14);
+  expect(result.paddingTop).toBeGreaterThanOrEqual(14);
+  expect(result.labelLeft).toBeGreaterThanOrEqual(result.cardLeft + 13);
+  expect(result.labelTop).toBeGreaterThanOrEqual(result.cardTop + 13);
+  expect(result.labelBottom).toBeLessThan(result.monthBottom);
+  expect(result.monthLeft).toBeGreaterThanOrEqual(result.cardLeft + 13);
+  expect(result.monthRight).toBeLessThanOrEqual(result.cardRight - 13);
+  expect(result.monthBottom).toBeLessThanOrEqual(result.cardBottom - 13);
+  expect(result.monthAlign).toBe('center');
 });
 
 test('form fields do not show redundant placeholder hints', async ({ page }) => {

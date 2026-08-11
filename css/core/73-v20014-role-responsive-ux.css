@@ -336,10 +336,11 @@ body[data-role-ux="branch_manager"] #dashboard .teacher-hours-metric{display:blo
   #camps .camp-date-scroll .camp-date-grid{display:grid!important;grid-template-columns:repeat(7,minmax(104px,1fr))!important;width:776px!important;min-width:776px!important;max-width:none!important;margin:0!important;padding:0 4px 4px 0!important;overflow:visible!important;box-sizing:border-box!important}
   #camps .camp-date-scroll .camp-date-weekday,#camps .camp-date-scroll .camp-date-empty,#camps .camp-date-scroll .camp-date-check{min-width:0!important;max-width:100%!important;box-sizing:border-box!important;scroll-snap-align:start!important}
   /* Month field labels stay left-aligned; only the values inside the fields are centered. */
-  #lessons .toolbar>div:has(#lessonMonth),
-  #camps .camp-registration-form>div:has(#summerRegistrationMonth){display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;margin:0!important;padding:0!important;overflow:hidden!important;box-sizing:border-box!important}
+  #lessons .toolbar>div:has(#lessonMonth){display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;margin:0!important;padding:0!important;overflow:hidden!important;box-sizing:border-box!important}
+  #camps .camp-registration-form>div:has(#summerRegistrationMonth){display:flex!important;flex-direction:column!important;justify-content:center!important;width:100%!important;max-width:100%!important;min-width:0!important;height:auto!important;min-height:142px!important;margin:0!important;padding:18px 16px!important;overflow:hidden!important;box-sizing:border-box!important}
   #camps #summerRegistrationMonth,#lessons #lessonMonth{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;margin:0!important;padding-left:12px!important;padding-right:12px!important;text-align:center!important;text-align-last:center!important;font-variant-numeric:tabular-nums!important;box-sizing:border-box!important}
-  #camps .camp-registration-form>div:has(#summerRegistrationMonth)>label,#lessons .toolbar>div:has(#lessonMonth)>label{display:block!important;width:100%!important;margin:0 0 8px!important;text-align:left!important;box-sizing:border-box!important}
+  #lessons .toolbar>div:has(#lessonMonth)>label{display:block!important;width:100%!important;margin:0 0 8px!important;text-align:left!important;box-sizing:border-box!important}
+  #camps .camp-registration-form>div:has(#summerRegistrationMonth)>label{position:static!important;display:block!important;width:100%!important;margin:0 0 10px!important;text-align:left!important;line-height:1.4!important;box-sizing:border-box!important}
 
   /* Lesson-card dates sit in the visual centre of the value column. */
   #lessons tbody td:first-child>.lesson-cell-value{text-align:center!important;font-variant-numeric:tabular-nums!important}
