@@ -3,6 +3,10 @@ function switchTab(id){const role=window.currentCloudRole?.()||window.DanbridgeA
 function ensureCalendarDefaults(){const date=$('calendarDate');if(date&&!date.value)date.value=todayStr()}
 function setDefaults(){ensureCalendarDefaults();if(!$('lessonMonth').value)$('lessonMonth').value=monthNow();renderSettlementMonthOptions();if(!$('settleMonth').value)$('settleMonth').value='2026-07'}
 
-document.querySelectorAll('nav button').forEach(button=>{
-  button.onclick=()=>switchTab(button.dataset.tab);
-});
+function installNavigationHandlers(){
+  document.querySelectorAll('nav button[data-tab]').forEach(button=>{
+    button.onclick=()=>switchTab(button.dataset.tab);
+  });
+}
+window.installNavigationHandlers=installNavigationHandlers;
+installNavigationHandlers();

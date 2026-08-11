@@ -905,6 +905,7 @@ function applyRoleUI(profile,user){
    document.querySelector('#dashboard .card:nth-of-type(2)')?.style.removeProperty('display');
    setTimeout(()=>{window.DanbridgeRoleResponsive?.apply?.();window.renderAll?.()},0);
  }
+ window.installNavigationHandlers?.();
 }
 function lessonMetaSignature(value){
  const teacherIds=(Array.isArray(value?.teacherIds)?value.teacherIds:[]).filter(Boolean).map(String).sort();

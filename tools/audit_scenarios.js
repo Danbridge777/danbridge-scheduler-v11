@@ -236,6 +236,9 @@ assert.match(branchBusinessSource, /data=settlementDataFor\(month,scope\)/, 'set
 assert.doesNotMatch(branchBusinessSource, /window\.settleData=function\(\)\{return settlementDataFor\(window\.__danbridgeFinanceWorkspaceMonth/, 'finance workspace month cannot override settlement month');
 
 const cloudSource = fs.readFileSync(path.join(root, 'js/core/firebase-auth-and-cloud-sync.module.js'), 'utf8');
+const appShellSource = fs.readFileSync(path.join(root, 'js/app/app-shell.js'), 'utf8');
+assert.match(appShellSource, /function installNavigationHandlers\(\)[\s\S]*nav button\[data-tab\][\s\S]*button\.onclick=\(\)=>switchTab\(button\.dataset\.tab\)/, 'navigation handlers can be safely restored after an account or role switch');
+assert.match(cloudSource, /function applyRoleUI\(profile,user\)[\s\S]*window\.installNavigationHandlers\?\.\(\);\s*\}/, 'every authenticated role reapplies navigation handlers after role-specific UI restrictions');
 assert.match(cloudSource, /if\(teacherOnly\)\{\s*delete document\.body\.dataset\.teacherWeekInitialized;/, 'every fresh teacher login resets the one-time current-week initialization');
 const syncDecisionStart = cloudSource.indexOf('function dataHash');
 const syncDecisionEnd = cloudSource.indexOf('function safeErrorCode');
