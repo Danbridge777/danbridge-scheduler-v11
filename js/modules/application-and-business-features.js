@@ -77,7 +77,8 @@ document.addEventListener('copy',e=>{
 
 const lessonCardWithOwnerFinance=lessonCard;
 lessonCard=function(l){
-  const html=lessonCardWithOwnerFinance(l);
+  const lessonId=String(l?.id||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const html=lessonCardWithOwnerFinance(l).replace(' data-id=',` onclick="event.stopPropagation();editLesson('${lessonId}')" data-id=`);
   return calendarIsTeacherView()?html.replace(/｜(?:✓已繳|未繳)(?=(?:｜|<))/g,''):html;
 };
 

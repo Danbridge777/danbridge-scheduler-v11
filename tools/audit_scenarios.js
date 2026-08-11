@@ -77,12 +77,16 @@ assert.match(applicationSource, /createFreshLessonCopy\(lesson,\{date:newDate/, 
 const teacherCardPrivacyStart=applicationSource.indexOf('const lessonCardWithOwnerFinance');
 const teacherCardPrivacyEnd=applicationSource.indexOf('function weekMonday',teacherCardPrivacyStart);
 assert.ok(teacherCardPrivacyStart>=0&&teacherCardPrivacyEnd>teacherCardPrivacyStart,'teacher calendar privacy wrapper is installed before calendar use');
-context.lessonCard=()=>'<span>學生｜老師｜課程｜✓已繳</span>';
+context.lessonCard=lesson=>`<div class="lesson" data-id="${lesson.id}"><span>學生｜老師｜課程｜✓已繳</span></div>`;
 context.calendarIsTeacherView=()=>true;
 vm.runInContext(applicationSource.slice(teacherCardPrivacyStart,teacherCardPrivacyEnd),context);
-assert.equal(context.lessonCard({}),'<span>學生｜老師｜課程</span>','teacher calendar card never displays paid state');
+const directTeacherCard=context.lessonCard({id:'lesson-direct-edit'});
+assert.match(directTeacherCard,/onclick="event\.stopPropagation\(\);editLesson\('lesson-direct-edit'\)"/,'month card directly opens its exact lesson ID when clicked');
+assert.doesNotMatch(directTeacherCard,/已繳|未繳|免收/,'teacher calendar card never displays payment state');
 context.calendarIsTeacherView=()=>false;
-assert.equal(context.lessonCard({}),'<span>學生｜老師｜課程｜✓已繳</span>','owner calendar card keeps payment state');
+const directOwnerCard=context.lessonCard({id:'owner-direct-edit'});
+assert.match(directOwnerCard,/editLesson\('owner-direct-edit'\)/,'owner month card has a direct edit fallback independent of delegated handlers');
+assert.match(directOwnerCard,/✓已繳/,'owner calendar card keeps payment state');
 const matrix = [
   ['completed', lesson({ teacherReportStatus: 'completed' }), 200, 100],
   ['student leave', lesson({ status: '學生請假', teacherReportStatus: 'student_leave' }), 200, 100],
