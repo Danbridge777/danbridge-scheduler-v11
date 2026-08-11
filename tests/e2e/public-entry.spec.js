@@ -1,13 +1,13 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.25.6';
+const CLOUD_RELEASE = '20.25.7';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
 const ROLE_UX_RELEASE = '20.20.1';
-const ROLE_UX_STYLE_RELEASE = '20.25.6';
+const ROLE_UX_STYLE_RELEASE = '20.25.7';
 const PWA_RELEASE = '20.18.3';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
@@ -94,10 +94,17 @@ test('iPad lesson start and end fields do not overlap', async ({ page }) => {
     modal.parentElement.classList.add('show');
     const start = document.getElementById('startTime').getBoundingClientRect();
     const end = document.getElementById('endTime').getBoundingClientRect();
-    return { startRight: start.right, startBottom: start.bottom, endLeft: end.left, endTop: end.top, startWidth: start.width, endWidth: end.width };
+    const reference = document.getElementById('lessonTitle').getBoundingClientRect();
+    return { startLeft: start.left, startRight: start.right, startBottom: start.bottom, endLeft: end.left, endRight: end.right, endTop: end.top, startWidth: start.width, endWidth: end.width, referenceLeft: reference.left, referenceRight: reference.right, viewportWidth: innerWidth };
   });
   expect(boxes.endLeft >= boxes.startRight || boxes.endTop >= boxes.startBottom).toBe(true);
   expect(Math.abs(boxes.startWidth - boxes.endWidth)).toBeLessThanOrEqual(2);
+  if (boxes.viewportWidth <= 700) {
+    expect(Math.abs(boxes.startLeft - boxes.referenceLeft)).toBeLessThanOrEqual(2);
+    expect(Math.abs(boxes.endLeft - boxes.referenceLeft)).toBeLessThanOrEqual(2);
+    expect(boxes.startRight).toBeLessThanOrEqual(boxes.referenceRight + 1);
+    expect(boxes.endRight).toBeLessThanOrEqual(boxes.referenceRight + 1);
+  }
 });
 
 test('lesson start and end time values are centered with balanced inset', async ({ page }) => {
