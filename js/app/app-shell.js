@@ -4,9 +4,13 @@ function ensureCalendarDefaults(){const date=$('calendarDate');if(date&&!date.va
 function setDefaults(){ensureCalendarDefaults();if(!$('lessonMonth').value)$('lessonMonth').value=monthNow();renderSettlementMonthOptions();if(!$('settleMonth').value)$('settleMonth').value='2026-07'}
 
 function installNavigationHandlers(){
-  document.querySelectorAll('nav button[data-tab]').forEach(button=>{
-    button.onclick=()=>switchTab(button.dataset.tab);
-  });
+  const navigation=document.querySelector('nav');
+  if(!navigation||navigation.dataset.tabHandlerInstalled==='true')return;
+  navigation.dataset.tabHandlerInstalled='true';
+  navigation.addEventListener('click',event=>{
+    const button=event.target.closest('button[data-tab]');
+    if(button) switchTab(button.dataset.tab);
+  },true);
 }
 window.installNavigationHandlers=installNavigationHandlers;
 installNavigationHandlers();
