@@ -88,7 +88,7 @@ assert.match(schedulerCopySource, /createFreshLessonCopy\(old,\{date:mapDateByCa
 assert.match(schedulerCopySource, /createFreshLessonCopy\(old,\{date:targetDateStr,start:ns,end:ne/, 'clipboard paste uses the fresh lesson contract');
 assert.match(schedulerCopySource, /lessonClipboard=rows\.map\(l=>createFreshLessonCopy\(l,\{id:l\.id\}\)\)/, 'the clipboard itself never stores lesson report fields');
 assert.match(schedulerCopySource, /function ensureTeacherCalendarMonth\(\)[\s\S]*role!==\x27teacher\x27[\s\S]*calendarMode\x27\)\.value=\x27month\x27[\s\S]*calendarDate\x27\)\.value=todayStr\(\)/, 'teacher login starts on the current month');
-assert.match(schedulerCopySource, /function calendarTeacherTargetChanged\(\)[\s\S]*if\(targetId\)\{\$\(\x27calendarMode\x27\)\.value=\x27week\x27;\$\(\x27calendarDate\x27\)\.value=todayStr\(\)\}/, 'choosing a teacher switches the schedule to the current week');
+assert.match(schedulerCopySource, /function calendarTeacherTargetChanged\(\)[\s\S]*if\(targetId\)\{\$\(\x27calendarMode\x27\)\.value=\x27month\x27;\$\(\x27calendarDate\x27\)\.value=todayStr\(\)\}/, 'choosing a teacher switches the schedule to the current month');
 const applicationSource = fs.readFileSync(path.join(root, 'js/modules/application-and-business-features.js'), 'utf8');
 assert.match(applicationSource, /createFreshLessonCopy\(lesson,\{date:shiftDate\(lesson\.date,7\)/, 'weekly copy uses the fresh lesson contract');
 assert.match(applicationSource, /createFreshLessonCopy\(lesson,\{date:newDate/, 'monthly copy uses the fresh lesson contract');
@@ -272,7 +272,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.24\.0'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.24\.1'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource,/cloudEmailKey!==OWNER_EMAIL[\s\S]*只有主要 Owner 可以新增或更新其他 Owner/,'only the primary owner can create or update backup owners');
 assert.match(cloudSource,/email===OWNER_EMAIL[\s\S]*主要 Owner 帳號受保護，不能停權/,'the primary owner cannot be disabled from the account UI');
 const convenienceSource=fs.readFileSync(path.join(root,'js/app/v18-convenience-suite.js'),'utf8');

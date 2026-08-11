@@ -183,7 +183,7 @@ function calendarActionChanged(){
 }
 function calendarTeacherTargetChanged(){
   const targetId=$('calendarTeacherFilter')?.value||'';
-  if(targetId){$('calendarMode').value='week';$('calendarDate').value=todayStr()}
+  if(targetId){$('calendarMode').value='month';$('calendarDate').value=todayStr()}
   if(!pasteClickMode){calendarActionChanged();return}
   selectedLessonIds.clear();selectionMode=false;updateSelectionCount();renderCalendar();
   const msg=$('pasteModeMessage'),target=teacher(targetId);
