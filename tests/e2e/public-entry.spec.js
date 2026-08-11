@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.25.4';
+const CLOUD_RELEASE = '20.25.5';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -12,7 +12,7 @@ const PWA_RELEASE = '20.18.3';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
-const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.4';
+const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.5';
 const SCHEDULER_UI_RELEASE = '20.25.0';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
@@ -98,6 +98,19 @@ test('iPad lesson start and end fields do not overlap', async ({ page }) => {
   });
   expect(boxes.endLeft >= boxes.startRight || boxes.endTop >= boxes.startBottom).toBe(true);
   expect(Math.abs(boxes.startWidth - boxes.endWidth)).toBeLessThanOrEqual(2);
+});
+
+test('lesson start and end time values are centered with balanced inset', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  const result = await page.evaluate(() => ['startTime','endTime'].map(id => {
+    const style = getComputedStyle(document.getElementById(id));
+    return { textAlign: style.textAlign, paddingLeft: parseFloat(style.paddingLeft), paddingRight: parseFloat(style.paddingRight) };
+  }));
+  for (const field of result) {
+    expect(field.textAlign).toBe('center');
+    expect(Math.abs(field.paddingLeft - field.paddingRight)).toBeLessThanOrEqual(1);
+    expect(field.paddingLeft).toBeGreaterThanOrEqual(40);
+  }
 });
 
 test('desktop roles use document scrolling instead of a sidebar scrollbar', async ({ page }) => {
