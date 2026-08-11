@@ -2,6 +2,7 @@
 (()=>{
   'use strict';
   const controller={canvas:null,marquee:null,pointerDrag:null,dragGhost:null,suppressClickUntil:0};
+  const bindCardDragHandlers=typeof window.attachDragHandlers==='function'?window.attachDragHandlers:null;
   const cards=()=>controller.canvas?[...controller.canvas.querySelectorAll('[data-id]')]:[];
   const selectedRenderedIds=()=>{const rendered=new Set(cards().map(card=>card.dataset.id));return[...selectedLessonIds].filter(id=>rendered.has(id))};
   const cardOf=target=>target?.closest?.('[data-id]')||null;
@@ -25,6 +26,12 @@
       card.classList.remove('marquee-hit');
       card.draggable=false;
     });
+  }
+
+  function refreshRenderedInteractions(){
+    /* 課表重繪會建立全新的卡片；先恢復 iPad 長按拖曳，再同步桌面多選外觀。 */
+    bindCardDragHandlers?.();
+    refresh();
   }
 
   function finishSelection(){
@@ -204,7 +211,7 @@
 
   window.DanbridgeCalendarInteractions={install,refresh,finishSelection};
   window.enableDesktopMarquee=install;
-  window.attachDragHandlers=refresh;
+  window.attachDragHandlers=refreshRenderedInteractions;
   install();
   setTimeout(()=>renderCalendar(),0);
 })();

@@ -347,7 +347,8 @@ function handleCalendarShortcuts(e){
   }
 }
 function attachDragHandlers(){
-  const DRAG_HOLD_MS=550, MOVE_CANCEL_PX=12;
+  /* iPad Safari 會在原地長按時回報細微 pointer 位移；過長等待加上過小容許值會在拖曳啟動前誤判為捲動。 */
+  const DRAG_HOLD_MS=280, MOVE_CANCEL_PX=22;
   const role=document.body.dataset.cloudRole||window.DanbridgeAccess?.getContext?.().role||window.currentCloudRole?.()||'';
   const canMove=!role||role==='owner';
   document.querySelectorAll('#calendarCanvas [data-id]').forEach(el=>{
