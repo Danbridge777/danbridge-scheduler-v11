@@ -13,10 +13,10 @@ service cloud.firestore {
     function isOwner() {
       return signedIn() && (
         isPrimaryOwner()
-        || (ownerProfileExists()
-          && ownerProfile().active != false
-          && ownerProfile().companyId == 'danbridge'
-          && ownerProfile().role == 'owner')
+        || (accessExists()
+          && access().active == true
+          && access().companyId == 'danbridge'
+          && access().role == 'owner')
       );
     }
     function accessExists() { return signedIn() && exists(/databases/$(database)/documents/companyAccess/$(emailKey())); }

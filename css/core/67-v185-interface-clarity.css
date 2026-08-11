@@ -134,3 +134,13 @@ body[data-cloud-role="owner"] input[type="number"]{text-align:center!important;t
   #teacherReportModal{padding:calc(8px + env(safe-area-inset-top)) 8px calc(8px + env(safe-area-inset-bottom))!important}
   #teacherReportModal>.modal{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;padding-bottom:calc(16px + env(safe-area-inset-bottom))!important;scrollbar-gutter:auto!important}
 }
+
+/* V20.25.3 — the lesson editor owns its scroll surface on every device. */
+body:has(#lessonModal.show){overflow:hidden!important;overscroll-behavior:none!important}
+#lessonModal{position:fixed!important;inset:0!important;z-index:5000!important;box-sizing:border-box!important;overflow:hidden!important;overscroll-behavior:none!important;touch-action:none!important}
+#lessonModal>.modal{display:block!important;max-height:calc(100dvh - 32px)!important;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-y!important;scrollbar-gutter:stable!important}
+#lessonModal .modal-head{position:sticky!important;top:0!important;z-index:9!important;margin:-1px -1px 10px!important;padding:1px 1px 10px!important;background:var(--card,#fff)!important;border-bottom:1px solid var(--line,#dfe5ec)!important}
+@media(max-width:700px){
+  #lessonModal{padding:calc(8px + env(safe-area-inset-top)) 8px calc(8px + env(safe-area-inset-bottom))!important;align-items:stretch!important}
+  #lessonModal>.modal{width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;margin:0!important;padding-bottom:calc(20px + env(safe-area-inset-bottom))!important;border-radius:22px!important;scrollbar-gutter:auto!important}
+}

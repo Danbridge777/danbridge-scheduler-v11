@@ -8,9 +8,11 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   Timestamp,
+  collection,
   doc,
   deleteDoc,
   getDoc,
+  getDocs,
   onSnapshot,
   serverTimestamp,
   setDoc,
@@ -99,6 +101,12 @@ describe('帳號邀請', () => {
 });
 
 describe('Owner 權限', () => {
+  test('備援 Owner 僅憑正式授權即可立即訂閱全部課程回報', async () => {
+    const backup = auth('backup-owner-without-profile', BACKUP_OWNER_EMAIL);
+    const reports = await assertSucceeds(getDocs(collection(backup, `companies/${COMPANY_ID}/lessonReports`)));
+    assert.equal(reports.size, 2);
+  });
+
   test('Owner 可以讀寫公司命名空間與管理授權', async () => {
     const db = auth('owner-uid', OWNER_EMAIL);
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/data/main`)));

@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.25.2';
+const CLOUD_RELEASE = '20.25.3';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -12,7 +12,7 @@ const PWA_RELEASE = '20.18.3';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
-const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.2';
+const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.3';
 const SCHEDULER_UI_RELEASE = '20.25.0';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
@@ -149,6 +149,36 @@ test('lesson report dialog scrolls independently for every role and viewport', a
     expect(result.top).toBeGreaterThanOrEqual(0);
     expect(result.bottom).toBeLessThanOrEqual(result.viewportHeight + 1);
   }
+});
+
+test('lesson editor scrolls independently above the mobile navigation', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  const result = await page.evaluate(() => {
+    document.body.classList.remove('auth-locked');
+    const backdrop = document.getElementById('lessonModal');
+    const dialog = backdrop.querySelector('.modal');
+    backdrop.classList.add('show');
+    const style = getComputedStyle(dialog);
+    const backdropStyle = getComputedStyle(backdrop);
+    const rect = dialog.getBoundingClientRect();
+    const nav = document.querySelector('nav');
+    return {
+      overflowY: style.overflowY,
+      touchAction: style.touchAction,
+      backdropOverflow: backdropStyle.overflowY,
+      modalZ: Number(backdropStyle.zIndex),
+      navZ: nav ? Number(getComputedStyle(nav).zIndex) : 0,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewportHeight: innerHeight
+    };
+  });
+  expect(['auto', 'scroll']).toContain(result.overflowY);
+  expect(result.touchAction).toContain('pan-y');
+  expect(result.backdropOverflow).toBe('hidden');
+  expect(result.modalZ).toBeGreaterThan(result.navZ);
+  expect(result.top).toBeGreaterThanOrEqual(0);
+  expect(result.bottom).toBeLessThanOrEqual(result.viewportHeight + 1);
 });
 
 test('owner metric grids and numeric fields stay centered', async ({ page }) => {
