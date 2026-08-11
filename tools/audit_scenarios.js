@@ -505,6 +505,9 @@ assert.doesNotMatch(pointerDragStartSource, /setPointerCapture/, 'a plain lesson
 assert.match(pointerDragMoveSource, /state\.moved=true[\s\S]*setPointerCapture/, 'pointer capture starts only after the gesture becomes a real drag');
 
 const pwaSource = fs.readFileSync(path.join(root, 'js/core/pwa-installation.js'), 'utf8');
+assert(/worker\.state==='activated'\)return reloadAcceptedUpdate\(\)/.test(pwaSource), 'PWA update button must reload immediately when the worker already activated');
+assert(/setTimeout\(reloadAcceptedUpdate,1800\)/.test(pwaSource), 'PWA update button must have a reload fallback for Safari and installed apps');
+assert(/__danbridge_refresh/.test(pwaSource)&&/window\.location\.replace/.test(pwaSource), 'PWA accepted updates must reopen a cache-busted entry URL');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.webmanifest'), 'utf8'));
 assert.equal(manifest.id, './', 'PWA has a stable app identity across future start URL changes');
 assert.equal(manifest.display, 'standalone', 'installed PWA opens as an app window');

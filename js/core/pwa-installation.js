@@ -48,20 +48,26 @@
   function reloadAcceptedUpdate(){
     if(!reloadForAcceptedUpdate||refreshing)return;
     refreshing=true;
-    window.location.reload();
+    const freshUrl=new URL(window.location.href);
+    freshUrl.searchParams.set('__danbridge_refresh',Date.now().toString(36));
+    window.location.replace(freshUrl.href);
   }
 
   function offerUpdate(worker){
     if(!worker)return;
     const banner=updateBanner();
     banner.hidden=false;
-    banner.querySelector('.pwa-update-now').onclick=()=>{
-      banner.querySelector('.pwa-update-now').disabled=true;
+    const updateNow=banner.querySelector('.pwa-update-now');
+    updateNow.onclick=()=>{
+      updateNow.disabled=true;
+      updateNow.textContent='更新中…';
       reloadForAcceptedUpdate=true;
       worker.addEventListener('statechange',()=>{
         if(worker.state==='activated')reloadAcceptedUpdate();
       });
-      worker.postMessage({type:'SKIP_WAITING'});
+      if(worker.state==='activated')return reloadAcceptedUpdate();
+      try{worker.postMessage({type:'SKIP_WAITING'})}catch(error){console.warn('Service Worker 更新訊息失敗：',error)}
+      setTimeout(reloadAcceptedUpdate,1800);
     };
   }
 
