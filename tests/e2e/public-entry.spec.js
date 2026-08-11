@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
+const CLOUD_RELEASE = '20.15.8';
 const BUSINESS_RELEASE = '20.17.0';
 const TEACHER_KPI_RELEASE = '20.15.8';
 const BRANCH_SCOPE_RELEASE = '20.15.9';
@@ -24,7 +25,7 @@ test('critical teacher and finance resources load the current release', async ({
   const sources = await page.locator('script[src]').evaluateAll(elements => elements.map(element => element.getAttribute('src')));
   expect(sources).toContain(`./js/modules/business/business-logic.js?v=${BUSINESS_RELEASE}`);
   expect(sources).toContain(`./js/modules/notifications/notification-center.js?v=${RELEASE}`);
-  expect(sources).toContain(`./js/core/firebase-auth-and-cloud-sync.module.js?v=${RELEASE}`);
+  expect(sources).toContain(`./js/core/firebase-auth-and-cloud-sync.module.js?v=${CLOUD_RELEASE}`);
   expect(sources).toContain(`./js/modules/teachers/teacher-kpi.js?v=${TEACHER_KPI_RELEASE}`);
   expect(sources).toContain(`./js/core/branch-business-scope.js?v=${BRANCH_SCOPE_RELEASE}`);
   expect(sources).toContain(`./js/app/v20014-role-responsive-ux.js?v=${ROLE_UX_RELEASE}`);

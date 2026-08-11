@@ -38,6 +38,42 @@ vm.runInContext(fs.readFileSync(path.join(root, 'js/modules/makeups/makeup-manag
 context.db.students = [{ id: 's1', name: 'Student', rate: 200, parent: 'Private', contact: '0900' }];
 context.db.teachers = [{ id: 't1', name: 'One', rate: 100 }, { id: 't2', name: 'Two', rate: 150 }];
 const lesson = (overrides = {}) => ({ id: 'l1', studentId: 's1', teacherId: 't1', teacherIds: ['t1'], date: '2026-08-05', start: '10:00', end: '11:00', status: '已上課', ...overrides });
+const schedulerCopySource = fs.readFileSync(path.join(root, 'js/modules/calendar/scheduler-ui.js'), 'utf8');
+const freshCopyStart = schedulerCopySource.indexOf('function createFreshLessonCopy');
+const selectedCopyStart = schedulerCopySource.indexOf('function copySelectedLessons');
+assert.ok(freshCopyStart >= 0 && selectedCopyStart > freshCopyStart, 'fresh lesson copy helper is available before every calendar copy action');
+context.createLessonId = () => 'lsn-fresh-copy';
+vm.runInContext(schedulerCopySource.slice(freshCopyStart, selectedCopyStart), context);
+const reportedSource = lesson({
+  id: 'reported-source', seriesId: 'old-series', status: '已上課', paymentStatus: 'paid',
+  teacherReportStatus: 'completed', teacherReportContent: '舊課程內容', teacherReportHomework: '舊作業',
+  teacherReportFeedback: '舊回饋', teacherReportNote: '舊內部備註', teacherReportUpdatedAt: '2026-08-05T12:00:00Z',
+  teacherReportBy: 'Old Teacher', teacherReportEmail: 'old@example.com', makeupId: 'makeup-old',
+  sourceLessonId: 'source-old', scheduledLessonId: 'scheduled-old', isMakeup: true, note: '原備註｜MAKEUP:makeup-old'
+});
+const freshCopy = context.createFreshLessonCopy(reportedSource, { date: '2026-08-19' });
+assert.equal(freshCopy.id, 'lsn-fresh-copy', 'copied lesson receives a completely new lesson ID');
+assert.equal(freshCopy.studentId, reportedSource.studentId, 'copied lesson preserves the selected student');
+assert.equal(freshCopy.start, reportedSource.start, 'copied lesson preserves its start time');
+assert.equal(freshCopy.end, reportedSource.end, 'copied lesson preserves its end time');
+assert.equal(freshCopy.status, '未上課', 'copied lesson starts as a new unreported class');
+assert.equal(freshCopy.paymentStatus, 'unpaid', 'copied lesson starts with fresh payment state');
+assert.equal(freshCopy.seriesId, '', 'copied lesson is not linked to the old repeating series');
+assert.equal(freshCopy.note, '原備註', 'copied lesson removes a legacy makeup token hidden in its note');
+for(const key of Object.keys(reportedSource).filter(key=>key.startsWith('teacherReport'))){
+  assert.equal(Object.hasOwn(freshCopy,key),false,`copied lesson removes ${key}`);
+}
+for(const key of ['makeupId','sourceLessonId','scheduledLessonId','isMakeup']){
+  assert.equal(Object.hasOwn(freshCopy,key),false,`copied lesson removes old relationship ${key}`);
+}
+assert.match(schedulerCopySource, /createFreshLessonCopy\(old,\{date:mapDateByCalendarWeek/, 'selected month copy uses the fresh lesson contract');
+assert.match(schedulerCopySource, /createFreshLessonCopy\(old,\{date:targetDateStr,start:ns,end:ne/, 'clipboard paste uses the fresh lesson contract');
+assert.match(schedulerCopySource, /lessonClipboard=rows\.map\(l=>createFreshLessonCopy\(l,\{id:l\.id\}\)\)/, 'the clipboard itself never stores lesson report fields');
+assert.match(schedulerCopySource, /function ensureTeacherCalendarWeek\(\)[\s\S]*role!==\x27teacher\x27[\s\S]*calendarMode\x27\)\.value=\x27week\x27[\s\S]*calendarDate\x27\)\.value=todayStr\(\)/, 'teacher login starts on the current Monday-to-Sunday week');
+assert.match(schedulerCopySource, /function calendarTeacherTargetChanged\(\)[\s\S]*if\(targetId\)\{\$\(\x27calendarMode\x27\)\.value=\x27week\x27;\$\(\x27calendarDate\x27\)\.value=todayStr\(\)\}/, 'choosing a teacher switches the schedule to the current week');
+const applicationSource = fs.readFileSync(path.join(root, 'js/modules/application-and-business-features.js'), 'utf8');
+assert.match(applicationSource, /createFreshLessonCopy\(lesson,\{date:shiftDate\(lesson\.date,7\)/, 'weekly copy uses the fresh lesson contract');
+assert.match(applicationSource, /createFreshLessonCopy\(lesson,\{date:newDate/, 'monthly copy uses the fresh lesson contract');
 const matrix = [
   ['completed', lesson({ teacherReportStatus: 'completed' }), 200, 100],
   ['student leave', lesson({ status: '學生請假', teacherReportStatus: 'student_leave' }), 200, 100],
@@ -161,6 +197,7 @@ assert.match(branchBusinessSource, /data=settlementDataFor\(month,scope\)/, 'set
 assert.doesNotMatch(branchBusinessSource, /window\.settleData=function\(\)\{return settlementDataFor\(window\.__danbridgeFinanceWorkspaceMonth/, 'finance workspace month cannot override settlement month');
 
 const cloudSource = fs.readFileSync(path.join(root, 'js/core/firebase-auth-and-cloud-sync.module.js'), 'utf8');
+assert.match(cloudSource, /if\(teacherOnly\)\{\s*delete document\.body\.dataset\.teacherWeekInitialized;/, 'every fresh teacher login resets the one-time current-week initialization');
 const syncDecisionStart = cloudSource.indexOf('function dataHash');
 const syncDecisionEnd = cloudSource.indexOf('function safeErrorCode');
 vm.runInContext(cloudSource.slice(syncDecisionStart, syncDecisionEnd), context);

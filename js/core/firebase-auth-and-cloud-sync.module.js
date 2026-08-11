@@ -817,6 +817,7 @@ function applyRoleUI(profile,user){
 
  const teacherOnly=profile.role==='teacher';
  if(teacherOnly){
+   delete document.body.dataset.teacherWeekInitialized;
    applyingCloud=true;
    window.__danbridgeSetDB(emptyDB());
    window.renderAll?.();

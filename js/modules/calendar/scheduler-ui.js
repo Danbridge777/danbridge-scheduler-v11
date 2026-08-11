@@ -57,7 +57,14 @@ function renderCalendarAnalysis(){
   const gapWeeks=teacherGapWeekDays(gapRange).map(day=>{const rows=gapRows.filter(x=>x.date===day.date);return`<section class="gap-day${rows.length?'':' empty'}"><div class="gap-day-head"><b>${day.label}</b><span>${day.date.slice(5).replace('-','/')}</span>${rows.length?`<em>${rows.length} 個空堂</em>`:'<em>本日無空堂</em>'}</div>${rows.length?`<div class="gap-day-list">${rows.map(x=>`<div class="gap-item"><b>${esc(x.teacher)}</b><span>${x.start}–${x.end}</span><span class="pill red">${fmtHours(x.gap/60)} hr</span></div>`).join('')}</div>`:''}</section>`}).join('');
   box.innerHTML=`<div class="analysis-panel"><h3>教室使用率</h3><div class="small">以目前顯示範圍 08:00–22:00 計算。</div>${roomRows.length?`<table class="analysis-table"><thead><tr><th>教室</th><th>使用時數</th><th>使用率</th></tr></thead><tbody>${roomRows.map(x=>`<tr><td><b>${esc(x.room)}</b></td><td>${fmtHours(x.mins/60)} hr</td><td>${x.pct.toFixed(1)}%<div class="usage-bar"><span style="width:${x.pct}%"></span></div></td></tr>`).join('')}</tbody></table>`:'<div class="small" style="padding:10px 0">目前範圍沒有已指定教室的課程。</div>'}</div><div class="analysis-panel weekly-gap-panel"><h3>老師空堂分析</h3><div class="small">${gapRange.start}～${gapRange.end}；依目前老師選項逐位分析該週完整課表，不受學生、地點、教室或搜尋條件影響。每日分析 09:00–22:00，列出課前、課間與課後至少 30 分鐘的空檔；本日無課時顯示整段空堂。週一至週五顯示當週，週六、週日自動顯示下一週。</div><div class="gap-teacher-summary">${gapTeacherSummary||'<span class="small">沒有可分析的老師。</span>'}</div><div class="gap-week">${gapWeeks}</div></div>`;
 }
-function renderCalendar(){ensureCalendarDefaults();const mode=$('calendarMode').value,date=new Date($('calendarDate').value+'T00:00:00'),f=calendarFilterState();if(mode==='month')renderMonth(date,f);else renderWeek(date,f);renderCalendarAnalysis();setTimeout(enableDesktopMarquee,0)}
+function ensureTeacherCalendarWeek(){
+  const role=window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role||'';
+  if(role!=='teacher'||document.body.dataset.teacherWeekInitialized==='1')return;
+  $('calendarMode').value='week';
+  $('calendarDate').value=todayStr();
+  document.body.dataset.teacherWeekInitialized='1';
+}
+function renderCalendar(){ensureCalendarDefaults();ensureTeacherCalendarWeek();const mode=$('calendarMode').value,date=new Date($('calendarDate').value+'T00:00:00'),f=calendarFilterState();if(mode==='month')renderMonth(date,f);else renderWeek(date,f);renderCalendarAnalysis();setTimeout(enableDesktopMarquee,0)}
 function updateSelectionCount(){
   const count=selectedLessonIds.size;
   const bar=$('selectionBar'),label=$('selectionCount'),btn=$('selectionModeBtn');
@@ -102,6 +109,24 @@ function clearLessonSelection(){
   updateSelectionCount();
   window.DanbridgeCalendarInteractions?.refresh?.();
 }
+function createFreshLessonCopy(source,overrides={}){
+  const copy=JSON.parse(JSON.stringify(source||{}));
+  for(const key of Object.keys(copy)){
+    if(key.startsWith('teacherReport'))delete copy[key];
+  }
+  delete copy.id;
+  delete copy.makeupId;
+  delete copy.sourceLessonId;
+  delete copy.scheduledLessonId;
+  delete copy.isMakeup;
+  if(typeof copy.note==='string')copy.note=copy.note.replace(/(?:^|｜|\s)MAKEUP:[^｜\s]+/g,'').trim();
+  copy.seriesId='';
+  copy.status='未上課';
+  copy.paymentStatus='unpaid';
+  Object.assign(copy,overrides);
+  copy.id=overrides.id||createLessonId();
+  return copy;
+}
 function copySelectedLessons(){
   if(!calendarOwnerCanEdit())return alert('目前帳號沒有修改課表的權限。');
   const source=calendarTeacherScopedLessons(db.lessons.filter(l=>selectedLessonIds.has(l.id)&&!['取消','停課'].includes(l.status)));
@@ -114,7 +139,7 @@ function copySelectedLessons(){
   snapshot();
   const keys=new Set(db.lessons.map(keyOf));let added=0,skipped=0;
   for(const old of source){
-    const candidate={...old,id:createLessonId(),date:mapDateByCalendarWeek(old.date,fromMonth,toMonth),status:'未上課',paymentStatus:'unpaid',teacherIds:[...lessonTeacherIds(old)]};
+    const candidate=createFreshLessonCopy(old,{date:mapDateByCalendarWeek(old.date,fromMonth,toMonth),teacherIds:[...lessonTeacherIds(old)]});
     if(keys.has(keyOf(candidate))||conflictDetail(candidate,'')){skipped++;continue}
     db.lessons.push(candidate);keys.add(keyOf(candidate));logChange('複製選取到下個月',candidate,old);added++;
   }
@@ -153,6 +178,7 @@ function calendarActionChanged(){
 }
 function calendarTeacherTargetChanged(){
   const targetId=$('calendarTeacherFilter')?.value||'';
+  if(targetId){$('calendarMode').value='week';$('calendarDate').value=todayStr()}
   if(!pasteClickMode){calendarActionChanged();return}
   selectedLessonIds.clear();selectionMode=false;updateSelectionCount();renderCalendar();
   const msg=$('pasteModeMessage'),target=teacher(targetId);
@@ -212,7 +238,7 @@ function copyCurrentSelection(){
   /* 每次複製都完全覆蓋舊剪貼簿，第一次 Ctrl+C 也直接生效。 */
   lessonClipboard=[];
   try{localStorage.removeItem('danbridge_lesson_clipboard')}catch{}
-  lessonClipboard=rows.map(l=>JSON.parse(JSON.stringify(l))).sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start));
+  lessonClipboard=rows.map(l=>createFreshLessonCopy(l,{id:l.id})).sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start));
   try{localStorage.setItem('danbridge_lesson_clipboard',JSON.stringify(lessonClipboard))}catch{}
   lastSelectionCopyAt=Date.now();
   /* 複製完成後立刻離開多選；剪貼簿保留，下一個動作可直接貼上或拖曳。 */
@@ -255,7 +281,7 @@ function contextPasteLessons(){
     const ns=shiftTime(old.start,timeDelta),ne=shiftTime(old.end,timeDelta);
     if(!ns||!ne){skipped++;continue}
     const targetTeacherIds=targetTeacherId?[targetTeacherId]:[...lessonTeacherIds(old)];
-    const n={...old,id:createLessonId(),date:targetDateStr,start:ns,end:ne,status:'未上課',paymentStatus:'unpaid',teacherId:targetTeacherIds[0]||'',teacherIds:targetTeacherIds};
+    const n=createFreshLessonCopy(old,{date:targetDateStr,start:ns,end:ne,teacherId:targetTeacherIds[0]||'',teacherIds:targetTeacherIds});
     if(keys.has(keyOf(n))||conflictDetail(n,'')){skipped++;continue}
     if(teacherConflictDetail(n,''))teacherWarnings++;
     db.lessons.push(n);keys.add(keyOf(n));logChange('依日期間距貼上課程',n,old);added++;
