@@ -16,6 +16,7 @@ function clearTeacherForm(){
   const defaults=new Set([1,2,3,4,5]);
   document.querySelectorAll('#teacherWorkDays input[type=checkbox]').forEach(cb=>cb.checked=defaults.has(Number(cb.value)));
 }
+function teacherIsArchived(t){return !!String(t?.archivedAt||'').trim()}
 function saveTeacher(){
   const name=$('teacherName')?.value.trim()||'';
   const displayName=$('teacherDisplayName')?.value.trim()||'';
@@ -64,12 +65,15 @@ function editTeacher(id){
   document.querySelectorAll('#teacherWorkDays input[type=checkbox]').forEach(cb=>cb.checked=days.has(Number(cb.value)));
   $('teacherName').focus();
 }
-function deleteTeacher(id){
+async function archiveTeacher(id){
+  if((window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role)!=='owner')return alert('只有 Owner 可以封存老師。');
   const t=db.teachers.find(x=>String(x.id)===String(id));
-  if(!t)return;
-  const used=db.lessons.some(l=>lessonTeacherIds(l).includes(id));
-  const msg=used?'這位老師已有課程紀錄。刪除老師後，既有課程仍會保留老師 ID，但名稱可能無法顯示。確定刪除？':'確定刪除這位老師？';
-  if(!confirm(msg))return;
-  snapshot();db.teachers=db.teachers.filter(x=>String(x.id)!==String(id));saveDB();
+  if(!t||teacherIsArchived(t))return;
+  const reason=prompt(`請輸入封存「${t.name||'老師'}」的原因：`,'離職');if(reason===null)return;if(!reason.trim())return alert('請輸入封存原因');
+  if(!confirm(`確定封存「${t.name||'老師'}」？\n\n封存後不再出現在新增課程、代課與教師群組選項；歷史課程、薪資與月結仍會完整保留。綁定此老師的登入帳號會立即停權。`))return;
+  try{if(window.__danbridgeDisableTeacherAccessForArchive)await window.__danbridgeDisableTeacherAccessForArchive(id)}catch(error){console.error(error);return alert('老師帳號停權失敗，因此尚未封存。請確認網路後再試：'+(error?.message||error))}
+  snapshot();Object.assign(t,{archivedAt:new Date().toISOString(),archivedReason:reason.trim(),archivedBy:archivalActorLabel()});clearTeacherForm();saveDB();toast('老師已封存，歷史資料與帳號綁定仍保留');
 }
-function renderTeachers(){$('teacherRows').innerHTML=db.teachers.map(t=>{const mode=teacherPayrollMode(t),base=teacherBaseSalary(t),ot=teacherOvertimeRate(t),ded=teacherDeductionRate(t);const payInfo=mode==='fixed'?`固定底薪 ${base===null?'尚未設定':money(base)}<br><span class="small">超時 ${ot===null?'尚未設定':money(ot)}／不足扣款 ${ded===null?'尚未設定':money(ded)}</span>`:`純時薪 ${money(t.rate||0)}`;return `<tr><td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${t.color||'#2563eb'}"></span> <b>${esc(t.name)}</b>${t.displayName&&t.displayName!==t.name?`<br><span class="small">名牌：${esc(t.displayName)}</span>`:''}</td><td>${payInfo}</td><td>${t.minWeeklyHours||0} hr／週<br><span class="small">${esc(workDayNames(t.workDays))}</span></td><td>${esc(t.type)}</td><td>${esc(t.subjects)}</td><td class="row-actions"><button class="btn" onclick="editTeacher('${t.id}')">編輯</button><button class="btn danger" onclick="deleteTeacher('${t.id}')">刪除</button></td></tr>`}).join('')}
+function restoreTeacher(id){if((window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role)!=='owner')return alert('只有 Owner 可以恢復老師。');const t=db.teachers.find(x=>String(x.id)===String(id));if(!t||!teacherIsArchived(t))return;if(!confirm(`確定恢復「${t.name||'老師'}」？\n\n老師會重新出現在排課選項，但 Gmail 登入權限仍維持停權，必須到安全設定人工確認後重新啟用。`))return;snapshot();Object.assign(t,{archivedAt:'',archivedReason:'',archivedBy:'',restoredAt:new Date().toISOString(),restoredBy:archivalActorLabel()});saveDB();toast('老師資料已恢復；登入權限仍維持停權')}
+function ensureTeacherArchiveFilter(){const table=$('teacherRows')?.closest('.card');if(!table)return null;let select=$('teacherArchiveFilter');if(!select){const heading=table.querySelector('h2'),field=document.createElement('div');field.className='toolbar';field.innerHTML='<div><label for="teacherArchiveFilter">資料狀態</label><select id="teacherArchiveFilter" onchange="renderTeachers()"><option value="active">在職老師</option><option value="archived">已封存</option><option value="all">全部</option></select></div>';heading?.after(field);select=$('teacherArchiveFilter')}return select}
+function renderTeachers(){const archiveMode=ensureTeacherArchiveFilter()?.value||'active',rows=db.teachers.filter(t=>archiveMode==='all'||(archiveMode==='archived')===teacherIsArchived(t));$('teacherRows').innerHTML=rows.map(t=>{const mode=teacherPayrollMode(t),base=teacherBaseSalary(t),ot=teacherOvertimeRate(t),ded=teacherDeductionRate(t),archived=teacherIsArchived(t);const payInfo=mode==='fixed'?`固定底薪 ${base===null?'尚未設定':money(base)}<br><span class="small">超時 ${ot===null?'尚未設定':money(ot)}／不足扣款 ${ded===null?'尚未設定':money(ded)}</span>`:`純時薪 ${money(t.rate||0)}`;return `<tr${archived?' class="is-archived"':''}><td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${t.color||'#2563eb'}"></span> <b>${esc(t.name)}</b>${archived?' <span class="pill red">已封存</span>':''}${t.displayName&&t.displayName!==t.name?`<br><span class="small">名牌：${esc(t.displayName)}</span>`:''}${archived?`<br><span class="small">${esc(t.archivedReason||'未填原因')}｜${esc(t.archivedBy||'Owner')}｜${new Date(t.archivedAt).toLocaleDateString('zh-TW')}</span>`:''}</td><td>${payInfo}</td><td>${t.minWeeklyHours||0} hr／週<br><span class="small">${esc(workDayNames(t.workDays))}</span></td><td>${esc(t.type)}</td><td>${esc(t.subjects)}</td><td class="row-actions"><button class="btn" onclick="editTeacher('${t.id}')">檢視／編輯</button>${archived?`<button class="btn ok" onclick="restoreTeacher('${t.id}')">恢復</button>`:`<button class="btn danger" onclick="archiveTeacher('${t.id}')">封存</button>`}</td></tr>`}).join('')||'<tr><td colspan="6" class="small">沒有符合條件的老師。</td></tr>'}

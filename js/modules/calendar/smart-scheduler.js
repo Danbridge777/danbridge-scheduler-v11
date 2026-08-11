@@ -60,7 +60,7 @@ function findSmartSlots(){
   const sid=$('smartStudent').value,from=$('smartDateFrom').value,to=$('smartDateTo').value,duration=+$('smartDuration').value,step=+$('smartStep').value,branchId=$('smartBranch').value,mode=$('smartDeliveryMode').value,requested=$('smartRoom').value.trim();
   if(!sid||!from||!to||!branchId)return alert('請選擇學生、日期與校區');
   if(to<from)return alert('截止日期不能早於起始日期');
-  const s=studentDefaults(db.students.find(x=>x.id===sid)||{}),availability=parseStudentAvailability(s.availability),preferred=$('smartTeacher').value,teacherIds=preferred?[preferred]:db.teachers.map(t=>t.id),slots=[];
+  const s=studentDefaults(db.students.find(x=>x.id===sid)||{}),availability=parseStudentAvailability(s.availability),preferred=$('smartTeacher').value,teacherIds=preferred?[preferred]:db.teachers.filter(t=>!teacherIsArchived(t)).map(t=>t.id),slots=[];
   for(const date of dateRange(from,to)){
     const day=new Date(date+'T00:00:00').getDay(),windows=availability.length?availability.filter(a=>a.day===day):[{start:'09:00',end:'21:00'}];
     for(const window of windows){

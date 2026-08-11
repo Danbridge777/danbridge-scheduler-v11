@@ -17,7 +17,7 @@
   function teacherRows(){
     setupFilters();const c=ctx(),month=window.__danbridgeFinanceWorkspaceMonth||$('teacherKpiMonth')?.value||monthNow(),scope=$('teacherKpiBranch')?.value||'all';
     let lessons=(db.lessons||[]).filter(l=>!l.isDraft&&l.date?.startsWith(month)&&(scope==='all'||branchId(l)===scope));
-    let teachers=(db.teachers||[]).filter(t=>scope==='all'||[...(t.branchIds||[]),...(t.assignedBranchIds||[])].includes(scope)||lessons.some(l=>lessonTeachers(l).includes(t.id)));
+    let teachers=(db.teachers||[]).filter(t=>teacherIncludedForMonth(t,month)&&(scope==='all'||[...(t.branchIds||[]),...(t.assignedBranchIds||[])].includes(scope)||lessons.some(l=>lessonTeachers(l).includes(t.id))));
     if(c.role==='teacher'){teachers=teachers.filter(t=>t.id===c.teacherId);lessons=lessons.filter(l=>lessonTeachers(l).includes(c.teacherId))}
     return teachers.map(t=>{
       const ls=lessons.filter(l=>lessonTeachers(l).includes(t.id));

@@ -37,6 +37,10 @@ vm.runInContext(fs.readFileSync(path.join(root, 'js/modules/makeups/makeup-manag
 
 context.db.students = [{ id: 's1', name: 'Student', rate: 200, parent: 'Private', contact: '0900' }];
 context.db.teachers = [{ id: 't1', name: 'Wendy', rate: 100 }, { id: 't2', name: 'Kim', rate: 150 }];
+assert.equal(context.teacherIncludedForMonth({ archivedAt: '' }, '2027-01'), true, 'an active teacher remains eligible for future payroll');
+assert.equal(context.teacherIncludedForMonth({ archivedAt: '2026-08-11T08:00:00.000Z' }, '2026-08'), true, 'an archived teacher remains in the final archival month settlement');
+assert.equal(context.teacherIncludedForMonth({ archivedAt: '2026-08-11T08:00:00.000Z' }, '2026-09'), false, 'an archived teacher is excluded from later payroll months');
+assert.equal(context.teacherIncludedForMonth({ archivedAt: '2026-08-11T08:00:00.000Z' }, '2026-07'), true, 'historical payroll remains available before archival');
 const lesson = (overrides = {}) => ({ id: 'l1', studentId: 's1', teacherId: 't1', teacherIds: ['t1'], date: '2026-08-05', start: '10:00', end: '11:00', status: '已上課', ...overrides });
 const schedulerCopySource = fs.readFileSync(path.join(root, 'js/modules/calendar/scheduler-ui.js'), 'utf8');
 const freshCopyStart = schedulerCopySource.indexOf('function createFreshLessonCopy');
@@ -256,7 +260,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.21\.1'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.22\.0'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*setCompanyAccessWithAudit\(email,\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension atomically audits the preserved access record and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');
@@ -437,12 +441,23 @@ assert.match(financeArchitectureSource, /\['financeMonth','settleMonth','teacher
 assert.match(financeArchitectureSource, /id="expenseTotalAmount"/, 'expense management includes its own total card');
 const studentsCrmSource = fs.readFileSync(path.join(root, 'js/modules/students/students-crm.js'), 'utf8');
 assert.match(studentsCrmSource, /id="crmTeacherFilter"[\s\S]*全部老師/, 'student CRM exposes an all-teacher filter');
+assert.match(studentsCrmSource, /function archiveStudent[\s\S]*archivedAt:new Date\(\)\.toISOString\(\)[\s\S]*archivedReason[\s\S]*status:'inactive'/, 'student archival preserves the record with actor, time, reason, and inactive status');
+assert.match(studentsCrmSource, /function restoreStudent[\s\S]*archivedAt:''[\s\S]*status:'active'[\s\S]*restoredAt/, 'student restoration reactivates the preserved record and records restoration metadata');
+assert.doesNotMatch(studentsCrmSource, /function deleteStudent/, 'student CRM no longer exposes destructive record deletion');
 vm.runInContext(studentsCrmSource, context);
 const crmStudents = [{ id: 'crm-a', name: 'Amy', parent: 'Lin', preferredTeacherId: 't1' }, { id: 'crm-b', name: 'Bob', parent: 'Chen', preferredTeacherId: '' }, { id: 'crm-c', name: 'Ann', parent: 'Wu', preferredTeacherId: '' }, { id: 'crm-d', name: 'Cara', parent: 'Ho', preferredTeacherId: '' }].map(context.studentDefaults);
 context.db.lessons = [lesson({ id: 'crm-lesson', studentId: 'crm-b', teacherId: 't1', teacherIds: ['t1'] }), lesson({ id: 'crm-co-lesson', studentId: 'crm-c', teacherId: 't2', teacherIds: ['t2', 't1'] }), lesson({ id: 'crm-draft', studentId: 'crm-d', teacherId: 't1', teacherIds: ['t1'], isDraft: true })];
 assert.deepEqual(crmStudents.filter(s => context.studentMatchesCrmFilters(s, '', 't1')).map(s => s.name), ['Bob', 'Ann'], 'teacher filtering follows primary and co-teaching timetable assignments, excluding fixed-only and draft-only relationships');
 assert.deepEqual(crmStudents.filter(s => context.studentMatchesCrmFilters(s, 'chen', 't1')).map(s => s.name), ['Bob'], 'teacher and text filters combine without widening results');
 assert.deepEqual(crmStudents.filter(s => context.studentMatchesCrmFilters(s, '', '')).map(s => s.name), ['Amy', 'Bob', 'Ann', 'Cara'], 'clearing the teacher filter restores all visible students');
+const teachersCrmSource = fs.readFileSync(path.join(root, 'js/modules/teachers/teachers-crm.js'), 'utf8');
+const selectOptionsSource = fs.readFileSync(path.join(root, 'js/ui/select-options.js'), 'utf8');
+assert.match(teachersCrmSource, /async function archiveTeacher[\s\S]*__danbridgeDisableTeacherAccessForArchive[\s\S]*archivedAt:new Date\(\)\.toISOString\(\)/, 'teacher archival disables linked access before preserving the archived teacher');
+assert.match(teachersCrmSource, /function restoreTeacher[\s\S]*登入權限仍維持停權[\s\S]*archivedAt:''/, 'teacher restoration deliberately leaves login access disabled until owner review');
+assert.doesNotMatch(teachersCrmSource, /function deleteTeacher/, 'teacher CRM no longer exposes destructive record deletion');
+assert.match(selectOptionsSource, /function activeStudents\(\)[\s\S]*!isArchivedRecord[\s\S]*function activeTeachers\(\)[\s\S]*!teacherIsArchived/, 'new scheduling selectors exclude archived students and teachers');
+assert.match(selectOptionsSource, /optionsWithCurrent[\s\S]*（已封存）/, 'an archived participant already attached to a historical lesson remains identifiable while editing history');
+assert.match(cloudSource, /function disableTeacherAccessForArchive[\s\S]*teacher-archived-account-disabled[\s\S]*active:false[\s\S]*window\.__danbridgeDisableTeacherAccessForArchive/, 'teacher archival atomically audits access suspension and exposes the guarded workflow');
 assert.match(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.fixedTotal\+d\.oneTimeTotal\)/, 'expense management totals only fixed and one-time expenses');
 assert.doesNotMatch(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.totalExpenses\)/, 'expense management total excludes teacher payroll');
 assert.match(branchBusinessSource, /expenseTotalScope'\)\.textContent=scopeLabel\(scope\)/, 'expense total identifies the selected branch scope');

@@ -40,8 +40,8 @@ for (const name of [...handlerRoots].sort()) {
 }
 
 const requiredContracts = {
-  'student CRM': ['saveStudent', 'editStudent', 'deleteStudent', 'studentMatchesCrmFilters', 'studentTeacherIds', 'renderStudents'],
-  'teacher management': ['saveTeacher', 'editTeacher', 'deleteTeacher', 'calculateTeacherPayroll', 'renderTeacherKpi'],
+  'student CRM': ['saveStudent', 'editStudent', 'archiveStudent', 'restoreStudent', 'studentMatchesCrmFilters', 'studentTeacherIds', 'renderStudents'],
+  'teacher management': ['saveTeacher', 'editTeacher', 'archiveTeacher', 'restoreTeacher', 'calculateTeacherPayroll', 'renderTeacherKpi'],
   'calendar interactions': ['renderCalendar', 'moveLessonTo', 'copyVisibleWeekToNextWeek', 'copyMonth', 'toggleSelectionMode', 'buildBatchCandidates'],
   'lesson execution': ['saveLesson', 'lessonBlocksScheduling', 'markMonthLessonsCompleted', 'openCourseDrawer'],
   'makeups': ['renderMakeups', 'scheduleMakeup', 'finishMakeup', 'completeMakeupForLesson', 'cancelOpenMakeupForSourceLesson'],

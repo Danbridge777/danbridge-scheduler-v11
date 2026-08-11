@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.21.1';
+const APP_RELEASE='20.22.0';
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
@@ -395,7 +395,7 @@ async function renderCloudUserManager(){
  let card=document.getElementById('cloudUserManager');
  if(!card){card=document.createElement('div');card.id='cloudUserManager';card.className='card col-4';sec.querySelector('.grid')?.appendChild(card)}
  card.innerHTML=`<h2>老師帳號</h2><div class="small">選擇老師並邀請 Gmail。受邀帳號首次成功登入後會顯示「已加入」，且只能查看自己的課表。</div><label>老師</label><select id="cloudTeacherSelect"></select><label>老師 Gmail</label><input id="cloudTeacherEmail" type="email" placeholder="teacher@gmail.com"><br><button class="btn primary" id="saveCloudTeacherAccess">建立／更新老師邀請</button><div id="cloudTeacherAccessList" class="backup-list" style="margin-top:12px"></div>`;
- const sel=document.getElementById('cloudTeacherSelect');sel.innerHTML='<option value="">請選擇老師</option>'+window.__danbridgeGetDB().teachers.map(t=>`<option value="${t.id}">${teacherBadgeName(t)||t.name}</option>`).join('');
+ const sel=document.getElementById('cloudTeacherSelect');sel.innerHTML='<option value="">請選擇老師</option>'+window.__danbridgeGetDB().teachers.filter(t=>!t.archivedAt).map(t=>`<option value="${t.id}">${teacherBadgeName(t)||t.name}</option>`).join('');
  document.getElementById('saveCloudTeacherAccess').onclick=async()=>{
    const teacherId=sel.value,email=document.getElementById('cloudTeacherEmail').value.trim().toLowerCase();
    if(!teacherId||!validGmailAddress(email))return alert('請選老師並輸入有效的 Gmail');
@@ -471,6 +471,22 @@ async function setCloudAccessActive(email,active){
   cloudStatus(`帳號已${action}`,'ok');
  }catch(e){console.error(e);cloudStatus(`${action}帳號失敗`,'error');alert(`${action}失敗：`+(e?.message||e))}
 }
+async function disableTeacherAccessForArchive(teacherId){
+ if(cloudRole!=='owner')throw new Error('只有 Owner 可以封存老師。');
+ const normalized=String(teacherId||'');if(!normalized)throw new Error('找不到老師 ID。');
+ const qs=await getDocs(query(collection(cloud,'companyAccess'),where('companyId','==',COMPANY_ID)));
+ const matches=qs.docs.filter(d=>{const x=d.data()||{};return String(x.teacherId||'')===normalized&&x.active!==false});
+ for(const accessDoc of matches){
+  const x=accessDoc.data()||{},email=String(x.email||accessDoc.id).trim().toLowerCase();
+  invalidateCompanyAccessCache();
+  await setCompanyAccessWithAudit(email,{active:false,updatedAt:serverTimestamp()},{action:'teacher-archived-account-disabled',category:'access',targetType:'account',targetId:email,changedFields:['active','teacherId'],totalChanges:1},true);
+  const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));
+  await Promise.all(userQs.docs.map(u=>setDoc(u.ref,{active:false,updatedAt:serverTimestamp()},{merge:true})));
+ }
+ await Promise.all([listCloudTeacherAccess(),listCloudBranchManagerAccess()]);
+ return matches.length;
+}
+window.__danbridgeDisableTeacherAccessForArchive=disableTeacherAccessForArchive;
 async function listCloudTeacherAccess(){
  const box=document.getElementById('cloudTeacherAccessList');if(!box||cloudRole!=='owner')return;
  const [qs,logins]=await Promise.all([getDocs(query(collection(cloud,'companyAccess'),where('companyId','==',COMPANY_ID))),lastLoginByEmail()]);
@@ -581,7 +597,7 @@ async function renderBranchManagerAccess(){
  const managerTeacherSelect=document.getElementById('cloudBranchManagerTeacher');
  if(managerTeacherSelect){
    const current=managerTeacherSelect.value;
-   managerTeacherSelect.innerHTML='<option value="">請選擇管理者本人</option>'+((window.__danbridgeGetDB()?.teachers||[]).map(t=>`<option value="${escapeHTML(t.id)}">${escapeHTML(t.name||'未命名老師')}</option>`).join(''));
+   managerTeacherSelect.innerHTML='<option value="">請選擇管理者本人</option>'+((window.__danbridgeGetDB()?.teachers||[]).filter(t=>!t.archivedAt).map(t=>`<option value="${escapeHTML(t.id)}">${escapeHTML(t.name||'未命名老師')}</option>`).join(''));
    if(current)managerTeacherSelect.value=current;
  }
  const button=document.getElementById('saveCloudBranchManager');
