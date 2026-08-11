@@ -66,6 +66,8 @@ body.teacher-cloud-role #filterTeacher{display:none!important}
 body.teacher-cloud-role #calendarAnalysis,
 body.teacher-cloud-role>.floating-actions,
 body.teacher-cloud-role .v1819-back-to-top{display:none!important}
+body[data-role-ux="teacher"] #calendar .location-legend,
+body.teacher-cloud-role #calendar .location-legend{display:none!important}
 body.teacher-cloud-role #calendar .calendar-toolbar-filters>.calendar-field:not(.calendar-search-field){display:none!important}
 body.teacher-cloud-role #calendar .calendar-toolbar-filters{display:block!important}
 body.teacher-cloud-role #calendar .calendar-search-field{display:block!important;width:100%!important;max-width:100%!important}

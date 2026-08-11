@@ -1,13 +1,13 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.24.1';
+const CLOUD_RELEASE = '20.24.2';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
 const ROLE_UX_RELEASE = '20.20.1';
-const ROLE_UX_STYLE_RELEASE = '20.20.0';
+const ROLE_UX_STYLE_RELEASE = '20.24.2';
 const PWA_RELEASE = '20.18.3';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
@@ -42,6 +42,15 @@ test('critical teacher and finance resources load the current release', async ({
   expect(manifest).toBe('./manifest.webmanifest');
   const appleIcon = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
   expect(appleIcon).toBe('./icon-192.png?v=20.18.1');
+});
+
+test('teacher schedule hides the location legend', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await page.locator('body').evaluate(element => {
+    element.classList.add('teacher-cloud-role');
+    element.dataset.roleUx = 'teacher';
+  });
+  await expect(page.locator('#calendar .location-legend')).toBeHidden();
 });
 
 test('form fields do not show redundant placeholder hints', async ({ page }) => {
