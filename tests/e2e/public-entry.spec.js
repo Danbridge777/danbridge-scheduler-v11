@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.1';
+const CLOUD_RELEASE = '20.26.2';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -59,6 +59,40 @@ test('teacher schedule hides the location legend', async ({ page }) => {
     element.dataset.roleUx = 'teacher';
   });
   await expect(page.locator('#calendar .location-legend')).toBeHidden();
+});
+
+test('Wendy scheduler stays private, centered and contained on every device', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'load' });
+  const result = await page.evaluate(() => {
+    document.body.classList.remove('auth-locked');
+    document.body.classList.add('teacher-cloud-role', 'wendy-cloud-role');
+    document.body.dataset.roleUx = 'teacher';
+    const backdrop = document.getElementById('lessonModal');
+    backdrop.classList.add('show');
+    const modal = backdrop.querySelector('.modal');
+    const modalRect = modal.getBoundingClientRect();
+    const visibleControls = [...modal.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),select,button')].filter(control => {
+      const style = getComputedStyle(control), rect = control.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+    });
+    return {
+      viewportWidth: innerWidth,
+      modalLeft: modalRect.left,
+      modalRight: modalRect.right,
+      overflow: document.documentElement.scrollWidth - innerWidth,
+      uncentered: visibleControls.filter(control => getComputedStyle(control).textAlign !== 'center').map(control => control.id || control.textContent.trim().slice(0, 20)),
+      escaped: visibleControls.filter(control => { const rect = control.getBoundingClientRect(); return rect.left < modalRect.left - 1 || rect.right > modalRect.right + 1 || rect.left < -1 || rect.right > innerWidth + 1; }).map(control => control.id || control.textContent.trim().slice(0, 20)),
+      privateVisible: ['paymentStatus','chargeStudent','payTeacher','lessonNote','lessonState','quickStudentBox'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none'),
+      forbiddenSections: ['students','teachers','makeups','camps','finance','data','security'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none')
+    };
+  });
+  expect(result.modalLeft).toBeGreaterThanOrEqual(0);
+  expect(result.modalRight).toBeLessThanOrEqual(result.viewportWidth + 1);
+  expect(result.overflow).toBeLessThanOrEqual(1);
+  expect(result.uncentered).toEqual([]);
+  expect(result.escaped).toEqual([]);
+  expect(result.privateVisible).toEqual([]);
+  expect(result.forbiddenSections).toEqual([]);
 });
 
 test('English mode translates the major application workspaces', async ({ page }) => {

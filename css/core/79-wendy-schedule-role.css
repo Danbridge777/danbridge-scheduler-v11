@@ -23,14 +23,50 @@ body.wendy-cloud-role #lessonModal .student-select-row>button,
 body.wendy-cloud-role #lessonModal #quickStudentBox,
 body.wendy-cloud-role #lessonModal #lessonAddressWrap,
 body.wendy-cloud-role #lessonModal .col-6:has(>#paymentStatus),
+body.wendy-cloud-role #lessonModal label:has(+ #paymentStatus),
+body.wendy-cloud-role #lessonModal #paymentStatus,
 body.wendy-cloud-role #lessonModal label:has(+ #chargeStudent),
 body.wendy-cloud-role #lessonModal #chargeStudent,
 body.wendy-cloud-role #lessonModal label:has(+ #payTeacher),
 body.wendy-cloud-role #lessonModal #payTeacher,
 body.wendy-cloud-role #lessonModal label:has(+ #lessonNote),
-body.wendy-cloud-role #lessonModal #lessonNote{display:none!important}
+body.wendy-cloud-role #lessonModal #lessonNote,
+body.wendy-cloud-role #lessonModal label:has(+ #lessonState),
+body.wendy-cloud-role #lessonModal #lessonState,
+body.wendy-cloud-role>.floating-actions .v20-owner-action,
+body.wendy-cloud-role #v18Fab,
+body.wendy-cloud-role #v18FabMenu{display:none!important}
 body.wendy-cloud-role #lessonModal .modal{border-color:#d5c6eb!important;box-shadow:0 28px 70px rgba(73,56,103,.28)!important}
 body.wendy-cloud-role #lessonModal .btn.primary{background:linear-gradient(135deg,#7657a8,#604386)!important;border-color:#604386!important}
+body.wendy-cloud-role #lessonModal,
+body.wendy-cloud-role #lessonModal .modal,
+body.wendy-cloud-role #lessonModal .grid,
+body.wendy-cloud-role #lessonModal .col-6,
+body.wendy-cloud-role #lessonModal input,
+body.wendy-cloud-role #lessonModal select,
+body.wendy-cloud-role #lessonModal button{max-width:100%!important;min-width:0!important;box-sizing:border-box!important}
+body.wendy-cloud-role #lessonModal input:not([type="checkbox"]):not([type="radio"]),
+body.wendy-cloud-role #lessonModal select,
+body.wendy-cloud-role #calendar input,
+body.wendy-cloud-role #calendar select{text-align:center!important;text-align-last:center!important;line-height:1.25!important}
+body.wendy-cloud-role #lessonModal input[type="date"],
+body.wendy-cloud-role #lessonModal input[type="time"]{display:block!important;width:100%!important;padding-inline:14px!important;min-height:54px!important;height:54px!important}
+body.wendy-cloud-role #lessonModal .grid{width:100%!important;margin-inline:0!important}
+body.wendy-cloud-role #lessonModal .grid>.col-6{width:100%!important;margin-inline:0!important}
+body.wendy-cloud-role #lessonModal .modal-head,
+body.wendy-cloud-role #lessonModal label,
+body.wendy-cloud-role #lessonModal .small,
+body.wendy-cloud-role #calendar .calendar-field,
+body.wendy-cloud-role #calendar .calendar-field label{text-align:center!important}
+body.wendy-cloud-role #finance,
+body.wendy-cloud-role #settlement,
+body.wendy-cloud-role #data,
+body.wendy-cloud-role #security,
+body.wendy-cloud-role #students,
+body.wendy-cloud-role #teachers,
+body.wendy-cloud-role #makeups,
+body.wendy-cloud-role #camps,
+body.wendy-cloud-role #winterCamps{display:none!important}
 @media(max-width:700px){
  body.wendy-cloud-role #calendar .calendar-toolbar-filters{display:grid!important;grid-template-columns:1fr!important;gap:10px!important}
  body.wendy-cloud-role #calendar .calendar-toolbar-filters>.calendar-field{display:block!important;width:100%!important;max-width:100%!important}

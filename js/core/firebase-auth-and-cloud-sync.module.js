@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.1';
+const APP_RELEASE='20.26.2';
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
@@ -42,6 +42,8 @@ let cloudEmailKey='';
 let cloudRoleAccessSignature='';
 let cloudCanManageSchedule=false;
 let schedulerBaselineLessons=[];
+let schedulerSaveChain=Promise.resolve();
+let schedulerOptimisticLessons=new Map();
 let unsubscribeScheduleRequests=null;
 let applyingCloud=false;
 let unsubscribeState=null;
@@ -404,7 +406,8 @@ function schedulerSafeLesson(lesson={}){
 function filteredSchedulerDB(source){
  const lessons=(source.lessons||[]).filter(l=>!l.isDraft).map(schedulerSafeLesson);
  const studentIds=new Set(lessons.map(l=>String(l.studentId||'')));
- return {...emptyDB(),branches:deepCopy(source.branches||window.DanbridgeAccess?.DEFAULT_BRANCHES||[]),students:(source.students||[]).filter(s=>studentIds.has(String(s.id))).map(s=>({id:s.id,name:s.name||'',courseType:s.courseType||''})),teachers:(source.teachers||[]).filter(t=>!t.archivedAt).map(t=>({id:t.id,name:t.name||'',displayName:t.displayName||'',color:t.color||'',subjects:t.subjects||''})),lessons};
+ const branches=(source.branches||window.DanbridgeAccess?.DEFAULT_BRANCHES||[]).map(b=>({id:b.id,name:b.name||'',rooms:Array.isArray(b.rooms)?b.rooms.map(String):[]}));
+ return {...emptyDB(),branches,students:(source.students||[]).filter(s=>studentIds.has(String(s.id))).map(s=>({id:s.id,name:s.name||'',courseType:s.courseType||''})),teachers:(source.teachers||[]).filter(t=>!t.archivedAt).map(t=>({id:t.id,name:t.name||'',displayName:t.displayName||'',color:t.color||'',subjects:t.subjects||''})),lessons};
 }
 
 function lessonBranchId(l){return l?.branchId||window.DanbridgeAccess?.branchIdFromLocation?.(l?.location||'')||'art_museum'}
@@ -1093,7 +1096,7 @@ function applyRoleUI(profile,user){
    if(activeSection&&!teacherAllowedTabs.has(activeSection.id))switchTab('dashboard');
 
    // 老師唯讀：只保留總覽、自己的課表與課程回報。
-   const teacherHiddenSelector=cloudCanManageSchedule?'#dashboard .owner-v33-only,#dashboard .branch-scope-bar,#lessons .toolbar button':'.owner-only-action,.floating-actions,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#dashboard .owner-v33-only,#dashboard .branch-scope-bar,#calendarTeacherFilter,#calendarLocationFilter,#calendarStudentFilter,#calendarRoomFilter,#calendarStateFilter,#filterStudent,#filterTeacher,#lessons .toolbar button';
+   const teacherHiddenSelector=cloudCanManageSchedule?'#dashboard .owner-only-action,#dashboard .owner-v33-only,#dashboard .branch-scope-bar,#lessons .toolbar button,#v18Fab,#v18FabMenu,.floating-actions .v20-owner-action':'.owner-only-action,.floating-actions,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#dashboard .owner-v33-only,#dashboard .branch-scope-bar,#calendarTeacherFilter,#calendarLocationFilter,#calendarStudentFilter,#calendarRoomFilter,#calendarStateFilter,#filterStudent,#filterTeacher,#lessons .toolbar button';
    document.querySelectorAll(teacherHiddenSelector).forEach(e=>{const target=e.matches('select')?e.closest('.calendar-field,#lessons .toolbar>div')||e:e;markRoleIsolated(target)});
    const teacherAnalysis=document.getElementById('calendarAnalysis');if(teacherAnalysis){markRoleIsolated(teacherAnalysis);teacherAnalysis.replaceChildren()}
    if(!cloudCanManageSchedule)document.querySelectorAll('.floating-actions').forEach(e=>e.remove());
@@ -1359,7 +1362,7 @@ async function createScheduleNotificationIfMissing(notificationRef,payload){
   if(!existing.exists())transaction.set(notificationRef,payload);
  });
 }
-async function publishScheduleChangeNotifications(previousDb,currentDb,batchKey){
+async function publishScheduleChangeNotifications(previousDb,currentDb,batchKey,actor={}){
  if(cloudRole!=='owner'||!ownerBaselineReady||!previousDb)return;
  const teacherChanges=buildScheduleNotificationChanges(previousDb,currentDb);
  const lessonChanges=buildScheduleLessonChanges(previousDb,currentDb);
@@ -1415,9 +1418,9 @@ async function publishScheduleChangeNotifications(previousDb,currentDb,batchKey)
      afterTime:item.after?lessonTimeLabel(item.after):'',
      before:item.before?{date:item.before.date||'',start:item.before.start||'',end:item.before.end||'',studentId:item.before.studentId||'',title:item.before.title||'',location:item.before.location||'',branchId:item.before.branchId||'',deliveryMode:item.before.deliveryMode||'',room:item.before.room||'',address:item.before.address||'',onlinePlatform:item.before.onlinePlatform||'',meetingUrl:item.before.meetingUrl||'',status:item.before.status||'',note:item.before.note||'',teacherIds:lessonTeacherIds(item.before)}:null,
      after:item.after?{date:item.after.date||'',start:item.after.start||'',end:item.after.end||'',studentId:item.after.studentId||'',title:item.after.title||'',location:item.after.location||'',branchId:item.after.branchId||'',deliveryMode:item.after.deliveryMode||'',room:item.after.room||'',address:item.after.address||'',onlinePlatform:item.after.onlinePlatform||'',meetingUrl:item.after.meetingUrl||'',status:item.after.status||'',note:item.after.note||'',teacherIds:lessonTeacherIds(item.after)}:null
-   }));
+   })).map(item=>recipient.role==='teacher'?{...item,before:item.before?{...item.before,address:'',meetingUrl:'',note:''}:null,after:item.after?{...item.after,address:'',meetingUrl:'',note:''}:null}:item);
    const manager=recipient.role==='branch_manager',owner=recipient.role==='owner';
-   jobs.push(createScheduleNotificationIfMissing(notificationRef,{companyId:COMPANY_ID,recipientEmail:recipient.email,recipientRole:recipient.role,teacherId,branchIds:manager?recipient.branchIds:[],teacherName:recipient.teacherName||'',title:'課表更新通知',message:owner?`公司課表有 ${items.length} 個變更`:manager?`您管理的校區課表有 ${items.length} 個變更`:`您的課表有 ${items.length} 個變更`,changeCount:items.length,details,read:false,createdAt:serverTimestamp(),createdBy:cloudUid,createdByName:document.body.dataset.cloudDisplayName||auth.currentUser?.displayName||auth.currentUser?.email||'Owner'}));
+   jobs.push(createScheduleNotificationIfMissing(notificationRef,{companyId:COMPANY_ID,recipientEmail:recipient.email,recipientRole:recipient.role,teacherId,branchIds:manager?recipient.branchIds:[],teacherName:recipient.teacherName||'',title:'課表更新通知',message:owner?`公司課表有 ${items.length} 個變更`:manager?`您管理的校區課表有 ${items.length} 個變更`:`您的課表有 ${items.length} 個變更`,changeCount:items.length,details,read:false,createdAt:serverTimestamp(),createdBy:actor.uid||cloudUid,createdByName:actor.name||document.body.dataset.cloudDisplayName||auth.currentUser?.displayName||auth.currentUser?.email||'Owner'}));
  }
  if(jobs.length)await withSyncTimeout(Promise.all(jobs),15000);
 }
@@ -1563,22 +1566,31 @@ async function queueSchedulerChanges(){
    jobs.push(setDoc(ref,{companyId:COMPANY_ID,operation,lessonId:id,lesson,actorUid:cloudUid,actorEmail:cloudEmailKey,createdAt:serverTimestamp(),status:'pending'},{merge:false}));
  }
  if(!jobs.length)return;
- cloudStatus('Wendy 排課異動正在安全送出…','pending');await Promise.all(jobs);schedulerBaselineLessons=deepCopy(current);persistCurrentLocalView();cloudStatus(`已送出 ${jobs.length} 筆排課異動`,'ok');
+ cloudStatus('Wendy 排課異動正在安全送出…','pending');await Promise.all(jobs);schedulerBaselineLessons=deepCopy(current);persistCurrentLocalView();window.renderAll?.();cloudStatus(`課表已立即更新，${jobs.length} 筆異動正在同步給 Owner、校區管理者與老師`,'ok');
+}
+function scheduleSchedulerChanges(){
+ const current=(window.__danbridgeGetDB?.().lessons||[]).map(schedulerSafeLesson),before=lessonMap(schedulerBaselineLessons),after=lessonMap(current);
+ for(const id of new Set([...before.keys(),...after.keys()]))if(JSON.stringify(before.get(id))!==JSON.stringify(after.get(id)))schedulerOptimisticLessons.set(id,after.get(id)||null);
+ schedulerSaveChain=schedulerSaveChain.catch(()=>{}).then(queueSchedulerChanges);
+ return schedulerSaveChain;
 }
 async function applySchedulerRequest(requestRef,data){
  if(cloudRole!=='owner'||data?.status!=='pending')return;
  const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main'),schedulerAccessRef=doc(cloud,'companyAccess',String(data.actorEmail||'').toLowerCase());
+ let notificationBefore=null,notificationAfter=null;
  await runTransaction(cloud,async transaction=>{
    const [requestSnap,mainSnap]=await Promise.all([transaction.get(requestRef),transaction.get(mainRef)]);if(!requestSnap.exists()||requestSnap.data()?.status!=='pending'||!mainSnap.exists())return;
    const before=deepCopy(mainSnap.data()?.db),after=deepCopy(before),id=String(data.lessonId||''),index=(after.lessons||[]).findIndex(l=>String(l.id)===id),lesson=schedulerSafeLesson(data.lesson||{});
    if(!id||String(lesson.id||'')!==id)throw new Error('排課異動 ID 不一致');
    if(data.operation==='delete'){if(index>=0)after.lessons.splice(index,1)}
    else {if(!(after.students||[]).some(s=>String(s.id)===String(lesson.studentId))||!lessonTeacherIds(lesson).every(tid=>(after.teachers||[]).some(t=>String(t.id)===tid)))throw new Error('排課異動包含不存在的學生或老師');if(index>=0)after.lessons[index]={...after.lessons[index],...lesson};else after.lessons.push({...lesson,paymentStatus:'unpaid',chargeStudent:'yes',payTeacher:'yes',note:''})}
+   notificationBefore=before;notificationAfter=after;
    const audit=buildImmutableDataAudit(before,after),hash=dataHash(after),scopedDb=filteredSchedulerDB(after);transaction.set(mainRef,{db:after,updatedAt:serverTimestamp(),updatedBy:data.actorUid,clientHash:hash},{merge:false});
    transaction.set(schedulerAccessRef,{scopedDb,scopedDbHash:dataHash(scopedDb),scopedDbUpdatedAt:serverTimestamp()},{merge:true});
    if(audit){audit.eventId=`wendy-${requestSnap.id}`;const record=immutableAuditRecord(audit);transaction.set(record.ref,{...record.payload,action:`wendy-schedule-${data.operation}`,targetType:'lesson',targetId:id,entityChanges:[...record.payload.entityChanges,`requested-by:${data.actorEmail}`].slice(0,80)})}
-   transaction.set(requestRef,{status:'applied',appliedAt:serverTimestamp(),appliedBy:cloudUid},{merge:true});
  });
+ if(notificationBefore&&notificationAfter)await publishScheduleChangeNotifications(notificationBefore,notificationAfter,`wendy-${requestRef.id}`,{uid:data.actorUid,name:'Wendy'});
+ await setDoc(requestRef,{status:'applied',appliedAt:serverTimestamp(),appliedBy:cloudUid},{merge:true});
 }
 function subscribeSchedulerRequests(){
  unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;if(cloudRole!=='owner')return;
@@ -1588,7 +1600,7 @@ function subscribeSchedulerRequests(){
 function installCloudSave(){
  window.__danbridgeQueueCloudSave=queueOwnerCloudSave;
  window.saveDB=function(options={}){
-   if(cloudRole==='teacher'&&cloudCanManageSchedule){const result=originalSaveDB?.(options);queueSchedulerChanges().catch(e=>{console.error(e);cloudStatus('Wendy 排課同步失敗：'+(e.message||e),'error')});return result}
+   if(cloudRole==='teacher'&&cloudCanManageSchedule){const result=originalSaveDB?.(options);scheduleSchedulerChanges().catch(e=>{console.error(e);cloudStatus('Wendy 排課同步失敗：'+(e.message||e),'error')});return result}
    if(cloudRole==='teacher'||cloudRole==='branch_manager'){alert(cloudRole==='teacher'?'老師帳號目前為唯讀，只能查看自己的課表。':'校區管理者目前為唯讀，只能查看指定校區資料。');return}
    return originalSaveDB?.(options);
  };
@@ -1689,7 +1701,13 @@ async function subscribeSchedulerTeacher(){
    if(snap.metadata.hasPendingWrites)return;const access=snap.data()||{},raw=access.scopedDb;
    if(access.active!==true||access.role!=='teacher'||access.canManageSchedule!==true)return revokeCurrentRoleAccess('Wendy 排課權限已移除，系統已安全登出。');
    if(!raw)return cloudStatus('Wendy 排課資料尚未發布，請 Owner 登入同步。','error');
-   const incoming=filteredSchedulerDB(raw);schedulerBaselineLessons=deepCopy(incoming.lessons);applyingCloud=true;window.__danbridgeSetDB(deepCopy(incoming));applyCachedLessonReportsToCurrentDB();persistCurrentLocalView();window.renderAll?.();applyingCloud=false;cloudStatus('Wendy 全老師課表已同步','ok');
+   const incoming=filteredSchedulerDB(raw),serverLessons=lessonMap(incoming.lessons);
+   for(const [id,desired] of [...schedulerOptimisticLessons]){
+    const server=serverLessons.get(id);
+    if((desired===null&&!server)||(desired&&JSON.stringify(server)===JSON.stringify(desired))){schedulerOptimisticLessons.delete(id);continue}
+    if(desired===null)serverLessons.delete(id);else serverLessons.set(id,deepCopy(desired));
+   }
+   incoming.lessons=[...serverLessons.values()];schedulerBaselineLessons=deepCopy(incoming.lessons);applyingCloud=true;window.__danbridgeSetDB(deepCopy(incoming));applyCachedLessonReportsToCurrentDB();persistCurrentLocalView();window.renderAll?.();applyingCloud=false;cloudStatus(schedulerOptimisticLessons.size?'Wendy 課表已保留，異動正在同步正式課表':'Wendy 全老師課表已同步','ok');
  },e=>{console.error('Wendy schedule view failed',e);cloudStatus('Wendy 課表同步失敗：'+(e.message||e),'error')});
 }
 
@@ -1764,7 +1782,7 @@ installRoleInteractionGuards();
 onAuthStateChanged(auth,async user=>{
  unsubscribeState?.();unsubscribeState=null;unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;scheduleNotificationDocuments=[];lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();
  unsubscribeAccessGuard?.();unsubscribeAccessGuard=null;
- if(!user){lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);clearTimeout(dailyBackupTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudCanManageSchedule=false;schedulerBaselineLessons=[];cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true,canManageSchedule:false});showCloudLogin();cloudStatus('尚未登入');return}
+ if(!user){lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);clearTimeout(dailyBackupTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudCanManageSchedule=false;schedulerBaselineLessons=[];schedulerSaveChain=Promise.resolve();schedulerOptimisticLessons=new Map();cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true,canManageSchedule:false});showCloudLogin();cloudStatus('尚未登入');return}
  try{
    cloudStatus('正在載入權限…');const profile=await ensureProfile(user);try{await recordSuccessfulLogin(user,profile)}catch(e){console.warn('最後登入時間更新失敗：',e);reportOperationalError(e,{category:'cloud-write',area:'access-guard',retryable:true})}applyRoleUI(profile,user);showCloudApp();
    if(profile.role==='owner'){subscribeOwner();subscribeSchedulerRequests();setTimeout(()=>{renderCloudUserManager();renderBranchManagerAccess()},0)}else if(profile.role==='teacher'&&profile.canManageSchedule===true)subscribeSchedulerTeacher();else if(profile.role==='teacher')subscribeTeacher();else if(profile.role==='branch_manager')subscribeBranchManager();else throw new Error('不支援的角色：'+profile.role);subscribeRoleAccessGuard();subscribeLessonReports();subscribeScheduleNotifications();

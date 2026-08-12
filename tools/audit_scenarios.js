@@ -272,7 +272,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.1'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.2'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource,/cloudEmailKey!==OWNER_EMAIL[\s\S]*只有主要 Owner 可以新增或更新其他 Owner/,'only the primary owner can create or update backup owners');
 assert.match(cloudSource,/email===OWNER_EMAIL[\s\S]*主要 Owner 帳號受保護，不能停權/,'the primary owner cannot be disabled from the account UI');
 const convenienceSource=fs.readFileSync(path.join(root,'js/app/v18-convenience-suite.js'),'utf8');
@@ -383,6 +383,14 @@ assert.equal(teacherView.teachers[0].rate, undefined);
 assert.deepEqual(Array.from(teacherView.fixedExpenses), []);
 const legacyTeacherView = context.filteredTeacherDB({...scopedSource,lessons:[lesson({id:'legacy-own',teacherId:'t1',teacherIds:[]})]}, 't1');
 assert.deepEqual(Array.from(legacyTeacherView.lessons,row=>row.id), ['legacy-own'], 'an empty legacy teacherIds list falls back to the primary teacher');
+const schedulerView = context.filteredSchedulerDB({
+  ...scopedSource,
+  branches: [{id:'a',name:'A',rooms:['1'],managerEmail:'private@example.com'}],
+  lessons: [lesson({id:'schedule-safe',address:'Private address',meetingUrl:'https://private',note:'Private note',paymentStatus:'paid',chargeStudent:'yes',payTeacher:'yes'})]
+});
+assert.deepEqual(Object.keys(schedulerView.branches[0]).sort(), ['id','name','rooms']);
+for (const field of ['address','meetingUrl','note','paymentStatus','chargeStudent','payTeacher']) assert.equal(schedulerView.lessons[0][field], undefined, `Wendy scheduler lessons exclude ${field}`);
+assert.deepEqual(Array.from(schedulerView.fixedExpenses), []);
 const branchView = context.filteredBranchDB(scopedSource, ['a']);
 assert.deepEqual(Array.from(branchView.lessons, row => row.id), ['own-a']);
 assert.deepEqual(Array.from(branchView.students,row=>row.id), ['s1']);
@@ -554,6 +562,11 @@ assert.match(pointerDragMoveSource, /state\.moved=true[\s\S]*setPointerCapture/,
 const pwaSource = fs.readFileSync(path.join(root, 'js/core/pwa-installation.js'), 'utf8');
 assert.match(cloudSource, /if\(cloudRole==='owner'\)return \{\.\.\.meta,teacherIds\};[\s\S]*if\(!cloudTeacherId\)throw new Error/, 'every Owner can submit a lesson report without a linked teacher profile');
 assert.match(cloudSource, /const owners=\[\{email:OWNER_EMAIL[\s\S]*if\(a\.role==='owner'\)[\s\S]*for\(const owner of owners\)addRecipientItem/, 'every active Owner receives a large schedule-change notification');
+assert.match(cloudSource, /applySchedulerRequest[\s\S]*publishScheduleChangeNotifications\(notificationBefore,notificationAfter,`wendy-\$\{requestRef\.id\}`[\s\S]*status:'applied'/, 'Wendy requests remain pending until large role notifications succeed');
+assert.match(cloudSource, /課表已立即更新，[\s\S]*正在同步給 Owner、校區管理者與老師/, 'Wendy sees the locally updated all-teacher schedule immediately');
+assert.match(cloudSource, /schedulerSaveChain=schedulerSaveChain\.catch\(\(\)=>\{\}\)\.then\(queueSchedulerChanges\)/, 'rapid Wendy drag, paste and edit saves are serialized without duplicate schedule requests');
+assert.match(cloudSource, /for\(const \[id,desired\] of \[\.\.\.schedulerOptimisticLessons\]\)[\s\S]*serverLessons\.set\(id,deepCopy\(desired\)\)/, 'an intermediate server snapshot cannot erase Wendy optimistic drag, paste or edit results');
+assert.match(cloudSource, /cloudRole==='teacher'&&cloudCanManageSchedule[\s\S]*originalSaveDB[\s\S]*scheduleSchedulerChanges/, 'every shared calendar save path immediately queues Wendy synchronization');
 assert.match(cloudSource, /'paymentStatus','chargeStudent','payTeacher','campId'/, 'small billing, payroll and camp-code changes trigger schedule notifications');
 assert.match(cloudSource, /\['owner','teacher','branch_manager'\]\.includes\(cloudRole\)/, 'Owners, managers and teachers subscribe to large schedule notifications');
 assert(/worker\.state==='activated'\)return reloadAcceptedUpdate\(\)/.test(pwaSource), 'PWA update button must reload immediately when the worker already activated');
