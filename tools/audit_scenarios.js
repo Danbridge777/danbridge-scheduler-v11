@@ -25,6 +25,7 @@ const context = {
   localDate: date => date.toISOString().slice(0, 10),
   uid: (() => { let value = 0; return () => `audit-${++value}`; })(),
   emptyDB: () => ({ students: [], teachers: [], lessons: [], makeups: [], changes: [], teacherGroups: [], winterTeacherGroups: [], summerCampClasses: [], summerCampRegistrations: [], winterCampRegistrations: [], winterCampClasses: [], settlementRecords: [], fixedExpenses: [], oneTimeExpenses: [], collectionRecords: [], branches: [] }),
+  deepCopy: value => JSON.parse(JSON.stringify(value)),
   $: () => null,
   esc: value => String(value),
   saveDB: () => {}, toast: () => {}, alert: () => {},
@@ -252,6 +253,41 @@ assert.match(branchBusinessSource, /data=settlementDataFor\(month,scope\)/, 'set
 assert.doesNotMatch(branchBusinessSource, /window\.settleData=function\(\)\{return settlementDataFor\(window\.__danbridgeFinanceWorkspaceMonth/, 'finance workspace month cannot override settlement month');
 
 const cloudSource = fs.readFileSync(path.join(root, 'js/core/firebase-auth-and-cloud-sync.module.js'), 'utf8');
+const mergeStart = cloudSource.indexOf('function canonicalHashValue');
+const mergeEnd = cloudSource.indexOf('const AUDIT_COLLECTION_KEYS');
+assert.ok(mergeStart >= 0 && mergeEnd > mergeStart, 'owner three-way merge helpers are available');
+vm.runInContext(`${cloudSource.slice(mergeStart, mergeEnd)}\nthis.__testMergeOwnerDB=mergeConcurrentOwnerDB;this.__testConflictParts=conflictBackupParts;`, context);
+const mergeDB = (base, local, remote) => context.__testMergeOwnerDB(base, local, remote);
+const mergeBase = context.emptyDB();
+mergeBase.lessons = [{ id: 'shared', title: 'Base', room: '1' }];
+const danielAdded = Array.from({ length: 100 }, (_, i) => ({ id: `daniel-${i}`, title: 'Daniel' }));
+const catherineAdded = Array.from({ length: 100 }, (_, i) => ({ id: `catherine-${i}`, title: 'Catherine' }));
+let mergedOwner = mergeDB(mergeBase, { ...mergeBase, lessons: [...mergeBase.lessons, ...danielAdded] }, { ...mergeBase, lessons: [...mergeBase.lessons, ...catherineAdded] });
+assert.equal(mergedOwner.db.lessons.length, 201, 'two owners adding 100 lessons each preserves all 200 additions');
+assert.equal(new Set(mergedOwner.db.lessons.map(row => row.id)).size, 201, 'concurrent owner additions never duplicate lesson IDs');
+mergedOwner = mergeDB(mergeBase, { ...mergeBase, lessons: [{ ...mergeBase.lessons[0], room: '2' }] }, { ...mergeBase, lessons: [...mergeBase.lessons, ...danielAdded] });
+assert.equal(mergedOwner.db.lessons.length, 101, 'editing from a stale base preserves the other owner additions');
+assert.equal(mergedOwner.db.lessons.find(row => row.id === 'shared').room, '2', 'the stale owner edit is retained alongside remote additions');
+mergedOwner = mergeDB(mergeBase, { ...mergeBase, lessons: [{ ...mergeBase.lessons[0], room: '2' }] }, { ...mergeBase, lessons: [{ ...mergeBase.lessons[0], title: 'Remote' }] });
+assert.deepEqual({ ...mergedOwner.db.lessons[0] }, { id: 'shared', title: 'Remote', room: '2' }, 'different fields on one lesson merge independently');
+mergedOwner = mergeDB(mergeBase, { ...mergeBase, lessons: [{ ...mergeBase.lessons[0], title: 'Local' }] }, { ...mergeBase, lessons: [{ ...mergeBase.lessons[0], title: 'Remote' }] });
+assert.equal(mergedOwner.db.lessons[0].title, 'Local', 'same-field conflict uses the local value as the formal value');
+assert.equal(mergedOwner.conflicts.length, 1, 'same-field conflict creates one recoverable conflict entry');
+assert.equal(mergedOwner.conflicts[0].remote, 'Remote', 'the overwritten remote field is retained in the conflict entry');
+mergedOwner = mergeDB(mergeBase, { ...mergeBase, lessons: [{ ...mergeBase.lessons[0], flags: { paid: false, visible: true } }] }, { ...mergeBase, lessons: [{ ...mergeBase.lessons[0], flags: { paid: true, visible: false } }] });
+assert.equal(mergedOwner.conflicts.length, 2, 'falsy nested field conflicts are compared exactly instead of being treated as missing');
+mergedOwner = mergeDB(mergeBase, { ...mergeBase, lessons: [] }, { ...mergeBase, lessons: [{ ...mergeBase.lessons[0], room: '3' }] });
+assert.equal(mergedOwner.db.lessons[0].room, '3', 'local delete versus remote edit conservatively retains the remote lesson');
+assert.equal(mergedOwner.conflicts.length, 1, 'local delete versus remote edit records a conflict');
+mergedOwner = mergeDB(mergeBase, { ...mergeBase, lessons: [{ ...mergeBase.lessons[0], room: '4' }] }, { ...mergeBase, lessons: [] });
+assert.equal(mergedOwner.db.lessons[0].room, '4', 'remote delete versus local edit conservatively retains the local lesson');
+assert.equal(mergedOwner.conflicts.length, 1, 'remote delete versus local edit records a conflict');
+const changeA = { at: '2026-08-12T05:00:00Z', type: '新增課程', after: { id: 'a' } };
+const changeB = { at: '2026-08-12T05:00:00Z', type: '新增課程', after: { id: 'b' } };
+mergedOwner = mergeDB({ ...context.emptyDB(), changes: [changeA] }, { ...context.emptyDB(), changes: [changeA, changeB] }, { ...context.emptyDB(), changes: [changeA] });
+assert.equal(mergedOwner.db.changes.length, 2, 'append-only changes with the same timestamp are neither collapsed nor duplicated');
+const conflictParts = context.__testConflictParts([{ path: 'lessons.shared.note', local: 'x'.repeat(400000), remote: 'y'.repeat(400000) }]);
+assert.ok(conflictParts.length > 1 && conflictParts.every(part => part.length <= 160000), 'large conflict backups are split below the per-document safety limit');
 const appShellSource = fs.readFileSync(path.join(root, 'js/app/app-shell.js'), 'utf8');
 assert.match(appShellSource, /if\(id==='calendar'\)[\s\S]*mode\.value='month'[\s\S]*date\.value=todayStr\(\)/, 'opening the schedule always starts on the current month');
 assert.match(appShellSource, /function installNavigationHandlers\(\)[\s\S]*tabHandlerInstalled[\s\S]*addEventListener\('click'[\s\S]*closest\('button\[data-tab\]'\)[\s\S]*switchTab\(button\.dataset\.tab\)/, 'navigation uses one stable delegated handler that survives account and role switching');
@@ -260,7 +296,7 @@ assert.match(cloudSource, /function acknowledgeCurrentScheduleNotification\(\)[\
 assert.match(cloudSource, /function subscribeLessonReports\(\)\{\s*unsubscribeReports\?\.\(\);unsubscribeReports=null;\s*if\(cloudRole==='teacher'\)return;/, 'teachers use their isolated teacher view and never open a redundant company-wide report collection listener');
 assert.match(cloudSource, /function applyCalendarLocationRoleScope\(\)[\s\S]*cloudRole!=='branch_manager'[\s\S]*allowedBranches[\s\S]*option\.remove\(\)[\s\S]*applyCalendarLocationRoleScope\(\);/, 'branch managers only receive authorized branch locations while owner options remain restorable');
 assert.match(cloudSource, /if\(teacherOnly\)\{\s*delete document\.body\.dataset\.teacherWeekInitialized;/, 'every fresh teacher login resets the one-time current-week initialization');
-const syncDecisionStart = cloudSource.indexOf('function dataHash');
+const syncDecisionStart = cloudSource.indexOf('function ownerSnapshotDecision');
 const syncDecisionEnd = cloudSource.indexOf('function safeErrorCode');
 vm.runInContext(cloudSource.slice(syncDecisionStart, syncDecisionEnd), context);
 assert.equal(context.ownerSnapshotDecision('local-new','cloud-old','local-new','cloud-old'),'ignore-dirty','an older cloud snapshot cannot overwrite an unconfirmed local mutation');
@@ -275,7 +311,7 @@ assert.equal(context.dataHash({b:1,a:{d:2,c:3}}),context.dataHash({a:{c:3,d:2},b
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:95},(_,i)=>({id:`l${i}`}))}).risky,false,'a small lesson adjustment does not trigger the destructive-change guard');
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:80},(_,i)=>({id:`l${i}`}))}).risky,true,'a large lesson reduction triggers the destructive-change guard');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.10'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.11'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /function uploadOwnerState\(force=false\)[\s\S]*ownerLessonShrinkRisk\(previousPublished,current\)[\s\S]*confirm\(`[\s\S]*已阻止大量課程減少/, 'owner uploads require explicit confirmation before a large lesson reduction can replace cloud data');
 const timeControlSource=fs.readFileSync(path.join(root,'js/ui/24-hour-time-controls.js'),'utf8');
 assert.match(timeControlSource, /length:24\*12[\s\S]*padStart\(2,'0'\)[\s\S]*input\[type="time"\]/, 'all editable times use fixed HH:mm values instead of device locale formatting');
@@ -356,7 +392,7 @@ assert.match(cloudSource, /function saveEmergencyOwner\(\)[\s\S]*role:'owner'[\s
 assert.match(cloudSource, /function buildImmutableDataAudit\(beforeDb,afterDb\)[\s\S]*AUDIT_COLLECTION_KEYS[\s\S]*entityChanges/, 'immutable audit summaries cover every business collection without storing full entity contents');
 assert.match(cloudSource, /function immutableAuditRecord\(detail=\{\}\)[\s\S]*actorUid:cloudUid[\s\S]*serverTimestamp[\s\S]*companyAudit/, 'immutable audit records bind the authenticated owner and server timestamp outside company data');
 assert.match(cloudSource, /function writeImmutableAudit\(detail=\{\}\)[\s\S]*runTransaction[\s\S]*transaction\.set\(audit\.ref/, 'owner audit writes are transactionally deduplicated');
-assert.match(cloudSource, /function uploadOwnerState\(force=false\)[\s\S]*buildImmutableDataAudit\(previousPublished,current\)[\s\S]*runTransaction[\s\S]*transaction\.set\(mainRef[\s\S]*transaction\.set\(audit\.ref/, 'owner main data and its immutable audit event commit in one Firestore transaction');
+assert.match(cloudSource, /function uploadOwnerState\(force=false\)[\s\S]*runTransaction[\s\S]*buildImmutableDataAudit\(remoteBefore,finalDb\)[\s\S]*syncConflictBackups[\s\S]*transaction\.set\(mainRef[\s\S]*transaction\.set\(audit\.ref[\s\S]*conflictRefs\.forEach/, 'owner merged main data, immutable audit, and conflict backups commit in one Firestore transaction');
 assert.match(cloudSource, /function restoreCloudSafetyBackup\(day\)[\s\S]*action:'backup-restored'/, 'cloud backup restoration produces a dedicated immutable audit event');
 assert.match(cloudSource, /teacher-access-(?:updated|created)/, 'teacher account changes produce immutable access audit events');
 assert.match(cloudSource, /branch-access-(?:updated|created)/, 'branch-manager account changes produce immutable access audit events');

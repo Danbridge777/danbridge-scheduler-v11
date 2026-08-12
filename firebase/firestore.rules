@@ -164,6 +164,11 @@ service cloud.firestore {
       allow read, write: if isOwner();
     }
 
+    // 三方合併的復原內容含完整衝突欄位，只允許 Owner 存取。
+    match /companies/{companyId}/syncConflictBackups/{backupPartId} {
+      allow read, write: if isOwner();
+    }
+
     match /companies/{companyId}/teacherViews/{email} {
       allow read: if isOwner() || (signedIn()
         && email == emailKey()

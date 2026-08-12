@@ -50,6 +50,7 @@ async function seed() {
       ['users/teacher-uid', { email: TEACHER_EMAIL, active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1' }],
       ['users/manager-uid', { email: MANAGER_EMAIL, active: true, companyId: COMPANY_ID, role: 'branch_manager', teacherId: 'manager-teacher', branchIds: ['branch-a'] }],
       [`companies/${COMPANY_ID}/data/main`, { privateValue: 'owner-only' }],
+      [`companies/${COMPANY_ID}/syncConflictBackups/conflict-1`, { companyId: COMPANY_ID, payload: '[{"path":"lessons.lesson-1.title"}]' }],
       [`companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`, { teacherId: 'teacher-1', lessons: ['lesson-own'] }],
       [`companies/${COMPANY_ID}/teacherViews/${OTHER_TEACHER_EMAIL}`, { teacherId: 'teacher-2', lessons: ['lesson-other'] }],
       [`companies/${COMPANY_ID}/teacherViews/${INVITED_EMAIL}`, { teacherId: 'teacher-1', lessons: ['lesson-own'] }],
@@ -131,6 +132,18 @@ describe('帳號邀請', () => {
 });
 
 describe('Owner 權限', () => {
+  test('同步衝突備份只有 Owner 可以讀寫', async () => {
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    const backupOwner = auth('backup-owner-uid', BACKUP_OWNER_EMAIL);
+    await assertSucceeds(getDoc(doc(owner, `companies/${COMPANY_ID}/syncConflictBackups/conflict-1`)));
+    await assertSucceeds(setDoc(doc(backupOwner, `companies/${COMPANY_ID}/syncConflictBackups/conflict-2`), { companyId: COMPANY_ID, payload: '[]' }));
+    for (const [uid, email] of [['teacher-uid', TEACHER_EMAIL], ['manager-uid', MANAGER_EMAIL], ['wendy-uid', WENDY_EMAIL]]) {
+      const member = auth(uid, email);
+      await assertFails(getDoc(doc(member, `companies/${COMPANY_ID}/syncConflictBackups/conflict-1`)));
+      await assertFails(setDoc(doc(member, `companies/${COMPANY_ID}/syncConflictBackups/forbidden-${uid}`), { payload: '[]' }));
+    }
+  });
+
   test('備援 Owner 僅憑正式授權即可立即訂閱全部課程回報', async () => {
     const backup = auth('backup-owner-without-profile', BACKUP_OWNER_EMAIL);
     const reports = await assertSucceeds(getDocs(collection(backup, `companies/${COMPANY_ID}/lessonReports`)));

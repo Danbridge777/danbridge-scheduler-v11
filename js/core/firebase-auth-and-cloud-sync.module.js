@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.10';
+const APP_RELEASE='20.26.11';
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
@@ -73,6 +73,7 @@ let approvedLessonShrinkHash='';
 // 本機資料一旦修改，在雲端確認寫入前禁止舊 snapshot 倒灌覆蓋。
 let localDirtyHash='';
 let localMutationVersion=0;
+let ownerRecoveryBaseDB=null;
 let reportSyncTimer=null;
 let lessonMetaSignatureCache=new Map();
 let lessonMetaCacheReady=false;
@@ -98,12 +99,12 @@ function localRoleCacheKey(){
 function persistCurrentLocalView(){try{localStorage.setItem(localRoleCacheKey(),JSON.stringify(window.__danbridgeGetDB()))}catch{}}
 function persistOwnerSyncRecovery(){
  if(cloudRole!=='owner'||!localDirtyHash)return;
- try{localStorage.setItem(OWNER_SYNC_RECOVERY_KEY,JSON.stringify({hash:localDirtyHash,mutationVersion:localMutationVersion,updatedAt:new Date().toISOString()}))}catch{}
+ try{localStorage.setItem(OWNER_SYNC_RECOVERY_KEY,JSON.stringify({hash:localDirtyHash,mutationVersion:localMutationVersion,baseDb:ownerRecoveryBaseDB||lastPublishedOwnerDB||null,updatedAt:new Date().toISOString()}))}catch{}
 }
-function clearOwnerSyncRecovery(){try{localStorage.removeItem(OWNER_SYNC_RECOVERY_KEY)}catch{}}
+function clearOwnerSyncRecovery(){ownerRecoveryBaseDB=null;try{localStorage.removeItem(OWNER_SYNC_RECOVERY_KEY)}catch{}}
 function restoreOwnerSyncRecovery(){
  if(cloudRole!=='owner')return false;
- try{const saved=JSON.parse(localStorage.getItem(OWNER_SYNC_RECOVERY_KEY)||'null'),currentHash=dataHash(window.__danbridgeGetDB?.());if(saved?.hash&&saved.hash===currentHash){localDirtyHash=saved.hash;localMutationVersion=Math.max(localMutationVersion,Number(saved.mutationVersion)||1);ownerUploadQueued=true;return true}if(saved?.hash)clearOwnerSyncRecovery()}catch{}
+ try{const saved=JSON.parse(localStorage.getItem(OWNER_SYNC_RECOVERY_KEY)||'null'),currentHash=dataHash(window.__danbridgeGetDB?.());if(saved?.hash&&saved.hash===currentHash){localDirtyHash=saved.hash;localMutationVersion=Math.max(localMutationVersion,Number(saved.mutationVersion)||1);ownerRecoveryBaseDB=saved.baseDb?deepCopy(saved.baseDb):null;ownerUploadQueued=true;return true}if(saved?.hash)clearOwnerSyncRecovery()}catch{}
  return false;
 }
 let cloudStatusHideTimer=null;
@@ -117,6 +118,66 @@ function canonicalHashValue(value){
  return value;
 }
 function dataHash(value){try{const text=JSON.stringify(canonicalHashValue(value||{}));let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)+':'+text.length}catch{return String(Date.now())}}
+const OWNER_MERGE_COLLECTION_KEYS=['students','teachers','lessons','makeups','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches'];
+const OWNER_APPEND_ONLY_COLLECTION_KEYS=['changes'];
+function cloneMergeValue(value){return value===undefined?undefined:JSON.parse(JSON.stringify(value))}
+function mergeValueHash(value){return value===undefined?'__undefined__':dataHash(['__defined__',value])}
+function mergeOwnerRecord(base,local,remote,path,conflicts){
+ if(mergeValueHash(local)===mergeValueHash(base))return cloneMergeValue(remote);
+ if(mergeValueHash(remote)===mergeValueHash(base)||mergeValueHash(local)===mergeValueHash(remote))return cloneMergeValue(local);
+ if(!local||!remote||typeof local!=='object'||typeof remote!=='object'||Array.isArray(local)||Array.isArray(remote)){
+  conflicts.push({path,local:cloneMergeValue(local),remote:cloneMergeValue(remote)});return cloneMergeValue(local);
+ }
+ const result={},keys=new Set([...Object.keys(base||{}),...Object.keys(local||{}),...Object.keys(remote||{})]);
+ for(const key of keys){
+  const b=base?.[key],l=local?.[key],r=remote?.[key],localChanged=mergeValueHash(l)!==mergeValueHash(b),remoteChanged=mergeValueHash(r)!==mergeValueHash(b);
+  if(!localChanged)result[key]=cloneMergeValue(r);
+  else if(!remoteChanged||mergeValueHash(l)===mergeValueHash(r))result[key]=cloneMergeValue(l);
+  else if(l&&r&&typeof l==='object'&&typeof r==='object'&&!Array.isArray(l)&&!Array.isArray(r))result[key]=mergeOwnerRecord(b,l,r,`${path}.${key}`,conflicts);
+  else {conflicts.push({path:`${path}.${key}`,local:cloneMergeValue(l),remote:cloneMergeValue(r)});result[key]=cloneMergeValue(l)}
+ }
+ return result;
+}
+function mergeOwnerCollection(baseRows=[],localRows=[],remoteRows=[],key,conflicts){
+ const identity=(row,index)=>String(row?.id||row?.key||row?.email||row?.month||`${key}:missing-id:${index}`);
+ const map=(rows)=>new Map((rows||[]).map((row,index)=>[identity(row,index),row]));
+ const base=map(baseRows),local=map(localRows),remote=map(remoteRows),result=[];
+ for(const id of new Set([...remote.keys(),...local.keys(),...base.keys()])){
+  const b=base.get(id),l=local.get(id),r=remote.get(id),localChanged=mergeValueHash(l)!==mergeValueHash(b),remoteChanged=mergeValueHash(r)!==mergeValueHash(b);
+  if(!localChanged){if(r!==undefined)result.push(cloneMergeValue(r));continue}
+  if(!remoteChanged||mergeValueHash(l)===mergeValueHash(r)){if(l!==undefined)result.push(cloneMergeValue(l));continue}
+  if(l===undefined){conflicts.push({path:`${key}.${id}:delete`,local:null,remote:cloneMergeValue(r)});result.push(cloneMergeValue(r));continue}
+  if(r===undefined){conflicts.push({path:`${key}.${id}:remote-delete`,local:cloneMergeValue(l),remote:null});result.push(cloneMergeValue(l));continue}
+  result.push(mergeOwnerRecord(b,l,r,`${key}.${id}`,conflicts));
+ }
+ return result;
+}
+function mergeAppendOnlyOwnerCollection(baseRows=[],localRows=[],remoteRows=[]){
+ const hash=row=>dataHash(row),baseCounts=new Map(),result=[],resultCounts=new Map();
+ for(const row of baseRows||[])baseCounts.set(hash(row),(baseCounts.get(hash(row))||0)+1);
+ for(const row of remoteRows||[]){const key=hash(row);result.push(cloneMergeValue(row));resultCounts.set(key,(resultCounts.get(key)||0)+1)}
+ const localCounts=new Map();
+ for(const row of localRows||[]){
+  const key=hash(row),seen=(localCounts.get(key)||0)+1;localCounts.set(key,seen);
+  const baseCount=baseCounts.get(key)||0,target=Math.max(resultCounts.get(key)||0,seen,baseCount);
+  if((resultCounts.get(key)||0)<target){result.push(cloneMergeValue(row));resultCounts.set(key,(resultCounts.get(key)||0)+1)}
+ }
+ return result;
+}
+function mergeConcurrentOwnerDB(baseDb,localDb,remoteDb){
+ const base=baseDb||emptyDB(),local=localDb||emptyDB(),remote=remoteDb||emptyDB(),merged=deepCopy(remote),conflicts=[];
+ for(const key of OWNER_MERGE_COLLECTION_KEYS)merged[key]=mergeOwnerCollection(base[key],local[key],remote[key],key,conflicts);
+ for(const key of OWNER_APPEND_ONLY_COLLECTION_KEYS)merged[key]=mergeAppendOnlyOwnerCollection(base[key],local[key],remote[key]);
+ for(const key of new Set([...Object.keys(base),...Object.keys(local),...Object.keys(remote)])){
+  if(OWNER_MERGE_COLLECTION_KEYS.includes(key)||OWNER_APPEND_ONLY_COLLECTION_KEYS.includes(key))continue;
+  merged[key]=mergeOwnerRecord(base[key],local[key],remote[key],key,conflicts);
+ }
+ const unique=[];for(const conflict of conflicts)if(!unique.some(x=>x.path===conflict.path))unique.push(conflict);
+ return{db:merged,conflicts:unique};
+}
+function conflictBackupParts(conflicts,maxChars=160000){
+ const serialized=JSON.stringify(conflicts),parts=[];for(let offset=0;offset<serialized.length;offset+=maxChars)parts.push(serialized.slice(offset,offset+maxChars));return parts.length?parts:['[]'];
+}
 const AUDIT_COLLECTION_KEYS=['students','teachers','lessons','makeups','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches'];
 function auditEntityId(row,index){return String(row?.id||row?.email||row?.month||index)}
 function auditChangedFields(before,after){const keys=new Set([...Object.keys(before||{}),...Object.keys(after||{})]);return[...keys].filter(key=>JSON.stringify(before?.[key])!==JSON.stringify(after?.[key])).sort().slice(0,30)}
@@ -1521,7 +1582,7 @@ async function uploadOwnerState(force=false){
  if(ownerUploadInFlight)return;
  if(!navigator.onLine){setOfflineStatus();return}
  const current=deepCopy(window.__danbridgeGetDB());
- const previousPublished=lastPublishedOwnerDB?deepCopy(lastPublishedOwnerDB):null;
+ const previousPublished=lastPublishedOwnerDB?deepCopy(lastPublishedOwnerDB):(ownerRecoveryBaseDB?deepCopy(ownerRecoveryBaseDB):null);
  const currentScore=window.__danbridgeDataScore?.(current)||0;
  if(currentScore===0){cloudStatus('已阻止空白資料上傳；請先確認本機或版本紀錄中的資料。','error');ownerUploadQueued=false;return}
  const hash=dataHash(current);
@@ -1538,22 +1599,35 @@ async function uploadOwnerState(force=false){
  try{
    // V15.29.2：主資料是同步成功的唯一必要條件。老師／校區檢視與舊 ID 遷移改為背景工作，
    // 避免任何附屬文件或歷史遷移卡住，讓畫面永久停在「準備同步」。
-   const immutableAudit=buildImmutableDataAudit(previousPublished,current);
-   const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main'),mainPayload={db:current,updatedAt:serverTimestamp(),updatedBy:cloudUid,clientHash:hash};
-   if(immutableAudit){immutableAudit.eventId=`data-${immutableAudit.beforeHash}-${immutableAudit.afterHash}`;const audit=immutableAuditRecord(immutableAudit);await withSyncTimeout(runTransaction(cloud,async transaction=>{const existing=await transaction.get(audit.ref);transaction.set(mainRef,mainPayload,{merge:false});if(!existing.exists())transaction.set(audit.ref,audit.payload)}),7000)}
-   else await withSyncTimeout(setDoc(mainRef,mainPayload,{merge:false}),7000);
-   lastUploadedHash=hash;lastCloudSnapshotHash=hash;approvedLessonShrinkHash='';ownerRetryCount=0;
+   const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main');
+   const committed=await withSyncTimeout(runTransaction(cloud,async transaction=>{
+     const mainSnap=await transaction.get(mainRef),remoteBefore=mainSnap.exists()?deepCopy(mainSnap.data()?.db):emptyDB(),remoteHash=mainSnap.exists()?(mainSnap.data()?.clientHash||dataHash(remoteBefore)):'';
+     // 舊版恢復標記沒有保存 Base；這種情況以空 Base 做保守合併，寧可保留雙方資料與衝突備份，也不整份覆蓋遠端。
+     const mergeBase=previousPublished||(localDirtyHash?emptyDB():null),baselineHash=mergeBase?dataHash(mergeBase):remoteHash;
+     const mergeResult=remoteHash&&remoteHash!==baselineHash?mergeConcurrentOwnerDB(mergeBase,current,remoteBefore):{db:current,conflicts:[]};
+     const finalDb=mergeResult.db,finalHash=dataHash(finalDb),immutableAudit=buildImmutableDataAudit(remoteBefore,finalDb);
+     let audit=null,existingAudit=null;if(immutableAudit){immutableAudit.eventId=`data-${immutableAudit.beforeHash}-${immutableAudit.afterHash}`;audit=immutableAuditRecord(immutableAudit);existingAudit=await transaction.get(audit.ref)}
+     // 所有 transaction.get 都必須在第一個寫入前完成。
+     const conflictParts=mergeResult.conflicts.length?conflictBackupParts(mergeResult.conflicts):[],conflictRefs=conflictParts.map(()=>doc(collection(cloud,'companies',COMPANY_ID,'syncConflictBackups'))),backupId=conflictRefs[0]?.id||'';
+     transaction.set(mainRef,{db:finalDb,updatedAt:serverTimestamp(),updatedBy:cloudUid,clientHash:finalHash},{merge:false});
+     if(audit&&!existingAudit.exists())transaction.set(audit.ref,audit.payload);
+     conflictRefs.forEach((ref,index)=>transaction.set(ref,{companyId:COMPANY_ID,backupId,actorUid:cloudUid,actorEmail:cloudEmailKey,baseHash:baselineHash,remoteHash,mergedHash:finalHash,conflictCount:mergeResult.conflicts.length,partIndex:index,partCount:conflictParts.length,encoding:'json',payload:conflictParts[index],createdAt:serverTimestamp(),release:APP_RELEASE,environment:DANBRIDGE_ENVIRONMENT},{merge:false}));
+     return{remoteBefore,finalDb,finalHash,conflicts:mergeResult.conflicts.length};
+   }),10000);
+   const latestLocal=deepCopy(window.__danbridgeGetDB()),latestDb=uploadMutationVersion===localMutationVersion?committed.finalDb:mergeConcurrentOwnerDB(current,latestLocal,committed.finalDb).db;
+   applyingCloud=true;window.__danbridgeSetDB(deepCopy(latestDb));persistCurrentLocalView();window.renderAll?.();applyingCloud=false;
+   lastUploadedHash=committed.finalHash;lastCloudSnapshotHash=committed.finalHash;approvedLessonShrinkHash='';ownerRetryCount=0;
    const latestHash=dataHash(window.__danbridgeGetDB());
-   const confirmation=ownerUploadConfirmation(uploadMutationVersion,localMutationVersion,hash,latestHash);
+   const confirmation=ownerUploadConfirmation(uploadMutationVersion,localMutationVersion,committed.finalHash,latestHash);
    if(confirmation.clearDirty){localDirtyHash='';clearOwnerSyncRecovery()}else persistOwnerSyncRecovery();
    if(confirmation.queueNext)ownerUploadQueued=true;
-   cloudStatus(localDirtyHash?'目前變更已同步，另有新變更準備同步…':'已同步到雲端','ok');
+   cloudStatus(localDirtyHash?'目前變更已同步，另有新變更準備同步…':committed.conflicts?`已安全合併同步；${committed.conflicts} 個同筆衝突已保留復原紀錄`:'已同步到雲端','ok');
 
    // 主資料成功後立即發布各角色檢視，不等待通知文件完成。
    publishRoleViewsWithRetry();
 
-   queueScheduleChangeNotifications(previousPublished,current,hash);
-   lastPublishedOwnerDB=deepCopy(current);ownerBaselineReady=true;
+   queueScheduleChangeNotifications(committed.remoteBefore,committed.finalDb,committed.finalHash);
+   lastPublishedOwnerDB=deepCopy(committed.finalDb);ownerBaselineReady=true;
    scheduleDailyCloudBackup();renderSyncRecoveryCenter();
    if(!legacyMigrationStarted){
      legacyMigrationStarted=true;
@@ -1572,6 +1646,7 @@ async function uploadOwnerState(force=false){
 }
 function queueOwnerCloudSave(){
  if(cloudRole!=='owner')return;
+ if(!localDirtyHash)ownerRecoveryBaseDB=lastPublishedOwnerDB?deepCopy(lastPublishedOwnerDB):null;
  localMutationVersion++;
  localDirtyHash=dataHash(window.__danbridgeGetDB());
  persistOwnerSyncRecovery();
