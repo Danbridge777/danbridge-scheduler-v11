@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.8';
+const CLOUD_RELEASE = '20.26.9';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -95,6 +95,7 @@ test('Wendy scheduler stays private, centered and contained on every device', as
       ownerContextActionsHidden: [...document.querySelectorAll('#calendarContextMenu .v20-owner-action')].filter(element=>getComputedStyle(element).display==='none').length,
       filterGrid: getComputedStyle(document.querySelector('#calendar .calendar-toolbar-filters')).gridTemplateColumns,
       filterAlignments: [...document.querySelectorAll('#calendar .calendar-toolbar-filters input,#calendar .calendar-toolbar-filters select')].map(control=>getComputedStyle(control).textAlign),
+      workspaceCardBackground: getComputedStyle(document.querySelector('#calendar>.card')).backgroundColor,
       idleSelectionMarkers: [...document.querySelectorAll('#calendarCanvas .selectable:not(.selected)')].filter(card=>getComputedStyle(card,'::before').display!=='none').length,
       editingToolsHidden: ['#calendar .calendar-head-add','#calendar .calendar-quick-add','#calendar .weekly-copy-btn','#calendar #selectionModeBtn','#calendar .day-add','#calendarContextMenu','#courseDrawerEditBtn'].filter(selector => {
         const element=document.querySelector(selector);return !element||element.hidden||getComputedStyle(element).display==='none';
@@ -113,6 +114,7 @@ test('Wendy scheduler stays private, centered and contained on every device', as
   expect(result.capabilityAllowsEditing).toBe(true);
   expect(result.ownerContextActionsHidden).toBe(0);
   expect(result.filterAlignments.every(value=>value==='center')).toBe(true);
+  expect(result.workspaceCardBackground).toBe('rgb(255, 250, 243)');
   expect(result.idleSelectionMarkers).toBe(0);
   expect(result.editingToolsHidden).toEqual([]);
   expect(result.forbiddenSections).toEqual([]);

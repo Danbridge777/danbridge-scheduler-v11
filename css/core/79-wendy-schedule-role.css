@@ -1,9 +1,32 @@
 /* Wendy: teacher privacy boundary plus all-teacher schedule editing. */
-body.wendy-cloud-role{--wendy:#7657a8;--wendy-soft:#f1ebfa}
+body.wendy-cloud-role{--wendy:#d88a3d;--wendy-soft:#fff6e9;--wendy-card:#fffaf3;--wendy-line:#f1d7b8}
 body.wendy-cloud-role:not(.auth-locked)>header{background:linear-gradient(120deg,#66508f,#8870b4)!important}
 body.wendy-cloud-role:not(.auth-locked)>nav{background:linear-gradient(180deg,#493867,#634d86 55%,#43325e)!important}
 body.wendy-cloud-role:not(.auth-locked)>nav button.active{background:rgba(231,219,250,.22)!important;box-shadow:inset 4px 0 #d9c5f5!important}
-body.wendy-cloud-role .cloud-role-label{color:#7657a8!important}
+body.wendy-cloud-role .cloud-role-label{color:#b76522!important}
+html body.wendy-cloud-role:not(.auth-locked) main section[id]>.card,
+html body.wendy-cloud-role:not(.auth-locked) main section[id] .v32-dashboard-grid>.card,
+html body.wendy-cloud-role:not(.auth-locked) main section[id] .v32-side-stack>.card,
+html body.wendy-cloud-role:not(.auth-locked) main section[id] .metric,
+html body.wendy-cloud-role #courseDrawer,
+html body.wendy-cloud-role #lessonModal .modal{
+ background:linear-gradient(155deg,#fffdf9 0%,var(--wendy-card) 100%)!important;
+ background-color:var(--wendy-card)!important;
+ border-color:var(--wendy-line)!important;
+ box-shadow:0 10px 30px rgba(180,111,42,.08)!important
+}
+html body.wendy-cloud-role.teacher-cloud-role #dashboard .card,
+html body.wendy-cloud-role.teacher-cloud-role #calendar>.card,
+html body.wendy-cloud-role.teacher-cloud-role #lessons>.card{
+ background:linear-gradient(155deg,#fffdf9 0%,#fffaf3 100%)!important;
+ background-color:#fffaf3!important;
+ border-color:#f1d7b8!important
+}
+body.wendy-cloud-role #calendar .calendar-toolbar-v16,
+body.wendy-cloud-role #calendar .calendar-toolbar-v16 .calendar-toolbar-row,
+body.wendy-cloud-role #lessons>.card>.toolbar{background:#fff7ec!important;border-color:#efd7ba!important}
+body.wendy-cloud-role #calendar .calendar-toolbar-v16 .calendar-toolbar-row{border-left-color:#e4a35f!important}
+body.wendy-cloud-role .teacher-lesson-summary{background:#fff5e7!important;border-color:#efd0a8!important;color:#84572d!important}
 body.wendy-cloud-role #calendar .calendar-head-add,
 body.wendy-cloud-role #calendar .calendar-quick-add,
 body.wendy-cloud-role #calendar .weekly-copy-btn,
