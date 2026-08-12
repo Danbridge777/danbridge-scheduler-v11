@@ -13,8 +13,9 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.14';
-const SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com','aa096662336@gmail.com']);
+const APP_RELEASE='20.26.15';
+const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa096662336@gmail.com']);
+const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
@@ -1273,6 +1274,15 @@ async function publishScopedViews(){
      const p=d.data();
      const email=(p.email||d.id||'').trim().toLowerCase();
      if(p.active===false||!email)continue;
+     if(p.role==='teacher'&&p.teacherId&&RETIRED_SCHEDULER_ACCOUNT_EMAILS.has(email)&&p.canManageSchedule===true){
+       const viewDb=filteredTeacherDB(sourceDb,p.teacherId),hash=dataHash(viewDb),key='teacher:'+email;
+       jobs.push(Promise.all([
+         setDoc(d.ref,{canManageSchedule:false,readOnly:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()},{merge:true}),
+         setDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email),{db:viewDb,updatedAt:serverTimestamp(),teacherId:p.teacherId,email,clientHash:hash},{merge:false}),
+         getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email))).then(qs=>Promise.all(qs.docs.map(u=>setDoc(u.ref,{canManageSchedule:false,readOnly:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()},{merge:true}))))
+       ]).then(()=>scopedViewHashCache.set(key,hash)));
+       continue;
+     }
      if(p.role==='teacher'&&p.teacherId&&SCHEDULER_ACCOUNT_EMAILS.has(email)){
        const scopedDb=filteredSchedulerDB(sourceDb),hash=dataHash(scopedDb),key='scheduler:'+email;
        if(p.canManageSchedule===true&&(scopedViewHashCache.get(key)===hash||p.scopedClientHash===hash)){scopedViewHashCache.set(key,hash);continue}

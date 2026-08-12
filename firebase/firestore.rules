@@ -35,12 +35,12 @@ service cloud.firestore {
         : (currentProfileExists() && currentProfile().branchIds is list ? currentProfile().branchIds : []);
     }
     function isTeacher(companyId) { return activeMember(companyId) && access().role == 'teacher' && effectiveTeacherId() != ''; }
-    function canManageSchedule(companyId) { return isTeacher(companyId) && access().canManageSchedule == true; }
+    function canManageSchedule(companyId) { return isTeacher(companyId) && emailKey() == 'aa096662336@gmail.com' && access().canManageSchedule == true; }
     function isManager(companyId) { return activeMember(companyId) && access().role == 'branch_manager' && effectiveTeacherId() != ''; }
     function schedulerGrantAllowed(email, data) {
       return !('canManageSchedule' in data) || data.canManageSchedule != true || (
         data.role == 'teacher'
-        && email in ['wendylee0820520@gmail.com', 'aa096662336@gmail.com']
+        && email == 'aa096662336@gmail.com'
       );
     }
     function ownTeacherId() { return effectiveTeacherId(); }

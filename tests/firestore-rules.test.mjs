@@ -77,7 +77,7 @@ before(async () => {
   testEnv = await initializeTestEnvironment({ projectId: PROJECT_ID });
 });
 
-describe('Wendy 全老師排課權限', () => {
+describe('aa 全老師排課權限', () => {
   test('第二位排課專員具備與 Wendy 相同的最小化排課權限', async () => {
     const db = auth('scheduler-2-uid', SECOND_SCHEDULER_EMAIL);
     const request = { companyId: COMPANY_ID, operation: 'create', lessonId: 'lesson-scheduler-2', lesson: { id: 'lesson-scheduler-2', date: '2026-08-14', start: '10:00', end: '11:00', studentId: 'student-1', teacherId: 'teacher-1', teacherIds: ['teacher-1'], title: 'English', status: '未上課' }, actorUid: 'scheduler-2-uid', actorEmail: SECOND_SCHEDULER_EMAIL, createdAt: serverTimestamp(), status: 'pending' };
@@ -87,14 +87,12 @@ describe('Wendy 全老師排課權限', () => {
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/syncConflictBackups/conflict-1`)));
   });
 
-  test('Wendy 可送出排課要求但仍不能讀取公司主資料或他人回報', async () => {
+  test('舊 Wendy 排課旗標立即失效並恢復純老師權限', async () => {
     const db = auth('wendy-uid', WENDY_EMAIL);
     const request = { companyId: COMPANY_ID, operation: 'create', lessonId: 'lesson-new', lesson: { id: 'lesson-new', date: '2026-08-13', start: '10:00', end: '11:00', studentId: 'student-1', teacherId: 'teacher-2', teacherIds: ['teacher-2'], title: 'English', status: '未上課' }, actorUid: 'wendy-uid', actorEmail: WENDY_EMAIL, createdAt: serverTimestamp(), status: 'pending' };
-    await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/wendy-request`), request));
-    await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/wendy-request`)));
+    await assertFails(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/wendy-request`), request));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/data/main`)));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/lessonReports/lesson-other`)));
-    await assertFails(updateDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/wendy-request`), { status: 'applied' }));
   });
 
   test('一般老師不能偽造 Wendy 排課要求', async () => {
@@ -102,9 +100,9 @@ describe('Wendy 全老師排課權限', () => {
     await assertFails(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/forged`), { companyId: COMPANY_ID, operation: 'delete', lessonId: 'lesson-other', lesson: {}, actorUid: 'teacher-uid', actorEmail: TEACHER_EMAIL, createdAt: serverTimestamp(), status: 'pending' }));
   });
 
-  test('Wendy 排課要求不能夾帶費用或薪資', async () => {
-    const db = auth('wendy-uid', WENDY_EMAIL);
-    const base = { companyId: COMPANY_ID, operation: 'create', lessonId: 'lesson-private', actorUid: 'wendy-uid', actorEmail: WENDY_EMAIL, createdAt: serverTimestamp(), status: 'pending' };
+  test('aa 排課要求不能夾帶費用或薪資', async () => {
+    const db = auth('scheduler-2-uid', SECOND_SCHEDULER_EMAIL);
+    const base = { companyId: COMPANY_ID, operation: 'create', lessonId: 'lesson-private', actorUid: 'scheduler-2-uid', actorEmail: SECOND_SCHEDULER_EMAIL, createdAt: serverTimestamp(), status: 'pending' };
     for (const [index, field] of ['paymentStatus', 'chargeStudent', 'payTeacher'].entries()) {
       const lesson = { id: 'lesson-private', date: '2026-08-13', start: '10:00', end: '11:00', studentId: 'student-1', teacherId: 'teacher-2', teacherIds: ['teacher-2'], [field]: 'forbidden' };
       await assertFails(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/private-${index}`), { ...base, lesson }));
@@ -144,9 +142,10 @@ describe('帳號邀請', () => {
 });
 
 describe('Owner 權限', () => {
-  test('排課專員授權只允許 Wendy 與 aa 白名單帳號', async () => {
+  test('排課專員授權只允許 aa 帳號', async () => {
     const owner = auth('owner-uid', OWNER_EMAIL);
     await assertSucceeds(setDoc(doc(owner, `companyAccess/${SECOND_SCHEDULER_EMAIL}`), { email: SECOND_SCHEDULER_EMAIL, active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-aa', canManageSchedule: true }));
+    await assertFails(setDoc(doc(owner, `companyAccess/${WENDY_EMAIL}`), { email: WENDY_EMAIL, active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-wendy', canManageSchedule: true }));
     await assertFails(setDoc(doc(owner, 'companyAccess/not-approved@gmail.com'), { email: 'not-approved@gmail.com', active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-other', canManageSchedule: true }));
     await assertFails(updateDoc(doc(owner, `companyAccess/${OTHER_TEACHER_EMAIL}`), { canManageSchedule: true }));
     await assertSucceeds(updateDoc(doc(owner, `companyAccess/${OTHER_TEACHER_EMAIL}`), { canManageSchedule: false }));

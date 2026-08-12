@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.14';
+const CLOUD_RELEASE = '20.26.15';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -62,7 +62,6 @@ test('teacher schedule hides the location legend', async ({ page }) => {
 });
 
 for (const schedulerAccount of [
-  { name: 'Wendy', teacherId: 'wendy', email: 'wendylee0820520@gmail.com' },
   { name: 'aa', teacherId: 'aa', email: 'aa096662336@gmail.com' }
 ]) test(`${schedulerAccount.name} scheduler stays private, centered and contained on every device`, async ({ page }) => {
   await page.goto('/index.html', { waitUntil: 'load' });
