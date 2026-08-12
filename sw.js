@@ -1,4 +1,4 @@
-const CACHE_NAME='danbridge-v11-wendy-soft-orange-119';
+const CACHE_NAME='danbridge-v11-wendy-final-orange-120';
 const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png?v=20.18.1','./icon-512.png?v=20.18.1','./icon-1024.png?v=20.18.1','./icon-maskable-192.png?v=20.18.1','./icon-maskable-512.png?v=20.18.1','./css/core/77-pwa-install-and-update.css?v=20.18.0','./js/core/pwa-installation.js?v=20.18.3'];
 
 self.addEventListener('install',event=>{

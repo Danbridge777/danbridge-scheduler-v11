@@ -1,8 +1,8 @@
 /* Wendy: teacher privacy boundary plus all-teacher schedule editing. */
 body.wendy-cloud-role{--wendy:#d88a3d;--wendy-soft:#fff6e9;--wendy-card:#fffaf3;--wendy-line:#f1d7b8}
-body.wendy-cloud-role:not(.auth-locked)>header{background:linear-gradient(120deg,#66508f,#8870b4)!important}
-body.wendy-cloud-role:not(.auth-locked)>nav{background:linear-gradient(180deg,#493867,#634d86 55%,#43325e)!important}
-body.wendy-cloud-role:not(.auth-locked)>nav button.active{background:rgba(231,219,250,.22)!important;box-shadow:inset 4px 0 #d9c5f5!important}
+body.wendy-cloud-role:not(.auth-locked)>header{background:linear-gradient(120deg,#d8924c,#e9ad6d)!important}
+body.wendy-cloud-role:not(.auth-locked)>nav{background:linear-gradient(180deg,#b96f32,#cf8749 55%,#a95f28)!important}
+body.wendy-cloud-role:not(.auth-locked)>nav button.active{background:rgba(255,241,220,.24)!important;box-shadow:inset 4px 0 #ffe0b8!important}
 body.wendy-cloud-role .cloud-role-label{color:#b76522!important}
 html body.wendy-cloud-role:not(.auth-locked) main section[id]>.card,
 html body.wendy-cloud-role:not(.auth-locked) main section[id] .v32-dashboard-grid>.card,
@@ -66,8 +66,8 @@ body.wendy-cloud-role #lessonModal #payTeacher,
 body.wendy-cloud-role>.floating-actions .v20-owner-action,
 body.wendy-cloud-role #v18Fab,
 body.wendy-cloud-role #v18FabMenu{display:none!important}
-body.wendy-cloud-role #lessonModal .modal{border-color:#d5c6eb!important;box-shadow:0 28px 70px rgba(73,56,103,.28)!important}
-body.wendy-cloud-role #lessonModal .btn.primary{background:linear-gradient(135deg,#7657a8,#604386)!important;border-color:#604386!important}
+body.wendy-cloud-role #lessonModal .modal{border-color:#f0d0aa!important;box-shadow:0 28px 70px rgba(155,91,35,.18)!important}
+body.wendy-cloud-role #lessonModal .btn.primary{background:linear-gradient(135deg,#d88a3d,#bc6d2d)!important;border-color:#bc6d2d!important}
 body.wendy-cloud-role #lessonModal,
 body.wendy-cloud-role #lessonModal .modal,
 body.wendy-cloud-role #lessonModal .grid,
@@ -80,6 +80,15 @@ body.wendy-cloud-role #lessonModal select,
 body.wendy-cloud-role #calendar input,
 body.wendy-cloud-role #calendar select{text-align:center!important;text-align-last:center!important;line-height:1.25!important;padding-left:38px!important;padding-right:38px!important}
 body.wendy-cloud-role #calendar option{text-align:center!important}
+body.wendy-cloud-role #lessonModal #lessonTeacher{
+ -webkit-appearance:none!important;appearance:none!important;
+ width:100%!important;padding:0 54px!important;text-indent:0!important;
+ text-align:center!important;text-align-last:center!important;
+ background-color:#fff!important;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23596876' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E")!important;
+ background-repeat:no-repeat!important;background-position:right 18px center!important;background-size:16px!important
+}
+body.wendy-cloud-role #lessonModal #lessonTeacher option{text-align:center!important}
 body.wendy-cloud-role #lessonModal input[type="date"],
 body.wendy-cloud-role #lessonModal input[type="time"]{display:block!important;width:100%!important;padding-inline:14px!important;min-height:54px!important;height:54px!important}
 body.wendy-cloud-role #lessonModal .grid{width:100%!important;margin-inline:0!important}

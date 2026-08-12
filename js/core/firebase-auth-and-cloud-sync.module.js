@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.9';
+const APP_RELEASE='20.26.10';
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
@@ -983,6 +983,7 @@ window.currentCloudRole=function(){return cloudRole};
 
 function installTeacherReportUI(){
  window.editLesson=(id)=>{
+   if(cloudRole==='teacher'&&cloudCanManageSchedule)return originalEditLesson?.(id);
    if(cloudRole==='teacher')return openTeacherReportModal(id);
    if(cloudRole==='branch_manager'){
      const lesson=window.__danbridgeGetDB?.().lessons.find(l=>l.id===id);
