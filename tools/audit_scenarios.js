@@ -311,7 +311,9 @@ assert.equal(context.dataHash({b:1,a:{d:2,c:3}}),context.dataHash({a:{c:3,d:2},b
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:95},(_,i)=>({id:`l${i}`}))}).risky,false,'a small lesson adjustment does not trigger the destructive-change guard');
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:80},(_,i)=>({id:`l${i}`}))}).risky,true,'a large lesson reduction triggers the destructive-change guard');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.12'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.13'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /SCHEDULER_ACCOUNT_EMAILS=new Set\(\['wendylee0820520@gmail\.com','aa096662336@gmail\.com'\]\)/, 'the scheduler allowlist contains Wendy and the second approved scheduler account');
+assert.match(cloudSource, /canManageSchedule&&!SCHEDULER_ACCOUNT_EMAILS\.has\(email\)/, 'owner account management only grants all-teacher scheduling to allowlisted Gmail accounts');
 assert.match(cloudSource, /function applySchedulerRequest\(requestRef,data\)[\s\S]*runTransaction[\s\S]*transaction\.set\(mainRef[\s\S]*transaction\.set\(requestRef,\{status:'applied'/, 'Wendy main-data application and request acknowledgement commit atomically');
 assert.doesNotMatch(cloudSource, /\}\);\s*if\(notificationBefore&&notificationAfter\)[\s\S]*await setDoc\(requestRef,\{status:'applied'/, 'Wendy request acknowledgement is never written outside its main-data transaction');
 assert.match(cloudSource, /function uploadOwnerState\(force=false\)[\s\S]*ownerLessonShrinkRisk\(previousPublished,current\)[\s\S]*confirm\(`[\s\S]*已阻止大量課程減少/, 'owner uploads require explicit confirmation before a large lesson reduction can replace cloud data');

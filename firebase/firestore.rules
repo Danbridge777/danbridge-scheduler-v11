@@ -37,6 +37,12 @@ service cloud.firestore {
     function isTeacher(companyId) { return activeMember(companyId) && access().role == 'teacher' && effectiveTeacherId() != ''; }
     function canManageSchedule(companyId) { return isTeacher(companyId) && access().canManageSchedule == true; }
     function isManager(companyId) { return activeMember(companyId) && access().role == 'branch_manager' && effectiveTeacherId() != ''; }
+    function schedulerGrantAllowed(email, data) {
+      return !('canManageSchedule' in data) || data.canManageSchedule != true || (
+        data.role == 'teacher'
+        && email in ['wendylee0820520@gmail.com', 'aa096662336@gmail.com']
+      );
+    }
     function ownTeacherId() { return effectiveTeacherId(); }
     function ownLessonReport(data) {
       return data.reportedForTeacherIds is list && data.reportedForTeacherIds.hasAny([ownTeacherId()]);
@@ -119,13 +125,15 @@ service cloud.firestore {
 
     match /companyAccess/{email} {
       allow read: if isOwner() || (signedIn() && email == emailKey());
-      allow create: if isPrimaryOwner() || (isOwner()
+      allow create: if (isPrimaryOwner() || (isOwner()
         && email != 'a0965487920@gmail.com'
-        && request.resource.data.role != 'owner');
-      allow update: if isPrimaryOwner() || (isOwner()
+        && request.resource.data.role != 'owner'))
+        && schedulerGrantAllowed(email, request.resource.data);
+      allow update: if (isPrimaryOwner() || (isOwner()
         && email != 'a0965487920@gmail.com'
         && resource.data.role != 'owner'
-        && request.resource.data.role != 'owner');
+        && request.resource.data.role != 'owner'))
+        && schedulerGrantAllowed(email, request.resource.data);
       allow delete: if isPrimaryOwner() || (isOwner()
         && email != 'a0965487920@gmail.com'
         && resource.data.role != 'owner');

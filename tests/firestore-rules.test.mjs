@@ -26,6 +26,7 @@ const OWNER_EMAIL = 'a0965487920@gmail.com';
 const BACKUP_OWNER_EMAIL = 'backup-owner@gmail.com';
 const TEACHER_EMAIL = 'teacher@example.com';
 const WENDY_EMAIL = 'wendylee0820520@gmail.com';
+const SECOND_SCHEDULER_EMAIL = 'aa096662336@gmail.com';
 const OTHER_TEACHER_EMAIL = 'other@example.com';
 const MANAGER_EMAIL = 'manager@example.com';
 const INACTIVE_EMAIL = 'inactive@example.com';
@@ -43,6 +44,7 @@ async function seed() {
     const rows = [
       [`companyAccess/${TEACHER_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1' }],
       [`companyAccess/${WENDY_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1', canManageSchedule: true, scopedDb: { lessons: [], students: [], teachers: [] } }],
+      [`companyAccess/${SECOND_SCHEDULER_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-2', canManageSchedule: true, scopedDb: { lessons: [], students: [], teachers: [] } }],
       [`companyAccess/${OTHER_TEACHER_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-2' }],
       [`companyAccess/${MANAGER_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'branch_manager', teacherId: 'manager-teacher', branchIds: ['branch-a'] }],
       [`companyAccess/${INACTIVE_EMAIL}`, { active: false, companyId: COMPANY_ID, role: 'teacher', teacherId: 'inactive-teacher' }],
@@ -76,6 +78,15 @@ before(async () => {
 });
 
 describe('Wendy 全老師排課權限', () => {
+  test('第二位排課專員具備與 Wendy 相同的最小化排課權限', async () => {
+    const db = auth('scheduler-2-uid', SECOND_SCHEDULER_EMAIL);
+    const request = { companyId: COMPANY_ID, operation: 'create', lessonId: 'lesson-scheduler-2', lesson: { id: 'lesson-scheduler-2', date: '2026-08-14', start: '10:00', end: '11:00', studentId: 'student-1', teacherId: 'teacher-1', teacherIds: ['teacher-1'], title: 'English', status: '未上課' }, actorUid: 'scheduler-2-uid', actorEmail: SECOND_SCHEDULER_EMAIL, createdAt: serverTimestamp(), status: 'pending' };
+    await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/scheduler-2-request`), request));
+    await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/scheduler-2-request`)));
+    await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/data/main`)));
+    await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/syncConflictBackups/conflict-1`)));
+  });
+
   test('Wendy 可送出排課要求但仍不能讀取公司主資料或他人回報', async () => {
     const db = auth('wendy-uid', WENDY_EMAIL);
     const request = { companyId: COMPANY_ID, operation: 'create', lessonId: 'lesson-new', lesson: { id: 'lesson-new', date: '2026-08-13', start: '10:00', end: '11:00', studentId: 'student-1', teacherId: 'teacher-2', teacherIds: ['teacher-2'], title: 'English', status: '未上課' }, actorUid: 'wendy-uid', actorEmail: WENDY_EMAIL, createdAt: serverTimestamp(), status: 'pending' };
@@ -133,6 +144,14 @@ describe('帳號邀請', () => {
 });
 
 describe('Owner 權限', () => {
+  test('排課專員授權只允許 Wendy 與 aa 白名單帳號', async () => {
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    await assertSucceeds(setDoc(doc(owner, `companyAccess/${SECOND_SCHEDULER_EMAIL}`), { email: SECOND_SCHEDULER_EMAIL, active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-aa', canManageSchedule: true }));
+    await assertFails(setDoc(doc(owner, 'companyAccess/not-approved@gmail.com'), { email: 'not-approved@gmail.com', active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-other', canManageSchedule: true }));
+    await assertFails(updateDoc(doc(owner, `companyAccess/${OTHER_TEACHER_EMAIL}`), { canManageSchedule: true }));
+    await assertSucceeds(updateDoc(doc(owner, `companyAccess/${OTHER_TEACHER_EMAIL}`), { canManageSchedule: false }));
+  });
+
   test('Wendy request 狀態與公司主資料可由 Owner 原子完成', async () => {
     const owner = auth('owner-uid', OWNER_EMAIL);
     const requestRef = doc(owner, `companies/${COMPANY_ID}/scheduleRequests/atomic-wendy`);

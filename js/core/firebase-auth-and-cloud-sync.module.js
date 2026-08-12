@@ -13,7 +13,8 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.12';
+const APP_RELEASE='20.26.13';
+const SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com','aa096662336@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
@@ -505,7 +506,7 @@ async function renderCloudUserManager(){
  const sec=document.getElementById('security');if(!sec)return;
  let card=document.getElementById('cloudUserManager');
  if(!card){card=document.createElement('div');card.id='cloudUserManager';card.className='card col-4';sec.querySelector('.grid')?.appendChild(card)}
- card.innerHTML=`<h2>老師帳號</h2><div class="small">一般老師只能查看自己的課表。只有指定的 Wendy 帳號可額外管理所有老師課表，且仍看不到費用、家長、薪資與公司資料。</div><label>老師</label><select id="cloudTeacherSelect"></select><label>老師 Gmail</label><input id="cloudTeacherEmail" type="email" placeholder="teacher@gmail.com"><label class="wendy-access-choice"><input id="cloudTeacherScheduleAccess" type="checkbox"> <span>角色顯示 Wendy，額外開放全老師排課</span></label><br><button class="btn primary" id="saveCloudTeacherAccess">建立／更新老師邀請</button><div id="cloudTeacherAccessList" class="backup-list" style="margin-top:12px"></div>`;
+ card.innerHTML=`<h2>老師帳號</h2><div class="small">一般老師只能查看自己的課表。只有指定的排課專員帳號可額外管理所有老師課表，且仍看不到費用、家長、薪資與公司資料。</div><label>老師</label><select id="cloudTeacherSelect"></select><label>老師 Gmail</label><input id="cloudTeacherEmail" type="email" placeholder="teacher@gmail.com"><label class="wendy-access-choice"><input id="cloudTeacherScheduleAccess" type="checkbox"> <span>角色顯示排課專員，額外開放全老師排課</span></label><br><button class="btn primary" id="saveCloudTeacherAccess">建立／更新老師邀請</button><div id="cloudTeacherAccessList" class="backup-list" style="margin-top:12px"></div>`;
  const sel=document.getElementById('cloudTeacherSelect');sel.innerHTML='<option value="">請選擇老師</option>'+window.__danbridgeGetDB().teachers.filter(t=>!t.archivedAt).map(t=>`<option value="${t.id}">${teacherBadgeName(t)||t.name}</option>`).join('');
  document.getElementById('saveCloudTeacherAccess').onclick=async()=>{
    const teacherId=sel.value,email=document.getElementById('cloudTeacherEmail').value.trim().toLowerCase(),canManageSchedule=document.getElementById('cloudTeacherScheduleAccess')?.checked===true;
@@ -513,8 +514,8 @@ async function renderCloudUserManager(){
    const t=window.__danbridgeGetDB().teachers.find(x=>x.id===teacherId);
    const existing=await getDoc(doc(cloud,'companyAccess',email));
    if(!confirmCloudRoleTransition(existing,'teacher',email))return;
-   if(canManageSchedule&&email!=='wendylee0820520@gmail.com')return alert('全老師排課只允許指定的 Wendy Gmail。');
-   if(canManageSchedule&&!confirm(`確定讓 ${email} 以 Wendy 角色管理所有老師課表？她仍無法查看費用、家長、薪資與公司資料。`))return;
+   if(canManageSchedule&&!SCHEDULER_ACCOUNT_EMAILS.has(email))return alert('全老師排課只允許指定的排課專員 Gmail。');
+   if(canManageSchedule&&!confirm(`確定讓 ${email} 以排課專員角色管理所有老師課表？此帳號仍無法查看費用、家長、薪資與公司資料。`))return;
    const scopedDb=canManageSchedule?filteredSchedulerDB(window.__danbridgeGetDB()):deleteField();
    const payload={email,role:'teacher',companyId:COMPANY_ID,teacherId,teacherName:teacherBadgeName(t),active:true,canManageSchedule,branchIds:deleteField(),branchNames:deleteField(),managerName:deleteField(),readOnly:canManageSchedule?false:deleteField(),canSubmitOwnReports:deleteField(),scopedDb,scopedClientHash:canManageSchedule?dataHash(scopedDb):deleteField(),scopedUpdatedAt:canManageSchedule?serverTimestamp():deleteField(),updatedAt:serverTimestamp()};
    if(!existing.exists()){payload.invitedAt=serverTimestamp();payload.invitedBy=cloudEmailKey||OWNER_EMAIL}
@@ -606,7 +607,7 @@ window.__danbridgeDisableTeacherAccessForArchive=disableTeacherAccessForArchive;
 async function listCloudTeacherAccess(){
  const box=document.getElementById('cloudTeacherAccessList');if(!box||cloudRole!=='owner')return;
  const [qs,logins]=await Promise.all([getDocs(query(collection(cloud,'companyAccess'),where('companyId','==',COMPANY_ID))),lastLoginByEmail()]);
- box.innerHTML=qs.docs.filter(d=>d.data()?.role==='teacher').map(d=>{const x=d.data();const email=String(x.email||d.id).toLowerCase(),login=logins.get(email),last=login?.label||'尚未登入',active=x.active!==false,state=cloudInvitationState(active,!!login);return `<div class="backup-item ${x.canManageSchedule===true?'wendy-access-item':''}"><div class="info"><b>${escapeHTML(x.canManageSchedule===true?'Wendy':(x.teacherName||'老師'))}</b><div class="small">${escapeHTML(email)}<br>${x.canManageSchedule===true?'一般老師＋全老師排課<br>':''}最後登入：${escapeHTML(last)}</div></div><div class="row-actions"><span class="pill ${state.className}">${state.label}</span><button type="button" class="btn cloud-invitation-copy" data-email="${escapeHTML(email)}">複製登入邀請</button><button type="button" class="btn cloud-access-toggle" data-email="${escapeHTML(email)}" data-active="${active?'true':'false'}">${active?'停權':'重新啟用'}</button><button type="button" class="btn danger cloud-access-delete" data-email="${escapeHTML(email)}" data-name="${escapeHTML(x.teacherName||'老師')}">刪除權限</button></div></div>`}).join('')||'<span class="small">尚未建立老師 Gmail 邀請。</span>';
+ box.innerHTML=qs.docs.filter(d=>d.data()?.role==='teacher').map(d=>{const x=d.data();const email=String(x.email||d.id).toLowerCase(),login=logins.get(email),last=login?.label||'尚未登入',active=x.active!==false,state=cloudInvitationState(active,!!login);return `<div class="backup-item ${x.canManageSchedule===true?'wendy-access-item':''}"><div class="info"><b>${escapeHTML(x.canManageSchedule===true?'排課專員':(x.teacherName||'老師'))}</b><div class="small">${escapeHTML(email)}<br>${x.canManageSchedule===true?'一般老師＋全老師排課<br>':''}最後登入：${escapeHTML(last)}</div></div><div class="row-actions"><span class="pill ${state.className}">${state.label}</span><button type="button" class="btn cloud-invitation-copy" data-email="${escapeHTML(email)}">複製登入邀請</button><button type="button" class="btn cloud-access-toggle" data-email="${escapeHTML(email)}" data-active="${active?'true':'false'}">${active?'停權':'重新啟用'}</button><button type="button" class="btn danger cloud-access-delete" data-email="${escapeHTML(email)}" data-name="${escapeHTML(x.teacherName||'老師')}">刪除權限</button></div></div>`}).join('')||'<span class="small">尚未建立老師 Gmail 邀請。</span>';
  box.querySelectorAll('.cloud-invitation-copy').forEach(btn=>btn.onclick=()=>copyCloudLoginInvitation(btn.dataset.email));
  box.querySelectorAll('.cloud-access-toggle').forEach(btn=>btn.onclick=()=>setCloudAccessActive(btn.dataset.email,btn.dataset.active!=='true'));
  box.querySelectorAll('.cloud-access-delete').forEach(btn=>btn.onclick=()=>removeCloudTeacherAccess(btn.dataset.email,btn.dataset.name));
@@ -1136,7 +1137,7 @@ function applyRoleUI(profile,user){
    setDoc(ownerRef,{displayName:signedInName,updatedAt:serverTimestamp()},{merge:true}).catch(error=>console.warn('owner display name sync failed',error));
  }
  const header=document.querySelector('.header-auth-actions');
- if(header)header.innerHTML=`<span class="cloud-role-label" style="font-size:12px;font-weight:800">${cloudCanManageSchedule?'Wendy':(window.DanbridgeAccess?.ROLE_LABELS?.[profile.role]||profile.role)}｜${String(signedInName).trim()}</span>${profile.role==='owner'?'<button type="button" class="btn notification-bell" onclick="DanbridgeNotifications.open()" aria-label="開啟通知中心"><span class="notification-bell-icon">🔔</span><span id="notificationCount" class="notification-count" hidden>0</span></button>':''}<button type="button" class="btn" id="firebaseLogoutBtn">登出</button>`;
+ if(header)header.innerHTML=`<span class="cloud-role-label" style="font-size:12px;font-weight:800">${cloudCanManageSchedule?'排課專員':(window.DanbridgeAccess?.ROLE_LABELS?.[profile.role]||profile.role)}｜${String(signedInName).trim()}</span>${profile.role==='owner'?'<button type="button" class="btn notification-bell" onclick="DanbridgeNotifications.open()" aria-label="開啟通知中心"><span class="notification-bell-icon">🔔</span><span id="notificationCount" class="notification-count" hidden>0</span></button>':''}<button type="button" class="btn" id="firebaseLogoutBtn">登出</button>`;
  document.getElementById('firebaseLogoutBtn')?.addEventListener('click',()=>signOut(auth));
  document.body.classList.toggle('teacher-cloud-role',profile.role==='teacher');
  document.body.classList.toggle('branch-manager-cloud-role',profile.role==='branch_manager');
