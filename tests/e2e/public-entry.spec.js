@@ -1,20 +1,20 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.25.9';
+const CLOUD_RELEASE = '20.25.10';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
 const ROLE_UX_RELEASE = '20.20.1';
-const ROLE_UX_STYLE_RELEASE = '20.25.9';
+const ROLE_UX_STYLE_RELEASE = '20.25.10';
 const PWA_RELEASE = '20.18.3';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
 const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.5';
 const SCHEDULER_UI_RELEASE = '20.25.0';
-const PREMIUM_CONTROLS_RELEASE = '20.25.9';
+const PREMIUM_CONTROLS_RELEASE = '20.25.10';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
   await page.route('https://www.gstatic.com/**', route => route.abort());
@@ -123,6 +123,60 @@ test('lesson start and end time values are centered with balanced inset', async 
     expect(field.textAlign).toBe('center');
     expect(Math.abs(field.paddingLeft - field.paddingRight)).toBeLessThanOrEqual(1);
     expect(field.paddingLeft).toBeGreaterThanOrEqual(field.viewportWidth <= 700 ? 16 : 40);
+  }
+});
+
+test('mobile lesson date and all single-line editor controls are contained and centered', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'load' });
+  const result = await page.evaluate(() => {
+    const backdrop = document.getElementById('lessonModal');
+    backdrop.classList.add('show');
+    const modal = backdrop.querySelector('.modal');
+    const modalRect = modal.getBoundingClientRect();
+    const date = document.getElementById('lessonDate');
+    date.value = '2026-08-10';
+    const dateRect = date.getBoundingClientRect();
+    const controls = [...modal.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),select,.btn')]
+      .filter(control => {
+        const style = getComputedStyle(control);
+        const rect = control.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+      })
+      .map(control => {
+        const style = getComputedStyle(control);
+        const rect = control.getBoundingClientRect();
+        return {
+          id: control.id || control.textContent.trim().slice(0, 20),
+          align: style.textAlign,
+          lineHeight: style.lineHeight,
+          top: rect.top,
+          bottom: rect.bottom,
+          left: rect.left,
+          right: rect.right,
+          height: rect.height
+        };
+      });
+    return {
+      viewportWidth: innerWidth,
+      modalLeft: modalRect.left,
+      modalRight: modalRect.right,
+      dateLeft: dateRect.left,
+      dateRight: dateRect.right,
+      dateHeight: dateRect.height,
+      dateAlign: getComputedStyle(date).textAlign,
+      controls
+    };
+  });
+  expect(result.dateAlign).toBe('center');
+  expect(result.dateHeight).toBeLessThanOrEqual(52);
+  expect(result.dateHeight).toBeGreaterThanOrEqual(48);
+  expect(result.dateLeft).toBeGreaterThanOrEqual(result.modalLeft + 14);
+  expect(result.dateRight).toBeLessThanOrEqual(result.modalRight - 14);
+  for (const control of result.controls) {
+    expect(control.align, control.id).toBe('center');
+    expect(control.left, control.id).toBeGreaterThanOrEqual(result.modalLeft + 14);
+    expect(control.right, control.id).toBeLessThanOrEqual(result.modalRight - 14);
+    expect(control.height, control.id).toBeLessThanOrEqual(52);
   }
 });
 
