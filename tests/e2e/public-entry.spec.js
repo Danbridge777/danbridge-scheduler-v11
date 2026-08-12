@@ -61,12 +61,15 @@ test('teacher schedule hides the location legend', async ({ page }) => {
   await expect(page.locator('#calendar .location-legend')).toBeHidden();
 });
 
-test('Wendy scheduler stays private, centered and contained on every device', async ({ page }) => {
+for (const schedulerAccount of [
+  { name: 'Wendy', teacherId: 'wendy', email: 'wendylee0820520@gmail.com' },
+  { name: 'aa', teacherId: 'aa', email: 'aa096662336@gmail.com' }
+]) test(`${schedulerAccount.name} scheduler stays private, centered and contained on every device`, async ({ page }) => {
   await page.goto('/index.html', { waitUntil: 'load' });
-  const result = await page.evaluate(() => {
+  const result = await page.evaluate(schedulerAccount => {
     document.body.classList.remove('auth-locked');
     document.body.classList.add('teacher-cloud-role');
-    window.DanbridgeAccess.setContext({role:'teacher',teacherId:'wendy',email:'wendylee0820520@gmail.com',canManageSchedule:true});
+    window.DanbridgeAccess.setContext({role:'teacher',teacherId:schedulerAccount.teacherId,email:schedulerAccount.email,canManageSchedule:true});
     window.DanbridgeRoleResponsive?.apply?.();
     window.renderCalendar?.();
     const sampleLesson=db.lessons[0];
@@ -105,7 +108,7 @@ test('Wendy scheduler stays private, centered and contained on every device', as
       }),
       forbiddenSections: ['students','teachers','makeups','camps','finance','data','security'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none')
     };
-  });
+  }, schedulerAccount);
   expect(result.modalLeft).toBeGreaterThanOrEqual(0);
   expect(result.modalRight).toBeLessThanOrEqual(result.viewportWidth + 1);
   expect(result.overflow).toBeLessThanOrEqual(1);

@@ -158,7 +158,7 @@
   "package.json": "55c5e2246c1bb18bec02fa0d676687511e59a6863e478c73659cb220c20c315f",
   "playwright.config.js": "4ecb8abe8c4b8e4044f664c8d9b4677c9d34fbbc1ccb652cf12948ede863df24",
   "sw.js": "062d47065a26434b08105dc25ea0ff975732e0bf0115f34488d45ca9c7b5be4d",
-  "tests/e2e/public-entry.spec.js": "98f9eacda69a2c9ee6f4d8e4d990b53349eec94f7eee777fb904fb7e27e379bc",
+  "tests/e2e/public-entry.spec.js": "4af8d248849d238e7e404805daf9b0b6dfa111c4f6879309ee64aa766e85ea2f",
   "tests/firestore-rules.test.mjs": "d10203c8c9a2796c22fbf3d28f171baf423a276f51b1554acfa1fd4701de238d",
   "tools/audit_calendar_scenarios.js": "df4f6d35db6ae22c6bf4c5b2fc30ba15fc1575f75d93d7a5114474b9127e32d5",
   "tools/audit_full_system.js": "e2158b5a6f8772cf7906c615c00257c302b13a9c3bc8d2e75b7e1e21571a5383",
