@@ -1,19 +1,20 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.25.8';
+const CLOUD_RELEASE = '20.25.9';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
 const ROLE_UX_RELEASE = '20.20.1';
-const ROLE_UX_STYLE_RELEASE = '20.25.8';
+const ROLE_UX_STYLE_RELEASE = '20.25.9';
 const PWA_RELEASE = '20.18.3';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
 const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.5';
 const SCHEDULER_UI_RELEASE = '20.25.0';
+const PREMIUM_CONTROLS_RELEASE = '20.25.9';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
   await page.route('https://www.gstatic.com/**', route => route.abort());
@@ -44,6 +45,7 @@ test('critical teacher and finance resources load the current release', async ({
   expect(styles).toContain(`./css/core/73-v20014-role-responsive-ux.css?v=${ROLE_UX_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/77-pwa-install-and-update.css?v=${PWA_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/67-v185-interface-clarity.css?v=${INTERFACE_CLARITY_STYLE_RELEASE}`);
+  expect(styles).toContain(`./css/core/78-v20259-premium-responsive-controls.css?v=${PREMIUM_CONTROLS_RELEASE}`);
   const manifest = await page.locator('link[rel="manifest"]').getAttribute('href');
   expect(manifest).toBe('./manifest.webmanifest');
   const appleIcon = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
@@ -252,6 +254,45 @@ test('mobile lesson dates, record month and form controls use consistent typogra
     expect(result.inputSize).toBe(result.buttonSize);
   }
   expect(result.colorWidth).toBeLessThanOrEqual(70);
+});
+
+test('all workspaces use the unified responsive control system', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'load' });
+  const result = await page.evaluate(() => {
+    document.body.classList.remove('auth-locked');
+    const sections = [...document.querySelectorAll('main section')];
+    const problems = [];
+    const expectedFieldHeight = 44;
+    const expectedButtonHeight = 44;
+    for (const section of sections) {
+      sections.forEach(item => item.classList.toggle('active', item === section));
+      const controls = section.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="hidden"]),select,textarea');
+      for (const control of controls) {
+        const style = getComputedStyle(control);
+        if (style.display === 'none' || style.visibility === 'hidden') continue;
+        const rect = control.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) continue;
+        const cssHeight = parseFloat(style.height);
+        if (cssHeight + 1 < expectedFieldHeight || rect.right > innerWidth + 1 || rect.left < -1) problems.push(`${section.id}:${control.id || control.tagName}:field:h${Math.round(cssHeight)}:l${Math.round(rect.left)}:r${Math.round(rect.right)}:vw${innerWidth}`);
+      }
+      for (const button of section.querySelectorAll('.btn')) {
+        const style = getComputedStyle(button);
+        if (style.display === 'none' || style.visibility === 'hidden') continue;
+        const rect = button.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) continue;
+        const cssMinHeight = parseFloat(style.minHeight);
+        if (cssMinHeight + 1 < expectedButtonHeight || rect.right > innerWidth + 1 || rect.left < -1) problems.push(`${section.id}:${button.id || button.textContent.trim().slice(0,20)}:button:h${Math.round(cssMinHeight)}:l${Math.round(rect.left)}:r${Math.round(rect.right)}:vw${innerWidth}`);
+      }
+    }
+    return {
+      problems,
+      expectedFieldHeight,
+      expectedButtonHeight,
+      premiumSheet: [...document.styleSheets].find(sheet => sheet.href?.includes('78-v20259'))?.href || ''
+    };
+  });
+  expect(result.premiumSheet).toContain('78-v20259-premium-responsive-controls.css');
+  expect(result.problems).toEqual([]);
 });
 
 test('winter and summer registration month stays inside its card', async ({ page }) => {
