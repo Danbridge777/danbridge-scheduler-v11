@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.4';
+const CLOUD_RELEASE = '20.26.5';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -143,7 +143,7 @@ test('iPad lesson start and end fields do not overlap', async ({ page }) => {
     const reference = document.getElementById('lessonTitle').getBoundingClientRect();
     const startStyle = getComputedStyle(document.getElementById('startTime'));
     const endStyle = getComputedStyle(document.getElementById('endTime'));
-    return { startLeft: start.left, startRight: start.right, startBottom: start.bottom, endLeft: end.left, endRight: end.right, endTop: end.top, startWidth: start.width, endWidth: end.width, referenceLeft: reference.left, referenceRight: reference.right, viewportWidth: innerWidth, startAppearance: startStyle.webkitAppearance || startStyle.appearance, endAppearance: endStyle.webkitAppearance || endStyle.appearance };
+    return { startLeft: start.left, startRight: start.right, startBottom: start.bottom, endLeft: end.left, endRight: end.right, endTop: end.top, startWidth: start.width, endWidth: end.width, referenceLeft: reference.left, referenceRight: reference.right, viewportWidth: innerWidth, startFormat: document.getElementById('startTime').dataset.timeFormat, endFormat: document.getElementById('endTime').dataset.timeFormat };
   });
   expect(boxes.endLeft >= boxes.startRight || boxes.endTop >= boxes.startBottom).toBe(true);
   expect(Math.abs(boxes.startWidth - boxes.endWidth)).toBeLessThanOrEqual(2);
@@ -152,8 +152,8 @@ test('iPad lesson start and end fields do not overlap', async ({ page }) => {
     expect(Math.abs(boxes.endLeft - boxes.referenceLeft)).toBeLessThanOrEqual(2);
     expect(boxes.startRight).toBeLessThanOrEqual(boxes.referenceRight + 1);
     expect(boxes.endRight).toBeLessThanOrEqual(boxes.referenceRight + 1);
-    expect(boxes.startAppearance).toBe('none');
-    expect(boxes.endAppearance).toBe('none');
+    expect(boxes.startFormat).toBe('24-hour');
+    expect(boxes.endFormat).toBe('24-hour');
   }
 });
 
@@ -167,6 +167,21 @@ test('lesson start and end time values are centered with balanced inset', async 
     expect(field.textAlign).toBe('center');
     expect(Math.abs(field.paddingLeft - field.paddingRight)).toBeLessThanOrEqual(1);
     expect(field.paddingLeft).toBeGreaterThanOrEqual(field.viewportWidth <= 700 ? 16 : 40);
+  }
+});
+
+test('all editable time fields use locale-independent 24-hour controls', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'load' });
+  const result = await page.evaluate(() => ['startTime','endTime','campTimeStart','campTimeEnd','winterCampTimeStart','winterCampTimeEnd'].map(id => {
+    const field=document.getElementById(id);
+    return {id,tag:field?.tagName,format:field?.dataset.timeFormat,first:field?.options?.[0]?.textContent,last:field?.options?.[field.options.length-1]?.textContent,count:field?.options?.length};
+  }));
+  for(const field of result){
+    expect(field.tag).toBe('SELECT');
+    expect(field.format).toBe('24-hour');
+    expect(field.first).toBe('00:00');
+    expect(field.last).toBe('23:55');
+    expect(field.count).toBe(288);
   }
 });
 

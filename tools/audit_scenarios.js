@@ -272,7 +272,9 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.4'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.5'/, 'operational errors identify the current deployed release');
+const timeControlSource=fs.readFileSync(path.join(root,'js/ui/24-hour-time-controls.js'),'utf8');
+assert.match(timeControlSource, /length:24\*12[\s\S]*padStart\(2,'0'\)[\s\S]*input\[type="time"\]/, 'all editable times use fixed HH:mm values instead of device locale formatting');
 assert.match(cloudSource,/cloudEmailKey!==OWNER_EMAIL[\s\S]*只有主要 Owner 可以新增或更新其他 Owner/,'only the primary owner can create or update backup owners');
 assert.match(cloudSource,/email===OWNER_EMAIL[\s\S]*主要 Owner 帳號受保護，不能停權/,'the primary owner cannot be disabled from the account UI');
 const convenienceSource=fs.readFileSync(path.join(root,'js/app/v18-convenience-suite.js'),'utf8');

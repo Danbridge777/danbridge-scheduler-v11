@@ -1,0 +1,15 @@
+/* Locale-independent 24-hour time controls. */
+select.danbridge-24-hour-time{
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  min-height:54px!important;
+  height:54px!important;
+  box-sizing:border-box!important;
+  padding-inline:44px!important;
+  text-align:center!important;
+  text-align-last:center!important;
+  font-variant-numeric:tabular-nums!important;
+}
+@media(max-width:700px){select.danbridge-24-hour-time{padding-inline:18px!important}}
