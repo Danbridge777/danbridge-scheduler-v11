@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.15';
+const APP_RELEASE='20.26.16';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa096662336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1751,7 +1751,7 @@ function subscribeOwner(){
      if(!ownerUploadInFlight){clearTimeout(syncTimer);syncTimer=setTimeout(()=>uploadOwnerState(),80);}
      return;
    }
-   if(snapshotDecision==='unchanged')return;
+   if(snapshotDecision==='unchanged'){publishRoleViewsWithRetry();return}
    applyingCloud=true;
    window.__danbridgeSetDB(deepCopy(incoming));
    applyCachedLessonReportsToCurrentDB();
@@ -1764,6 +1764,7 @@ function subscribeOwner(){
    lastPublishedOwnerDB=deepCopy(incoming);ownerBaselineReady=true;
    if(localDirtyHash===incomingHash){localDirtyHash='';clearOwnerSyncRecovery()}
    scheduleDailyCloudBackup();renderSyncRecoveryCenter();
+   publishRoleViewsWithRetry();
    cloudStatus(`雲端資料已更新：學生 ${incoming.students?.length||0}、老師 ${incoming.teachers?.length||0}、課程 ${incoming.lessons?.length||0}`,'ok');
  },err=>{console.error('owner snapshot',err);reportOperationalError(err,{category:'cloud-read',area:'owner-snapshot',retryable:true});cloudStatus('讀取雲端主資料失敗：'+(err.message||err),'error')});
 }
