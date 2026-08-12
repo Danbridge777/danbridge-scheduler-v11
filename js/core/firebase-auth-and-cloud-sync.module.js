@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.13';
+const APP_RELEASE='20.26.14';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com','aa096662336@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
@@ -509,12 +509,11 @@ async function renderCloudUserManager(){
  card.innerHTML=`<h2>老師帳號</h2><div class="small">一般老師只能查看自己的課表。只有指定的排課專員帳號可額外管理所有老師課表，且仍看不到費用、家長、薪資與公司資料。</div><label>老師</label><select id="cloudTeacherSelect"></select><label>老師 Gmail</label><input id="cloudTeacherEmail" type="email" placeholder="teacher@gmail.com"><label class="wendy-access-choice"><input id="cloudTeacherScheduleAccess" type="checkbox"> <span>角色顯示排課專員，額外開放全老師排課</span></label><br><button class="btn primary" id="saveCloudTeacherAccess">建立／更新老師邀請</button><div id="cloudTeacherAccessList" class="backup-list" style="margin-top:12px"></div>`;
  const sel=document.getElementById('cloudTeacherSelect');sel.innerHTML='<option value="">請選擇老師</option>'+window.__danbridgeGetDB().teachers.filter(t=>!t.archivedAt).map(t=>`<option value="${t.id}">${teacherBadgeName(t)||t.name}</option>`).join('');
  document.getElementById('saveCloudTeacherAccess').onclick=async()=>{
-   const teacherId=sel.value,email=document.getElementById('cloudTeacherEmail').value.trim().toLowerCase(),canManageSchedule=document.getElementById('cloudTeacherScheduleAccess')?.checked===true;
+   const teacherId=sel.value,email=document.getElementById('cloudTeacherEmail').value.trim().toLowerCase(),canManageSchedule=SCHEDULER_ACCOUNT_EMAILS.has(email);
    if(!teacherId||!validGmailAddress(email))return alert('請選老師並輸入有效的 Gmail');
    const t=window.__danbridgeGetDB().teachers.find(x=>x.id===teacherId);
    const existing=await getDoc(doc(cloud,'companyAccess',email));
    if(!confirmCloudRoleTransition(existing,'teacher',email))return;
-   if(canManageSchedule&&!SCHEDULER_ACCOUNT_EMAILS.has(email))return alert('全老師排課只允許指定的排課專員 Gmail。');
    if(canManageSchedule&&!confirm(`確定讓 ${email} 以排課專員角色管理所有老師課表？此帳號仍無法查看費用、家長、薪資與公司資料。`))return;
    const scopedDb=canManageSchedule?filteredSchedulerDB(window.__danbridgeGetDB()):deleteField();
    const payload={email,role:'teacher',companyId:COMPANY_ID,teacherId,teacherName:teacherBadgeName(t),active:true,canManageSchedule,branchIds:deleteField(),branchNames:deleteField(),managerName:deleteField(),readOnly:canManageSchedule?false:deleteField(),canSubmitOwnReports:deleteField(),scopedDb,scopedClientHash:canManageSchedule?dataHash(scopedDb):deleteField(),scopedUpdatedAt:canManageSchedule?serverTimestamp():deleteField(),updatedAt:serverTimestamp()};
@@ -1274,10 +1273,10 @@ async function publishScopedViews(){
      const p=d.data();
      const email=(p.email||d.id||'').trim().toLowerCase();
      if(p.active===false||!email)continue;
-     if(p.role==='teacher'&&p.teacherId&&p.canManageSchedule===true){
+     if(p.role==='teacher'&&p.teacherId&&SCHEDULER_ACCOUNT_EMAILS.has(email)){
        const scopedDb=filteredSchedulerDB(sourceDb),hash=dataHash(scopedDb),key='scheduler:'+email;
-       if(scopedViewHashCache.get(key)===hash||p.scopedClientHash===hash){scopedViewHashCache.set(key,hash);continue}
-       jobs.push(setDoc(d.ref,{scopedDb,scopedClientHash:hash,scopedUpdatedAt:serverTimestamp(),active:true},{merge:true}).then(()=>scopedViewHashCache.set(key,hash)));
+       if(p.canManageSchedule===true&&(scopedViewHashCache.get(key)===hash||p.scopedClientHash===hash)){scopedViewHashCache.set(key,hash);continue}
+       jobs.push(setDoc(d.ref,{canManageSchedule:true,readOnly:false,scopedDb,scopedClientHash:hash,scopedUpdatedAt:serverTimestamp(),active:true},{merge:true}).then(()=>scopedViewHashCache.set(key,hash)));
      }else if(p.role==='teacher'&&p.teacherId){
        const viewDb=filteredTeacherDB(sourceDb,p.teacherId);
        const hash=dataHash(viewDb);
