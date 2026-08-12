@@ -350,7 +350,7 @@ function attachDragHandlers(){
   /* iPad 與桌面一致：移動即拖曳；極小位移門檻只用來保留單點編輯。 */
   const DRAG_START_PX=3;
   const role=document.body.dataset.cloudRole||window.DanbridgeAccess?.getContext?.().role||window.currentCloudRole?.()||'';
-  const canMove=!role||role==='owner';
+  const canMove=calendarOwnerCanEdit();
   document.querySelectorAll('#calendarCanvas [data-id]').forEach(el=>{
     el.setAttribute('draggable',canMove&&!selectionMode?'true':'false');
     let pointerId=null,startX=0,startY=0,dragStarted=false,suppressClick=false,touchDragIds=[];

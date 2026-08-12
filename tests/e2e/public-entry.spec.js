@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.5';
+const CLOUD_RELEASE = '20.26.6';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -13,7 +13,7 @@ const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
 const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.5';
-const SCHEDULER_UI_RELEASE = '20.25.0';
+const SCHEDULER_UI_RELEASE = '20.26.6';
 const PREMIUM_CONTROLS_RELEASE = '20.25.10';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
@@ -69,6 +69,8 @@ test('Wendy scheduler stays private, centered and contained on every device', as
     window.DanbridgeAccess.setContext({role:'teacher',teacherId:'wendy',email:'wendylee0820520@gmail.com',canManageSchedule:true});
     window.DanbridgeRoleResponsive?.apply?.();
     window.renderCalendar?.();
+    const sampleLesson=db.lessons[0];
+    if(sampleLesson)window.editLesson(sampleLesson.id);
     const backdrop = document.getElementById('lessonModal');
     backdrop.classList.add('show');
     document.getElementById('lessonAddressWrap').classList.remove('hidden');
@@ -88,6 +90,9 @@ test('Wendy scheduler stays private, centered and contained on every device', as
       escaped: visibleControls.filter(control => { const rect = control.getBoundingClientRect(); return rect.left < modalRect.left - 1 || rect.right > modalRect.right + 1 || rect.left < -1 || rect.right > innerWidth + 1; }).map(control => control.id || control.textContent.trim().slice(0, 20)),
       privateVisible: ['paymentStatus','chargeStudent','payTeacher','quickStudentBox'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none'),
       scheduleFieldsHidden: ['lessonAddress','lessonMeetingUrl','lessonNote','lessonState'].filter(id => getComputedStyle(document.getElementById(id)).display === 'none'),
+      singleClickOpenedEditor: !sampleLesson || document.getElementById('lessonId').value===sampleLesson.id,
+      capabilityAllowsEditing: window.calendarOwnerCanEdit?.()===true,
+      ownerContextActionsHidden: [...document.querySelectorAll('#calendarContextMenu .v20-owner-action')].filter(element=>getComputedStyle(element).display==='none').length,
       editingToolsHidden: ['#calendar .calendar-head-add','#calendar .calendar-quick-add','#calendar .weekly-copy-btn','#calendar #selectionModeBtn','#calendar .day-add','#calendarContextMenu','#courseDrawerEditBtn'].filter(selector => {
         const element=document.querySelector(selector);return !element||element.hidden||getComputedStyle(element).display==='none';
       }),
@@ -101,6 +106,9 @@ test('Wendy scheduler stays private, centered and contained on every device', as
   expect(result.escaped).toEqual([]);
   expect(result.privateVisible).toEqual([]);
   expect(result.scheduleFieldsHidden).toEqual([]);
+  expect(result.singleClickOpenedEditor).toBe(true);
+  expect(result.capabilityAllowsEditing).toBe(true);
+  expect(result.ownerContextActionsHidden).toBe(0);
   expect(result.editingToolsHidden).toEqual([]);
   expect(result.forbiddenSections).toEqual([]);
 });
@@ -183,6 +191,33 @@ test('all editable time fields use locale-independent 24-hour controls', async (
     expect(field.last).toBe('23:55');
     expect(field.count).toBe(288);
   }
+});
+
+test('Windows receives its isolated performance profile', async ({ browser }) => {
+  const context=await browser.newContext({userAgent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36'});
+  const page=await context.newPage();
+  await page.addInitScript(()=>Object.defineProperty(navigator,'platform',{configurable:true,get:()=> 'Win32'}));
+  await page.goto('/index.html',{waitUntil:'load'});
+  await expect(page.locator('html')).toHaveClass(/danbridge-windows/);
+  const result=await page.evaluate(()=>({isWindows:window.DanbridgePlatform?.isWindows,backdropFilter:getComputedStyle(document.getElementById('lessonModal')).backdropFilter,cardTransition:getComputedStyle(document.querySelector('.card')).transitionDuration}));
+  expect(result.isWindows).toBe(true);
+  expect(result.backdropFilter).toBe('none');
+  expect(result.cardTransition).toBe('0s');
+  await context.close();
+});
+
+test('non-Windows devices do not receive Windows performance overrides', async ({ browser }) => {
+  const context=await browser.newContext({userAgent:'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15'});
+  const page=await context.newPage();
+  await page.addInitScript(()=>{
+    Object.defineProperty(navigator,'platform',{configurable:true,get:()=> 'MacIntel'});
+    if('userAgentData' in navigator)Object.defineProperty(navigator,'userAgentData',{configurable:true,get:()=>undefined});
+  });
+  await page.goto('/index.html',{waitUntil:'load'});
+  const result=await page.evaluate(()=>({isWindows:window.DanbridgePlatform?.isWindows,hasClass:document.documentElement.classList.contains('danbridge-windows')}));
+  expect(result.isWindows).toBe(false);
+  expect(result.hasClass).toBe(false);
+  await context.close();
 });
 
 test('mobile lesson date and all single-line editor controls are contained and centered', async ({ page }) => {

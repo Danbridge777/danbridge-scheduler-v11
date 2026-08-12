@@ -1,7 +1,7 @@
 /** Danbridge Operations V20 — scheduling efficiency suite. */
 (function(){
  const $id=id=>document.getElementById(id),copy=v=>v==null?v:JSON.parse(JSON.stringify(v));
- const role=()=>window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role||'',canEdit=()=>role()==='owner';
+ const role=()=>window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role||'',canEdit=()=>window.calendarOwnerCanEdit?.()??role()==='owner';
  const guard=()=>{if(canEdit())return true;alert('目前帳號沒有修改課表的權限。');return false};
  const replacePrimary=(l,tid)=>[tid,...lessonTeacherIds(l).filter(id=>id!==l.teacherId&&id!==tid)];
 

@@ -104,7 +104,7 @@ function openCourseDrawer(id){
     reportBtn.onclick=()=>{const lessonId=activeCourseDrawerId;closeCourseDrawer();window.openLessonReport?.(lessonId)};
   }
   const editBtn=$('courseDrawerEditBtn');
-  const ownerCanEdit=!role||role==='owner';
+  const ownerCanEdit=window.calendarOwnerCanEdit?.()??(!role||role==='owner'||(role==='teacher'&&context.canManageSchedule===true));
   editBtn.hidden=!ownerCanEdit;
   if(ownerCanEdit){editBtn.style.removeProperty('display');delete editBtn.dataset.roleResponsiveHidden}
   editBtn.onclick=ownerCanEdit?()=>{const lessonId=activeCourseDrawerId;closeCourseDrawer();openLessonModal(todayStr(),'16:00',lessonId)}:null;

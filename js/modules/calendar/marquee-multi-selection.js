@@ -1,14 +1,14 @@
 /* Danbridge calendar interactions — one stable delegated controller. */
 (()=>{
   'use strict';
-  const controller={canvas:null,marquee:null,pointerDrag:null,dragGhost:null,suppressClickUntil:0};
+  const controller={canvas:null,marquee:null,pointerDrag:null,dragGhost:null,suppressClickUntil:0,pointerFrame:0,pendingPointerEvent:null};
   const bindCardDragHandlers=typeof window.attachDragHandlers==='function'?window.attachDragHandlers:null;
   const cards=()=>controller.canvas?[...controller.canvas.querySelectorAll('[data-id]')]:[];
   const selectedRenderedIds=()=>{const rendered=new Set(cards().map(card=>card.dataset.id));return[...selectedLessonIds].filter(id=>rendered.has(id))};
   const cardOf=target=>target?.closest?.('[data-id]')||null;
   const isControl=target=>!!target?.closest?.('button,input,select,textarea,a');
   const currentRole=()=>document.body.dataset.cloudRole||window.DanbridgeAccess?.getContext?.().role||window.currentCloudRole?.()||'';
-  const canEdit=()=>{const role=currentRole();return !role||role==='owner'};
+  const canEdit=()=>window.calendarOwnerCanEdit?.()??(()=>{const role=currentRole(),context=window.DanbridgeAccess?.getContext?.()||{};return !role||role==='owner'||(role==='teacher'&&context.canManageSchedule===true)})();
 
   function targetOf(target){
     const cell=target?.closest?.('[data-date]');
@@ -166,11 +166,23 @@
     beginMarquee(event);
   }
 
-  function onPointerMove(event){
+  function processPointerMove(event){
     if(controller.pointerDrag){movePointerDrag(event);return}
     if(controller.marquee){moveMarquee(event);return}
     if(!pasteClickMode)return;
     const target=targetOf(event.target);contextPasteTarget=target?{date:target.date,time:target.time}:null;setPasteHoverTarget(target?.element||null);
+  }
+
+  function onPointerMove(event){
+    if(!window.DanbridgePlatform?.isWindows){processPointerMove(event);return}
+    if(controller.pointerDrag||controller.marquee)event.preventDefault();
+    controller.pendingPointerEvent=event;
+    if(controller.pointerFrame)return;
+    controller.pointerFrame=requestAnimationFrame(()=>{
+      controller.pointerFrame=0;
+      const pending=controller.pendingPointerEvent;controller.pendingPointerEvent=null;
+      if(pending)processPointerMove(pending);
+    });
   }
 
   function onClick(event){

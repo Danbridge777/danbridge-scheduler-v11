@@ -30,6 +30,7 @@ body.wendy-cloud-role #calendar .calendar-field:has(>#calendarStudentFilter),
 body.wendy-cloud-role #calendar .calendar-field:has(>#calendarRoomFilter),
 body.wendy-cloud-role #calendar .calendar-field:has(>#calendarStateFilter){display:block!important}
 body.wendy-cloud-role #calendar .teacher-redundant-filter{display:block!important}
+body.wendy-cloud-role #calendarContextMenu .v20-owner-action{display:grid!important}
 body.wendy-cloud-role #lessonModal .student-select-row>button,
 body.wendy-cloud-role #lessonModal #quickStudentBox,
 body.wendy-cloud-role #lessonModal .col-6:has(>#paymentStatus),
