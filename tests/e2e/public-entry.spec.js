@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.25.10';
+const CLOUD_RELEASE = '20.26.0';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -198,8 +198,9 @@ test('student teacher filter stays inside the viewport', async ({ page }) => {
       element.inert = false;element.removeAttribute('aria-hidden');delete element.dataset.authIsolated;
     });
     window.switchTab('students');
+    window.renderStudents?.();
     const filter = document.getElementById('crmTeacherFilter');
-    const rect = filter.getBoundingClientRect();
+    const rect = filter?.getBoundingClientRect() || { left: -1, right: innerWidth + 1 };
     return { exists: !!filter, left: rect.left, right: rect.right, width: innerWidth };
   });
   expect(result.exists).toBe(true);

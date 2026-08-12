@@ -24,6 +24,7 @@ const COMPANY_ID = 'danbridge';
 const OWNER_EMAIL = 'a0965487920@gmail.com';
 const BACKUP_OWNER_EMAIL = 'backup-owner@gmail.com';
 const TEACHER_EMAIL = 'teacher@example.com';
+const WENDY_EMAIL = 'wendylee0820520@gmail.com';
 const OTHER_TEACHER_EMAIL = 'other@example.com';
 const MANAGER_EMAIL = 'manager@example.com';
 const INACTIVE_EMAIL = 'inactive@example.com';
@@ -40,6 +41,7 @@ async function seed() {
     const db = context.firestore();
     const rows = [
       [`companyAccess/${TEACHER_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1' }],
+      [`companyAccess/${WENDY_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1', canManageSchedule: true, scopedDb: { lessons: [], students: [], teachers: [] } }],
       [`companyAccess/${OTHER_TEACHER_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-2' }],
       [`companyAccess/${MANAGER_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'branch_manager', teacherId: 'manager-teacher', branchIds: ['branch-a'] }],
       [`companyAccess/${INACTIVE_EMAIL}`, { active: false, companyId: COMPANY_ID, role: 'teacher', teacherId: 'inactive-teacher' }],
@@ -69,6 +71,23 @@ async function seed() {
 
 before(async () => {
   testEnv = await initializeTestEnvironment({ projectId: PROJECT_ID });
+});
+
+describe('Wendy 全老師排課權限', () => {
+  test('Wendy 可送出排課要求但仍不能讀取公司主資料或他人回報', async () => {
+    const db = auth('wendy-uid', WENDY_EMAIL);
+    const request = { companyId: COMPANY_ID, operation: 'create', lessonId: 'lesson-new', lesson: { id: 'lesson-new', date: '2026-08-13', start: '10:00', end: '11:00', studentId: 'student-1', teacherId: 'teacher-2', teacherIds: ['teacher-2'], title: 'English', status: '未上課' }, actorUid: 'wendy-uid', actorEmail: WENDY_EMAIL, createdAt: serverTimestamp(), status: 'pending' };
+    await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/wendy-request`), request));
+    await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/wendy-request`)));
+    await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/data/main`)));
+    await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/lessonReports/lesson-other`)));
+    await assertFails(updateDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/wendy-request`), { status: 'applied' }));
+  });
+
+  test('一般老師不能偽造 Wendy 排課要求', async () => {
+    const db = auth('teacher-uid', TEACHER_EMAIL);
+    await assertFails(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/forged`), { companyId: COMPANY_ID, operation: 'delete', lessonId: 'lesson-other', lesson: {}, actorUid: 'teacher-uid', actorEmail: TEACHER_EMAIL, createdAt: serverTimestamp(), status: 'pending' }));
+  });
 });
 beforeEach(async () => {
   await testEnv.clearFirestore();

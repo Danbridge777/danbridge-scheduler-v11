@@ -35,6 +35,7 @@ service cloud.firestore {
         : (currentProfileExists() && currentProfile().branchIds is list ? currentProfile().branchIds : []);
     }
     function isTeacher(companyId) { return activeMember(companyId) && access().role == 'teacher' && effectiveTeacherId() != ''; }
+    function canManageSchedule(companyId) { return isTeacher(companyId) && access().canManageSchedule == true; }
     function isManager(companyId) { return activeMember(companyId) && access().role == 'branch_manager' && effectiveTeacherId() != ''; }
     function ownTeacherId() { return effectiveTeacherId(); }
     function ownLessonReport(data) {
@@ -108,7 +109,7 @@ service cloud.firestore {
         && request.resource.data.teacherId == access().teacherId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'displayName','photoURL','lastLoginAt','updatedAt','role','companyId','active',
-          'teacherId','teacherName','managerName','branchIds','branchNames','readOnly','canSubmitOwnReports'
+          'teacherId','teacherName','managerName','branchIds','branchNames','readOnly','canSubmitOwnReports','canManageSchedule'
         ])
       );
       allow delete: if isPrimaryOwner() || (isOwner()
@@ -170,6 +171,21 @@ service cloud.firestore {
         && resource.data.teacherId is string
         && resource.data.teacherId == ownTeacherId());
       allow write: if isOwner();
+    }
+
+    match /companies/{companyId}/scheduleRequests/{requestId} {
+      allow read: if isOwner() || (canManageSchedule(companyId) && resource.data.actorEmail == emailKey());
+      allow create: if canManageSchedule(companyId)
+        && request.resource.data.keys().hasOnly(['companyId','operation','lessonId','lesson','actorUid','actorEmail','createdAt','status'])
+        && request.resource.data.companyId == companyId
+        && request.resource.data.operation in ['create','update','delete']
+        && request.resource.data.lessonId is string
+        && request.resource.data.lesson is map
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.actorEmail == emailKey()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if isOwner();
     }
 
     match /companies/{companyId}/branchViews/{email} {

@@ -10,13 +10,13 @@
     branch_manager:['VIEW_BRANCH_DASHBOARD','VIEW_BRANCH_STUDENTS','VIEW_BRANCH_TEACHERS','VIEW_BRANCH_LESSONS','VIEW_BRANCH_REVENUE','VIEW_BRANCH_PAYROLL','VIEW_BRANCH_EXPENSES','VIEW_BRANCH_REPORTS','SUBMIT_OWN_CLASS_REPORT','VIEW_OWN_HOURS'],
     teacher:['VIEW_OWN_DASHBOARD','VIEW_OWN_LESSONS','SUBMIT_CLASS_REPORT','VIEW_OWN_HOURS']
   };
-  let context={role:'owner',branchIds:[],teacherId:'',email:'',readOnly:false,canSubmitOwnReports:true};
+  let context={role:'owner',branchIds:[],teacherId:'',email:'',readOnly:false,canSubmitOwnReports:true,canManageSchedule:false};
   function branchIdFromLocation(location=''){const hit=DEFAULT_BRANCHES.find(b=>b.locations.includes(location));return hit?.id||(location==='到府'||location==='線上課'?'unassigned':'art_museum')}
   function branchName(branchId=''){return DEFAULT_BRANCHES.find(b=>b.id===branchId)?.name||'未歸屬校區'}
   function deliveryModeFromLesson(l={}){return l.deliveryMode||(l.location==='到府'?'home':l.location==='線上課'?'online':'onsite')}
   function deliveryModeLabel(mode='onsite'){return mode==='home'?'到府':mode==='online'?'線上':'校區實體'}
   function normalizeBranchIds(ids){return [...new Set((Array.isArray(ids)?ids:[]).filter(Boolean))]}
-  function setContext(next={}){context={...context,...next,branchIds:normalizeBranchIds(next.branchIds??context.branchIds),canSubmitOwnReports:next.canSubmitOwnReports??context.canSubmitOwnReports};document.body.dataset.cloudRole=context.role||'';document.body.dataset.branchIds=context.branchIds.join(',');document.body.classList.toggle('branch-manager-cloud-role',context.role==='branch_manager')}
+  function setContext(next={}){context={...context,...next,branchIds:normalizeBranchIds(next.branchIds??context.branchIds),canSubmitOwnReports:next.canSubmitOwnReports??context.canSubmitOwnReports,canManageSchedule:next.canManageSchedule??context.canManageSchedule};document.body.dataset.cloudRole=context.role||'';document.body.dataset.branchIds=context.branchIds.join(',');document.body.classList.toggle('branch-manager-cloud-role',context.role==='branch_manager');document.body.classList.toggle('wendy-cloud-role',context.role==='teacher'&&context.canManageSchedule===true)}
   function getContext(){return {...context,branchIds:[...context.branchIds]}}
   function can(permission){const list=ROLE_PERMISSIONS[context.role]||[];return list.includes('*')||list.includes(permission)}
   function canAccessBranch(branchId){return context.role==='owner'||context.branchIds.includes(branchId)}

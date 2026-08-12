@@ -6,7 +6,7 @@
 
 function calendarFilterState(){return{teacher:$('calendarTeacherFilter')?.value||'',location:$('calendarLocationFilter')?.value||'',student:$('calendarStudentFilter')?.value||'',room:$('calendarRoomFilter')?.value||'',state:$('calendarStateFilter')?.value||'',search:($('calendarSearch')?.value||'').trim().toLowerCase()}}
 function currentCalendarTeacherId(){return $('calendarTeacherFilter')?.value||''}
-function calendarIsTeacherView(){return (window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role||'')==='teacher'}
+function calendarIsTeacherView(){const context=window.DanbridgeAccess?.getContext?.()||{};return (window.currentCloudRole?.()||context.role||'')==='teacher'&&context.canManageSchedule!==true}
 function calendarTeacherScopedLessons(rows){const teacherId=currentCalendarTeacherId();return teacherId?rows.filter(l=>lessonTeacherIds(l).includes(teacherId)):rows}
 function lessonMatchesCalendar(l,f=calendarFilterState()){if(f.teacher&&!lessonTeacherIds(l).includes(f.teacher))return false;if(f.location&&locationLabel(l)!==f.location)return false;if(f.student&&l.studentId!==f.student)return false;if(f.room&&(l.room||'')!==f.room)return false;if(f.state&&(l.lessonState||(l.isDraft?'draft':'active'))!==f.state)return false;if(f.search){const hay=[l.date,l.start,l.end,l.title,l.room,l.location,l.address,l.status,student(l.studentId).name,student(l.studentId).parent,lessonTeacherNames(l),effectiveCampId(l)].join(' ').toLowerCase();if(!hay.includes(f.search))return false}return true}
 function lessonHoverText(l){const s=student(l.studentId),teacherView=(window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role)==='teacher',parent=!teacherView&&s.parent?`\n家長：${s.parent}`:'',contact=!teacherView&&s.contact?`\n聯絡：${s.contact}`:'',addr=l.location==='到府'&&l.address?`\n地址：${l.address}`:'',payment=teacherView?'':`\n付款：${l.paymentStatus==='paid'?'已繳':l.paymentStatus==='waived'?'免收':'未繳'}`;return `${l.date} ${l.start}–${l.end}\n學生／班級：${s.name||'未命名'}${parent}${contact}\n老師：${lessonTeacherNames(l)||'未指定'}\n課程：${l.title||'未命名'}\n地點：${locationLabel(l)} ${l.room||''}${addr}\n狀態：${l.status||''}${payment}\n備註：${l.note||'—'}`}
@@ -86,7 +86,7 @@ function toggleSelectionMode(force){
   updateSelectionCount();
   window.DanbridgeCalendarInteractions?.refresh?.();
 }
-function calendarOwnerCanEdit(){const role=document.body.dataset.cloudRole||window.DanbridgeAccess?.getContext?.().role||window.currentCloudRole?.()||'';return !role||role==='owner'}
+function calendarOwnerCanEdit(){const context=window.DanbridgeAccess?.getContext?.()||{},role=document.body.dataset.cloudRole||context.role||window.currentCloudRole?.()||'';return !role||role==='owner'||(role==='teacher'&&context.canManageSchedule===true)}
 function toggleLessonSelection(id){
   if(!calendarOwnerCanEdit())return;
   if(!id)return;

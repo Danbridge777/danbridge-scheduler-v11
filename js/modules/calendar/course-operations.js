@@ -121,7 +121,8 @@ function closeCourseDrawer(){
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('courseDrawer')?.classList.contains('show')){e.preventDefault();closeCourseDrawer()}},true);
 
 function editLesson(id){
-  const role=window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role||'';
+  const context=window.DanbridgeAccess?.getContext?.()||{},role=window.currentCloudRole?.()||context.role||'';
+  if(role==='teacher'&&context.canManageSchedule===true)return openLessonModal(todayStr(),'16:00',id);
   const restricted=role==='teacher'||role==='branch_manager'||document.body.classList.contains('teacher-cloud-role')||document.body.classList.contains('branch-manager-cloud-role');
   if(!restricted)return openLessonModal(todayStr(),'16:00',id);
   return openCourseDrawer(id);
