@@ -1,13 +1,13 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.25.7';
+const CLOUD_RELEASE = '20.25.8';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
 const ROLE_UX_RELEASE = '20.20.1';
-const ROLE_UX_STYLE_RELEASE = '20.25.7';
+const ROLE_UX_STYLE_RELEASE = '20.25.8';
 const PWA_RELEASE = '20.18.3';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
@@ -95,7 +95,9 @@ test('iPad lesson start and end fields do not overlap', async ({ page }) => {
     const start = document.getElementById('startTime').getBoundingClientRect();
     const end = document.getElementById('endTime').getBoundingClientRect();
     const reference = document.getElementById('lessonTitle').getBoundingClientRect();
-    return { startLeft: start.left, startRight: start.right, startBottom: start.bottom, endLeft: end.left, endRight: end.right, endTop: end.top, startWidth: start.width, endWidth: end.width, referenceLeft: reference.left, referenceRight: reference.right, viewportWidth: innerWidth };
+    const startStyle = getComputedStyle(document.getElementById('startTime'));
+    const endStyle = getComputedStyle(document.getElementById('endTime'));
+    return { startLeft: start.left, startRight: start.right, startBottom: start.bottom, endLeft: end.left, endRight: end.right, endTop: end.top, startWidth: start.width, endWidth: end.width, referenceLeft: reference.left, referenceRight: reference.right, viewportWidth: innerWidth, startAppearance: startStyle.webkitAppearance || startStyle.appearance, endAppearance: endStyle.webkitAppearance || endStyle.appearance };
   });
   expect(boxes.endLeft >= boxes.startRight || boxes.endTop >= boxes.startBottom).toBe(true);
   expect(Math.abs(boxes.startWidth - boxes.endWidth)).toBeLessThanOrEqual(2);
@@ -104,6 +106,8 @@ test('iPad lesson start and end fields do not overlap', async ({ page }) => {
     expect(Math.abs(boxes.endLeft - boxes.referenceLeft)).toBeLessThanOrEqual(2);
     expect(boxes.startRight).toBeLessThanOrEqual(boxes.referenceRight + 1);
     expect(boxes.endRight).toBeLessThanOrEqual(boxes.referenceRight + 1);
+    expect(boxes.startAppearance).toBe('none');
+    expect(boxes.endAppearance).toBe('none');
   }
 });
 
@@ -111,12 +115,12 @@ test('lesson start and end time values are centered with balanced inset', async 
   await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
   const result = await page.evaluate(() => ['startTime','endTime'].map(id => {
     const style = getComputedStyle(document.getElementById(id));
-    return { textAlign: style.textAlign, paddingLeft: parseFloat(style.paddingLeft), paddingRight: parseFloat(style.paddingRight) };
+    return { textAlign: style.textAlign, paddingLeft: parseFloat(style.paddingLeft), paddingRight: parseFloat(style.paddingRight), viewportWidth: innerWidth };
   }));
   for (const field of result) {
     expect(field.textAlign).toBe('center');
     expect(Math.abs(field.paddingLeft - field.paddingRight)).toBeLessThanOrEqual(1);
-    expect(field.paddingLeft).toBeGreaterThanOrEqual(40);
+    expect(field.paddingLeft).toBeGreaterThanOrEqual(field.viewportWidth <= 700 ? 16 : 40);
   }
 });
 

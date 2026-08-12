@@ -254,8 +254,10 @@ body[data-role-ux="branch_manager"] #dashboard .teacher-hours-metric{display:blo
   .modal input,.modal select,.modal textarea,.modal button{max-width:100%!important;box-sizing:border-box!important}
   .modal .grid{grid-template-columns:1fr!important}
   .modal .col-6{grid-column:1/-1!important}
-  #lessonModal>.modal>.grid:first-of-type{width:auto!important;max-width:calc(100% - 16px)!important;margin-right:16px!important;overflow:hidden!important;box-sizing:border-box!important}
+  #lessonModal>.modal>.grid:first-of-type{width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;overflow:hidden!important;box-sizing:border-box!important}
   #lessonModal>.modal>.grid:first-of-type>.col-6,#lessonModal #startTime,#lessonModal #endTime{width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden!important;box-sizing:border-box!important}
+  #lessonModal #startTime,#lessonModal #endTime{-webkit-appearance:none!important;appearance:none!important;height:48px!important;min-height:48px!important;padding:0 16px!important;border:1px solid var(--line,#dfe5ec)!important;border-radius:12px!important;background:#fff!important;line-height:48px!important}
+  #lessonModal #startTime::-webkit-calendar-picker-indicator,#lessonModal #endTime::-webkit-calendar-picker-indicator{display:none!important;width:0!important;height:0!important;margin:0!important;padding:0!important;opacity:0!important}
   .course-drawer{width:100dvw!important;max-width:100dvw!important;box-sizing:border-box!important;overflow-x:hidden!important}
   .course-drawer-footer{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important}
   .course-drawer-footer .btn{width:100%!important}
