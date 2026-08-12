@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.6';
+const APP_RELEASE='20.26.7';
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
@@ -69,6 +69,7 @@ let roleViewRetryCount=0;
 let roleViewRetryTimer=null;
 let lastUploadedHash='';
 let lastCloudSnapshotHash='';
+let approvedLessonShrinkHash='';
 // 本機資料一旦修改，在雲端確認寫入前禁止舊 snapshot 倒灌覆蓋。
 let localDirtyHash='';
 let localMutationVersion=0;
@@ -107,7 +108,15 @@ function restoreOwnerSyncRecovery(){
 }
 let cloudStatusHideTimer=null;
 function cloudStatus(text,kind=''){let el=document.getElementById('firebaseCloudStatus');if(!el){el=document.createElement('div');el.id='firebaseCloudStatus';el.style.cssText='position:fixed;left:12px;bottom:12px;z-index:10001;padding:8px 11px;border-radius:10px;background:#172033;color:#fff;font-size:12px;font-weight:800;box-shadow:0 8px 20px rgba(0,0,0,.2);pointer-events:none';document.body.appendChild(el)}clearTimeout(cloudStatusHideTimer);el.hidden=false;el.textContent=text;el.dataset.kind=kind||'';el.style.background=kind==='error'?'#991b1b':kind==='ok'?'#18794e':kind==='pending'?'#9a6700':kind==='offline'?'#475569':'#172033';if(kind==='ok')cloudStatusHideTimer=setTimeout(()=>{if(el.dataset.kind==='ok')el.hidden=true},2200)}
-function dataHash(value){try{const text=JSON.stringify(value||{});let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)+':'+text.length}catch{return String(Date.now())}}
+function canonicalHashValue(value){
+ if(Array.isArray(value))return value.map(canonicalHashValue);
+ if(value&&typeof value==='object'){
+  if(typeof value.toMillis==='function')return{__timestampMillis:value.toMillis()};
+  return Object.keys(value).sort().reduce((result,key)=>{result[key]=canonicalHashValue(value[key]);return result},{});
+ }
+ return value;
+}
+function dataHash(value){try{const text=JSON.stringify(canonicalHashValue(value||{}));let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)+':'+text.length}catch{return String(Date.now())}}
 const AUDIT_COLLECTION_KEYS=['students','teachers','lessons','makeups','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches'];
 function auditEntityId(row,index){return String(row?.id||row?.email||row?.month||index)}
 function auditChangedFields(before,after){const keys=new Set([...Object.keys(before||{}),...Object.keys(after||{})]);return[...keys].filter(key=>JSON.stringify(before?.[key])!==JSON.stringify(after?.[key])).sort().slice(0,30)}
@@ -150,6 +159,13 @@ async function listImmutableAudit(){
 }
 function ownerSnapshotDecision(localDirty,incoming,current,lastCloud){if(localDirty&&incoming!==localDirty)return'ignore-dirty';if(incoming===lastCloud&&incoming===current)return'unchanged';return'apply'}
 function ownerUploadConfirmation(uploadMutationVersion,currentMutationVersion,uploadedHash,latestHash){const confirmed=uploadMutationVersion===currentMutationVersion&&uploadedHash===latestHash;return{clearDirty:confirmed,queueNext:!confirmed}}
+function ownerLessonShrinkRisk(beforeDb,afterDb){
+ const beforeIds=new Set((beforeDb?.lessons||[]).map(row=>String(row?.id||'')).filter(Boolean));
+ const afterIds=new Set((afterDb?.lessons||[]).map(row=>String(row?.id||'')).filter(Boolean));
+ const removed=[...beforeIds].filter(id=>!afterIds.has(id)).length,before=beforeIds.size,after=afterIds.size;
+ const risky=before>=20&&removed>=10&&removed/before>=0.1;
+ return{risky,before,after,removed,ratio:before?removed/before:0};
+}
 function ownerRetryDelay(retryCount){return Math.min(30000,1000*Math.pow(2,Math.min(Math.max(0,retryCount),5)))}
 function safeErrorCode(error){
  const raw=String(error?.code||error?.name||'unknown').toLowerCase();
@@ -1508,6 +1524,12 @@ async function uploadOwnerState(force=false){
  const currentScore=window.__danbridgeDataScore?.(current)||0;
  if(currentScore===0){cloudStatus('已阻止空白資料上傳；請先確認本機或版本紀錄中的資料。','error');ownerUploadQueued=false;return}
  const hash=dataHash(current);
+ const shrink=ownerLessonShrinkRisk(previousPublished,current);
+ if(shrink.risky&&approvedLessonShrinkHash!==hash){
+  const approved=confirm(`安全檢查：這次同步會讓課程從 ${shrink.before} 堂減少為 ${shrink.after} 堂，共少 ${shrink.removed} 堂。\n\n如果這不是刻意的大量刪除，請按「取消」，資料將保留在本機且不會覆蓋雲端。`);
+  if(!approved){ownerUploadQueued=false;cloudStatus(`已阻止大量課程減少（${shrink.removed} 堂）覆蓋雲端，請先檢查課表。`,'error');persistOwnerSyncRecovery();renderSyncRecoveryCenter();return}
+  approvedLessonShrinkHash=hash;
+ }
  const uploadMutationVersion=localMutationVersion;
  if(!force&&hash===lastUploadedHash){ownerUploadQueued=false;localDirtyHash='';cloudStatus('資料已是最新版本','ok');return}
  ownerUploadInFlight=true;ownerUploadQueued=false;cloudStatus('雲端同步中…','pending');
@@ -1519,7 +1541,7 @@ async function uploadOwnerState(force=false){
    const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main'),mainPayload={db:current,updatedAt:serverTimestamp(),updatedBy:cloudUid,clientHash:hash};
    if(immutableAudit){immutableAudit.eventId=`data-${immutableAudit.beforeHash}-${immutableAudit.afterHash}`;const audit=immutableAuditRecord(immutableAudit);await withSyncTimeout(runTransaction(cloud,async transaction=>{const existing=await transaction.get(audit.ref);transaction.set(mainRef,mainPayload,{merge:false});if(!existing.exists())transaction.set(audit.ref,audit.payload)}),7000)}
    else await withSyncTimeout(setDoc(mainRef,mainPayload,{merge:false}),7000);
-   lastUploadedHash=hash;lastCloudSnapshotHash=hash;ownerRetryCount=0;
+   lastUploadedHash=hash;lastCloudSnapshotHash=hash;approvedLessonShrinkHash='';ownerRetryCount=0;
    const latestHash=dataHash(window.__danbridgeGetDB());
    const confirmation=ownerUploadConfirmation(uploadMutationVersion,localMutationVersion,hash,latestHash);
    if(confirmation.clearDirty){localDirtyHash='';clearOwnerSyncRecovery()}else persistOwnerSyncRecovery();
