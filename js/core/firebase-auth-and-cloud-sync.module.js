@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.0';
+const APP_RELEASE='20.26.1';
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
@@ -399,7 +399,7 @@ function filteredTeacherDB(source,teacherId){
 
 function schedulerSafeLesson(lesson={}){
  const allowed=['id','date','start','end','studentId','teacherId','teacherIds','title','campId','room','location','branchId','deliveryMode','onlinePlatform','status','seriesId','lessonState','isDraft'];
- return Object.fromEntries(allowed.filter(key=>lesson[key]!==undefined).map(key=>[key,deepCopy(lesson[key])]));
+ return Object.fromEntries(allowed.filter(key=>lesson[key]!==undefined).map(key=>[key,JSON.parse(JSON.stringify(lesson[key]))]));
 }
 function filteredSchedulerDB(source){
  const lessons=(source.lessons||[]).filter(l=>!l.isDraft).map(schedulerSafeLesson);
