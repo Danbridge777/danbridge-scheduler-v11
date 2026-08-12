@@ -272,7 +272,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.3'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.4'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource,/cloudEmailKey!==OWNER_EMAIL[\s\S]*只有主要 Owner 可以新增或更新其他 Owner/,'only the primary owner can create or update backup owners');
 assert.match(cloudSource,/email===OWNER_EMAIL[\s\S]*主要 Owner 帳號受保護，不能停權/,'the primary owner cannot be disabled from the account UI');
 const convenienceSource=fs.readFileSync(path.join(root,'js/app/v18-convenience-suite.js'),'utf8');
@@ -570,6 +570,8 @@ assert.match(cloudSource, /課表已立即更新，[\s\S]*正在同步給 Owner�
 assert.match(cloudSource, /schedulerSaveChain=schedulerSaveChain\.catch\(\(\)=>\{\}\)\.then\(queueSchedulerChanges\)/, 'rapid Wendy drag, paste and edit saves are serialized without duplicate schedule requests');
 assert.match(cloudSource, /for\(const \[id,desired\] of \[\.\.\.schedulerOptimisticLessons\]\)[\s\S]*serverLessons\.set\(id,deepCopy\(desired\)\)/, 'an intermediate server snapshot cannot erase Wendy optimistic drag, paste or edit results');
 assert.match(cloudSource, /cloudRole==='teacher'&&cloudCanManageSchedule[\s\S]*originalSaveDB[\s\S]*scheduleSchedulerChanges/, 'every shared calendar save path immediately queues Wendy synchronization');
+const roleUxSource=fs.readFileSync(path.join(root,'js/app/v20014-role-responsive-ux.js'),'utf8');
+assert.match(roleUxSource, /const scheduler=accessContext\(\)\.canManageSchedule===true[\s\S]*hidden=scheduler\?[\s\S]*if\(!scheduler\)\$\$\('\.floating-actions'\)/, 'responsive teacher UI preserves every Wendy editing entry point');
 assert.match(cloudSource, /'paymentStatus','chargeStudent','payTeacher','campId'/, 'small billing, payroll and camp-code changes trigger schedule notifications');
 assert.match(cloudSource, /\['owner','teacher','branch_manager'\]\.includes\(cloudRole\)/, 'Owners, managers and teachers subscribe to large schedule notifications');
 assert(/worker\.state==='activated'\)return reloadAcceptedUpdate\(\)/.test(pwaSource), 'PWA update button must reload immediately when the worker already activated');

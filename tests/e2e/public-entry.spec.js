@@ -1,12 +1,12 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.3';
+const CLOUD_RELEASE = '20.26.4';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
-const ROLE_UX_RELEASE = '20.20.1';
+const ROLE_UX_RELEASE = '20.26.4';
 const ROLE_UX_STYLE_RELEASE = '20.25.10';
 const PWA_RELEASE = '20.18.3';
 const PWA_STYLE_RELEASE = '20.18.0';
@@ -65,8 +65,10 @@ test('Wendy scheduler stays private, centered and contained on every device', as
   await page.goto('/index.html', { waitUntil: 'load' });
   const result = await page.evaluate(() => {
     document.body.classList.remove('auth-locked');
-    document.body.classList.add('teacher-cloud-role', 'wendy-cloud-role');
-    document.body.dataset.roleUx = 'teacher';
+    document.body.classList.add('teacher-cloud-role');
+    window.DanbridgeAccess.setContext({role:'teacher',teacherId:'wendy',email:'wendylee0820520@gmail.com',canManageSchedule:true});
+    window.DanbridgeRoleResponsive?.apply?.();
+    window.renderCalendar?.();
     const backdrop = document.getElementById('lessonModal');
     backdrop.classList.add('show');
     document.getElementById('lessonAddressWrap').classList.remove('hidden');
@@ -86,6 +88,9 @@ test('Wendy scheduler stays private, centered and contained on every device', as
       escaped: visibleControls.filter(control => { const rect = control.getBoundingClientRect(); return rect.left < modalRect.left - 1 || rect.right > modalRect.right + 1 || rect.left < -1 || rect.right > innerWidth + 1; }).map(control => control.id || control.textContent.trim().slice(0, 20)),
       privateVisible: ['paymentStatus','chargeStudent','payTeacher','quickStudentBox'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none'),
       scheduleFieldsHidden: ['lessonAddress','lessonMeetingUrl','lessonNote','lessonState'].filter(id => getComputedStyle(document.getElementById(id)).display === 'none'),
+      editingToolsHidden: ['#calendar .calendar-head-add','#calendar .calendar-quick-add','#calendar .weekly-copy-btn','#calendar #selectionModeBtn','#calendar .day-add','#calendarContextMenu','#courseDrawerEditBtn'].filter(selector => {
+        const element=document.querySelector(selector);return !element||element.hidden||getComputedStyle(element).display==='none';
+      }),
       forbiddenSections: ['students','teachers','makeups','camps','finance','data','security'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none')
     };
   });
@@ -96,6 +101,7 @@ test('Wendy scheduler stays private, centered and contained on every device', as
   expect(result.escaped).toEqual([]);
   expect(result.privateVisible).toEqual([]);
   expect(result.scheduleFieldsHidden).toEqual([]);
+  expect(result.editingToolsHidden).toEqual([]);
   expect(result.forbiddenSections).toEqual([]);
 });
 

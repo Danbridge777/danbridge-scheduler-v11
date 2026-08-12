@@ -14,11 +14,22 @@ body.wendy-cloud-role #calendarLocationFilter,
 body.wendy-cloud-role #calendarStudentFilter,
 body.wendy-cloud-role #calendarRoomFilter,
 body.wendy-cloud-role #calendarStateFilter{display:flex!important}
+body.wendy-cloud-role #calendar .owner-only-action,
+body.wendy-cloud-role #calendar .calendar-head-add,
+body.wendy-cloud-role #calendar .calendar-quick-add,
+body.wendy-cloud-role #calendar .weekly-copy-btn,
+body.wendy-cloud-role #calendar #selectionModeBtn,
+body.wendy-cloud-role #calendar #selectionBar,
+body.wendy-cloud-role #calendar .day-add,
+body.wendy-cloud-role #calendarContextMenu,
+body.wendy-cloud-role #courseDrawerEditBtn,
+body.wendy-cloud-role>.floating-actions{display:flex!important}
 body.wendy-cloud-role #calendar .calendar-field:has(>#calendarTeacherFilter),
 body.wendy-cloud-role #calendar .calendar-field:has(>#calendarLocationFilter),
 body.wendy-cloud-role #calendar .calendar-field:has(>#calendarStudentFilter),
 body.wendy-cloud-role #calendar .calendar-field:has(>#calendarRoomFilter),
 body.wendy-cloud-role #calendar .calendar-field:has(>#calendarStateFilter){display:block!important}
+body.wendy-cloud-role #calendar .teacher-redundant-filter{display:block!important}
 body.wendy-cloud-role #lessonModal .student-select-row>button,
 body.wendy-cloud-role #lessonModal #quickStudentBox,
 body.wendy-cloud-role #lessonModal .col-6:has(>#paymentStatus),

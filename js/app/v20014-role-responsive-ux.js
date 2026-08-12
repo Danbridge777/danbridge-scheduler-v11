@@ -85,19 +85,22 @@
 
   function teacherConvenience(){
     if(role()!=='teacher')return;
+    const scheduler=accessContext().canManageSchedule===true;
     const languageButton=$('#danbridgeLanguageToggle'),headerActions=$('header .header-auth-actions');
     if(languageButton&&headerActions){languageButton.hidden=false;languageButton.style.setProperty('display','inline-grid','important');if(languageButton.parentElement!==headerActions)headerActions.appendChild(languageButton)}
     const calendarHeading=$('#calendar .calendar-workspace-head h2');
     const calendarCopy=$('#calendar .calendar-workspace-head p');
-    if(calendarHeading)calendarHeading.textContent='我的課表';
-    if(calendarCopy)calendarCopy.textContent='查看自己的課程；可依日期或關鍵字快速搜尋。';
+    if(calendarHeading)calendarHeading.textContent=scheduler?'全老師課表':'我的課表';
+    if(calendarCopy)calendarCopy.textContent=scheduler?'使用與 Owner 相同的排課工具安排所有老師課程。':'查看自己的課程；可依日期或關鍵字快速搜尋。';
     if($('#calendarSearch'))$('#calendarSearch').placeholder='搜尋日期、學生或課程名稱';
     const appleButton=$('#calendar .apple-calendar-btn');if(appleButton)appleButton.textContent='加入 Apple 行事曆';
     const printButton=$('#calendar .calendar-toolbar-tools .secondary-action:last-of-type');if(printButton)printButton.textContent='列印 / PDF';
-    $('#calendarTeacherFilter')?.closest('.calendar-field')?.classList.add('teacher-redundant-filter');
-    $('#calendarStudentFilter')?.closest('.calendar-field')?.classList.add('teacher-redundant-filter');
-    $('#calendarRoomFilter')?.closest('.calendar-field')?.classList.add('teacher-redundant-filter');
-    $('#calendarStateFilter')?.closest('.calendar-field')?.classList.add('teacher-redundant-filter');
+    if(!scheduler){
+      $('#calendarTeacherFilter')?.closest('.calendar-field')?.classList.add('teacher-redundant-filter');
+      $('#calendarStudentFilter')?.closest('.calendar-field')?.classList.add('teacher-redundant-filter');
+      $('#calendarRoomFilter')?.closest('.calendar-field')?.classList.add('teacher-redundant-filter');
+      $('#calendarStateFilter')?.closest('.calendar-field')?.classList.add('teacher-redundant-filter');
+    }
     $('#filterStudent')?.closest('div')?.classList.add('teacher-redundant-filter');
     $('#filterTeacher')?.closest('div')?.classList.add('teacher-redundant-filter');
     const calendarAnalysis=$('#calendarAnalysis');
@@ -105,7 +108,7 @@
 
     const actions=$('#dashboard .v32-header-actions');
     const scheduleButton=actions?.querySelector('button:not(.owner-only-action)');
-    if(scheduleButton)scheduleButton.textContent='查看我的課表';
+    if(scheduleButton)scheduleButton.textContent=scheduler?'管理全老師課表':'查看我的課表';
     if(actions&&!$('#teacherReportShortcut',actions)){
       const button=document.createElement('button');
       button.type='button';button.id='teacherReportShortcut';button.className='btn primary';
@@ -158,10 +161,13 @@
     if(current!=='teacher')$('#teacherReportShortcut')?.remove();
     if(current==='owner')restoreRoleResponsiveControls();
     if(current==='teacher'){
+      const scheduler=accessContext().canManageSchedule===true;
       const labels={dashboard:'我的總覽',calendar:'我的課表',lessons:'課程回報'};
+      if(scheduler)labels.calendar='全老師課表';
       $$('nav button[data-tab]').forEach(button=>{const allowed=Object.prototype.hasOwnProperty.call(labels,button.dataset.tab);button.hidden=!allowed;button.style.setProperty('display',allowed?'':'none',allowed?'':'important');if(allowed)button.textContent=labels[button.dataset.tab]});
-      $$('.owner-only-action,.owner-v33-only,.branch-scope-bar,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#calendar .day-add,#calendarAnalysis,#lessons .toolbar button,#courseDrawerEditBtn').forEach(hideForRole);
-      $$('.floating-actions').forEach(el=>el.remove());
+      const hidden=scheduler?'#dashboard .owner-only-action,#dashboard .owner-v33-only,.branch-scope-bar,#calendarAnalysis,#lessons .toolbar button':'.owner-only-action,.owner-v33-only,.branch-scope-bar,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#calendar .day-add,#calendarAnalysis,#lessons .toolbar button,#courseDrawerEditBtn';
+      $$(hidden).forEach(hideForRole);
+      if(!scheduler)$$('.floating-actions').forEach(el=>el.remove());
       teacherStats();
       $$('#calendar .lesson .meta').forEach(meta=>{meta.textContent=meta.textContent.replace(/｜(?:✓已繳|未繳)/g,'')});
       $$('#todayLessons .lesson .meta').forEach(meta=>{meta.textContent=meta.textContent.replace(/｜(?:✓已繳|已繳|未繳)/g,'')});
