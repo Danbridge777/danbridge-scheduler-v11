@@ -311,13 +311,15 @@ assert.equal(context.dataHash({b:1,a:{d:2,c:3}}),context.dataHash({a:{c:3,d:2},b
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:95},(_,i)=>({id:`l${i}`}))}).risky,false,'a small lesson adjustment does not trigger the destructive-change guard');
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:80},(_,i)=>({id:`l${i}`}))}).risky,true,'a large lesson reduction triggers the destructive-change guard');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.16'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.17'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /SCHEDULER_ACCOUNT_EMAILS=new Set\(\['aa096662336@gmail\.com'\]\)/, 'aa is the only approved scheduler account');
 assert.match(cloudSource, /RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set\(\['wendylee0820520@gmail\.com'\]\)/, 'Wendy is explicitly migrated back to a standard teacher');
 assert.match(cloudSource, /canManageSchedule=SCHEDULER_ACCOUNT_EMAILS\.has\(email\)/, 'approved scheduler Gmail accounts always receive all-teacher scheduling instead of relying on a checkbox');
-assert.match(cloudSource, /SCHEDULER_ACCOUNT_EMAILS\.has\(email\)[\s\S]*canManageSchedule:true,readOnly:false,scopedDb/, 'owner publishing automatically repairs an existing approved scheduler account and its scoped view');
-assert.match(cloudSource, /RETIRED_SCHEDULER_ACCOUNT_EMAILS\.has\(email\)[\s\S]*canManageSchedule:false[\s\S]*scopedDb:deleteField\(\)[\s\S]*teacherViews/, 'owner publishing removes Wendy scheduler data and restores her teacher-only view');
+assert.match(cloudSource, /SCHEDULER_ACCOUNT_EMAILS\.has\(email\)[\s\S]*canManageSchedule:true,readOnly:false[\s\S]*schedulerViews/, 'owner publishing automatically repairs aa access and her dedicated scheduler view');
+assert.match(cloudSource, /RETIRED_SCHEDULER_ACCOUNT_EMAILS\.has\(email\)[\s\S]*canManageSchedule:deleteField\(\)[\s\S]*scopedDb:deleteField\(\)[\s\S]*teacherViews/, 'owner publishing fully deletes Wendy scheduler fields and restores her teacher-only view');
 assert.match(cloudSource, /if\(snapshotDecision==='unchanged'\)\{publishRoleViewsWithRetry\(\);return\}/, 'owner login republishes role views even when the main schedule snapshot is unchanged');
+assert.match(cloudSource, /save teacher access failed[\s\S]*儲存老師權限失敗/, 'account management surfaces scheduler permission write failures instead of failing silently');
+assert.match(cloudSource, /schedulerViewRef=doc\(cloud,'companies',COMPANY_ID,'schedulerViews'/, 'scheduler data is isolated from the small companyAccess permission document');
 assert.match(cloudSource, /function applySchedulerRequest\(requestRef,data\)[\s\S]*runTransaction[\s\S]*transaction\.set\(mainRef[\s\S]*transaction\.set\(requestRef,\{status:'applied'/, 'Wendy main-data application and request acknowledgement commit atomically');
 assert.doesNotMatch(cloudSource, /\}\);\s*if\(notificationBefore&&notificationAfter\)[\s\S]*await setDoc\(requestRef,\{status:'applied'/, 'Wendy request acknowledgement is never written outside its main-data transaction');
 assert.match(cloudSource, /function uploadOwnerState\(force=false\)[\s\S]*ownerLessonShrinkRisk\(previousPublished,current\)[\s\S]*confirm\(`[\s\S]*已阻止大量課程減少/, 'owner uploads require explicit confirmation before a large lesson reduction can replace cloud data');
@@ -335,7 +337,7 @@ assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');
 assert.match(cloudSource, /role:'teacher'[\s\S]*branchIds:deleteField\(\)/, 'changing to teacher removes stale branch-manager scope');
-assert.match(cloudSource, /const scopedDb=canManageSchedule\?filteredSchedulerDB/, 'only Wendy receives a scheduler view');
+assert.match(cloudSource, /if\(canManageSchedule\)\{const db=filteredSchedulerDB[\s\S]*schedulerViews/, 'only the approved scheduler account receives a dedicated scheduler view');
 assert.match(cloudSource, /role:'branch_manager'[\s\S]*deleteDoc\(doc\(cloud,'companies',COMPANY_ID,'teacherViews',email\)\)/, 'changing to branch manager removes the stale teacher view');
 assert.match(cloudSource, /async function removeCloudTeacherAccess[\s\S]*teacherViews[\s\S]*branchViews/, 'deleting teacher access removes both possible scoped views');
 assert.match(cloudSource, /async function removeCloudBranchManagerAccess\(email\)\{\s*if\(cloudRole!=='owner'\)return;/, 'branch-manager deletion has an explicit owner guard');

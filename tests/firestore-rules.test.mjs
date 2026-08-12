@@ -57,6 +57,7 @@ async function seed() {
       [`companies/${COMPANY_ID}/teacherViews/${TEACHER_EMAIL}`, { teacherId: 'teacher-1', lessons: ['lesson-own'] }],
       [`companies/${COMPANY_ID}/teacherViews/${OTHER_TEACHER_EMAIL}`, { teacherId: 'teacher-2', lessons: ['lesson-other'] }],
       [`companies/${COMPANY_ID}/teacherViews/${INVITED_EMAIL}`, { teacherId: 'teacher-1', lessons: ['lesson-own'] }],
+      [`companies/${COMPANY_ID}/schedulerViews/${SECOND_SCHEDULER_EMAIL}`, { email: SECOND_SCHEDULER_EMAIL, db: { lessons: [], students: [], teachers: [] } }],
       [`companies/${COMPANY_ID}/teacherViews/${MANAGER_EMAIL}`, { teacherId: 'manager-teacher', lessons: ['stale-teacher-view'] }],
       [`companies/${COMPANY_ID}/branchViews/${TEACHER_EMAIL}`, { branchIds: ['branch-a'] }],
       [`companies/${COMPANY_ID}/branchViews/${MANAGER_EMAIL}`, { branchIds: ['branch-a'] }],
@@ -83,6 +84,7 @@ describe('aa 全老師排課權限', () => {
     const request = { companyId: COMPANY_ID, operation: 'create', lessonId: 'lesson-scheduler-2', lesson: { id: 'lesson-scheduler-2', date: '2026-08-14', start: '10:00', end: '11:00', studentId: 'student-1', teacherId: 'teacher-1', teacherIds: ['teacher-1'], title: 'English', status: '未上課' }, actorUid: 'scheduler-2-uid', actorEmail: SECOND_SCHEDULER_EMAIL, createdAt: serverTimestamp(), status: 'pending' };
     await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/scheduler-2-request`), request));
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/scheduler-2-request`)));
+    await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/schedulerViews/${SECOND_SCHEDULER_EMAIL}`)));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/data/main`)));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/syncConflictBackups/conflict-1`)));
   });
@@ -93,6 +95,7 @@ describe('aa 全老師排課權限', () => {
     await assertFails(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/wendy-request`), request));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/data/main`)));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/lessonReports/lesson-other`)));
+    await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/schedulerViews/${SECOND_SCHEDULER_EMAIL}`)));
   });
 
   test('一般老師不能偽造 Wendy 排課要求', async () => {

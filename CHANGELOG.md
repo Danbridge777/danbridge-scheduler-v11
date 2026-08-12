@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.17
+
+- 將 aa 的全老師排課快照從 `companyAccess` 大型權限文件拆到 Owner 管理、僅 aa 可讀的 `schedulerViews`，避免帳號更新因 Firestore 文件容量或混合權限資料而無聲失敗。
+- Owner 建立／更新老師邀請按鈕新增處理中狀態與明確錯誤提示；成功後才更新列表，不再出現按下沒有反應。
+- aa 排課要求套用時，主資料、稽核、request 狀態與專用排課檢視仍在同一筆 Firestore transaction；Wendy 的 `canManageSchedule` 與所有舊排課快照欄位會完整刪除，再恢復純老師檢視。
+
 ## 20.26.16
 
 - 修正 Owner 單純登入且主課表沒有變更時不發布角色檢視，導致 aa 無法升級、Wendy 無法降回純老師；現在已確認快照即使內容未變也會執行角色遷移。

@@ -186,6 +186,11 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
+    match /companies/{companyId}/schedulerViews/{email} {
+      allow read: if isOwner() || (signedIn() && email == emailKey() && canManageSchedule(companyId));
+      allow write: if isOwner();
+    }
+
     match /companies/{companyId}/scheduleRequests/{requestId} {
       allow read: if isOwner() || (canManageSchedule(companyId) && resource.data.actorEmail == emailKey());
       allow create: if canManageSchedule(companyId)

@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.16';
+const APP_RELEASE='20.26.17';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa096662336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -510,23 +510,27 @@ async function renderCloudUserManager(){
  card.innerHTML=`<h2>老師帳號</h2><div class="small">一般老師只能查看自己的課表。只有指定的排課專員帳號可額外管理所有老師課表，且仍看不到費用、家長、薪資與公司資料。</div><label>老師</label><select id="cloudTeacherSelect"></select><label>老師 Gmail</label><input id="cloudTeacherEmail" type="email" placeholder="teacher@gmail.com"><label class="wendy-access-choice"><input id="cloudTeacherScheduleAccess" type="checkbox"> <span>角色顯示排課專員，額外開放全老師排課</span></label><br><button class="btn primary" id="saveCloudTeacherAccess">建立／更新老師邀請</button><div id="cloudTeacherAccessList" class="backup-list" style="margin-top:12px"></div>`;
  const sel=document.getElementById('cloudTeacherSelect');sel.innerHTML='<option value="">請選擇老師</option>'+window.__danbridgeGetDB().teachers.filter(t=>!t.archivedAt).map(t=>`<option value="${t.id}">${teacherBadgeName(t)||t.name}</option>`).join('');
  document.getElementById('saveCloudTeacherAccess').onclick=async()=>{
-   const teacherId=sel.value,email=document.getElementById('cloudTeacherEmail').value.trim().toLowerCase(),canManageSchedule=SCHEDULER_ACCOUNT_EMAILS.has(email);
+   const button=document.getElementById('saveCloudTeacherAccess'),teacherId=sel.value,email=document.getElementById('cloudTeacherEmail').value.trim().toLowerCase(),canManageSchedule=SCHEDULER_ACCOUNT_EMAILS.has(email);
    if(!teacherId||!validGmailAddress(email))return alert('請選老師並輸入有效的 Gmail');
-   const t=window.__danbridgeGetDB().teachers.find(x=>x.id===teacherId);
-   const existing=await getDoc(doc(cloud,'companyAccess',email));
-   if(!confirmCloudRoleTransition(existing,'teacher',email))return;
-   if(canManageSchedule&&!confirm(`確定讓 ${email} 以排課專員角色管理所有老師課表？此帳號仍無法查看費用、家長、薪資與公司資料。`))return;
-   const scopedDb=canManageSchedule?filteredSchedulerDB(window.__danbridgeGetDB()):deleteField();
-   const payload={email,role:'teacher',companyId:COMPANY_ID,teacherId,teacherName:teacherBadgeName(t),active:true,canManageSchedule,branchIds:deleteField(),branchNames:deleteField(),managerName:deleteField(),readOnly:canManageSchedule?false:deleteField(),canSubmitOwnReports:deleteField(),scopedDb,scopedClientHash:canManageSchedule?dataHash(scopedDb):deleteField(),scopedUpdatedAt:canManageSchedule?serverTimestamp():deleteField(),updatedAt:serverTimestamp()};
-   if(!existing.exists()){payload.invitedAt=serverTimestamp();payload.invitedBy=cloudEmailKey||OWNER_EMAIL}
-   invalidateCompanyAccessCache();
-   await setCompanyAccessWithAudit(email,payload,{action:existing.exists()?'teacher-access-updated':'teacher-access-created',category:'access',targetType:'account',targetId:email,changedFields:['role','teacherId','active'],totalChanges:1},true);
-   try{const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));await Promise.all(userQs.docs.map(u=>setDoc(u.ref,payload,{merge:true})))}catch(e){console.warn('同步老師帳號資料失敗：',e)}
-   if(!canManageSchedule)await setDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email),{db:filteredTeacherDB(window.__danbridgeGetDB(),teacherId),updatedAt:serverTimestamp(),teacherId,email},{merge:false});
-   else await deleteDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email)).catch(()=>{});
-   await deleteDoc(doc(cloud,'companies',COMPANY_ID,'branchViews',email)).catch(()=>{});
-   alert(existing.exists()?'老師邀請與專屬課表已更新。':'老師邀請已建立。請複製登入邀請給老師。');
-   document.getElementById('cloudTeacherEmail').value='';await Promise.all([listCloudTeacherAccess(),listCloudBranchManagerAccess()]);
+   button.disabled=true;button.textContent='正在儲存…';
+   try{
+    const t=window.__danbridgeGetDB().teachers.find(x=>x.id===teacherId),existing=await getDoc(doc(cloud,'companyAccess',email));
+    if(!confirmCloudRoleTransition(existing,'teacher',email))return;
+    if(canManageSchedule&&!confirm(`確定讓 ${email} 以排課專員角色管理所有老師課表？此帳號仍無法查看費用、家長、薪資與公司資料。`))return;
+    const payload={email,role:'teacher',companyId:COMPANY_ID,teacherId,teacherName:teacherBadgeName(t),active:true,canManageSchedule:canManageSchedule?true:deleteField(),branchIds:deleteField(),branchNames:deleteField(),managerName:deleteField(),readOnly:canManageSchedule?false:deleteField(),canSubmitOwnReports:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()};
+    if(!existing.exists()){payload.invitedAt=serverTimestamp();payload.invitedBy=cloudEmailKey||OWNER_EMAIL}
+    invalidateCompanyAccessCache();
+    await setCompanyAccessWithAudit(email,payload,{action:existing.exists()?'teacher-access-updated':'teacher-access-created',category:'access',targetType:'account',targetId:email,changedFields:['role','teacherId','active','canManageSchedule'],totalChanges:1},true);
+    const schedulerViewRef=doc(cloud,'companies',COMPANY_ID,'schedulerViews',email);
+    if(canManageSchedule){const db=filteredSchedulerDB(window.__danbridgeGetDB());await setDoc(schedulerViewRef,{db,clientHash:dataHash(db),updatedAt:serverTimestamp(),email},{merge:false})}
+    else {await deleteDoc(schedulerViewRef).catch(()=>{});await setDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email),{db:filteredTeacherDB(window.__danbridgeGetDB(),teacherId),updatedAt:serverTimestamp(),teacherId,email},{merge:false})}
+    try{const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));await Promise.all(userQs.docs.map(u=>setDoc(u.ref,payload,{merge:true})))}catch(e){console.warn('同步老師帳號資料失敗：',e)}
+    if(canManageSchedule)await deleteDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email)).catch(()=>{});
+    await deleteDoc(doc(cloud,'companies',COMPANY_ID,'branchViews',email)).catch(()=>{});
+    alert(existing.exists()?'老師邀請與專屬課表已更新。':'老師邀請已建立。請複製登入邀請給老師。');
+    document.getElementById('cloudTeacherEmail').value='';await Promise.all([listCloudTeacherAccess(),listCloudBranchManagerAccess()]);
+   }catch(e){console.error('save teacher access failed',e);alert('儲存老師權限失敗：'+(e?.message||e))}
+   finally{button.disabled=false;button.textContent='建立／更新老師邀請'}
  };
  await listCloudTeacherAccess();
 }
@@ -1277,16 +1281,17 @@ async function publishScopedViews(){
      if(p.role==='teacher'&&p.teacherId&&RETIRED_SCHEDULER_ACCOUNT_EMAILS.has(email)&&p.canManageSchedule===true){
        const viewDb=filteredTeacherDB(sourceDb,p.teacherId),hash=dataHash(viewDb),key='teacher:'+email;
        jobs.push(Promise.all([
-         setDoc(d.ref,{canManageSchedule:false,readOnly:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()},{merge:true}),
+         setDoc(d.ref,{canManageSchedule:deleteField(),readOnly:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()},{merge:true}),
+         deleteDoc(doc(cloud,'companies',COMPANY_ID,'schedulerViews',email)).catch(()=>{}),
          setDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email),{db:viewDb,updatedAt:serverTimestamp(),teacherId:p.teacherId,email,clientHash:hash},{merge:false}),
-         getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email))).then(qs=>Promise.all(qs.docs.map(u=>setDoc(u.ref,{canManageSchedule:false,readOnly:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()},{merge:true}))))
+         getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email))).then(qs=>Promise.all(qs.docs.map(u=>setDoc(u.ref,{canManageSchedule:deleteField(),readOnly:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()},{merge:true}))))
        ]).then(()=>scopedViewHashCache.set(key,hash)));
        continue;
      }
      if(p.role==='teacher'&&p.teacherId&&SCHEDULER_ACCOUNT_EMAILS.has(email)){
        const scopedDb=filteredSchedulerDB(sourceDb),hash=dataHash(scopedDb),key='scheduler:'+email;
-       if(p.canManageSchedule===true&&(scopedViewHashCache.get(key)===hash||p.scopedClientHash===hash)){scopedViewHashCache.set(key,hash);continue}
-       jobs.push(setDoc(d.ref,{canManageSchedule:true,readOnly:false,scopedDb,scopedClientHash:hash,scopedUpdatedAt:serverTimestamp(),active:true},{merge:true}).then(()=>scopedViewHashCache.set(key,hash)));
+       if(p.canManageSchedule===true&&scopedViewHashCache.get(key)===hash){continue}
+       jobs.push(Promise.all([setDoc(d.ref,{canManageSchedule:true,readOnly:false,scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),active:true},{merge:true}),setDoc(doc(cloud,'companies',COMPANY_ID,'schedulerViews',email),{db:scopedDb,clientHash:hash,updatedAt:serverTimestamp(),email},{merge:false})]).then(()=>scopedViewHashCache.set(key,hash)));
      }else if(p.role==='teacher'&&p.teacherId){
        const viewDb=filteredTeacherDB(sourceDb,p.teacherId);
        const hash=dataHash(viewDb);
@@ -1684,7 +1689,7 @@ function scheduleSchedulerChanges(){
 }
 async function applySchedulerRequest(requestRef,data){
  if(cloudRole!=='owner'||data?.status!=='pending')return;
- const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main'),schedulerAccessRef=doc(cloud,'companyAccess',String(data.actorEmail||'').toLowerCase());
+ const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main'),schedulerViewRef=doc(cloud,'companies',COMPANY_ID,'schedulerViews',String(data.actorEmail||'').toLowerCase());
  let notificationBefore=null,notificationAfter=null;
  await runTransaction(cloud,async transaction=>{
    const [requestSnap,mainSnap]=await Promise.all([transaction.get(requestRef),transaction.get(mainRef)]);if(!requestSnap.exists()||requestSnap.data()?.status!=='pending'||!mainSnap.exists())return;
@@ -1694,7 +1699,7 @@ async function applySchedulerRequest(requestRef,data){
    else {if(!(after.students||[]).some(s=>String(s.id)===String(lesson.studentId))||!lessonTeacherIds(lesson).every(tid=>(after.teachers||[]).some(t=>String(t.id)===tid)))throw new Error('排課異動包含不存在的學生或老師');if(index>=0)after.lessons[index]={...after.lessons[index],...lesson};else after.lessons.push({...lesson,paymentStatus:'unpaid',chargeStudent:'yes',payTeacher:'yes',note:''})}
    notificationBefore=before;notificationAfter=after;
    const audit=buildImmutableDataAudit(before,after),hash=dataHash(after),scopedDb=filteredSchedulerDB(after);transaction.set(mainRef,{db:after,updatedAt:serverTimestamp(),updatedBy:data.actorUid,clientHash:hash},{merge:false});
-   transaction.set(schedulerAccessRef,{scopedDb,scopedDbHash:dataHash(scopedDb),scopedDbUpdatedAt:serverTimestamp()},{merge:true});
+   transaction.set(schedulerViewRef,{db:scopedDb,clientHash:dataHash(scopedDb),updatedAt:serverTimestamp(),email:String(data.actorEmail||'').toLowerCase()},{merge:false});
    if(audit){audit.eventId=`wendy-${requestSnap.id}`;const record=immutableAuditRecord(audit);transaction.set(record.ref,{...record.payload,action:`wendy-schedule-${data.operation}`,targetType:'lesson',targetId:id,entityChanges:[...record.payload.entityChanges,`requested-by:${data.actorEmail}`].slice(0,80)})}
    transaction.set(requestRef,{status:'applied',appliedAt:serverTimestamp(),appliedBy:cloudUid},{merge:true});
  });
@@ -1805,11 +1810,10 @@ async function subscribeTeacher(){
 
 async function subscribeSchedulerTeacher(){
  if(!cloudTeacherId||!cloudEmailKey)throw new Error('Wendy 帳號尚未綁定老師資料。');
- const ref=doc(cloud,'companyAccess',cloudEmailKey);unsubscribeState?.();
+ const ref=doc(cloud,'companies',COMPANY_ID,'schedulerViews',cloudEmailKey);unsubscribeState?.();
  unsubscribeState=onSnapshot(ref,{includeMetadataChanges:true},snap=>{
-   if(snap.metadata.hasPendingWrites)return;const access=snap.data()||{},raw=access.scopedDb;
-   if(access.active!==true||access.role!=='teacher'||access.canManageSchedule!==true)return revokeCurrentRoleAccess('Wendy 排課權限已移除，系統已安全登出。');
-   if(!raw)return cloudStatus('Wendy 排課資料尚未發布，請 Owner 登入同步。','error');
+   if(snap.metadata.hasPendingWrites)return;const view=snap.data()||{},raw=view.db;
+   if(!raw)return cloudStatus('排課專員資料尚未發布，請 Owner 重新儲存帳號權限。','error');
    const incoming=filteredSchedulerDB(raw),serverLessons=lessonMap(incoming.lessons);
    for(const [id,desired] of [...schedulerOptimisticLessons]){
     const server=serverLessons.get(id);
