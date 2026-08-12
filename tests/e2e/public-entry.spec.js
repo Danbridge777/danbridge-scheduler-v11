@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.2';
+const CLOUD_RELEASE = '20.26.3';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -69,6 +69,8 @@ test('Wendy scheduler stays private, centered and contained on every device', as
     document.body.dataset.roleUx = 'teacher';
     const backdrop = document.getElementById('lessonModal');
     backdrop.classList.add('show');
+    document.getElementById('lessonAddressWrap').classList.remove('hidden');
+    document.getElementById('lessonOnlineWrap').classList.remove('hidden');
     const modal = backdrop.querySelector('.modal');
     const modalRect = modal.getBoundingClientRect();
     const visibleControls = [...modal.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),select,button')].filter(control => {
@@ -82,7 +84,8 @@ test('Wendy scheduler stays private, centered and contained on every device', as
       overflow: document.documentElement.scrollWidth - innerWidth,
       uncentered: visibleControls.filter(control => getComputedStyle(control).textAlign !== 'center').map(control => control.id || control.textContent.trim().slice(0, 20)),
       escaped: visibleControls.filter(control => { const rect = control.getBoundingClientRect(); return rect.left < modalRect.left - 1 || rect.right > modalRect.right + 1 || rect.left < -1 || rect.right > innerWidth + 1; }).map(control => control.id || control.textContent.trim().slice(0, 20)),
-      privateVisible: ['paymentStatus','chargeStudent','payTeacher','lessonNote','lessonState','quickStudentBox'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none'),
+      privateVisible: ['paymentStatus','chargeStudent','payTeacher','quickStudentBox'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none'),
+      scheduleFieldsHidden: ['lessonAddress','lessonMeetingUrl','lessonNote','lessonState'].filter(id => getComputedStyle(document.getElementById(id)).display === 'none'),
       forbiddenSections: ['students','teachers','makeups','camps','finance','data','security'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none')
     };
   });
@@ -92,6 +95,7 @@ test('Wendy scheduler stays private, centered and contained on every device', as
   expect(result.uncentered).toEqual([]);
   expect(result.escaped).toEqual([]);
   expect(result.privateVisible).toEqual([]);
+  expect(result.scheduleFieldsHidden).toEqual([]);
   expect(result.forbiddenSections).toEqual([]);
 });
 

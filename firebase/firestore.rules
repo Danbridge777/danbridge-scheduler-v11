@@ -183,8 +183,8 @@ service cloud.firestore {
         && request.resource.data.lesson is map
         && request.resource.data.lesson.keys().hasOnly([
           'id','date','start','end','studentId','teacherId','teacherIds','title','campId',
-          'room','location','branchId','deliveryMode','onlinePlatform','status','seriesId',
-          'lessonState','isDraft'
+          'room','location','branchId','deliveryMode','address','onlinePlatform','meetingUrl',
+          'status','note','seriesId','lessonState','isDraft'
         ])
         && request.resource.data.lesson.id == request.resource.data.lessonId
         && request.resource.data.actorUid == request.auth.uid

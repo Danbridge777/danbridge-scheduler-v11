@@ -272,7 +272,7 @@ assert.equal(context.ownerRetryDelay(0),1000,'owner sync retry starts after one 
 assert.equal(context.ownerRetryDelay(3),8000,'owner sync retry uses exponential backoff');
 assert.equal(context.ownerRetryDelay(9),30000,'owner sync retry delay is capped at thirty seconds');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.2'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.3'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource,/cloudEmailKey!==OWNER_EMAIL[\s\S]*只有主要 Owner 可以新增或更新其他 Owner/,'only the primary owner can create or update backup owners');
 assert.match(cloudSource,/email===OWNER_EMAIL[\s\S]*主要 Owner 帳號受保護，不能停權/,'the primary owner cannot be disabled from the account UI');
 const convenienceSource=fs.readFileSync(path.join(root,'js/app/v18-convenience-suite.js'),'utf8');
@@ -386,10 +386,13 @@ assert.deepEqual(Array.from(legacyTeacherView.lessons,row=>row.id), ['legacy-own
 const schedulerView = context.filteredSchedulerDB({
   ...scopedSource,
   branches: [{id:'a',name:'A',rooms:['1'],managerEmail:'private@example.com'}],
-  lessons: [lesson({id:'schedule-safe',address:'Private address',meetingUrl:'https://private',note:'Private note',paymentStatus:'paid',chargeStudent:'yes',payTeacher:'yes'})]
+  lessons: [lesson({id:'schedule-safe',address:'Scheduling address',meetingUrl:'https://meeting',note:'Scheduling note',paymentStatus:'paid',chargeStudent:'yes',payTeacher:'yes'})]
 });
 assert.deepEqual(Object.keys(schedulerView.branches[0]).sort(), ['id','name','rooms']);
-for (const field of ['address','meetingUrl','note','paymentStatus','chargeStudent','payTeacher']) assert.equal(schedulerView.lessons[0][field], undefined, `Wendy scheduler lessons exclude ${field}`);
+assert.equal(schedulerView.lessons[0].address, 'Scheduling address', 'Wendy scheduler lessons retain the scheduling address');
+assert.equal(schedulerView.lessons[0].meetingUrl, 'https://meeting', 'Wendy scheduler lessons retain the online meeting link');
+assert.equal(schedulerView.lessons[0].note, 'Scheduling note', 'Wendy scheduler lessons retain the scheduling note');
+for (const field of ['paymentStatus','chargeStudent','payTeacher']) assert.equal(schedulerView.lessons[0][field], undefined, `Wendy scheduler lessons exclude ${field}`);
 assert.deepEqual(Array.from(schedulerView.fixedExpenses), []);
 const branchView = context.filteredBranchDB(scopedSource, ['a']);
 assert.deepEqual(Array.from(branchView.lessons, row => row.id), ['own-a']);
