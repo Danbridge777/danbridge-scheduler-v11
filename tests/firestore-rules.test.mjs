@@ -14,6 +14,7 @@ import {
   getDoc,
   getDocs,
   onSnapshot,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc
@@ -132,6 +133,23 @@ describe('帳號邀請', () => {
 });
 
 describe('Owner 權限', () => {
+  test('Wendy request 狀態與公司主資料可由 Owner 原子完成', async () => {
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    const requestRef = doc(owner, `companies/${COMPANY_ID}/scheduleRequests/atomic-wendy`);
+    const mainRef = doc(owner, `companies/${COMPANY_ID}/data/main`);
+    await testEnv.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), `companies/${COMPANY_ID}/scheduleRequests/atomic-wendy`), { companyId: COMPANY_ID, actorEmail: WENDY_EMAIL, status: 'pending' });
+    });
+    await assertSucceeds(runTransaction(owner, async transaction => {
+      const [requestSnap, mainSnap] = await Promise.all([transaction.get(requestRef), transaction.get(mainRef)]);
+      assert.equal(requestSnap.data().status, 'pending');
+      transaction.set(mainRef, { ...mainSnap.data(), atomicWendyLesson: 'lesson-atomic' });
+      transaction.set(requestRef, { status: 'applied', appliedAt: serverTimestamp(), appliedBy: 'owner-uid' }, { merge: true });
+    }));
+    assert.equal((await getDoc(requestRef)).data().status, 'applied');
+    assert.equal((await getDoc(mainRef)).data().atomicWendyLesson, 'lesson-atomic');
+  });
+
   test('同步衝突備份只有 Owner 可以讀寫', async () => {
     const owner = auth('owner-uid', OWNER_EMAIL);
     const backupOwner = auth('backup-owner-uid', BACKUP_OWNER_EMAIL);

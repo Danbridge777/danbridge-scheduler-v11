@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.11';
+const APP_RELEASE='20.26.12';
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
@@ -1502,14 +1502,14 @@ async function publishScheduleChangeNotifications(previousDb,currentDb,batchKey,
  }
  if(jobs.length)await withSyncTimeout(Promise.all(jobs),15000);
 }
-function queueScheduleChangeNotifications(previousDb,currentDb,batchKey){
+function queueScheduleChangeNotifications(previousDb,currentDb,batchKey,actor={}){
  if(cloudRole!=='owner'||!ownerBaselineReady||!previousDb)return;
  const key=String(batchKey||dataHash(currentDb));
- const job={previousDb:deepCopy(previousDb),currentDb:deepCopy(currentDb),batchKey:key,attempts:0,timer:null};
+ const job={previousDb:deepCopy(previousDb),currentDb:deepCopy(currentDb),batchKey:key,actor:{uid:actor.uid||'',name:actor.name||''},attempts:0,timer:null};
  scheduleNotificationDeliveryJobs.set(key,job);
  const deliver=async()=>{
    if(!scheduleNotificationDeliveryJobs.has(key)||cloudRole!=='owner')return;
-   try{await publishScheduleChangeNotifications(job.previousDb,job.currentDb,job.batchKey);scheduleNotificationDeliveryJobs.delete(key)}
+   try{await publishScheduleChangeNotifications(job.previousDb,job.currentDb,job.batchKey,job.actor);scheduleNotificationDeliveryJobs.delete(key)}
    catch(e){job.attempts++;console.error('Schedule notification background delivery failed',e);cloudStatus(job.attempts<3?'課表已同步；老師通知正在背景補送。':'課表已同步，但老師通知持續補送中，請保持網路連線。',job.attempts<3?'pending':'error');job.timer=setTimeout(deliver,Math.min(30000,1000*Math.pow(2,Math.min(job.attempts,5))))}
  };
  deliver();
@@ -1686,9 +1686,9 @@ async function applySchedulerRequest(requestRef,data){
    const audit=buildImmutableDataAudit(before,after),hash=dataHash(after),scopedDb=filteredSchedulerDB(after);transaction.set(mainRef,{db:after,updatedAt:serverTimestamp(),updatedBy:data.actorUid,clientHash:hash},{merge:false});
    transaction.set(schedulerAccessRef,{scopedDb,scopedDbHash:dataHash(scopedDb),scopedDbUpdatedAt:serverTimestamp()},{merge:true});
    if(audit){audit.eventId=`wendy-${requestSnap.id}`;const record=immutableAuditRecord(audit);transaction.set(record.ref,{...record.payload,action:`wendy-schedule-${data.operation}`,targetType:'lesson',targetId:id,entityChanges:[...record.payload.entityChanges,`requested-by:${data.actorEmail}`].slice(0,80)})}
+   transaction.set(requestRef,{status:'applied',appliedAt:serverTimestamp(),appliedBy:cloudUid},{merge:true});
  });
- if(notificationBefore&&notificationAfter)await publishScheduleChangeNotifications(notificationBefore,notificationAfter,`wendy-${requestRef.id}`,{uid:data.actorUid,name:'Wendy'});
- await setDoc(requestRef,{status:'applied',appliedAt:serverTimestamp(),appliedBy:cloudUid},{merge:true});
+ if(notificationBefore&&notificationAfter)queueScheduleChangeNotifications(notificationBefore,notificationAfter,`wendy-${requestRef.id}`,{uid:data.actorUid,name:'Wendy'});
 }
 function subscribeSchedulerRequests(){
  unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;if(cloudRole!=='owner')return;

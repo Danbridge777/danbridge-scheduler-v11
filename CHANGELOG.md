@@ -1,5 +1,10 @@
 # Changelog
 
+## 20.26.12
+
+- Wendy 排課要求的主資料更新、角色排課檢視、不可覆寫稽核與 `applied` 狀態改在同一個 Firestore transaction 原子提交，避免主資料成功但 request 因瞬間斷網維持 pending。
+- Wendy 排課通知改接入既有背景重試佇列，request 原子完成後即使通知服務暫時失敗，也會持續補送且保留 Wendy 操作者資訊。
+
 ## 20.26.11
 
 - Owner 主資料同步改為 Firestore transaction 內的 Base／Local／Remote 三方合併，不同課程及不同欄位的同步修改會同時保留，避免舊裝置整份覆蓋新課表。
