@@ -275,7 +275,7 @@ assert.equal(context.dataHash({b:1,a:{d:2,c:3}}),context.dataHash({a:{c:3,d:2},b
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:95},(_,i)=>({id:`l${i}`}))}).risky,false,'a small lesson adjustment does not trigger the destructive-change guard');
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:80},(_,i)=>({id:`l${i}`}))}).risky,true,'a large lesson reduction triggers the destructive-change guard');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.7'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.8'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /function uploadOwnerState\(force=false\)[\s\S]*ownerLessonShrinkRisk\(previousPublished,current\)[\s\S]*confirm\(`[\s\S]*已阻止大量課程減少/, 'owner uploads require explicit confirmation before a large lesson reduction can replace cloud data');
 const timeControlSource=fs.readFileSync(path.join(root,'js/ui/24-hour-time-controls.js'),'utf8');
 assert.match(timeControlSource, /length:24\*12[\s\S]*padStart\(2,'0'\)[\s\S]*input\[type="time"\]/, 'all editable times use fixed HH:mm values instead of device locale formatting');
@@ -585,10 +585,17 @@ assert.match(roleUxSource, /const scheduler=accessContext\(\)\.canManageSchedule
 const schedulerUiSource=fs.readFileSync(path.join(root,'js/modules/calendar/scheduler-ui.js'),'utf8');
 const marqueeSource=fs.readFileSync(path.join(root,'js/modules/calendar/marquee-multi-selection.js'),'utf8');
 const wendyCourseOperationsSource=fs.readFileSync(path.join(root,'js/modules/calendar/course-operations.js'),'utf8');
+const lessonListSource=fs.readFileSync(path.join(root,'js/modules/lessons/lesson-list-and-search.js'),'utf8');
 const schedulingEfficiencySource=fs.readFileSync(path.join(root,'js/app/v20-scheduling-efficiency.js'),'utf8');
 assert.match(schedulerUiSource,/canMove=calendarOwnerCanEdit\(\)/,'Wendy and Owner use the same card drag permission');
 assert.match(marqueeSource,/canEdit=\(\)=>window\.calendarOwnerCanEdit/,'Wendy and Owner use the same marquee, click and context-menu controller');
 assert.match(wendyCourseOperationsSource,/ownerCanEdit=window\.calendarOwnerCanEdit/,'Wendy and Owner use the same course drawer edit action');
+assert.match(wendyCourseOperationsSource,/context\.canManageSchedule===true\|\|document\.body\.classList\.contains\('wendy-cloud-role'\)[\s\S]*openLessonModal/,'Wendy lesson clicks always open scheduling edit instead of the teacher report permission path');
+assert.match(lessonListSource,/const scheduler=document\.body\.classList\.contains\('wendy-cloud-role'\)[\s\S]*scheduler\?'編輯'/,'Wendy lesson records expose scheduling edit rather than a misleading report action');
+assert.match(marqueeSource,/classList\.toggle\('calendar-selection-active',selecting\)/,'selection decoration is explicitly tied to active multi-selection state');
+const wendyRoleCss=fs.readFileSync(path.join(root,'css/core/79-wendy-schedule-role.css'),'utf8');
+assert.match(wendyRoleCss,/calendar-toolbar-filters\{display:grid!important;grid-template-columns:repeat\(5,minmax\(130px,1fr\)\) minmax\(250px,1\.55fr\)/,'Wendy desktop filters use the exact Owner row geometry');
+assert.doesNotMatch(wendyRoleCss,/max-width:700px[\s\S]*calendar-toolbar-filters[\s\S]*grid-template-columns:1fr/,'Wendy no longer has a separate teacher-only mobile toolbar breakpoint');
 assert.match(schedulingEfficiencySource,/canEdit=\(\)=>window\.calendarOwnerCanEdit/,'Wendy and Owner use the same smart scheduling and replacement actions');
 assert.match(cloudSource, /'paymentStatus','chargeStudent','payTeacher','campId'/, 'small billing, payroll and camp-code changes trigger schedule notifications');
 assert.match(cloudSource, /\['owner','teacher','branch_manager'\]\.includes\(cloudRole\)/, 'Owners, managers and teachers subscribe to large schedule notifications');

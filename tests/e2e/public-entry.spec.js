@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.7';
+const CLOUD_RELEASE = '20.26.8';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -13,7 +13,7 @@ const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
 const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.5';
-const SCHEDULER_UI_RELEASE = '20.26.6';
+const SCHEDULER_UI_RELEASE = '20.26.8';
 const PREMIUM_CONTROLS_RELEASE = '20.25.10';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
@@ -93,6 +93,9 @@ test('Wendy scheduler stays private, centered and contained on every device', as
       singleClickOpenedEditor: !sampleLesson || document.getElementById('lessonId').value===sampleLesson.id,
       capabilityAllowsEditing: window.calendarOwnerCanEdit?.()===true,
       ownerContextActionsHidden: [...document.querySelectorAll('#calendarContextMenu .v20-owner-action')].filter(element=>getComputedStyle(element).display==='none').length,
+      filterGrid: getComputedStyle(document.querySelector('#calendar .calendar-toolbar-filters')).gridTemplateColumns,
+      filterAlignments: [...document.querySelectorAll('#calendar .calendar-toolbar-filters input,#calendar .calendar-toolbar-filters select')].map(control=>getComputedStyle(control).textAlign),
+      idleSelectionMarkers: [...document.querySelectorAll('#calendarCanvas .selectable:not(.selected)')].filter(card=>getComputedStyle(card,'::before').display!=='none').length,
       editingToolsHidden: ['#calendar .calendar-head-add','#calendar .calendar-quick-add','#calendar .weekly-copy-btn','#calendar #selectionModeBtn','#calendar .day-add','#calendarContextMenu','#courseDrawerEditBtn'].filter(selector => {
         const element=document.querySelector(selector);return !element||element.hidden||getComputedStyle(element).display==='none';
       }),
@@ -109,6 +112,8 @@ test('Wendy scheduler stays private, centered and contained on every device', as
   expect(result.singleClickOpenedEditor).toBe(true);
   expect(result.capabilityAllowsEditing).toBe(true);
   expect(result.ownerContextActionsHidden).toBe(0);
+  expect(result.filterAlignments.every(value=>value==='center')).toBe(true);
+  expect(result.idleSelectionMarkers).toBe(0);
   expect(result.editingToolsHidden).toEqual([]);
   expect(result.forbiddenSections).toEqual([]);
 });

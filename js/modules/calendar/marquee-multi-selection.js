@@ -20,6 +20,7 @@
   function refresh(){
     if(!controller.canvas)return;
     const selecting=selectionMode||selectedLessonIds.size>0;
+    document.body.classList.toggle('calendar-selection-active',selecting);
     cards().forEach(card=>{
       card.classList.toggle('selected',selectedLessonIds.has(card.dataset.id));
       card.classList.toggle('selectable',selecting);

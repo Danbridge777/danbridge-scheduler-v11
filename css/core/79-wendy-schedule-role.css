@@ -55,7 +55,8 @@ body.wendy-cloud-role #lessonModal button{max-width:100%!important;min-width:0!i
 body.wendy-cloud-role #lessonModal input:not([type="checkbox"]):not([type="radio"]),
 body.wendy-cloud-role #lessonModal select,
 body.wendy-cloud-role #calendar input,
-body.wendy-cloud-role #calendar select{text-align:center!important;text-align-last:center!important;line-height:1.25!important}
+body.wendy-cloud-role #calendar select{text-align:center!important;text-align-last:center!important;line-height:1.25!important;padding-left:38px!important;padding-right:38px!important}
+body.wendy-cloud-role #calendar option{text-align:center!important}
 body.wendy-cloud-role #lessonModal input[type="date"],
 body.wendy-cloud-role #lessonModal input[type="time"]{display:block!important;width:100%!important;padding-inline:14px!important;min-height:54px!important;height:54px!important}
 body.wendy-cloud-role #lessonModal .grid{width:100%!important;margin-inline:0!important}
@@ -74,8 +75,25 @@ body.wendy-cloud-role #teachers,
 body.wendy-cloud-role #makeups,
 body.wendy-cloud-role #camps,
 body.wendy-cloud-role #winterCamps{display:none!important}
-@media(max-width:700px){
- body.wendy-cloud-role #calendar .calendar-toolbar-filters{display:grid!important;grid-template-columns:1fr!important;gap:10px!important}
- body.wendy-cloud-role #calendar .calendar-toolbar-filters>.calendar-field{display:block!important;width:100%!important;max-width:100%!important}
- body.wendy-cloud-role #calendar .calendar-toolbar-tools{grid-template-columns:1fr!important}
+/* Wendy uses the exact Owner toolbar geometry; only data visibility differs. */
+body.wendy-cloud-role #calendar .calendar-toolbar-filters{display:grid!important;grid-template-columns:repeat(5,minmax(130px,1fr)) minmax(250px,1.55fr)!important;gap:12px!important}
+body.wendy-cloud-role #calendar .calendar-toolbar-filters>.calendar-field{display:flex!important;width:auto!important;max-width:none!important}
+body.wendy-cloud-role #calendar #calendarSearch{background-position:13px center!important}
+body.wendy-cloud-role:not(.calendar-selection-active) #calendarCanvas .lesson.selectable:not(.selected),
+body.wendy-cloud-role:not(.calendar-selection-active) #calendarCanvas .week-event.selectable:not(.selected){padding-left:inherit!important}
+body.wendy-cloud-role:not(.calendar-selection-active) #calendarCanvas .lesson.selectable:not(.selected)::before,
+body.wendy-cloud-role:not(.calendar-selection-active) #calendarCanvas .week-event.selectable:not(.selected)::before,
+body.wendy-cloud-role.calendar-selection-active #calendarCanvas .lesson.selectable:not(.selected)::before,
+body.wendy-cloud-role.calendar-selection-active #calendarCanvas .week-event.selectable:not(.selected)::before{display:none!important;content:none!important}
+@media(max-width:1250px){
+ body.wendy-cloud-role #calendar .calendar-toolbar-filters{grid-template-columns:repeat(3,minmax(150px,1fr))!important}
+ body.wendy-cloud-role #calendar .calendar-search-field{grid-column:span 2!important}
+}
+@media(max-width:900px){
+ body.wendy-cloud-role #calendar .calendar-toolbar-filters{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ body.wendy-cloud-role #calendar .calendar-search-field{grid-column:1/-1!important}
+}
+@media(max-width:600px){
+ body.wendy-cloud-role #calendar .calendar-toolbar-filters{grid-template-columns:1fr!important}
+ body.wendy-cloud-role #calendar .calendar-search-field{grid-column:1!important}
 }
