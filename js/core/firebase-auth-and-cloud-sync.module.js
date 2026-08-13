@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.27';
+const APP_RELEASE='20.26.28';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1684,7 +1684,7 @@ async function queueSchedulerChanges(){
    const old=before.get(id),next=after.get(id);if(JSON.stringify(old)===JSON.stringify(next))continue;
    const operation=!old?'create':!next?'delete':'update',lesson=next||old,ref=doc(collection(cloud,'companies',COMPANY_ID,'scheduleRequests'));
    const student=operation==='create'?schedulerSafeStudent((window.__danbridgeGetDB?.().students||[]).find(s=>String(s.id)===String(lesson.studentId))||{}):undefined;
-   jobs.push(setDoc(ref,{companyId:COMPANY_ID,operation,lessonId:id,lesson,...(student?.id?{student}:{}),actorUid:cloudUid,actorEmail:cloudEmailKey,actorName:String(document.body.dataset.cloudDisplayName||'aa').trim()||'aa',createdAt:serverTimestamp(),status:'pending'},{merge:false}));
+   jobs.push(setDoc(ref,{companyId:COMPANY_ID,operation,lessonId:id,lesson,...(student?.id?{student}:{}),actorUid:cloudUid,actorEmail:cloudEmailKey,createdAt:serverTimestamp(),status:'pending'},{merge:false}));
  }
  if(!jobs.length)return;
  cloudStatus('aa 排課異動正在安全送出…','pending');await Promise.all(jobs);schedulerBaselineLessons=deepCopy(current);persistCurrentLocalView();window.renderAll?.();cloudStatus(`課表已立即更新，${jobs.length} 筆異動正在同步給 Owner、校區管理者與老師`,'ok');
@@ -1711,7 +1711,7 @@ async function applySchedulerRequest(requestRef,data){
    if(audit){audit.eventId=`scheduler-${requestSnap.id}`;const record=immutableAuditRecord(audit);transaction.set(record.ref,{...record.payload,action:`scheduler-schedule-${data.operation}`,targetType:'lesson',targetId:id,entityChanges:[...record.payload.entityChanges,`requested-by:${data.actorEmail}`].slice(0,80)})}
    transaction.set(requestRef,{status:'applied',appliedAt:serverTimestamp(),appliedBy:cloudUid},{merge:true});
  });
- if(notificationBefore&&notificationAfter)queueScheduleChangeNotifications(notificationBefore,notificationAfter,`scheduler-${requestRef.id}`,{uid:data.actorUid,name:String(data.actorName||'aa').trim()||'aa'});
+ if(notificationBefore&&notificationAfter)queueScheduleChangeNotifications(notificationBefore,notificationAfter,`scheduler-${requestRef.id}`,{uid:data.actorUid,name:SCHEDULER_ACCOUNT_EMAILS.has(String(data.actorEmail||'').toLowerCase())?'aa':'排課專員'});
 }
 function subscribeSchedulerRequests(){
  unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;if(cloudRole!=='owner')return;
