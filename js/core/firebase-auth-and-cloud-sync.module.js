@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.44';
+const APP_RELEASE='20.26.45';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -49,6 +49,17 @@ let schedulerOptimisticLessons=new Map();
 let schedulerOptimisticStudents=new Map();
 let schedulerUploadRetryTimer=null,schedulerUploadRetryCount=0;
 let schedulerStartupRecoveryChecked=false;
+let schedulerEmergencyRecoveryCandidates=[];
+let schedulerRecoveryHold=false;
+function inspectSchedulerLocalRecoveryCandidates(){
+ const candidates=[],add=(label,value)=>{if(!value||!Array.isArray(value.lessons)||!Array.isArray(value.students)||!Array.isArray(value.teachers))return;const dates=value.lessons.map(l=>l.date).filter(Boolean).sort();candidates.push({label,db:deepCopy(value),lessons:value.lessons.length,students:value.students.length,teachers:value.teachers.length,from:dates[0]||'—',to:dates.at(-1)||'—'})},parse=raw=>{try{return JSON.parse(raw||'null')}catch{return null}};
+ add('主本機資料',parse(localStorage.getItem('danbridge_scheduler_v1')));add('aa 角色快取',parse(localStorage.getItem(localRoleCacheKey())));add('草稿資料',parse(localStorage.getItem('danbridge_scheduler_draft_v8')));try{const versions=parse(localStorage.getItem('danbridge_scheduler_versions_v4'));if(Array.isArray(versions))versions.forEach((v,index)=>add(`版本 ${index+1}｜${v.reason||v.createdAt||''}`,v.data))}catch{}
+ schedulerEmergencyRecoveryCandidates=candidates.sort((a,b)=>b.lessons-a.lessons);return schedulerEmergencyRecoveryCandidates.map(({db,...summary})=>summary);
+}
+window.__danbridgeInspectSchedulerRecovery=inspectSchedulerLocalRecoveryCandidates;
+function showSchedulerRecoveryInspector(){
+ if(document.getElementById('schedulerRecoveryInspector'))return;const summaries=inspectSchedulerLocalRecoveryCandidates(),best=summaries[0];if(!best)return;const button=document.createElement('button');button.type='button';button.id='schedulerRecoveryInspector';button.className='btn';button.style.cssText='position:fixed;right:18px;bottom:92px;z-index:10002;background:#7f1d1d;color:#fff;border-color:#fecaca;box-shadow:0 10px 28px rgba(127,29,29,.28)';button.textContent=`檢查本機救援資料（最多 ${best.lessons} 堂）`;button.onclick=()=>alert(summaries.map((x,i)=>`${i+1}. ${x.label}\n課程 ${x.lessons}｜學生 ${x.students}｜老師 ${x.teachers}\n日期 ${x.from} ～ ${x.to}`).join('\n\n')+'\n\n目前僅掃描，尚未還原或上傳任何資料。');document.body.appendChild(button);
+}
 let unsubscribeScheduleRequests=null;
 let schedulerRequestQueue=[],schedulerRequestQueueIds=new Set(),schedulerRequestWorkerActive=false,schedulerRequestRetryTimer=null;
 let schedulerQuarantinedRequestIds=new Set(),schedulerAppliedRequestCount=0;
@@ -1699,6 +1710,7 @@ function queueOwnerCloudSave(){
 function lessonMap(rows=[]){return new Map(rows.map(row=>[String(row.id),row]))}
 async function queueSchedulerChanges(){
  if(!cloudCanManageSchedule||applyingCloud)return;
+ if(schedulerRecoveryHold){cloudStatus('已進入 aa 救援唯讀鎖定；確認恢復來源前不會上傳或覆蓋資料','pending');return}
  const current=(window.__danbridgeGetDB?.().lessons||[]).map(schedulerSafeLesson),before=lessonMap(schedulerBaselineLessons),after=lessonMap(current),jobs=[];
  for(const id of new Set([...before.keys(),...after.keys()])){
    const old=before.get(id),next=after.get(id);if(JSON.stringify(old)===JSON.stringify(next))continue;
@@ -1858,8 +1870,8 @@ async function subscribeSchedulerTeacher(){
  unsubscribeState=onSnapshot(ref,{includeMetadataChanges:true},snap=>{
    if(snap.metadata.hasPendingWrites)return;const view=snap.data()||{},raw=view.db;
    if(!raw)return cloudStatus('排課專員資料尚未發布，請 Owner 重新儲存帳號權限。','error');
-   const incoming=filteredSchedulerDB(raw),serverLessons=lessonMap(incoming.lessons),serverStudents=lessonMap(incoming.students),serverBaselineLessons=deepCopy(incoming.lessons),serverBaselineStudents=deepCopy(incoming.students);let recoveredAtStartup=false;
-   if(!schedulerStartupRecoveryChecked){schedulerStartupRecoveryChecked=true;const local=filteredSchedulerDB(window.__danbridgeGetDB?.()||emptyDB()),localLessons=lessonMap(local.lessons),localStudents=lessonMap(local.students);for(const [id,row] of localLessons)if(JSON.stringify(serverLessons.get(id))!==JSON.stringify(row)){schedulerOptimisticLessons.set(id,deepCopy(row));recoveredAtStartup=true}for(const [id,row] of localStudents)if(JSON.stringify(serverStudents.get(id))!==JSON.stringify(row)){schedulerOptimisticStudents.set(id,deepCopy(row));recoveredAtStartup=true}}
+   showSchedulerRecoveryInspector();const incoming=filteredSchedulerDB(raw),serverLessons=lessonMap(incoming.lessons),serverStudents=lessonMap(incoming.students),serverBaselineLessons=deepCopy(incoming.lessons),serverBaselineStudents=deepCopy(incoming.students);let recoveredAtStartup=false;
+   if(!schedulerStartupRecoveryChecked){schedulerStartupRecoveryChecked=true;const local=filteredSchedulerDB(window.__danbridgeGetDB?.()||emptyDB()),localLessons=lessonMap(local.lessons),localStudents=lessonMap(local.students);for(const [id,row] of localLessons)if(JSON.stringify(serverLessons.get(id))!==JSON.stringify(row)){schedulerOptimisticLessons.set(id,deepCopy(row));recoveredAtStartup=true}for(const [id,row] of localStudents)if(JSON.stringify(serverStudents.get(id))!==JSON.stringify(row)){schedulerOptimisticStudents.set(id,deepCopy(row));recoveredAtStartup=true}if(recoveredAtStartup)schedulerRecoveryHold=true}
    for(const [id,desired] of [...schedulerOptimisticLessons]){
     const server=serverLessons.get(id);
     if((desired===null&&!server)||(desired&&JSON.stringify(server)===JSON.stringify(desired))){schedulerOptimisticLessons.delete(id);continue}
@@ -1870,7 +1882,7 @@ async function subscribeSchedulerTeacher(){
     if((desired===null&&!server)||(desired&&JSON.stringify(server)===JSON.stringify(desired))){schedulerOptimisticStudents.delete(id);continue}
     if(desired===null)serverStudents.delete(id);else serverStudents.set(id,deepCopy(desired));
    }
-   incoming.lessons=[...serverLessons.values()];incoming.students=[...serverStudents.values()];schedulerBaselineLessons=recoveredAtStartup?serverBaselineLessons:deepCopy(incoming.lessons);schedulerBaselineStudents=recoveredAtStartup?serverBaselineStudents:deepCopy(incoming.students);applyingCloud=true;window.__danbridgeSetDB(deepCopy(incoming));applyCachedLessonReportsToCurrentDB();persistCurrentLocalView();window.renderAll?.();applyingCloud=false;if(recoveredAtStartup)setTimeout(()=>scheduleSchedulerChanges(),0);cloudStatus(schedulerOptimisticLessons.size||schedulerOptimisticStudents.size?'aa 本機未送課表已復原，正在續傳正式課表':'aa 全老師課表已同步','ok');
+   incoming.lessons=[...serverLessons.values()];incoming.students=[...serverStudents.values()];schedulerBaselineLessons=recoveredAtStartup?serverBaselineLessons:deepCopy(incoming.lessons);schedulerBaselineStudents=recoveredAtStartup?serverBaselineStudents:deepCopy(incoming.students);applyingCloud=true;window.__danbridgeSetDB(deepCopy(incoming));applyCachedLessonReportsToCurrentDB();persistCurrentLocalView();window.renderAll?.();applyingCloud=false;cloudStatus(schedulerRecoveryHold?'發現 aa 本機與雲端不一致，已唯讀鎖定；請先檢查本機救援資料':'aa 全老師課表已同步',schedulerRecoveryHold?'pending':'ok');
  },e=>{console.error('Scheduler view failed',e);cloudStatus('aa 課表同步失敗：'+(e.message||e),'error')});
 }
 
@@ -1945,7 +1957,7 @@ installRoleInteractionGuards();
 onAuthStateChanged(auth,async user=>{
  unsubscribeState?.();unsubscribeState=null;unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;scheduleNotificationDocuments=[];lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();roleViewPublishSourceDB=null;
  unsubscribeAccessGuard?.();unsubscribeAccessGuard=null;
- if(!user){lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);clearTimeout(dailyBackupTimer);clearTimeout(schedulerRequestRetryTimer);clearTimeout(schedulerUploadRetryTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudCanManageSchedule=false;schedulerBaselineLessons=[];schedulerBaselineStudents=[];schedulerSaveChain=Promise.resolve();schedulerOptimisticLessons=new Map();schedulerOptimisticStudents=new Map();schedulerUploadRetryCount=0;schedulerStartupRecoveryChecked=false;schedulerRequestQueue=[];schedulerRequestQueueIds=new Set();schedulerQuarantinedRequestIds=new Set();schedulerAppliedRequestCount=0;schedulerRequestWorkerActive=false;cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';document.body.classList.remove('wendy-teacher-role');window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true,canManageSchedule:false});showCloudLogin();cloudStatus('尚未登入');return}
+ if(!user){lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);clearTimeout(dailyBackupTimer);clearTimeout(schedulerRequestRetryTimer);clearTimeout(schedulerUploadRetryTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudCanManageSchedule=false;schedulerBaselineLessons=[];schedulerBaselineStudents=[];schedulerSaveChain=Promise.resolve();schedulerOptimisticLessons=new Map();schedulerOptimisticStudents=new Map();schedulerUploadRetryCount=0;schedulerStartupRecoveryChecked=false;schedulerRecoveryHold=false;schedulerRequestQueue=[];schedulerRequestQueueIds=new Set();schedulerQuarantinedRequestIds=new Set();schedulerAppliedRequestCount=0;schedulerRequestWorkerActive=false;cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';document.body.classList.remove('wendy-teacher-role');window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true,canManageSchedule:false});showCloudLogin();cloudStatus('尚未登入');return}
  try{
    cloudStatus('正在載入權限…');const profile=await ensureProfile(user);try{await recordSuccessfulLogin(user,profile)}catch(e){console.warn('最後登入時間更新失敗：',e);reportOperationalError(e,{category:'cloud-write',area:'access-guard',retryable:true})}applyRoleUI(profile,user);showCloudApp();
    if(profile.role==='owner'){subscribeOwner();subscribeSchedulerRequests();setTimeout(()=>{renderCloudUserManager();renderBranchManagerAccess()},0)}else if(profile.role==='teacher'&&profile.canManageSchedule===true)subscribeSchedulerTeacher();else if(profile.role==='teacher')subscribeTeacher();else if(profile.role==='branch_manager')subscribeBranchManager();else throw new Error('不支援的角色：'+profile.role);subscribeRoleAccessGuard();subscribeLessonReports();subscribeScheduleNotifications();
