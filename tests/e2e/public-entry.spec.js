@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.21';
+const CLOUD_RELEASE = '20.26.22';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -75,6 +75,14 @@ for (const schedulerAccount of [
     selectionBar.classList.remove('hidden');
     const selectionRect=selectionBar.getBoundingClientRect();
     const calendarCardRect=document.querySelector('#calendar>.card').getBoundingClientRect();
+    const contextMenu=document.getElementById('calendarContextMenu');
+    document.querySelectorAll('main section.active').forEach(section=>section.classList.remove('active'));document.getElementById('calendar').classList.add('active');
+    const contextHiddenByDefault=getComputedStyle(contextMenu).display==='none';
+    contextMenu.classList.add('show');
+    const contextVisibleOnCalendar=getComputedStyle(contextMenu).display!=='none';
+    document.getElementById('calendar').classList.remove('active');document.getElementById('students').classList.add('active');
+    const contextHiddenOnStudents=getComputedStyle(contextMenu).display==='none';
+    document.getElementById('students').classList.remove('active');document.getElementById('calendar').classList.add('active');contextMenu.classList.remove('show');
     const sampleLesson=db.lessons[0];
     if(sampleLesson)window.editLesson(sampleLesson.id);
     const backdrop = document.getElementById('lessonModal');
@@ -106,7 +114,7 @@ for (const schedulerAccount of [
       teacherSelectAlign: getComputedStyle(document.getElementById('lessonTeacher')).textAlign,
       teacherSelectPadding: [getComputedStyle(document.getElementById('lessonTeacher')).paddingLeft,getComputedStyle(document.getElementById('lessonTeacher')).paddingRight],
       idleSelectionMarkers: [...document.querySelectorAll('#calendarCanvas .selectable:not(.selected)')].filter(card=>getComputedStyle(card,'::before').display!=='none').length,
-      editingToolsHidden: ['#calendar .calendar-head-add','#calendar .calendar-quick-add','#calendar .weekly-copy-btn','#calendar #selectionModeBtn','#calendar .day-add','#calendarContextMenu','#courseDrawerEditBtn'].filter(selector => {
+      editingToolsHidden: ['#calendar .calendar-head-add','#calendar .calendar-quick-add','#calendar .weekly-copy-btn','#calendar #selectionModeBtn','#calendar .day-add','#courseDrawerEditBtn'].filter(selector => {
         const element=document.querySelector(selector);return !element||element.hidden||getComputedStyle(element).display==='none';
       }),
       forbiddenSections: ['dashboard','teachers','lessons','makeups','camps','finance','data','security'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none'),
@@ -116,6 +124,7 @@ for (const schedulerAccount of [
       reportShortcutExists: Boolean(document.getElementById('teacherReportShortcut')),
       selectionPosition: getComputedStyle(selectionBar).position,
       selectionContained: selectionRect.left>=calendarCardRect.left-1&&selectionRect.right<=calendarCardRect.right+1
+      ,contextHiddenByDefault,contextVisibleOnCalendar,contextHiddenOnStudents
     };
   }, schedulerAccount);
   expect(result.modalLeft).toBeGreaterThanOrEqual(0);
@@ -142,6 +151,9 @@ for (const schedulerAccount of [
   expect(result.reportShortcutExists).toBe(false);
   expect(result.selectionPosition).toBe('static');
   expect(result.selectionContained).toBe(true);
+  expect(result.contextHiddenByDefault).toBe(true);
+  expect(result.contextVisibleOnCalendar).toBe(true);
+  expect(result.contextHiddenOnStudents).toBe(true);
 });
 
 test('English mode translates the major application workspaces', async ({ page }) => {

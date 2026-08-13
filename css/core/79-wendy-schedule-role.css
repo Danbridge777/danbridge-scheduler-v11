@@ -47,7 +47,6 @@ body.wendy-cloud-role #calendar .weekly-copy-btn,
 body.wendy-cloud-role #calendar #selectionModeBtn,
 body.wendy-cloud-role #calendar #selectionBar,
 body.wendy-cloud-role #calendar .day-add,
-body.wendy-cloud-role #calendarContextMenu,
 body.wendy-cloud-role #courseDrawerEditBtn,
 body.wendy-cloud-role>.floating-actions{display:flex!important}
 body.wendy-cloud-role #calendar .calendar-field:has(>#calendarTeacherFilter),
@@ -57,6 +56,8 @@ body.wendy-cloud-role #calendar .calendar-field:has(>#calendarRoomFilter),
 body.wendy-cloud-role #calendar .calendar-field:has(>#calendarStateFilter){display:block!important}
 body.wendy-cloud-role #calendar .teacher-redundant-filter{display:block!important}
 body.wendy-cloud-role #calendarContextMenu .v20-owner-action{display:grid!important}
+body.wendy-cloud-role #calendarContextMenu{display:none!important}
+body.wendy-cloud-role:has(#calendar.active) #calendarContextMenu.show{display:block!important}
 /* The scheduler selection controls belong to the calendar card, never the viewport. */
 body.wendy-cloud-role #calendar #selectionBar{
  position:static!important;inset:auto!important;z-index:auto!important;
