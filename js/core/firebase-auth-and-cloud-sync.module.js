@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.50';
+const APP_RELEASE='20.26.52';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -108,6 +108,8 @@ let scopedViewHashCache=new Map();
 let companyAccessCache=null;
 let companyAccessCacheAt=0;
 let legacyMigrationStarted=false;
+const SYNC_HEALTH_BASELINE_KEY='danbridge_sync_health_baseline_v1';
+let lastSyncHealthReport=null;
 const COMPANY_ACCESS_CACHE_TTL=30000;
 const errorEventQueue=[];
 const errorEventFingerprints=new Map();
@@ -439,12 +441,44 @@ async function createCloudSafetyBackup(force=false){
  }catch(e){console.error('createCloudSafetyBackup failed',e);resilienceStatus('建立雲端快照失敗，系統會在下次連線重試','error');reportOperationalError(e,{category:'cloud-write',area:'owner-upload',retryable:true});return false}
 }
 function scheduleDailyCloudBackup(){clearTimeout(dailyBackupTimer);dailyBackupTimer=setTimeout(()=>createCloudSafetyBackup(false),1200)}
+function readSyncHealthBaseline(){try{const value=JSON.parse(localStorage.getItem(SYNC_HEALTH_BASELINE_KEY)||'null');return value&&Number.isFinite(value.lessons)&&value.lessons>=0?value:null}catch{return null}}
+function updateSyncHealthBaseline(counts){
+ const previous=readSyncHealthBaseline(),today=new Date().toISOString().slice(0,10),next=!previous||counts.lessons>=previous.lessons?{day:today,lessons:counts.lessons,students:counts.students,teachers:counts.teachers,observedAt:new Date().toISOString()}:previous;
+ try{localStorage.setItem(SYNC_HEALTH_BASELINE_KEY,JSON.stringify(next))}catch{}
+ return next;
+}
+function syncHealthTimestamp(value){const millis=value?.toMillis?.()||0;return millis?new Date(millis).toISOString():''}
+function formatHealthBytes(bytes){return bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KiB`:`${(bytes/1048576).toFixed(2)} MiB`}
+function buildSyncHealthReport({db,mainData,pendingRequests,errorRows}){
+ const counts=backupCounts(db),estimatedBytes=new TextEncoder().encode(JSON.stringify({db})).length,baseline=updateSyncHealthBaseline(counts),drop=Math.max(0,baseline.lessons-counts.lessons),dropRatio=baseline.lessons?drop/baseline.lessons:0;
+ const requestAges=pendingRequests.map(row=>{const created=row.createdAt?.toMillis?.()||0;return created?Math.max(0,Date.now()-created):0}),oldestRequestMs=Math.max(0,...requestAges);
+ const flags={online:navigator.onLine,localDirty:Boolean(localDirtyHash),ownerUploading:ownerUploadInFlight,ownerQueued:ownerUploadQueued,roleViewUploading:roleViewPublishInFlight,roleViewQueued:roleViewPublishQueued,roleViewRetryCount,notificationBatches:scheduleNotificationDeliveryJobs.size,schedulerLocalQueue:schedulerRequestQueue.length,schedulerWorkerActive:schedulerRequestWorkerActive,schedulerQuarantined:schedulerQuarantinedRequestIds.size,pendingCloudRequests:pendingRequests.length,oldestRequestMs};
+ const alerts=[];
+ if(!flags.online)alerts.push({level:'error',message:'目前離線；所有新變更會留在本機，恢復網路後才續傳。'});
+ if(estimatedBytes>=921600)alerts.push({level:'error',message:`主資料估計 ${formatHealthBytes(estimatedBytes)}，已接近 Firestore 1 MiB 文件上限，應立即進行資料拆分。`});else if(estimatedBytes>=768000)alerts.push({level:'pending',message:`主資料估計 ${formatHealthBytes(estimatedBytes)}，已進入容量預警區，建議安排資料拆分。`});
+ if(drop>=10&&dropRatio>=.1)alerts.push({level:'error',message:`本機監測基準為 ${baseline.lessons} 堂，目前少 ${drop} 堂（${Math.round(dropRatio*100)}%）；已警示但不會自動還原或寫入。`});
+ if(flags.schedulerQuarantined)alerts.push({level:'error',message:`有 ${flags.schedulerQuarantined} 筆 aa 異常要求被隔離，原始要求仍保留，需人工檢查。`});
+ if(oldestRequestMs>=600000)alerts.push({level:'error',message:`最舊 aa 待處理要求已等待 ${Math.floor(oldestRequestMs/60000)} 分鐘。`});else if(oldestRequestMs>=120000)alerts.push({level:'pending',message:`最舊 aa 待處理要求已等待 ${Math.floor(oldestRequestMs/60000)} 分鐘，系統仍會自動續傳。`});
+ if(roleViewRetryCount>=3)alerts.push({level:'error',message:`老師／aa 檢視已連續重試 ${roleViewRetryCount} 次，請保持 Owner 裝置連線並檢查錯誤紀錄。`});else if(roleViewPublishQueued||roleViewPublishInFlight)alerts.push({level:'pending',message:'老師／aa 檢視正在背景更新。'});
+ const activeWork=flags.localDirty||flags.ownerUploading||flags.ownerQueued||flags.roleViewUploading||flags.roleViewQueued||flags.notificationBatches||flags.schedulerLocalQueue||flags.pendingCloudRequests;
+ const level=alerts.some(x=>x.level==='error')?'error':alerts.length||activeWork?'pending':'ok';
+ return{generatedAt:new Date().toISOString(),release:APP_RELEASE,environment:DANBRIDGE_ENVIRONMENT,readOnly:true,level,counts,estimatedMainDocumentBytes:estimatedBytes,main:{clientHash:String(mainData?.clientHash||'').slice(0,16),updatedAt:syncHealthTimestamp(mainData?.updatedAt),localMatchesCloud:Boolean(mainData?.clientHash)&&mainData.clientHash===dataHash(db)},baseline:{...baseline,drop,dropRatio:Number(dropRatio.toFixed(4))},flags,alerts,errorEvents:errorRows.map(row=>({area:String(row.area||'sync'),code:String(row.code||'unknown'),retryable:row.retryable===true,occurredAt:syncHealthTimestamp(row.occurredAt)}))};
+}
+function downloadSyncHealthReport(){if(!lastSyncHealthReport)return alert('請先按「重新整理」完成健康檢查。');const blob=new Blob([JSON.stringify(lastSyncHealthReport,null,2)],{type:'application/json'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`danbridge-sync-health-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000)}
 async function renderSyncRecoveryCenter(){
  if(cloudRole!=='owner')return;
- const summary=document.getElementById('syncRecoverySummary'),errors=document.getElementById('syncRecoveryErrors');if(!summary||!errors)return;
+ const summary=document.getElementById('syncRecoverySummary'),errors=document.getElementById('syncRecoveryErrors'),badge=document.getElementById('syncHealthBadge'),metrics=document.getElementById('syncHealthMetrics'),alerts=document.getElementById('syncHealthAlerts');if(!summary||!errors||!badge||!metrics||!alerts)return;
  const pending=[localDirtyHash&&'本機資料待上傳',ownerUploadInFlight&&'主資料同步中',ownerUploadQueued&&'主資料等待重試',roleViewPublishQueued&&'角色檢視等待重試',scheduleNotificationDeliveryJobs.size&&`${scheduleNotificationDeliveryJobs.size} 批課表通知待送`].filter(Boolean);
  summary.textContent=`網路：${navigator.onLine?'正常':'離線'}｜${pending.length?pending.join('｜'):'目前沒有待處理項目'}`;summary.dataset.kind=pending.length?'pending':'ok';
- try{const qs=await getDocs(collection(cloud,'companies',COMPANY_ID,'errorEvents')),rows=qs.docs.map(d=>d.data()).sort((a,b)=>(b.occurredAt?.toMillis?.()||0)-(a.occurredAt?.toMillis?.()||0)).slice(0,12);errors.innerHTML=rows.length?rows.map(x=>`<div class="backup-item"><div class="info"><b>${escapeHTML(x.area||'同步')}｜${escapeHTML(x.code||'unknown')}</b><div class="small">${escapeHTML(formatNotificationTimestamp(x.occurredAt)||'時間確認中')}｜${x.retryable?'可自動重試':'需人工檢查'}</div></div><span class="pill ${x.retryable?'blue':'red'}">${x.retryable?'已記錄':'注意'}</span></div>`).join(''):'<span class="small">目前沒有同步錯誤紀錄。</span>'}catch(e){errors.innerHTML='<span class="small">錯誤紀錄暫時無法讀取。</span>'}
+ badge.textContent='檢查中';badge.className='sync-health-badge pending';
+ try{
+  const [mainSnap,errorSnap,requestSnap]=await Promise.all([getDoc(doc(cloud,'companies',COMPANY_ID,'data','main')),getDocs(collection(cloud,'companies',COMPANY_ID,'errorEvents')),getDocs(query(collection(cloud,'companies',COMPANY_ID,'scheduleRequests'),where('status','==','pending')))]),rows=errorSnap.docs.map(d=>d.data()).sort((a,b)=>(b.occurredAt?.toMillis?.()||0)-(a.occurredAt?.toMillis?.()||0)).slice(0,12),requests=requestSnap.docs.map(d=>d.data()),db=deepCopy(window.__danbridgeGetDB?.()||emptyDB());
+  lastSyncHealthReport=buildSyncHealthReport({db,mainData:mainSnap.data()||{},pendingRequests:requests,errorRows:rows});const report=lastSyncHealthReport;
+  badge.textContent=report.level==='ok'?'健康':report.level==='pending'?'處理中／注意':'需要處理';badge.className=`sync-health-badge ${report.level}`;
+  metrics.innerHTML=[['主資料',`課程 ${report.counts.lessons}｜學生 ${report.counts.students}｜老師 ${report.counts.teachers}`],['估計容量',`${formatHealthBytes(report.estimatedMainDocumentBytes)} / 1 MiB`],['Owner 主資料',report.main.localMatchesCloud?'本機與雲端一致':(report.flags.localDirty?'本機變更待確認':'正在比對版本')],['aa 要求',`雲端待處理 ${report.flags.pendingCloudRequests}｜本機佇列 ${report.flags.schedulerLocalQueue}｜隔離 ${report.flags.schedulerQuarantined}`],['老師／aa 檢視',report.flags.roleViewUploading||report.flags.roleViewQueued?`更新中｜重試 ${report.flags.roleViewRetryCount}`:'目前無待處理'],['課表通知',`待送 ${report.flags.notificationBatches} 批`]].map(([label,value])=>`<div class="sync-health-metric"><span>${escapeHTML(label)}</span><b>${escapeHTML(value)}</b></div>`).join('');
+  alerts.innerHTML=report.alerts.length?report.alerts.map(item=>`<div class="sync-health-alert ${item.level}">${escapeHTML(item.message)}</div>`).join(''):'<div class="sync-health-alert ok">目前未偵測到容量、課程數下降或同步佇列異常。</div>';
+  errors.innerHTML=rows.length?rows.map(x=>`<div class="backup-item"><div class="info"><b>${escapeHTML(x.area||'同步')}｜${escapeHTML(x.code||'unknown')}</b><div class="small">${escapeHTML(formatNotificationTimestamp(x.occurredAt)||'時間確認中')}｜${x.retryable?'可自動重試':'需人工檢查'}</div></div><span class="pill ${x.retryable?'blue':'red'}">${x.retryable?'已記錄':'注意'}</span></div>`).join(''):'<span class="small">目前沒有同步錯誤紀錄。</span>';
+ }catch(e){badge.textContent='檢查失敗';badge.className='sync-health-badge error';alerts.innerHTML='<div class="sync-health-alert error">唯讀健康檢查暫時無法完成；沒有修改任何資料。</div>';errors.innerHTML='<span class="small">錯誤紀錄暫時無法讀取。</span>';console.error('renderSyncRecoveryCenter',e)}
 }
 async function retryAllOperationalSync(){
  if(cloudRole!=='owner')return;
@@ -483,7 +517,7 @@ async function saveEmergencyOwner(){
 function installOperationalResilienceUI(){
  if(cloudRole!=='owner')return;
  const bind=(id,handler)=>{const button=document.getElementById(id);if(button)button.onclick=handler};
- bind('createCloudBackupNow',()=>createCloudSafetyBackup(true));bind('refreshCloudBackups',listCloudSafetyBackups);bind('retryAllSync',retryAllOperationalSync);bind('refreshSyncRecovery',renderSyncRecoveryCenter);bind('saveEmergencyOwner',saveEmergencyOwner);bind('refreshImmutableAudit',listImmutableAudit);
+ bind('createCloudBackupNow',()=>createCloudSafetyBackup(true));bind('refreshCloudBackups',listCloudSafetyBackups);bind('retryAllSync',retryAllOperationalSync);bind('refreshSyncRecovery',renderSyncRecoveryCenter);bind('downloadSyncHealthReport',downloadSyncHealthReport);bind('saveEmergencyOwner',saveEmergencyOwner);bind('refreshImmutableAudit',listImmutableAudit);
  listCloudSafetyBackups();renderSyncRecoveryCenter();listEmergencyOwners();listImmutableAudit();
 }
 
