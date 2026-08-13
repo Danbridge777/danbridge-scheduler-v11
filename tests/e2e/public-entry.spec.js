@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.33';
+const CLOUD_RELEASE = '20.26.34';
 const APP_SHELL_RELEASE = '20.26.27';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -620,20 +620,20 @@ test('public entry has no horizontal viewport overflow', async ({ page }) => {
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
 });
 
-test('Wendy alone receives soft orange lesson cards without masking warnings', async ({ page }) => {
+test('Wendy receives an orange interface while lesson room colors stay unchanged', async ({ page }) => {
   await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
   const colors = await page.evaluate(() => {
-    document.body.classList.add('teacher-cloud-role', 'wendy-teacher-role');
-    const normal = document.createElement('div'); normal.className = 'week-event';
-    const month = document.createElement('div'); month.className = 'lesson';
-    const warning = document.createElement('div'); warning.className = 'week-event teacher-overlap';
-    document.querySelector('#calendarCanvas')?.append(normal, month, warning);
-    const result = { normal: getComputedStyle(normal).backgroundImage, month: getComputedStyle(month).backgroundImage, warning: getComputedStyle(warning).backgroundImage };
-    normal.remove(); month.remove(); warning.remove(); return result;
+    document.body.classList.add('teacher-cloud-role');
+    document.body.dataset.cloudDisplayName = 'Wendy';
+    document.body.classList.remove('auth-locked');
+    const normal = document.createElement('div'); normal.className = 'week-event'; normal.style.setProperty('--location-bg','#dbeafe');
+    document.querySelector('#calendarCanvas')?.append(normal);
+    const result = { header: getComputedStyle(document.querySelector('body>header')).backgroundImage, nav: getComputedStyle(document.querySelector('body>nav')).backgroundImage, lesson: getComputedStyle(normal).backgroundImage };
+    normal.remove(); return result;
   });
-  expect(colors.normal).toContain('255, 247, 237');
-  expect(colors.month).toContain('255, 247, 237');
-  expect(colors.warning).toContain('239, 68, 68');
+  expect(colors.header).toContain('187, 100, 40');
+  expect(colors.nav).toContain('169, 85, 32');
+  expect(colors.lesson).not.toContain('255, 247, 237');
 });
 
 test('iPad install action opens usable Safari guidance', async ({ page }, testInfo) => {

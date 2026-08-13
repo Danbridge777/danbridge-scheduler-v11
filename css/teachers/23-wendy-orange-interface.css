@@ -1,0 +1,46 @@
+/* Wendy stays a standard teacher. This file changes interface chrome only. */
+body.wendy-teacher-role,
+body[data-cloud-display-name="Wendy"]{
+  --wendy-orange:#c96f2b;
+  --wendy-orange-deep:#9f4f1d;
+  --wendy-orange-soft:#fff3e6;
+  --wendy-orange-line:#f2c79f;
+}
+
+body.wendy-teacher-role:not(.auth-locked)>nav,
+body[data-cloud-display-name="Wendy"]:not(.auth-locked)>nav{
+  background:linear-gradient(180deg,#a95520 0%,#c87330 58%,#b45f25 100%)!important;
+}
+body.wendy-teacher-role:not(.auth-locked)>header,
+body[data-cloud-display-name="Wendy"]:not(.auth-locked)>header{
+  background:linear-gradient(120deg,#bb6428 0%,#e79b57 100%)!important;
+}
+body.wendy-teacher-role:not(.auth-locked)>nav button.active,
+body[data-cloud-display-name="Wendy"]:not(.auth-locked)>nav button.active{
+  background:rgba(255,255,255,.20)!important;
+  border-color:rgba(255,255,255,.35)!important;
+}
+
+@media(min-width:1100px){
+  body.wendy-teacher-role:not(.auth-locked)>nav,
+  body[data-cloud-display-name="Wendy"]:not(.auth-locked)>nav{background:linear-gradient(180deg,#a95520 0%,#c87330 58%,#b45f25 100%)!important}
+}
+
+body.wendy-teacher-role .btn.primary,
+body[data-cloud-display-name="Wendy"] .btn.primary{
+  background:linear-gradient(135deg,var(--wendy-orange),#e69550)!important;
+  border-color:var(--wendy-orange-deep)!important;
+  color:#fff!important;
+}
+body.wendy-teacher-role .calendar-eyebrow,
+body.wendy-teacher-role .v32-eyebrow,
+body[data-cloud-display-name="Wendy"] .calendar-eyebrow,
+body[data-cloud-display-name="Wendy"] .v32-eyebrow{
+  color:var(--wendy-orange-deep)!important;
+}
+body.wendy-teacher-role .v32-card-head h2::after,
+body[data-cloud-display-name="Wendy"] .v32-card-head h2::after{
+  background:var(--wendy-orange)!important;
+}
+
+/* Deliberately no .lesson or .week-event rules: course colors keep the shared room/location palette. */
