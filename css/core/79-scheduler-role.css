@@ -1,0 +1,161 @@
+/* Scheduler specialist: teacher privacy boundary plus all-teacher schedule editing. */
+body.scheduler-cloud-role{--scheduler:#d88a3d;--scheduler-soft:#fff6e9;--scheduler-card:#fffaf3;--scheduler-line:#f1d7b8}
+html body:not(.auth-locked)>nav button[hidden]{display:none!important}
+html body.scheduler-cloud-role:not(.auth-locked)>nav button[data-tab="lessons"]{display:none!important}
+html body.scheduler-cloud-role:not(.auth-locked)>nav button[data-tab="dashboard"]{display:none!important}
+body.scheduler-cloud-role:not(.auth-locked)>header{background:linear-gradient(120deg,#d8924c,#e9ad6d)!important}
+body.scheduler-cloud-role:not(.auth-locked)>nav{background:linear-gradient(180deg,#b96f32,#cf8749 55%,#a95f28)!important}
+body.scheduler-cloud-role:not(.auth-locked)>nav button.active{background:rgba(255,241,220,.24)!important;box-shadow:inset 4px 0 #ffe0b8!important}
+body.scheduler-cloud-role .cloud-role-label{color:#b76522!important}
+html body.scheduler-cloud-role:not(.auth-locked) main section[id]>.card,
+html body.scheduler-cloud-role:not(.auth-locked) main section[id] .v32-dashboard-grid>.card,
+html body.scheduler-cloud-role:not(.auth-locked) main section[id] .v32-side-stack>.card,
+html body.scheduler-cloud-role:not(.auth-locked) main section[id] .metric,
+html body.scheduler-cloud-role #courseDrawer,
+html body.scheduler-cloud-role #lessonModal .modal{
+ background:linear-gradient(155deg,#fffdf9 0%,var(--scheduler-card) 100%)!important;
+ background-color:var(--scheduler-card)!important;
+ border-color:var(--scheduler-line)!important;
+ box-shadow:0 10px 30px rgba(180,111,42,.08)!important
+}
+html body.scheduler-cloud-role.teacher-cloud-role #dashboard .card,
+html body.scheduler-cloud-role.teacher-cloud-role #calendar>.card,
+html body.scheduler-cloud-role.teacher-cloud-role #lessons>.card{
+ background:linear-gradient(155deg,#fffdf9 0%,#fffaf3 100%)!important;
+ background-color:#fffaf3!important;
+ border-color:#f1d7b8!important
+}
+body.scheduler-cloud-role #calendar .calendar-toolbar-v16,
+body.scheduler-cloud-role #calendar .calendar-toolbar-v16 .calendar-toolbar-row,
+body.scheduler-cloud-role #lessons>.card>.toolbar{background:#fff7ec!important;border-color:#efd7ba!important}
+body.scheduler-cloud-role #calendar .calendar-toolbar-v16 .calendar-toolbar-row{border-left-color:#e4a35f!important}
+body.scheduler-cloud-role .teacher-lesson-summary{background:#fff5e7!important;border-color:#efd0a8!important;color:#84572d!important}
+body.scheduler-cloud-role #calendar .calendar-head-add,
+body.scheduler-cloud-role #calendar .calendar-quick-add,
+body.scheduler-cloud-role #calendar .weekly-copy-btn,
+body.scheduler-cloud-role #calendar #selectionModeBtn,
+body.scheduler-cloud-role #calendar #selectionBar,
+body.scheduler-cloud-role #calendarTeacherFilter,
+body.scheduler-cloud-role #calendarLocationFilter,
+body.scheduler-cloud-role #calendarStudentFilter,
+body.scheduler-cloud-role #calendarRoomFilter,
+body.scheduler-cloud-role #calendarStateFilter{display:flex!important}
+body.scheduler-cloud-role #calendar .owner-only-action,
+body.scheduler-cloud-role #calendar .calendar-head-add,
+body.scheduler-cloud-role #calendar .calendar-quick-add,
+body.scheduler-cloud-role #calendar .weekly-copy-btn,
+body.scheduler-cloud-role #calendar #selectionModeBtn,
+body.scheduler-cloud-role #calendar #selectionBar,
+body.scheduler-cloud-role #calendar .day-add,
+body.scheduler-cloud-role #courseDrawerEditBtn,
+body.scheduler-cloud-role>.floating-actions{display:flex!important}
+body.scheduler-cloud-role #calendar .calendar-field:has(>#calendarTeacherFilter),
+body.scheduler-cloud-role #calendar .calendar-field:has(>#calendarLocationFilter),
+body.scheduler-cloud-role #calendar .calendar-field:has(>#calendarStudentFilter),
+body.scheduler-cloud-role #calendar .calendar-field:has(>#calendarRoomFilter),
+body.scheduler-cloud-role #calendar .calendar-field:has(>#calendarStateFilter){display:block!important}
+body.scheduler-cloud-role #calendar .teacher-redundant-filter{display:block!important}
+body.scheduler-cloud-role #calendarContextMenu .v20-owner-action{display:grid!important}
+body.scheduler-cloud-role #calendarContextMenu{display:none!important}
+body.scheduler-cloud-role:has(#calendar.active) #calendarContextMenu.show{display:block!important}
+/* The scheduler selection controls belong to the calendar card, never the viewport. */
+body.scheduler-cloud-role #calendar #selectionBar{
+ position:static!important;inset:auto!important;z-index:auto!important;
+ width:100%!important;max-width:100%!important;margin:8px 0!important;
+ justify-content:center!important;box-sizing:border-box!important
+}
+body.scheduler-cloud-role #calendar #selectionBar.hidden{display:none!important}
+body.scheduler-cloud-role #lessonModal .col-6:has(>#paymentStatus),
+body.scheduler-cloud-role #lessonModal label:has(+ #paymentStatus),
+body.scheduler-cloud-role #lessonModal #paymentStatus,
+body.scheduler-cloud-role #lessonModal label:has(+ #chargeStudent),
+body.scheduler-cloud-role #lessonModal #chargeStudent,
+body.scheduler-cloud-role #lessonModal label:has(+ #payTeacher),
+body.scheduler-cloud-role #lessonModal #payTeacher,
+body.scheduler-cloud-role>.floating-actions .v20-owner-action,
+body.scheduler-cloud-role #v18Fab,
+body.scheduler-cloud-role #v18FabMenu{display:none!important}
+body.scheduler-cloud-role #quickStudentBox .col-6:has(>#quickBilling),
+body.scheduler-cloud-role #quickStudentBox .col-6:has(>#quickRate){display:none!important}
+html body.scheduler-cloud-role #lessonModal .student-select-row>button{display:inline-flex!important;visibility:visible!important;opacity:1!important}
+body.scheduler-cloud-role #lessonModal .modal{border-color:#f0d0aa!important;box-shadow:0 28px 70px rgba(155,91,35,.18)!important}
+body.scheduler-cloud-role #lessonModal .btn.primary{background:linear-gradient(135deg,#d88a3d,#bc6d2d)!important;border-color:#bc6d2d!important}
+body.scheduler-cloud-role #lessonModal,
+body.scheduler-cloud-role #lessonModal .modal,
+body.scheduler-cloud-role #lessonModal .grid,
+body.scheduler-cloud-role #lessonModal .col-6,
+body.scheduler-cloud-role #lessonModal input,
+body.scheduler-cloud-role #lessonModal select,
+body.scheduler-cloud-role #lessonModal button{max-width:100%!important;min-width:0!important;box-sizing:border-box!important}
+body.scheduler-cloud-role #lessonModal input:not([type="checkbox"]):not([type="radio"]),
+body.scheduler-cloud-role #lessonModal select,
+body.scheduler-cloud-role #calendar input,
+body.scheduler-cloud-role #calendar select{text-align:center!important;text-align-last:center!important;line-height:1.25!important;padding-left:38px!important;padding-right:38px!important}
+body.scheduler-cloud-role #calendar option{text-align:center!important}
+body.scheduler-cloud-role #lessonModal #lessonTeacher{
+ -webkit-appearance:none!important;appearance:none!important;
+ width:100%!important;padding:0 54px!important;text-indent:0!important;
+ text-align:center!important;text-align-last:center!important;
+ background-color:#fff!important;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23596876' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E")!important;
+ background-repeat:no-repeat!important;background-position:right 18px center!important;background-size:16px!important
+}
+body.scheduler-cloud-role #lessonModal #lessonTeacher option{text-align:center!important}
+body.scheduler-cloud-role #lessonModal input[type="date"],
+body.scheduler-cloud-role #lessonModal input[type="time"]{display:block!important;width:100%!important;padding-inline:14px!important;min-height:54px!important;height:54px!important}
+body.scheduler-cloud-role #lessonModal .grid{width:100%!important;margin-inline:0!important}
+body.scheduler-cloud-role #lessonModal .grid>.col-6{width:100%!important;margin-inline:0!important}
+body.scheduler-cloud-role #lessonModal .modal-head,
+body.scheduler-cloud-role #lessonModal label,
+body.scheduler-cloud-role #lessonModal .small,
+body.scheduler-cloud-role #calendar .calendar-field,
+body.scheduler-cloud-role #calendar .calendar-field label{text-align:center!important}
+body.scheduler-cloud-role #finance,
+body.scheduler-cloud-role #settlement,
+body.scheduler-cloud-role #data,
+body.scheduler-cloud-role #security,
+body.scheduler-cloud-role #teachers,
+body.scheduler-cloud-role #makeups,
+body.scheduler-cloud-role #camps,
+body.scheduler-cloud-role #winterCamps{display:none!important}
+body.scheduler-cloud-role #dashboard,
+body.scheduler-cloud-role #lessons{display:none!important}
+body.scheduler-cloud-role #students>.grid>.card:first-child,
+body.scheduler-cloud-role #students th:nth-child(n+4),
+body.scheduler-cloud-role #students td:nth-child(n+4){display:none!important}
+body.scheduler-cloud-role #students>.grid{display:block!important;width:100%!important;max-width:none!important}
+body.scheduler-cloud-role #students>.grid>.card.col-8{display:block!important;width:100%!important;max-width:none!important;margin:0!important}
+body.scheduler-cloud-role #students .card.col-8>.toolbar{
+ display:grid!important;grid-template-columns:auto minmax(280px,1fr) minmax(200px,260px) minmax(180px,220px)!important;
+ align-items:end!important;gap:14px!important;width:100%!important
+}
+body.scheduler-cloud-role #students .card.col-8>.toolbar>div{width:100%!important;min-width:0!important}
+body.scheduler-cloud-role #students .table-wrap{width:100%!important}
+body.scheduler-cloud-role #students table{width:100%!important;min-width:680px!important;table-layout:fixed!important}
+body.scheduler-cloud-role #students th:nth-child(1){width:28%}
+body.scheduler-cloud-role #students th:nth-child(2){width:38%}
+body.scheduler-cloud-role #students th:nth-child(3){width:34%}
+@media(max-width:1050px){body.scheduler-cloud-role #students .card.col-8>.toolbar{grid-template-columns:1fr 1fr!important}body.scheduler-cloud-role #students .card.col-8>.toolbar>div:first-child{grid-column:1/-1}}
+@media(max-width:650px){body.scheduler-cloud-role #students .card.col-8>.toolbar{grid-template-columns:1fr!important}body.scheduler-cloud-role #students table{min-width:620px!important}}
+/* Scheduler specialist uses the exact Owner toolbar geometry; only data visibility differs. */
+body.scheduler-cloud-role #calendar .calendar-toolbar-filters{display:grid!important;grid-template-columns:repeat(5,minmax(130px,1fr)) minmax(250px,1.55fr)!important;gap:12px!important}
+body.scheduler-cloud-role #calendar .calendar-toolbar-filters>.calendar-field{display:flex!important;width:auto!important;max-width:none!important}
+body.scheduler-cloud-role #calendar #calendarSearch{background-position:13px center!important}
+body.scheduler-cloud-role:not(.calendar-selection-active) #calendarCanvas .lesson.selectable:not(.selected),
+body.scheduler-cloud-role:not(.calendar-selection-active) #calendarCanvas .week-event.selectable:not(.selected){padding-left:inherit!important}
+body.scheduler-cloud-role:not(.calendar-selection-active) #calendarCanvas .lesson.selectable:not(.selected)::before,
+body.scheduler-cloud-role:not(.calendar-selection-active) #calendarCanvas .week-event.selectable:not(.selected)::before,
+body.scheduler-cloud-role.calendar-selection-active #calendarCanvas .lesson.selectable:not(.selected)::before,
+body.scheduler-cloud-role.calendar-selection-active #calendarCanvas .week-event.selectable:not(.selected)::before{display:none!important;content:none!important}
+@media(max-width:1250px){
+ body.scheduler-cloud-role #calendar .calendar-toolbar-filters{grid-template-columns:repeat(3,minmax(150px,1fr))!important}
+ body.scheduler-cloud-role #calendar .calendar-search-field{grid-column:span 2!important}
+}
+@media(max-width:900px){
+ body.scheduler-cloud-role #calendar .calendar-toolbar-filters{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ body.scheduler-cloud-role #calendar .calendar-search-field{grid-column:1/-1!important}
+}
+@media(max-width:600px){
+ body.scheduler-cloud-role #calendar .calendar-toolbar-filters{grid-template-columns:1fr!important}
+ body.scheduler-cloud-role #calendar .calendar-search-field{grid-column:1!important}
+}

@@ -1,14 +1,4 @@
 (function(){
-  const originalSwitchTab=window.switchTab;
-  window.switchTab=function(id){
-    const scheduler=window.DanbridgeAccess?.getContext?.().canManageSchedule===true;
-    if(!scheduler||id!=='students')return originalSwitchTab?.(id);
-    window.cancelSelectionForNewAction?.();document.body.dataset.activeSection='students';
-    document.querySelectorAll('main section').forEach(section=>section.classList.toggle('active',section.id==='students'));
-    document.querySelectorAll('nav button[data-tab]').forEach(button=>button.classList.toggle('active',button.dataset.tab==='students'));
-    window.renderStudents?.();
-    if(matchMedia('(max-width:1100px)').matches)window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth'});
-  };
   const original=window.saveQuickStudent;
   window.saveQuickStudent=function(){
     const scheduler=window.DanbridgeAccess?.getContext?.().canManageSchedule===true;

@@ -1,8 +1,8 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.26';
-const APP_SHELL_RELEASE = '20.26.26';
+const CLOUD_RELEASE = '20.26.27';
+const APP_SHELL_RELEASE = '20.26.27';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
@@ -64,7 +64,7 @@ test('teacher schedule hides the location legend', async ({ page }) => {
 test('owner lesson navigation paints before the heavy table render', async ({ page }) => {
   await page.goto('/');
   const result=await page.evaluate(async()=>{
-    document.body.classList.remove('auth-locked','teacher-cloud-role','branch-manager-cloud-role','wendy-cloud-role');
+    document.body.classList.remove('auth-locked','teacher-cloud-role','branch-manager-cloud-role','scheduler-cloud-role');
     window.currentCloudRole=()=> 'owner';
     const original=window.renderLessons;let rendered=false;
     window.renderLessons=()=>{const start=performance.now();while(performance.now()-start<80){}rendered=true};
@@ -76,6 +76,60 @@ test('owner lesson navigation paints before the heavy table render', async ({ pa
   expect(result.immediate).toBe(true);
   expect(result.elapsed).toBeLessThan(30);
   expect(result.rendered).toBe(true);
+});
+
+test('every owner navigation and dashboard shortcut responds before heavy rendering', async ({ page }) => {
+  await page.goto('/');
+  const result=await page.evaluate(async()=>{
+    document.body.classList.remove('auth-locked','teacher-cloud-role','branch-manager-cloud-role','scheduler-cloud-role');
+    window.DanbridgeAccess.setContext({role:'owner',canManageSchedule:false});window.currentCloudRole=()=> 'owner';
+    const renderNames=['renderDashboard','renderStudents','renderCalendar','renderLessons','renderFinance'],originals={};
+    renderNames.forEach(name=>{originals[name]=window[name];window[name]=()=>{const start=performance.now();while(performance.now()-start<80){}}});
+    const tabs=['dashboard','students','teachers','calendar','lessons','makeups','camps','finance','data','security'],checks=[];
+    for(const tab of tabs){const start=performance.now();window.switchTab(tab);checks.push({tab,elapsed:performance.now()-start,section:document.getElementById(tab).classList.contains('active'),button:document.querySelector(`nav button[data-tab="${tab}"]`).classList.contains('active')})}
+    const shortcutTargets=[...document.querySelectorAll('#dashboard button[onclick*="switchTab"]')].map(button=>button.getAttribute('onclick').match(/switchTab\('([^']+)'\)/)?.[1]).filter(Boolean);
+    renderNames.forEach(name=>window[name]=originals[name]);await new Promise(resolve=>setTimeout(resolve,120));
+    return{checks,shortcutTargets};
+  });
+  expect(result.checks.every(item=>item.section&&item.button&&item.elapsed<30)).toBe(true);
+  expect(result.shortcutTargets.sort()).toEqual(['calendar','calendar','calendar','lessons','makeups'].sort());
+});
+
+test('role navigation matrix rejects every forbidden workspace', async ({ page }) => {
+  await page.goto('/');
+  const matrix=await page.evaluate(()=>{
+    document.body.classList.remove('auth-locked');
+    const attempt=(role,canManageSchedule,tabs)=>{window.DanbridgeAccess.setContext({role,canManageSchedule});window.currentCloudRole=()=>role;return tabs.map(tab=>{window.switchTab(tab);return[tab,document.body.dataset.activeSection]})};
+    return{
+      owner:attempt('owner',false,['dashboard','students','teachers','calendar','lessons','makeups','camps','finance','data','security']),
+      scheduler:attempt('teacher',true,['students','calendar','dashboard','lessons','finance','security']),
+      teacher:attempt('teacher',false,['dashboard','calendar','lessons','students','teachers','finance','security']),
+      manager:attempt('branch_manager',false,['dashboard','students','teachers','calendar','lessons','makeups','settlement','finance','data','security'])
+    };
+  });
+  expect(matrix.owner.every(([requested,active])=>requested===active)).toBe(true);
+  expect(matrix.scheduler).toEqual([['students','students'],['calendar','calendar'],['dashboard','calendar'],['lessons','calendar'],['finance','calendar'],['security','calendar']]);
+  expect(matrix.teacher).toEqual([['dashboard','dashboard'],['calendar','calendar'],['lessons','lessons'],['students','dashboard'],['teachers','dashboard'],['finance','dashboard'],['security','dashboard']]);
+  expect(matrix.manager).toEqual([['dashboard','dashboard'],['students','students'],['teachers','teachers'],['calendar','calendar'],['lessons','lessons'],['makeups','makeups'],['settlement','finance'],['finance','finance'],['data','dashboard'],['security','dashboard']]);
+});
+
+test('ordinary teacher cannot reveal owner or aa-only controls', async ({ page }) => {
+  await page.goto('/');
+  const result=await page.evaluate(()=>{
+    document.body.classList.remove('auth-locked','scheduler-cloud-role','branch-manager-cloud-role');document.body.classList.add('teacher-cloud-role');
+    window.DanbridgeAccess.setContext({role:'teacher',teacherId:'teacher-ordinary',email:'teacher@example.com',canManageSchedule:false});
+    const hiddenIds=['students','teachers','makeups','camps','winterCamps','settlement','finance','data','security'];
+    return{
+      privateSections:hiddenIds.filter(id=>getComputedStyle(document.getElementById(id)).display!=='none'),
+      schedulerClass:document.body.classList.contains('scheduler-cloud-role'),
+      allowed:['dashboard','calendar','lessons'].map(tab=>{window.switchTab(tab);return document.body.dataset.activeSection}),
+      rejected:['students','teachers','finance','security'].map(tab=>{window.switchTab(tab);return document.body.dataset.activeSection})
+    };
+  });
+  expect(result.privateSections).toEqual([]);
+  expect(result.schedulerClass).toBe(false);
+  expect(result.allowed).toEqual(['dashboard','calendar','lessons']);
+  expect(result.rejected).toEqual(['dashboard','dashboard','dashboard','dashboard']);
 });
 
 for (const schedulerAccount of [

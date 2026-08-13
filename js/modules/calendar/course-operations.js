@@ -122,7 +122,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('courseDrawer')?.
 
 function editLesson(id){
   const context=window.DanbridgeAccess?.getContext?.()||{},role=window.currentCloudRole?.()||context.role||'';
-  if(role==='teacher'&&(context.canManageSchedule===true||document.body.classList.contains('wendy-cloud-role')))return openLessonModal(todayStr(),'16:00',id);
+  if(role==='teacher'&&(context.canManageSchedule===true||document.body.classList.contains('scheduler-cloud-role')))return openLessonModal(todayStr(),'16:00',id);
   const restricted=role==='teacher'||role==='branch_manager'||document.body.classList.contains('teacher-cloud-role')||document.body.classList.contains('branch-manager-cloud-role');
   if(!restricted)return openLessonModal(todayStr(),'16:00',id);
   return openCourseDrawer(id);

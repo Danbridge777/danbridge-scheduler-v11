@@ -86,7 +86,7 @@ function toggleSelectionMode(force){
   updateSelectionCount();
   window.DanbridgeCalendarInteractions?.refresh?.();
 }
-function calendarOwnerCanEdit(){const context=window.DanbridgeAccess?.getContext?.()||{},role=document.body.dataset.cloudRole||context.role||window.currentCloudRole?.()||'';return !role||role==='owner'||(role==='teacher'&&(context.canManageSchedule===true||document.body.classList.contains('wendy-cloud-role')))}
+function calendarOwnerCanEdit(){const context=window.DanbridgeAccess?.getContext?.()||{},role=document.body.dataset.cloudRole||context.role||window.currentCloudRole?.()||'';return !role||role==='owner'||(role==='teacher'&&(context.canManageSchedule===true||document.body.classList.contains('scheduler-cloud-role')))}
 function toggleLessonSelection(id){
   if(!calendarOwnerCanEdit())return;
   if(!id)return;
