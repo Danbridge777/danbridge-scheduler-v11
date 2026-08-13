@@ -77,6 +77,15 @@ let stagingShadowQueued=null;
 let stagingShadowInFlight=false;
 let stagingShadowLastVerifiedHash='';
 let stagingShadowDiagnostic={state:'idle',generationId:'',sourceHash:'',verifiedHash:'',totalChunks:0,totalRecords:0,error:'',updatedAt:''};
+function setStagingShadowDiagnostic(next){
+ stagingShadowDiagnostic={...stagingShadowDiagnostic,...next,updatedAt:new Date().toISOString()};
+ if(DANBRIDGE_ENVIRONMENT!=='staging')return;
+ document.body.dataset.stagingShadowState=stagingShadowDiagnostic.state;
+ document.body.dataset.stagingShadowSourceHash=stagingShadowDiagnostic.sourceHash;
+ document.body.dataset.stagingShadowVerifiedHash=stagingShadowDiagnostic.verifiedHash;
+ document.body.dataset.stagingShadowChunks=String(stagingShadowDiagnostic.totalChunks||0);
+ document.body.dataset.stagingShadowRecords=String(stagingShadowDiagnostic.totalRecords||0);
+}
 let unsubscribeState=null;
 let unsubscribeAccessGuard=null;
 let syncTimer=null;
@@ -1683,7 +1692,7 @@ async function publishStagingShadowGeneration(db,sourceHash){
  const generationRef=doc(collection(cloud,'companies',COMPANY_ID,'shardedGenerations'));
  const snapshot=createShardedSnapshot(db,{hash:dataHash,maxChunkBytes:180000,generationId:generationRef.id});
  if(snapshot.manifest.sourceHash!==sourceHash)throw new Error('影子分片來源版本在排程前已改變');
- stagingShadowDiagnostic={state:'uploading',generationId:generationRef.id,sourceHash,verifiedHash:'',totalChunks:snapshot.manifest.totalChunks,totalRecords:snapshot.manifest.totalRecords,error:'',updatedAt:new Date().toISOString()};
+ setStagingShadowDiagnostic({state:'uploading',generationId:generationRef.id,sourceHash,verifiedHash:'',totalChunks:snapshot.manifest.totalChunks,totalRecords:snapshot.manifest.totalRecords,error:''});
  await setDoc(generationRef,{...snapshot.manifest,status:'uploading',environment:'staging',createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false});
  await Promise.all(snapshot.chunks.map(chunk=>setDoc(doc(generationRef,'chunks',chunk.documentId),{generationId:generationRef.id,key:chunk.key,index:chunk.index,items:chunk.items,sourceHash,createdAt:serverTimestamp()},{merge:false})));
  await setDoc(generationRef,{status:'uploaded',uploadedAt:serverTimestamp()},{merge:true});
@@ -1694,7 +1703,7 @@ async function publishStagingShadowGeneration(db,sourceHash){
  if(verifiedHash!==sourceHash)throw new Error('影子分片讀回驗證與舊主資料不一致');
  await setDoc(generationRef,{status:'verified',verifiedHash,verifiedAt:serverTimestamp()},{merge:true});
  stagingShadowLastVerifiedHash=verifiedHash;
- stagingShadowDiagnostic={...stagingShadowDiagnostic,state:'verified',verifiedHash,error:'',updatedAt:new Date().toISOString()};
+ setStagingShadowDiagnostic({state:'verified',verifiedHash,error:''});
 }
 async function processStagingShadowQueue(){
  if(stagingShadowInFlight||!canRunStagingShadow({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole}))return;
@@ -1704,14 +1713,14 @@ async function processStagingShadowQueue(){
    const queued=stagingShadowQueued;stagingShadowQueued=null;
    if(queued.sourceHash===stagingShadowLastVerifiedHash)continue;
    try{await publishStagingShadowGeneration(queued.db,queued.sourceHash)}
-   catch(error){stagingShadowDiagnostic={...stagingShadowDiagnostic,state:'failed',error:String(error?.message||error).slice(0,300),updatedAt:new Date().toISOString()};console.error('Staging shadow sharding failed',error);reportOperationalError(error,{category:'cloud-write',area:'staging-shadow-shard',retryable:true})}
+   catch(error){setStagingShadowDiagnostic({state:'failed',error:String(error?.message||error).slice(0,300)});console.error('Staging shadow sharding failed',error);reportOperationalError(error,{category:'cloud-write',area:'staging-shadow-shard',retryable:true})}
   }
  }finally{stagingShadowInFlight=false;if(stagingShadowQueued)queueMicrotask(processStagingShadowQueue)}
 }
 function queueStagingShadowGeneration(db,sourceHash=dataHash(db)){
  if(!canRunStagingShadow({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole}))return false;
  stagingShadowQueued={db:deepCopy(db),sourceHash:String(sourceHash)};
- stagingShadowDiagnostic={...stagingShadowDiagnostic,state:'queued',sourceHash:String(sourceHash),error:'',updatedAt:new Date().toISOString()};
+ setStagingShadowDiagnostic({state:'queued',sourceHash:String(sourceHash),error:''});
  queueMicrotask(processStagingShadowQueue);return true;
 }
 window.__danbridgeQueueStagingShadowGeneration=queueStagingShadowGeneration;

@@ -327,6 +327,7 @@ assert.match(cloudSource, /createShardedSnapshot\(db,\{hash:dataHash,maxChunkByt
 assert.match(cloudSource, /function queueStagingShadowGeneration[\s\S]*if\(!canRunStagingShadow\(\{environment:DANBRIDGE_ENVIRONMENT,role:cloudRole\}\)\)return false;/, 'shadow sharding has a hard staging Owner gate');
 assert.doesNotMatch(cloudSource, /shardedControl|createShardedActivation\(/, 'shadow sharding cannot activate or replace the legacy read source');
 assert.match(cloudSource, /__danbridgeGetStagingShadowDiagnostic=\(\)=>canRunStagingShadow/, 'shadow diagnostics are exposed only behind the staging Owner gate');
+assert.match(cloudSource, /if\(DANBRIDGE_ENVIRONMENT!=='staging'\)return;[\s\S]*dataset\.stagingShadowState/, 'shadow verification is observable in the DOM only on staging');
 assert.match(cloudSource,/classList\.toggle\('wendy-teacher-role',cloudRole==='teacher'&&cloudEmailKey==='wendylee0820520@gmail\.com'\)/,'Wendy alone receives the teacher-card color marker');
 assert.match(cloudSource,/classList\.remove\('wendy-teacher-role'\)/,'Wendy card styling is removed immediately on sign-out');
 assert.doesNotMatch(cloudSource, /jobs\.push\(setDoc\(ref,[\s\S]{0,500}actorName/, 'aa schedule requests never add fields outside the Firestore allowlist');
