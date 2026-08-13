@@ -319,7 +319,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:80},(_,i)=>({id:`l${i}`}))}).risky,true,'a large lesson reduction triggers the destructive-change guard');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.37'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.39'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource,/classList\.toggle\('wendy-teacher-role',cloudRole==='teacher'&&cloudEmailKey==='wendylee0820520@gmail\.com'\)/,'Wendy alone receives the teacher-card color marker');
 assert.match(cloudSource,/classList\.remove\('wendy-teacher-role'\)/,'Wendy card styling is removed immediately on sign-out');
 assert.doesNotMatch(cloudSource, /jobs\.push\(setDoc\(ref,[\s\S]{0,500}actorName/, 'aa schedule requests never add fields outside the Firestore allowlist');
@@ -655,6 +655,8 @@ assert.match(cloudSource, /課表已立即更新，[\s\S]*正在同步給 Owner�
 assert.match(cloudSource, /schedulerSaveChain=schedulerSaveChain\.catch\(\(\)=>\{\}\)\.then\(queueSchedulerChanges\)/, 'rapid Wendy drag, paste and edit saves are serialized without duplicate schedule requests');
 assert.match(cloudSource, /operation!=='delete'\?schedulerSafeStudent/, 'aa create and update requests both carry the referenced student recovery snapshot');
 assert.match(cloudSource, /unchangedOrphanStudent=data\.operation==='update'&&index>=0&&String\(after\.lessons\[index\]\?\.studentId\|\|''\)===String\(lesson\.studentId\|\|''\)/, 'an existing aa lesson can still move when its unchanged historical student record is already absent');
+assert.match(cloudSource, /transaction\.get\(schedulerViewRef\)[\s\S]*viewStudent=schedulerSafeStudent\(\(schedulerViewSnap\.data\(\)\?\.db\?\.students/, 'legacy pending aa requests recover their student snapshot from the scheduler view inside the Owner transaction');
+assert.match(cloudSource, /approvedLegacyCreate=data\.operation==='create'&&SCHEDULER_ACCOUNT_EMAILS\.has[\s\S]*name:'待補學生資料'[\s\S]*由舊版 aa 待同步課程保留/, 'approved legacy aa creates preserve orphaned lesson IDs with an explicit non-financial recovery student instead of dropping lessons');
 assert.match(cloudSource,/cloudRole==='teacher'&&cloudCanManageSchedule[\s\S]*originalSaveDB\?\.\(options\)[\s\S]*scheduleSchedulerChanges\(\)/,'every aa save persists locally first and immediately queues its serialized cloud request');
 assert.match(cloudSource, /for\(const \[id,desired\] of \[\.\.\.schedulerOptimisticLessons\]\)[\s\S]*serverLessons\.set\(id,deepCopy\(desired\)\)/, 'an intermediate server snapshot cannot erase Wendy optimistic drag, paste or edit results');
 assert.match(cloudSource, /cloudRole==='teacher'&&cloudCanManageSchedule[\s\S]*originalSaveDB[\s\S]*scheduleSchedulerChanges/, 'every shared calendar save path immediately queues Wendy synchronization');

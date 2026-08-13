@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.37';
+const APP_RELEASE='20.26.39';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1712,14 +1712,14 @@ function scheduleSchedulerChanges(){
 }
 async function applySchedulerRequest(requestRef,data){
  if(cloudRole!=='owner'||data?.status!=='pending')return;
- const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main');
+ const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main'),schedulerViewRef=doc(cloud,'companies',COMPANY_ID,'schedulerViews',String(data.actorEmail||'').trim().toLowerCase());
  let notificationBefore=null,notificationAfter=null;
  await runTransaction(cloud,async transaction=>{
-   const [requestSnap,mainSnap]=await Promise.all([transaction.get(requestRef),transaction.get(mainRef)]);if(!requestSnap.exists()||requestSnap.data()?.status!=='pending'||!mainSnap.exists())return;
+   const [requestSnap,mainSnap,schedulerViewSnap]=await Promise.all([transaction.get(requestRef),transaction.get(mainRef),transaction.get(schedulerViewRef)]);if(!requestSnap.exists()||requestSnap.data()?.status!=='pending'||!mainSnap.exists())return;
    const before=deepCopy(mainSnap.data()?.db),after=deepCopy(before),id=String(data.lessonId||''),index=(after.lessons||[]).findIndex(l=>String(l.id)===id),lesson=schedulerSafeLesson(data.lesson||{});
    if(!id||String(lesson.id||'')!==id)throw new Error('排課異動 ID 不一致');
    if(data.operation==='delete'){if(index>=0)after.lessons.splice(index,1)}
-   else {if(!(after.students||[]).some(s=>String(s.id)===String(lesson.studentId))){const student=schedulerSafeStudent(data.student||{}),unchangedOrphanStudent=data.operation==='update'&&index>=0&&String(after.lessons[index]?.studentId||'')===String(lesson.studentId||'');if(student.id===String(lesson.studentId)&&String(student.name||'').trim())after.students.push({...student,billing:'hour',rate:0,note:''});else if(!unchangedOrphanStudent)throw new Error('排課異動包含不存在的學生')}if(!lessonTeacherIds(lesson).every(tid=>(after.teachers||[]).some(t=>String(t.id)===tid)))throw new Error('排課異動包含不存在的老師');if(index>=0)after.lessons[index]={...after.lessons[index],...lesson};else after.lessons.push({...lesson,paymentStatus:'unpaid',chargeStudent:'yes',payTeacher:'yes',note:''})}
+   else {if(!(after.students||[]).some(s=>String(s.id)===String(lesson.studentId))){const requestStudent=schedulerSafeStudent(data.student||{}),viewStudent=schedulerSafeStudent((schedulerViewSnap.data()?.db?.students||[]).find(s=>String(s.id)===String(lesson.studentId))||{}),student=requestStudent.id?requestStudent:viewStudent,unchangedOrphanStudent=data.operation==='update'&&index>=0&&String(after.lessons[index]?.studentId||'')===String(lesson.studentId||''),approvedLegacyCreate=data.operation==='create'&&SCHEDULER_ACCOUNT_EMAILS.has(String(data.actorEmail||'').trim().toLowerCase())&&String(lesson.studentId||'');if(student.id===String(lesson.studentId)&&String(student.name||'').trim())after.students.push({...student,billing:'hour',rate:0,note:''});else if(approvedLegacyCreate)after.students.push({id:String(lesson.studentId),name:'待補學生資料',status:'在讀',courseType:'1對1',branchIds:lesson.branchId?[String(lesson.branchId)]:[],billing:'hour',rate:0,note:'由舊版 aa 待同步課程保留，請 Owner 補正學生姓名與資料'});else if(!unchangedOrphanStudent)throw new Error('排課異動包含不存在的學生')}if(!lessonTeacherIds(lesson).every(tid=>(after.teachers||[]).some(t=>String(t.id)===tid)))throw new Error('排課異動包含不存在的老師');if(index>=0)after.lessons[index]={...after.lessons[index],...lesson};else after.lessons.push({...lesson,paymentStatus:'unpaid',chargeStudent:'yes',payTeacher:'yes',note:''})}
    notificationBefore=before;notificationAfter=after;
    const audit=buildImmutableDataAudit(before,after),auditRecord=audit?(()=>{audit.eventId=`scheduler-${requestSnap.id}`;return immutableAuditRecord(audit)})():null,auditSnap=auditRecord?await transaction.get(auditRecord.ref):null,hash=dataHash(after);transaction.set(mainRef,{db:after,updatedAt:serverTimestamp(),updatedBy:data.actorUid,clientHash:hash},{merge:false});
    if(auditRecord&&!auditSnap.exists())transaction.set(auditRecord.ref,{...auditRecord.payload,action:`scheduler-schedule-${data.operation}`,targetType:'lesson',targetId:id,entityChanges:[...auditRecord.payload.entityChanges,`requested-by:${data.actorEmail}`].slice(0,80)});
