@@ -13,10 +13,11 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.46';
+const APP_RELEASE='20.26.47';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
+const CONFIRMED_AA_RECOVERY_SHA256='66b13334efa1e992301c4d2fab788b2c6c552f4bd67f502b8556180156720d1b';
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
 const app=initializeApp(firebaseConfig);
@@ -65,8 +66,16 @@ function buildSchedulerRecoveryDifferenceReport(){
 }
 window.__danbridgeBuildSchedulerRecoveryDifferenceReport=buildSchedulerRecoveryDifferenceReport;
 function downloadSchedulerRecoveryDifferenceReport(){const report=buildSchedulerRecoveryDifferenceReport();if(!report)return alert('找不到可比較的主本機資料與 aa 角色快取。');const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`danbridge-aa-recovery-difference-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);alert(`唯讀差異報告已下載：\n缺少課程 ${report.missingLessonCount} 堂\n缺少學生 ${report.missingStudentCount} 位\n\n尚未還原或上傳任何資料。`)}
+async function sha256Text(text){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+async function submitConfirmedSchedulerRecovery(file){
+ if(!cloudCanManageSchedule||cloudEmailKey!=='aa0966626336@gmail.com')throw new Error('只有 aa 排課帳號可執行這次確認恢復');const text=await file.text(),hash=await sha256Text(text);if(hash!==CONFIRMED_AA_RECOVERY_SHA256)throw new Error('救援檔案 SHA-256 不符，已阻止寫入');const report=JSON.parse(text),lessons=report.missingLessons||[],students=report.missingStudents||[],wilson=students.find(x=>x.id==='ent_fec1fa6e-0a08-4602-ac0c-1a73c077c64a');
+ if(report.readOnly!==true||lessons.length!==67||students.length!==1||!wilson||wilson.name!=='Wilson'||lessons.some(x=>x.teacherId!=='mrlilwcujyemtb'||x.date<'2026-08-01'||x.date>'2026-08-16'||!x.id||!x.studentId)||new Set(lessons.map(x=>x.id)).size!==67)throw new Error('救援內容未通過 67 堂／Daniel／日期／Wilson 固定範圍驗證');
+ if(!confirm('即將恢復已確認的 Daniel 2026/8/1～8/16 共 67 堂及 Wilson。\n\n只建立缺少的固定 ID；既有或已送出的項目會跳過，不會整份覆蓋。確定執行？'))return;
+ let created=0,skipped=0;for(let index=0;index<lessons.length;index++){const row=lessons[index],requestRef=doc(cloud,'companies',COMPANY_ID,'scheduleRequests',`confirmed-recovery-${row.id}`),existing=await getDoc(requestRef);if(existing.exists()){skipped++;continue}const lesson=schedulerSafeLesson(row.raw||row),student=lesson.studentId===wilson.id?schedulerSafeStudent(wilson):undefined;await setDoc(requestRef,{companyId:COMPANY_ID,operation:'create',lessonId:lesson.id,lesson,...(student?.id?{student}:{}),actorUid:cloudUid,actorEmail:cloudEmailKey,createdAt:serverTimestamp(),status:'pending'},{merge:false});created++;cloudStatus(`確認恢復要求送出中：${index+1} / ${lessons.length}（新增 ${created}、跳過 ${skipped}）`,'pending');await new Promise(resolve=>setTimeout(resolve,250))}cloudStatus(`67 堂確認恢復要求已安全送出：新增 ${created}、已存在跳過 ${skipped}；等待 Owner 原子套用`,'ok');alert(`恢復要求已送出。\n新增 ${created} 筆，已存在跳過 ${skipped} 筆。\n\n請保持 aa 與 Owner 網路連線，Owner 將逐筆原子套用。`)
+}
+function chooseConfirmedSchedulerRecoveryFile(){const input=document.createElement('input');input.type='file';input.accept='.json,.txt,application/json,text/plain';input.onchange=async()=>{try{if(input.files?.[0])await submitConfirmedSchedulerRecovery(input.files[0])}catch(e){console.error(e);cloudStatus('確認恢復失敗：'+(e.message||e),'error');alert('確認恢復失敗：'+(e.message||e))}};input.click()}
 function showSchedulerRecoveryInspector(){
- if(document.getElementById('schedulerRecoveryInspector'))return;const summaries=inspectSchedulerLocalRecoveryCandidates(),best=summaries[0];if(!best)return;const button=document.createElement('button');button.type='button';button.id='schedulerRecoveryInspector';button.className='btn';button.style.cssText='position:fixed;right:18px;bottom:92px;z-index:10002;background:#7f1d1d;color:#fff;border-color:#fecaca;box-shadow:0 10px 28px rgba(127,29,29,.28)';button.textContent=`下載唯讀救援差異（最多 ${best.lessons} 堂）`;button.onclick=downloadSchedulerRecoveryDifferenceReport;document.body.appendChild(button);
+ if(document.getElementById('schedulerRecoveryInspector'))return;const summaries=inspectSchedulerLocalRecoveryCandidates(),best=summaries[0];if(!best)return;const wrap=document.createElement('div');wrap.id='schedulerRecoveryInspector';wrap.style.cssText='position:fixed;right:18px;bottom:92px;z-index:10002;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end';const download=document.createElement('button'),restore=document.createElement('button');for(const button of [download,restore]){button.type='button';button.className='btn';button.style.cssText='background:#7f1d1d;color:#fff;border-color:#fecaca;box-shadow:0 10px 28px rgba(127,29,29,.28)'}download.textContent=`下載唯讀差異（最多 ${best.lessons} 堂）`;download.onclick=downloadSchedulerRecoveryDifferenceReport;restore.textContent='選取已確認檔案恢復 67 堂';restore.onclick=chooseConfirmedSchedulerRecoveryFile;wrap.append(download,restore);document.body.appendChild(wrap);
 }
 let unsubscribeScheduleRequests=null;
 let schedulerRequestQueue=[],schedulerRequestQueueIds=new Set(),schedulerRequestWorkerActive=false,schedulerRequestRetryTimer=null;
