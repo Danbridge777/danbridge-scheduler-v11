@@ -169,7 +169,7 @@
   "tests/e2e/public-entry.spec.js": "9995c198b9cc578d8c04364dea6853ca9da832a9f39b4a1d5c0a6a930d8aa287",
   "tests/firestore-rules.test.mjs": "6a57ef3ec9d2cd9250133fec756e1b6c8705df858e07f4a11cb172f07fa05d0f",
   "tests/sharded-sync-stress.test.mjs": "29d249cba4f55bc11317db6ad273051ffa885e41c2bcfca32e4148ee5a1b3a95",
-  "tools/audit_calendar_scenarios.js": "df4f6d35db6ae22c6bf4c5b2fc30ba15fc1575f75d93d7a5114474b9127e32d5",
+  "tools/audit_calendar_scenarios.js": "582ad84d3dc2e63a15fc8cf93292849e34964dc9197c348d84b400ad409c8d0c",
   "tools/audit_full_system.js": "e2158b5a6f8772cf7906c615c00257c302b13a9c3bc8d2e75b7e1e21571a5383",
   "tools/audit_scenarios.js": "5815b6e0103e25a7870ebe7eab03df8c3b2468b5a1287bda1bab79a7d36a1d3f",
   "tools/e2e_static_server.js": "835f20e57610aa6609dbbba1cef67f85f77e9670d32a3edfcdb4d1176de55667",

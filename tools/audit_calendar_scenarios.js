@@ -295,4 +295,51 @@ assert.equal(coTeacherConflict.name, 'Teacher Two', 'the teacher warning identif
 assert.equal(coTeacherConflict.lesson.id, 'co-teaching-existing', 'the teacher warning returns the blocking lesson as its message source');
 assert.equal(context.conflictDetail(lesson({ id: 'co-teaching-candidate', studentId: 's1', room: 'C', teacherId: 't2', teacherIds: ['t2'] }), ''), null, 'teacher overlap remains a warning rather than a student or room block');
 
+// A single confirmed deletion keeps a complete recovery point and undo restores
+// the exact lesson identity without touching unrelated records or creating copies.
+elements.lessonId = { value: 'delete-target' };
+elements.lessonModal = { classList: fakeClassList('show') };
+context.syncMakeupForDeletedLesson = () => { context.makeupDeletes += 1; };
+context.makeupDeletes = 0;
+context.changeRows = [];
+context.logChange = (action, after, before) => context.changeRows.push({ action, after, before: before ? JSON.parse(JSON.stringify(before)) : before });
+context.closeLessonModal = () => elements.lessonModal.classList.remove('show');
+let deletionHistory = [];
+context.snapshot = () => { deletionHistory.push(JSON.stringify(context.db)); context.snapshots += 1; };
+context.undoLast = () => {
+  const previous = deletionHistory.pop();
+  if (!previous) return;
+  context.db = JSON.parse(previous);
+  context.saveDB();
+};
+const deleteStart = courseSource.indexOf('function deleteCurrentLesson');
+const deleteEnd = courseSource.indexOf("let activeCourseDrawerId=''");
+assert.ok(deleteStart >= 0 && deleteEnd > deleteStart, 'single-lesson delete function is available');
+vm.runInContext(courseSource.slice(deleteStart, deleteEnd), context);
+const deleteTarget = lesson({ id: 'delete-target', note: 'recovery marker' });
+const deleteUntouched = lesson({ id: 'delete-untouched', date: '2026-08-04', studentId: 's2', teacherId: 't2', teacherIds: ['t2'], room: 'B' });
+context.db = { students: [...context.db.students], teachers: [...context.db.teachers], lessons: [deleteTarget, deleteUntouched] };
+const savesBeforeDelete = context.saves;
+context.confirm = () => false;
+context.deleteCurrentLesson();
+assert.deepEqual(context.db.lessons.map(row => row.id), ['delete-target', 'delete-untouched'], 'cancelling deletion changes nothing');
+assert.equal(context.saves, savesBeforeDelete, 'cancelled deletion does not save');
+assert.equal(deletionHistory.length, 0, 'cancelled deletion creates no recovery snapshot');
+context.confirm = () => true;
+context.deleteCurrentLesson();
+assert.deepEqual(context.db.lessons.map(row => row.id), ['delete-untouched'], 'confirmed deletion removes only the selected lesson');
+assert.equal(context.db.students.length, 2, 'deleting a lesson preserves every student');
+assert.equal(context.db.teachers.length, 2, 'deleting a lesson preserves every teacher');
+assert.equal(context.saves, savesBeforeDelete + 1, 'confirmed deletion saves exactly once');
+assert.equal(context.makeupDeletes, 1, 'confirmed deletion synchronizes linked makeup state exactly once');
+assert.equal(context.changeRows.length, 1, 'confirmed deletion creates exactly one audit change');
+assert.equal(context.changeRows[0].action, '刪除課程');
+assert.deepEqual(context.changeRows[0].before, deleteTarget, 'the deletion audit preserves the complete recoverable lesson');
+context.undoLast();
+assert.deepEqual(context.db.lessons.map(row => row.id).sort(), ['delete-target', 'delete-untouched'], 'undo restores the same lesson id without duplication');
+assert.deepEqual(context.db.lessons.find(row => row.id === 'delete-target'), deleteTarget, 'undo restores every deleted lesson field exactly');
+assert.equal(context.db.students.length, 2, 'undo preserves every student');
+assert.equal(context.db.teachers.length, 2, 'undo preserves every teacher');
+assert.equal(context.saves, savesBeforeDelete + 2, 'undo schedules exactly one additional save');
+
 console.log('PASS: teacher-scoped copy, calendar dates, cross-midnight rejection, co-teaching, and conflict sources.');
