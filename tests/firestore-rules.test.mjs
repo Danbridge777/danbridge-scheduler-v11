@@ -87,6 +87,7 @@ describe('aa 全老師排課權限', () => {
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/scheduler-2-request`)));
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/schedulerViews/${SECOND_SCHEDULER_EMAIL}`)));
     await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/scheduler-new-student`), { ...request, lessonId: 'lesson-new-student', lesson: { ...request.lesson, id: 'lesson-new-student', studentId: 'student-new' }, student: { id: 'student-new', name: 'New Student', parent: 'Parent', contact: '0912345678', homeAddress: 'Address', courseType: '1對1' } }));
+    await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/scheduler-update-student-snapshot`), { ...request, operation: 'update', lessonId: 'lesson-own', lesson: { ...request.lesson, id: 'lesson-own', studentId: 'student-1' }, student: { id: 'student-1', name: 'Student One', parent: 'Parent' } }));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/data/main`)));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/syncConflictBackups/conflict-1`)));
   });

@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.36';
+const APP_RELEASE='20.26.37';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1698,7 +1698,7 @@ async function queueSchedulerChanges(){
  for(const id of new Set([...before.keys(),...after.keys()])){
    const old=before.get(id),next=after.get(id);if(JSON.stringify(old)===JSON.stringify(next))continue;
    const operation=!old?'create':!next?'delete':'update',lesson=next||old,ref=doc(collection(cloud,'companies',COMPANY_ID,'scheduleRequests'));
-   const student=operation==='create'?schedulerSafeStudent((window.__danbridgeGetDB?.().students||[]).find(s=>String(s.id)===String(lesson.studentId))||{}):undefined;
+   const student=operation!=='delete'?schedulerSafeStudent((window.__danbridgeGetDB?.().students||[]).find(s=>String(s.id)===String(lesson.studentId))||{}):undefined;
    jobs.push(setDoc(ref,{companyId:COMPANY_ID,operation,lessonId:id,lesson,...(student?.id?{student}:{}),actorUid:cloudUid,actorEmail:cloudEmailKey,createdAt:serverTimestamp(),status:'pending'},{merge:false}));
  }
  if(!jobs.length)return;
@@ -1719,7 +1719,7 @@ async function applySchedulerRequest(requestRef,data){
    const before=deepCopy(mainSnap.data()?.db),after=deepCopy(before),id=String(data.lessonId||''),index=(after.lessons||[]).findIndex(l=>String(l.id)===id),lesson=schedulerSafeLesson(data.lesson||{});
    if(!id||String(lesson.id||'')!==id)throw new Error('排課異動 ID 不一致');
    if(data.operation==='delete'){if(index>=0)after.lessons.splice(index,1)}
-   else {if(!(after.students||[]).some(s=>String(s.id)===String(lesson.studentId))){const student=schedulerSafeStudent(data.student||{});if(student.id===String(lesson.studentId)&&String(student.name||'').trim())after.students.push({...student,billing:'hour',rate:0,note:''});else throw new Error('排課異動包含不存在的學生')}if(!lessonTeacherIds(lesson).every(tid=>(after.teachers||[]).some(t=>String(t.id)===tid)))throw new Error('排課異動包含不存在的老師');if(index>=0)after.lessons[index]={...after.lessons[index],...lesson};else after.lessons.push({...lesson,paymentStatus:'unpaid',chargeStudent:'yes',payTeacher:'yes',note:''})}
+   else {if(!(after.students||[]).some(s=>String(s.id)===String(lesson.studentId))){const student=schedulerSafeStudent(data.student||{}),unchangedOrphanStudent=data.operation==='update'&&index>=0&&String(after.lessons[index]?.studentId||'')===String(lesson.studentId||'');if(student.id===String(lesson.studentId)&&String(student.name||'').trim())after.students.push({...student,billing:'hour',rate:0,note:''});else if(!unchangedOrphanStudent)throw new Error('排課異動包含不存在的學生')}if(!lessonTeacherIds(lesson).every(tid=>(after.teachers||[]).some(t=>String(t.id)===tid)))throw new Error('排課異動包含不存在的老師');if(index>=0)after.lessons[index]={...after.lessons[index],...lesson};else after.lessons.push({...lesson,paymentStatus:'unpaid',chargeStudent:'yes',payTeacher:'yes',note:''})}
    notificationBefore=before;notificationAfter=after;
    const audit=buildImmutableDataAudit(before,after),auditRecord=audit?(()=>{audit.eventId=`scheduler-${requestSnap.id}`;return immutableAuditRecord(audit)})():null,auditSnap=auditRecord?await transaction.get(auditRecord.ref):null,hash=dataHash(after);transaction.set(mainRef,{db:after,updatedAt:serverTimestamp(),updatedBy:data.actorUid,clientHash:hash},{merge:false});
    if(auditRecord&&!auditSnap.exists())transaction.set(auditRecord.ref,{...auditRecord.payload,action:`scheduler-schedule-${data.operation}`,targetType:'lesson',targetId:id,entityChanges:[...auditRecord.payload.entityChanges,`requested-by:${data.actorEmail}`].slice(0,80)});
