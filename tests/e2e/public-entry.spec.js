@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.34';
+const CLOUD_RELEASE = '20.26.35';
 const APP_SHELL_RELEASE = '20.26.27';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -634,6 +634,20 @@ test('Wendy receives an orange interface while lesson room colors stay unchanged
   expect(colors.header).toContain('187, 100, 40');
   expect(colors.nav).toContain('169, 85, 32');
   expect(colors.lesson).not.toContain('255, 247, 237');
+});
+
+test('Owner navigation uses a restrained premium gold palette', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  const colors = await page.evaluate(() => {
+    document.body.classList.remove('auth-locked');
+    document.body.dataset.cloudRole = 'owner';
+    const nav = document.querySelector('body>nav');
+    const active = nav?.querySelector('button'); active?.classList.add('active');
+    return { nav: getComputedStyle(nav).backgroundImage, active: active ? getComputedStyle(active).backgroundImage : '' };
+  });
+  expect(colors.nav).toContain('102, 81, 40');
+  expect(colors.nav).toContain('123, 99, 49');
+  expect(colors.active).toContain('214, 174, 67');
 });
 
 test('iPad install action opens usable Safari guidance', async ({ page }, testInfo) => {

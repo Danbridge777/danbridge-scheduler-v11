@@ -1,0 +1,20 @@
+/* Owner-only navigation: muted antique gold that complements the dashboard accents. */
+body[data-cloud-role="owner"]:not(.auth-locked)>nav{
+  background:linear-gradient(180deg,#665128 0%,#7b6331 48%,#594620 100%)!important;
+  border-right-color:rgba(218,181,86,.38)!important;
+  box-shadow:12px 0 34px rgba(72,54,20,.18)!important;
+}
+body[data-cloud-role="owner"]:not(.auth-locked)>nav::before{color:#fff9e9!important}
+body[data-cloud-role="owner"]:not(.auth-locked)>nav::after{color:rgba(245,220,151,.82)!important}
+body[data-cloud-role="owner"]:not(.auth-locked)>nav button{color:#fff9e9!important}
+body[data-cloud-role="owner"]:not(.auth-locked)>nav button::before{color:#e5c86f!important}
+body[data-cloud-role="owner"]:not(.auth-locked)>nav button:hover{
+  background:rgba(255,239,194,.13)!important;
+  border-color:rgba(231,198,105,.25)!important;
+}
+body[data-cloud-role="owner"]:not(.auth-locked)>nav button.active{
+  color:#fffdf5!important;
+  background:linear-gradient(90deg,rgba(214,174,67,.38),rgba(255,247,218,.13))!important;
+  border-color:rgba(235,203,113,.48)!important;
+  box-shadow:inset 5px 0 0 #d9b449,0 8px 20px rgba(55,40,13,.16)!important;
+}
