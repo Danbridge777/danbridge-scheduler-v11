@@ -109,7 +109,8 @@
     const actions=$('#dashboard .v32-header-actions');
     const scheduleButton=actions?.querySelector('button:not(.owner-only-action)');
     if(scheduleButton)scheduleButton.textContent=scheduler?'管理全老師課表':'查看我的課表';
-    if(actions&&!$('#teacherReportShortcut',actions)){
+    if(scheduler)$('#teacherReportShortcut')?.remove();
+    if(actions&&!scheduler&&!$('#teacherReportShortcut',actions)){
       const button=document.createElement('button');
       button.type='button';button.id='teacherReportShortcut';button.className='btn primary';
       button.textContent='填寫課程回報';button.addEventListener('click',()=>window.switchTab?.('lessons'));
@@ -162,8 +163,7 @@
     if(current==='owner')restoreRoleResponsiveControls();
     if(current==='teacher'){
       const scheduler=accessContext().canManageSchedule===true;
-      const labels={dashboard:'我的總覽',calendar:'我的課表',lessons:'課程回報'};
-      if(scheduler)labels.calendar='全老師課表';
+      const labels=scheduler?{calendar:'全老師課表'}:{dashboard:'我的總覽',calendar:'我的課表',lessons:'課程回報'};
       $$('nav button[data-tab]').forEach(button=>{const allowed=Object.prototype.hasOwnProperty.call(labels,button.dataset.tab);button.hidden=!allowed;button.style.setProperty('display',allowed?'':'none',allowed?'':'important');if(allowed)button.textContent=labels[button.dataset.tab]});
       const hidden=scheduler?'#dashboard .owner-only-action,#dashboard .owner-v33-only,.branch-scope-bar,#calendarAnalysis,#lessons .toolbar button':'.owner-only-action,.owner-v33-only,.branch-scope-bar,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#calendar .day-add,#calendarAnalysis,#lessons .toolbar button,#courseDrawerEditBtn';
       $$(hidden).forEach(hideForRole);

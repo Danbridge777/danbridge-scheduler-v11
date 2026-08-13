@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.18';
+const APP_RELEASE='20.26.19';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1164,7 +1164,7 @@ function applyRoleUI(profile,user){
    window.renderAll?.();
    applyingCloud=false;
 
-   const teacherAllowedTabs=new Set(['dashboard','calendar','lessons']);
+   const teacherAllowedTabs=new Set(cloudCanManageSchedule?['calendar']:['dashboard','calendar','lessons']);
    const teacherTabLabels={dashboard:'我的總覽',calendar:cloudCanManageSchedule?'全老師課表':'我的課表',lessons:'課程回報'};
    document.querySelectorAll('nav button[data-tab]').forEach(b=>{
      const allowed=teacherAllowedTabs.has(b.dataset.tab);
@@ -1176,14 +1176,14 @@ function applyRoleUI(profile,user){
      if(!allowed)b.tabIndex=-1;else b.removeAttribute('tabindex');
    });
    const activeSection=document.querySelector('main section.active');
-   if(activeSection&&!teacherAllowedTabs.has(activeSection.id))switchTab('dashboard');
+   if(activeSection&&!teacherAllowedTabs.has(activeSection.id))switchTab(cloudCanManageSchedule?'calendar':'dashboard');
 
-   // 老師唯讀：只保留總覽、自己的課表與課程回報。
+   // 一般老師保留老師功能；純排課專員只保留全老師課表。
    const teacherHiddenSelector=cloudCanManageSchedule?'#dashboard .owner-only-action,#dashboard .owner-v33-only,#dashboard .branch-scope-bar,#lessons .toolbar button,#v18Fab,#v18FabMenu,.floating-actions .v20-owner-action':'.owner-only-action,.floating-actions,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#dashboard .owner-v33-only,#dashboard .branch-scope-bar,#calendarTeacherFilter,#calendarLocationFilter,#calendarStudentFilter,#calendarRoomFilter,#calendarStateFilter,#filterStudent,#filterTeacher,#lessons .toolbar button';
    document.querySelectorAll(teacherHiddenSelector).forEach(e=>{const target=e.matches('select')?e.closest('.calendar-field,#lessons .toolbar>div')||e:e;markRoleIsolated(target)});
    const teacherAnalysis=document.getElementById('calendarAnalysis');if(teacherAnalysis){markRoleIsolated(teacherAnalysis);teacherAnalysis.replaceChildren()}
    if(!cloudCanManageSchedule)document.querySelectorAll('.floating-actions').forEach(e=>e.remove());
-   document.querySelectorAll('#students,#teachers,#drafts,#makeups,#camps,#winterCamps,#settlement,#finance,#data,#security').forEach(e=>{markRoleIsolated(e);e.classList.remove('active')});
+   document.querySelectorAll(`#students,#teachers,#drafts,#makeups,#camps,#winterCamps,#settlement,#finance,#data,#security${cloudCanManageSchedule?',#dashboard,#lessons':''}`).forEach(e=>{markRoleIsolated(e);e.classList.remove('active')});
 
    // 隱藏公司營收、未收款、薪資、老師總數與公司異動等敏感資訊。
    ['mTeachers','mRevenue','mUnpaid','mPayroll','mChanges'].forEach(id=>{

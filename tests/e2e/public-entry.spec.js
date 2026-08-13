@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.18';
+const CLOUD_RELEASE = '20.26.19';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -71,6 +71,10 @@ for (const schedulerAccount of [
     window.DanbridgeAccess.setContext({role:'teacher',teacherId:schedulerAccount.teacherId,email:schedulerAccount.email,canManageSchedule:true});
     window.DanbridgeRoleResponsive?.apply?.();
     window.renderCalendar?.();
+    const selectionBar=document.getElementById('selectionBar');
+    selectionBar.classList.remove('hidden');
+    const selectionRect=selectionBar.getBoundingClientRect();
+    const calendarCardRect=document.querySelector('#calendar>.card').getBoundingClientRect();
     const sampleLesson=db.lessons[0];
     if(sampleLesson)window.editLesson(sampleLesson.id);
     const backdrop = document.getElementById('lessonModal');
@@ -105,7 +109,11 @@ for (const schedulerAccount of [
       editingToolsHidden: ['#calendar .calendar-head-add','#calendar .calendar-quick-add','#calendar .weekly-copy-btn','#calendar #selectionModeBtn','#calendar .day-add','#calendarContextMenu','#courseDrawerEditBtn'].filter(selector => {
         const element=document.querySelector(selector);return !element||element.hidden||getComputedStyle(element).display==='none';
       }),
-      forbiddenSections: ['students','teachers','makeups','camps','finance','data','security'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none')
+      forbiddenSections: ['dashboard','students','teachers','lessons','makeups','camps','finance','data','security'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none'),
+      reportTabVisible: getComputedStyle(document.querySelector('nav button[data-tab="lessons"]')).display!=='none',
+      reportShortcutExists: Boolean(document.getElementById('teacherReportShortcut')),
+      selectionPosition: getComputedStyle(selectionBar).position,
+      selectionContained: selectionRect.left>=calendarCardRect.left-1&&selectionRect.right<=calendarCardRect.right+1
     };
   }, schedulerAccount);
   expect(result.modalLeft).toBeGreaterThanOrEqual(0);
@@ -126,6 +134,10 @@ for (const schedulerAccount of [
   expect(result.idleSelectionMarkers).toBe(0);
   expect(result.editingToolsHidden).toEqual([]);
   expect(result.forbiddenSections).toEqual([]);
+  expect(result.reportTabVisible).toBe(false);
+  expect(result.reportShortcutExists).toBe(false);
+  expect(result.selectionPosition).toBe('static');
+  expect(result.selectionContained).toBe(true);
 });
 
 test('English mode translates the major application workspaces', async ({ page }) => {

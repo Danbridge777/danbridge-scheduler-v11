@@ -1,5 +1,8 @@
 /* Wendy: teacher privacy boundary plus all-teacher schedule editing. */
 body.wendy-cloud-role{--wendy:#d88a3d;--wendy-soft:#fff6e9;--wendy-card:#fffaf3;--wendy-line:#f1d7b8}
+html body:not(.auth-locked)>nav button[hidden]{display:none!important}
+html body.wendy-cloud-role:not(.auth-locked)>nav button[data-tab="lessons"]{display:none!important}
+html body.wendy-cloud-role:not(.auth-locked)>nav button[data-tab="dashboard"]{display:none!important}
 body.wendy-cloud-role:not(.auth-locked)>header{background:linear-gradient(120deg,#d8924c,#e9ad6d)!important}
 body.wendy-cloud-role:not(.auth-locked)>nav{background:linear-gradient(180deg,#b96f32,#cf8749 55%,#a95f28)!important}
 body.wendy-cloud-role:not(.auth-locked)>nav button.active{background:rgba(255,241,220,.24)!important;box-shadow:inset 4px 0 #ffe0b8!important}
@@ -54,6 +57,13 @@ body.wendy-cloud-role #calendar .calendar-field:has(>#calendarRoomFilter),
 body.wendy-cloud-role #calendar .calendar-field:has(>#calendarStateFilter){display:block!important}
 body.wendy-cloud-role #calendar .teacher-redundant-filter{display:block!important}
 body.wendy-cloud-role #calendarContextMenu .v20-owner-action{display:grid!important}
+/* The scheduler selection controls belong to the calendar card, never the viewport. */
+body.wendy-cloud-role #calendar #selectionBar{
+ position:static!important;inset:auto!important;z-index:auto!important;
+ width:100%!important;max-width:100%!important;margin:8px 0!important;
+ justify-content:center!important;box-sizing:border-box!important
+}
+body.wendy-cloud-role #calendar #selectionBar.hidden{display:none!important}
 body.wendy-cloud-role #lessonModal .student-select-row>button,
 body.wendy-cloud-role #lessonModal #quickStudentBox,
 body.wendy-cloud-role #lessonModal .col-6:has(>#paymentStatus),
@@ -107,6 +117,8 @@ body.wendy-cloud-role #teachers,
 body.wendy-cloud-role #makeups,
 body.wendy-cloud-role #camps,
 body.wendy-cloud-role #winterCamps{display:none!important}
+body.wendy-cloud-role #dashboard,
+body.wendy-cloud-role #lessons{display:none!important}
 /* Wendy uses the exact Owner toolbar geometry; only data visibility differs. */
 body.wendy-cloud-role #calendar .calendar-toolbar-filters{display:grid!important;grid-template-columns:repeat(5,minmax(130px,1fr)) minmax(250px,1.55fr)!important;gap:12px!important}
 body.wendy-cloud-role #calendar .calendar-toolbar-filters>.calendar-field{display:flex!important;width:auto!important;max-width:none!important}
