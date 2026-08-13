@@ -1,5 +1,10 @@
 # Changelog
 
+## 20.26.56（僅 staging 影子驗證狀態）
+
+- 新增 staging Owner-only 的唯讀影子狀態，顯示 queued、uploading、verified 或 failed，供逐步驗證使用。
+- 診斷只存在目前頁面記憶體，不讀取正式資料、不改變主同步結果，也不提供分片啟用能力。
+
 ## 20.26.55（僅 staging 影子驗證，正式資料與正式讀取來源不變）
 
 - Owner 與 aa 的舊主資料交易成功後，僅在 staging 背景建立不可啟用的分片世代。

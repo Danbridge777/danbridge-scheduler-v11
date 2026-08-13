@@ -1,7 +1,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.55';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.56';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -14,7 +14,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.55';
+const APP_RELEASE='20.26.56';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -76,6 +76,7 @@ let applyingCloud=false;
 let stagingShadowQueued=null;
 let stagingShadowInFlight=false;
 let stagingShadowLastVerifiedHash='';
+let stagingShadowDiagnostic={state:'idle',generationId:'',sourceHash:'',verifiedHash:'',totalChunks:0,totalRecords:0,error:'',updatedAt:''};
 let unsubscribeState=null;
 let unsubscribeAccessGuard=null;
 let syncTimer=null;
@@ -1682,6 +1683,7 @@ async function publishStagingShadowGeneration(db,sourceHash){
  const generationRef=doc(collection(cloud,'companies',COMPANY_ID,'shardedGenerations'));
  const snapshot=createShardedSnapshot(db,{hash:dataHash,maxChunkBytes:180000,generationId:generationRef.id});
  if(snapshot.manifest.sourceHash!==sourceHash)throw new Error('影子分片來源版本在排程前已改變');
+ stagingShadowDiagnostic={state:'uploading',generationId:generationRef.id,sourceHash,verifiedHash:'',totalChunks:snapshot.manifest.totalChunks,totalRecords:snapshot.manifest.totalRecords,error:'',updatedAt:new Date().toISOString()};
  await setDoc(generationRef,{...snapshot.manifest,status:'uploading',environment:'staging',createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false});
  await Promise.all(snapshot.chunks.map(chunk=>setDoc(doc(generationRef,'chunks',chunk.documentId),{generationId:generationRef.id,key:chunk.key,index:chunk.index,items:chunk.items,sourceHash,createdAt:serverTimestamp()},{merge:false})));
  await setDoc(generationRef,{status:'uploaded',uploadedAt:serverTimestamp()},{merge:true});
@@ -1692,6 +1694,7 @@ async function publishStagingShadowGeneration(db,sourceHash){
  if(verifiedHash!==sourceHash)throw new Error('影子分片讀回驗證與舊主資料不一致');
  await setDoc(generationRef,{status:'verified',verifiedHash,verifiedAt:serverTimestamp()},{merge:true});
  stagingShadowLastVerifiedHash=verifiedHash;
+ stagingShadowDiagnostic={...stagingShadowDiagnostic,state:'verified',verifiedHash,error:'',updatedAt:new Date().toISOString()};
 }
 async function processStagingShadowQueue(){
  if(stagingShadowInFlight||!canRunStagingShadow({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole}))return;
@@ -1701,16 +1704,18 @@ async function processStagingShadowQueue(){
    const queued=stagingShadowQueued;stagingShadowQueued=null;
    if(queued.sourceHash===stagingShadowLastVerifiedHash)continue;
    try{await publishStagingShadowGeneration(queued.db,queued.sourceHash)}
-   catch(error){console.error('Staging shadow sharding failed',error);reportOperationalError(error,{category:'cloud-write',area:'staging-shadow-shard',retryable:true})}
+   catch(error){stagingShadowDiagnostic={...stagingShadowDiagnostic,state:'failed',error:String(error?.message||error).slice(0,300),updatedAt:new Date().toISOString()};console.error('Staging shadow sharding failed',error);reportOperationalError(error,{category:'cloud-write',area:'staging-shadow-shard',retryable:true})}
   }
  }finally{stagingShadowInFlight=false;if(stagingShadowQueued)queueMicrotask(processStagingShadowQueue)}
 }
 function queueStagingShadowGeneration(db,sourceHash=dataHash(db)){
  if(!canRunStagingShadow({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole}))return false;
  stagingShadowQueued={db:deepCopy(db),sourceHash:String(sourceHash)};
+ stagingShadowDiagnostic={...stagingShadowDiagnostic,state:'queued',sourceHash:String(sourceHash),error:'',updatedAt:new Date().toISOString()};
  queueMicrotask(processStagingShadowQueue);return true;
 }
 window.__danbridgeQueueStagingShadowGeneration=queueStagingShadowGeneration;
+window.__danbridgeGetStagingShadowDiagnostic=()=>canRunStagingShadow({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole})?deepCopy(stagingShadowDiagnostic):null;
 
 async function uploadOwnerState(force=false){
  if(cloudRole!=='owner'||applyingCloud)return;
