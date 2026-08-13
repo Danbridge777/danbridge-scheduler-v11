@@ -609,3 +609,44 @@ describe('非正式環境備份還原演練', () => {
     assert.deepEqual(actual, source);
   });
 });
+
+describe('分片世代權限與原子啟用', () => {
+  const generationPath=`companies/${COMPANY_ID}/shardedGenerations/generation-test`;
+  const chunkPath=`${generationPath}/chunks/lessons-0000`;
+  const activationPath=`companies/${COMPANY_ID}/shardedControl/active`;
+
+  test('只有 Owner 可存取未啟用世代、分片與啟用指標', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),manager=auth('manager-uid',MANAGER_EMAIL),scheduler=auth('scheduler-uid',SECOND_SCHEDULER_EMAIL);
+    const manifest={schema:'danbridge-sharded-db-v1',generationId:'generation-test',sourceHash:'hash-v1',totalChunks:1,totalRecords:1};
+    const chunk={key:'lessons',index:0,items:[{id:'lesson-1'}]};
+    await assertSucceeds(setDoc(doc(owner,generationPath),manifest));
+    await assertSucceeds(setDoc(doc(owner,chunkPath),chunk));
+    await assertSucceeds(getDoc(doc(owner,generationPath)));
+    for(const db of [unauthenticated(),teacher,manager,scheduler]){
+      await assertFails(getDoc(doc(db,generationPath)));
+      await assertFails(getDoc(doc(db,chunkPath)));
+      await assertFails(setDoc(doc(db,activationPath),{activeGenerationId:'generation-test'}));
+    }
+  });
+
+  test('舊主資料雜湊改變時禁止啟用，未改變時只提交小型指標', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),mainRef=doc(owner,`companies/${COMPANY_ID}/data/main`),manifestRef=doc(owner,generationPath),activationRef=doc(owner,activationPath);
+    await setDoc(mainRef,{db:{lessons:[]},clientHash:'hash-v1'});
+    await setDoc(manifestRef,{schema:'danbridge-sharded-db-v1',generationId:'generation-test',sourceHash:'hash-v1',verifiedHash:'hash-v1',totalChunks:1,totalRecords:0});
+    await setDoc(mainRef,{db:{lessons:[{id:'newer'}]},clientHash:'hash-v2'});
+    await assert.rejects(runTransaction(owner,async transaction=>{
+      const [mainSnap,manifestSnap]=await Promise.all([transaction.get(mainRef),transaction.get(manifestRef)]);
+      if(mainSnap.data().clientHash!==manifestSnap.data().sourceHash)throw new Error('legacy hash changed');
+      transaction.set(activationRef,{activeGenerationId:manifestSnap.data().generationId,sourceHash:manifestSnap.data().sourceHash});
+    }),/legacy hash changed/);
+    assert.equal((await getDoc(activationRef)).exists(),false);
+    await setDoc(mainRef,{db:{lessons:[]},clientHash:'hash-v1'});
+    await assertSucceeds(runTransaction(owner,async transaction=>{
+      const [mainSnap,manifestSnap]=await Promise.all([transaction.get(mainRef),transaction.get(manifestRef)]);
+      assert.equal(manifestSnap.data().sourceHash,manifestSnap.data().verifiedHash);
+      if(mainSnap.data().clientHash!==manifestSnap.data().sourceHash)throw new Error('legacy hash changed');
+      transaction.set(activationRef,{schema:'danbridge-sharded-activation-v1',activeGenerationId:manifestSnap.data().generationId,sourceHash:manifestSnap.data().sourceHash,totalChunks:manifestSnap.data().totalChunks,totalRecords:manifestSnap.data().totalRecords});
+    }));
+    assert.deepEqual((await getDoc(activationRef)).data(),{schema:'danbridge-sharded-activation-v1',activeGenerationId:'generation-test',sourceHash:'hash-v1',totalChunks:1,totalRecords:0});
+  });
+});

@@ -172,6 +172,20 @@ service cloud.firestore {
       allow read, write: if isOwner();
     }
 
+    // 尚未啟用的分片世代可能含完整公司資料；任何老師、排課專員與校區管理者均不可讀寫。
+    // Owner 的實際啟用仍須由客戶端交易驗證 legacy hash 與已讀回的完整世代 hash。
+    match /companies/{companyId}/shardedGenerations/{generationId} {
+      allow read, write: if isOwner();
+    }
+
+    match /companies/{companyId}/shardedGenerations/{generationId}/chunks/{chunkId} {
+      allow read, write: if isOwner();
+    }
+
+    match /companies/{companyId}/shardedControl/{documentId} {
+      allow read, write: if isOwner();
+    }
+
     // 三方合併的復原內容含完整衝突欄位，只允許 Owner 存取。
     match /companies/{companyId}/syncConflictBackups/{backupPartId} {
       allow read, write: if isOwner();
