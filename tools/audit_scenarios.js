@@ -265,6 +265,13 @@ const catherineAdded = Array.from({ length: 100 }, (_, i) => ({ id: `catherine-$
 let mergedOwner = mergeDB(mergeBase, { ...mergeBase, lessons: [...mergeBase.lessons, ...danielAdded] }, { ...mergeBase, lessons: [...mergeBase.lessons, ...catherineAdded] });
 assert.equal(mergedOwner.db.lessons.length, 201, 'two owners adding 100 lessons each preserves all 200 additions');
 assert.equal(new Set(mergedOwner.db.lessons.map(row => row.id)).size, 201, 'concurrent owner additions never duplicate lesson IDs');
+const aaAdded = Array.from({ length: 100 }, (_, i) => ({ id: `aa-${i}`, title: 'aa scheduler' }));
+const afterAaRequests = { ...mergedOwner.db, lessons: [...mergedOwner.db.lessons, ...aaAdded] };
+assert.equal(afterAaRequests.lessons.length, 301, 'aa adding 100 lessons after both Owner streams preserves all 300 concurrent additions');
+assert.equal(new Set(afterAaRequests.lessons.map(row=>row.id)).size,301,'Daniel, Catherine and aa never produce duplicate lesson IDs');
+const staleDanielAfterAa=mergeDB(mergeBase,{...mergeBase,lessons:[{...mergeBase.lessons[0],room:'Daniel stale edit'}]},afterAaRequests);
+assert.equal(staleDanielAfterAa.db.lessons.length,301,'a stale Owner edit after aa requests cannot erase Catherine or aa lessons');
+assert.equal(staleDanielAfterAa.db.lessons.find(row=>row.id==='shared').room,'Daniel stale edit','the stale Owner field edit remains alongside all scheduler additions');
 mergedOwner = mergeDB(mergeBase, { ...mergeBase, lessons: [{ ...mergeBase.lessons[0], room: '2' }] }, { ...mergeBase, lessons: [...mergeBase.lessons, ...danielAdded] });
 assert.equal(mergedOwner.db.lessons.length, 101, 'editing from a stale base preserves the other owner additions');
 assert.equal(mergedOwner.db.lessons.find(row => row.id === 'shared').room, '2', 'the stale owner edit is retained alongside remote additions');
@@ -311,7 +318,7 @@ assert.equal(context.dataHash({b:1,a:{d:2,c:3}}),context.dataHash({a:{c:3,d:2},b
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:95},(_,i)=>({id:`l${i}`}))}).risky,false,'a small lesson adjustment does not trigger the destructive-change guard');
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:80},(_,i)=>({id:`l${i}`}))}).risky,true,'a large lesson reduction triggers the destructive-change guard');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.22'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.23'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /SCHEDULER_ACCOUNT_EMAILS=new Set\(\['aa0966626336@gmail\.com'\]\)/, 'the actual aa Gmail is the only approved scheduler account');
 assert.match(cloudSource, /RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set\(\['wendylee0820520@gmail\.com'\]\)/, 'Wendy is explicitly migrated back to a standard teacher');
 assert.match(cloudSource, /canManageSchedule=SCHEDULER_ACCOUNT_EMAILS\.has\(email\)/, 'approved scheduler Gmail accounts always receive all-teacher scheduling instead of relying on a checkbox');
@@ -444,6 +451,9 @@ const schedulerView = context.filteredSchedulerDB({
   branches: [{id:'a',name:'A',rooms:['1'],managerEmail:'private@example.com'}],
   lessons: [lesson({id:'schedule-safe',address:'Scheduling address',meetingUrl:'https://meeting',note:'Scheduling note',paymentStatus:'paid',chargeStudent:'yes',payTeacher:'yes'})]
 });
+assert.equal(schedulerView.students.length,scopedSource.students.length,'aa receives the complete active student directory instead of only students already scheduled');
+assert.equal(schedulerView.students[0].parent,scopedSource.students[0].parent,'aa student directory retains parent identity needed for scheduling');
+assert.equal(schedulerView.students[0].rate,undefined,'aa student directory never exposes tuition rates');
 assert.deepEqual(Object.keys(schedulerView.branches[0]).sort(), ['id','name','rooms']);
 assert.equal(schedulerView.lessons[0].address, 'Scheduling address', 'Wendy scheduler lessons retain the scheduling address');
 assert.equal(schedulerView.lessons[0].meetingUrl, 'https://meeting', 'Wendy scheduler lessons retain the online meeting link');
