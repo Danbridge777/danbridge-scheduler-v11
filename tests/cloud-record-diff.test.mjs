@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildRecordCollectionDiff,buildCoreRecordDiffs} from '../js/core/cloud-record-diff.js';
+import {buildRecordCollectionDiff,buildCoreRecordDiffs,buildRecordShadowWritePlan} from '../js/core/cloud-record-diff.js';
 
 const row=(id,value)=>({id,value,nested:{safe:true}});
 
@@ -64,4 +64,64 @@ test('一萬堂課只修改一堂時只產生一筆更新',()=>{
  const result=buildCoreRecordDiffs(before,after);
  assert.deepEqual(result.counts,{creates:0,updates:1,deletes:0,unchanged:9999,writes:1});
  assert.equal(result.collections.lessons.updates[0].id,'lesson-6789');
+});
+
+test('影子寫入計畫產生固定路徑、建立版號與逐次更新版號',()=>{
+ const diffs=buildCoreRecordDiffs(
+  {lessons:[row('update',1)],students:[],teachers:[]},
+  {lessons:[row('update',2),row('create',1)],students:[],teachers:[]}
+ );
+ const plan=buildRecordShadowWritePlan(diffs,{sourceHash:'hash-v2',revisions:{lessons:{update:4}}});
+ assert.equal(plan.operations.length,2);
+ assert.deepEqual(plan.operations.map(operation=>({type:operation.type,path:operation.path,revision:operation.payload.revision,deleted:operation.payload.deleted})),[
+  {type:'create',path:'stagingRecordShadows/danbridge/collections/lessons/records/create',revision:1,deleted:false},
+  {type:'update',path:'stagingRecordShadows/danbridge/collections/lessons/records/update',revision:5,deleted:false}
+ ]);
+ assert.deepEqual(plan.operations[1].payload.record,row('update',2));
+ assert.equal(plan.operations[1].payload.sourceHash,'hash-v2');
+ assert.equal(plan.operations[1].payload.environment,'staging');
+});
+
+test('刪除墓碑後重新建立沿用既有版號，不會重設為第一版',()=>{
+ const diffs=buildCoreRecordDiffs({lessons:[],students:[],teachers:[]},{lessons:[row('revived',9)],students:[],teachers:[]});
+ const plan=buildRecordShadowWritePlan(diffs,{sourceHash:'hash-revive',revisions:{lessons:{revived:6}}});
+ assert.equal(plan.operations[0].type,'create');
+ assert.equal(plan.operations[0].payload.revision,7);
+ assert.equal(plan.operations[0].payload.deleted,false);
+});
+
+test('刪除只建立保留原始資料的墓碑，不產生實體刪除',()=>{
+ const diffs=buildCoreRecordDiffs(
+  {lessons:[],students:[row('student-delete',7)],teachers:[]},
+  {lessons:[],students:[],teachers:[]}
+ );
+ const plan=buildRecordShadowWritePlan(diffs,{sourceHash:'hash-delete',revisions:{students:{'student-delete':2}}});
+ assert.equal(plan.operations.length,1);
+ assert.equal(plan.operations[0].type,'delete');
+ assert.equal(plan.operations[0].payload.deleted,true);
+ assert.equal(plan.operations[0].payload.revision,3);
+ assert.deepEqual(plan.operations[0].payload.record,row('student-delete',7));
+});
+
+test('更新或刪除缺少目前版號時拒絕產生計畫',()=>{
+ const updateDiff=buildCoreRecordDiffs({lessons:[row('x',1)],students:[],teachers:[]},{lessons:[row('x',2)],students:[],teachers:[]});
+ assert.throws(()=>buildRecordShadowWritePlan(updateDiff,{sourceHash:'hash',revisions:{}}),/缺少目前 revision/);
+ const deleteDiff=buildCoreRecordDiffs({lessons:[row('x',1)],students:[],teachers:[]},{lessons:[],students:[],teachers:[]});
+ assert.throws(()=>buildRecordShadowWritePlan(deleteDiff,{sourceHash:'hash',revisions:{lessons:{x:0}}}),/無效 revision/);
+});
+
+test('沒有差異時影子寫入計畫為空且不需要版號',()=>{
+ const value={lessons:[row('same',1)],students:[],teachers:[]};
+ const plan=buildRecordShadowWritePlan(buildCoreRecordDiffs(value,structuredClone(value)),{sourceHash:'same-hash'});
+ assert.deepEqual(plan,{companyId:'danbridge',sourceHash:'same-hash',operations:[],writes:0});
+});
+
+test('影子寫入計畫拒絕空白雜湊、非核心集合與超過單批安全上限',()=>{
+ const one=buildCoreRecordDiffs({lessons:[],students:[],teachers:[]},{lessons:[row('one',1)],students:[],teachers:[]});
+ assert.throws(()=>buildRecordShadowWritePlan(one,{sourceHash:'  '}),/sourceHash/);
+ assert.throws(()=>buildRecordShadowWritePlan(one,{companyId:'other-company',sourceHash:'hash'}),/companyId/);
+ const invalid={collections:{changes:{collection:'changes',creates:[row('one',1)],updates:[],deletes:[]}},counts:{writes:1}};
+ assert.throws(()=>buildRecordShadowWritePlan(invalid,{sourceHash:'hash'}),/非核心集合/);
+ const many=buildCoreRecordDiffs({lessons:[],students:[],teachers:[]},{lessons:Array.from({length:401},(_,index)=>row(`lesson-${index}`,index)),students:[],teachers:[]});
+ assert.throws(()=>buildRecordShadowWritePlan(many,{sourceHash:'hash'}),/超過單批安全上限 400/);
 });

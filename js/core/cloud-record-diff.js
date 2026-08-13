@@ -45,3 +45,44 @@ export function buildCoreRecordDiffs(beforeDb,afterDb){
  counts.writes=counts.creates+counts.updates+counts.deletes;
  return{collections,counts};
 }
+
+export const RECORD_SHADOW_SAFE_WRITE_LIMIT=400;
+
+function shadowRevision(revisions,collection,id){
+ const revision=revisions?.[collection]?.[id];
+ if(revision===undefined||revision===null)throw new Error(`${collection}/${id} 缺少目前 revision`);
+ if(!Number.isSafeInteger(revision)||revision<1)throw new Error(`${collection}/${id} 包含無效 revision`);
+ return revision+1;
+}
+
+function shadowOperation(type,collection,record,{companyId,sourceHash,revisions}){
+ const id=String(record.id),existingRevision=revisions?.[collection]?.[id];
+ const revision=type==='create'&&existingRevision===undefined?1:shadowRevision(revisions,collection,id);
+ return{
+  type,
+  path:`stagingRecordShadows/${companyId}/collections/${collection}/records/${id}`,
+  payload:{
+   companyId,collection,recordId:id,record:clone(record),sourceHash,revision,
+   deleted:type==='delete',environment:'staging'
+  }
+ };
+}
+
+export function buildRecordShadowWritePlan(coreDiffs,{companyId='danbridge',sourceHash,revisions={}}={}){
+ if(companyId!=='danbridge')throw new Error('影子寫入計畫包含 Rules 未允許的 companyId');
+ if(typeof sourceHash!=='string'||!sourceHash.trim())throw new Error('影子寫入計畫缺少有效 sourceHash');
+ const collections=coreDiffs?.collections;
+ if(!collections||typeof collections!=='object'||Array.isArray(collections))throw new Error('影子寫入計畫缺少核心集合差異');
+ for(const collection of Object.keys(collections))if(!CORE_RECORD_COLLECTIONS.includes(collection))throw new Error(`影子寫入計畫包含非核心集合：${collection}`);
+ const operations=[];
+ for(const collection of CORE_RECORD_COLLECTIONS){
+  const diff=collections[collection];
+  if(!diff)continue;
+  if(diff.collection!==collection)throw new Error(`${collection} 差異集合名稱不一致`);
+  for(const record of diff.creates??[])operations.push(shadowOperation('create',collection,record,{companyId,sourceHash,revisions}));
+  for(const record of diff.updates??[])operations.push(shadowOperation('update',collection,record,{companyId,sourceHash,revisions}));
+  for(const record of diff.deletes??[])operations.push(shadowOperation('delete',collection,record,{companyId,sourceHash,revisions}));
+ }
+ if(operations.length>RECORD_SHADOW_SAFE_WRITE_LIMIT)throw new Error(`影子寫入筆數 ${operations.length} 超過單批安全上限 ${RECORD_SHADOW_SAFE_WRITE_LIMIT}`);
+ return{companyId,sourceHash,operations,writes:operations.length};
+}
