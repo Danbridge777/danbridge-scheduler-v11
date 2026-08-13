@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.31
+
+- 課表大通知不再依賴 Owner 登入初期的本機基準旗標；只要 aa 或任一 Owner 的課表 transaction 已取得精確異動前後版本，就一定排入通知。
+- 所有啟用 Owner 仍收到每一筆課表新增、修改、刪除；被影響的舊授課老師與新授課老師分別收到移除、修改或新增通知。
+- 補強通知啟動時序防漏測試，避免 Owner 剛登入時 aa 異動已同步但大通知被跳過。
+
 ## 20.26.30
 
 - 移除 aa 套用 transaction 對 scheduler view 的重複寫入，避免和 Owner 背景角色檢視發布互撞而出現 Firestore base-version mismatch。

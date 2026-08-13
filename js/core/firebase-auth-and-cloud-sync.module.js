@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.30';
+const APP_RELEASE='20.26.31';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1477,7 +1477,7 @@ async function createScheduleNotificationIfMissing(notificationRef,payload){
  });
 }
 async function publishScheduleChangeNotifications(previousDb,currentDb,batchKey,actor={}){
- if(cloudRole!=='owner'||!ownerBaselineReady||!previousDb)return;
+ if(cloudRole!=='owner'||!previousDb)return;
  const teacherChanges=buildScheduleNotificationChanges(previousDb,currentDb);
  const lessonChanges=buildScheduleLessonChanges(previousDb,currentDb);
  if(!lessonChanges.length)return;
@@ -1539,7 +1539,7 @@ async function publishScheduleChangeNotifications(previousDb,currentDb,batchKey,
  if(jobs.length)await withSyncTimeout(Promise.all(jobs),15000);
 }
 function queueScheduleChangeNotifications(previousDb,currentDb,batchKey,actor={}){
- if(cloudRole!=='owner'||!ownerBaselineReady||!previousDb)return;
+ if(cloudRole!=='owner'||!previousDb)return;
  const key=String(batchKey||dataHash(currentDb));
  const job={previousDb:deepCopy(previousDb),currentDb:deepCopy(currentDb),batchKey:key,actor:{uid:actor.uid||'',name:actor.name||''},attempts:0,timer:null};
  scheduleNotificationDeliveryJobs.set(key,job);
