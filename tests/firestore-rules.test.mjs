@@ -184,7 +184,6 @@ describe('Owner 權限', () => {
       const requestId = `atomic-aa-existing-audit-${index}`;
       const requestRef = doc(owner, `companies/${COMPANY_ID}/scheduleRequests/${requestId}`);
       const mainRef = doc(owner, `companies/${COMPANY_ID}/data/main`);
-      const viewRef = doc(owner, `companies/${COMPANY_ID}/schedulerViews/${SECOND_SCHEDULER_EMAIL}`);
       const auditRef = doc(owner, `companyAudit/scheduler-${requestId}`);
       await testEnv.withSecurityRulesDisabled(async context => {
         const admin = context.firestore();
@@ -209,7 +208,6 @@ describe('Owner 權限', () => {
         assert.equal(requestSnap.data().status, 'pending');
         assert.equal(auditSnap.exists(), true);
         transaction.set(mainRef, { ...mainSnap.data(), [`atomicAaOwner${index}`]: requestId });
-        transaction.set(viewRef, { email: SECOND_SCHEDULER_EMAIL, db: { lessons: [{ id: requestId }] } });
         transaction.set(requestRef, { status: 'applied', appliedAt: serverTimestamp(), appliedBy: uid }, { merge: true });
       }));
       assert.equal((await getDoc(requestRef)).data().status, 'applied');

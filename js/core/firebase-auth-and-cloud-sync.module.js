@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.29';
+const APP_RELEASE='20.26.30';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -67,6 +67,7 @@ let ownerRetryCount=0;
 const scheduleNotificationDeliveryJobs=new Map();
 let roleViewPublishInFlight=false;
 let roleViewPublishQueued=false;
+let roleViewPublishSourceDB=null;
 let roleViewRetryCount=0;
 let roleViewRetryTimer=null;
 let lastUploadedHash='';
@@ -1275,12 +1276,12 @@ async function getCompanyAccessDocs(){
  return companyAccessCache;
 }
 function invalidateCompanyAccessCache(){companyAccessCache=null;companyAccessCacheAt=0}
-async function publishScopedViews(){
+async function publishScopedViews(sourceOverride=null){
  if(cloudRole!=='owner')return;
  try{
-   const sourceDb=window.__danbridgeGetDB();
+   const sourceDb=sourceOverride?deepCopy(sourceOverride):window.__danbridgeGetDB();
    const accessDocs=await getCompanyAccessDocs();
-   const jobs=[];
+   const jobs=[],scheduleTargets=[];
    for(const d of accessDocs){
      const p=d.data();
      const email=(p.email||d.id||'').trim().toLowerCase();
@@ -1290,21 +1291,22 @@ async function publishScopedViews(){
        jobs.push(Promise.all([
          setDoc(d.ref,{canManageSchedule:deleteField(),readOnly:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()},{merge:true}),
          deleteDoc(doc(cloud,'companies',COMPANY_ID,'schedulerViews',email)).catch(()=>{}),
-         setDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email),{db:viewDb,updatedAt:serverTimestamp(),teacherId:p.teacherId,email,clientHash:hash},{merge:false}),
          getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email))).then(qs=>Promise.all(qs.docs.map(u=>setDoc(u.ref,{canManageSchedule:deleteField(),readOnly:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()},{merge:true}))))
-       ]).then(()=>scopedViewHashCache.set(key,hash)));
+       ]));
+       scheduleTargets.push({ref:doc(cloud,'companies',COMPANY_ID,'teacherViews',email),payload:{db:viewDb,updatedAt:serverTimestamp(),teacherId:p.teacherId,email,clientHash:hash},key,hash});
        continue;
      }
      if(p.role==='teacher'&&p.teacherId&&SCHEDULER_ACCOUNT_EMAILS.has(email)){
        const scopedDb=filteredSchedulerDB(sourceDb),hash=dataHash(scopedDb),key='scheduler:'+email;
        if(p.canManageSchedule===true&&scopedViewHashCache.get(key)===hash){continue}
-       jobs.push(Promise.all([setDoc(d.ref,{canManageSchedule:true,readOnly:false,scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),active:true},{merge:true}),setDoc(doc(cloud,'companies',COMPANY_ID,'schedulerViews',email),{db:scopedDb,clientHash:hash,updatedAt:serverTimestamp(),email},{merge:false})]).then(()=>scopedViewHashCache.set(key,hash)));
+       jobs.push(setDoc(d.ref,{canManageSchedule:true,readOnly:false,scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),active:true},{merge:true}));
+       scheduleTargets.push({ref:doc(cloud,'companies',COMPANY_ID,'schedulerViews',email),payload:{db:scopedDb,clientHash:hash,updatedAt:serverTimestamp(),email},key,hash});
      }else if(p.role==='teacher'&&p.teacherId){
        const viewDb=filteredTeacherDB(sourceDb,p.teacherId);
        const hash=dataHash(viewDb);
        const key='teacher:'+email;
        if(scopedViewHashCache.get(key)===hash)continue;
-       jobs.push(setDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email),{db:viewDb,updatedAt:serverTimestamp(),teacherId:p.teacherId,email,clientHash:hash},{merge:false}).then(()=>scopedViewHashCache.set(key,hash)));
+       scheduleTargets.push({ref:doc(cloud,'companies',COMPANY_ID,'teacherViews',email),payload:{db:viewDb,updatedAt:serverTimestamp(),teacherId:p.teacherId,email,clientHash:hash},key,hash});
      }else if(p.role==='branch_manager'&&Array.isArray(p.branchIds)&&p.branchIds.length){
        const scopedDb=filteredBranchDB(sourceDb,p.branchIds);
        const hash=dataHash(scopedDb);
@@ -1313,17 +1315,29 @@ async function publishScopedViews(){
        jobs.push(setDoc(d.ref,{scopedDb,scopedClientHash:hash,scopedUpdatedAt:serverTimestamp(),branchIds:p.branchIds,active:true},{merge:true}).then(()=>scopedViewHashCache.set(key,hash)));
      }
    }
+   if(scheduleTargets.length){
+     const sourceHash=dataHash(sourceDb),published=await runTransaction(cloud,async transaction=>{
+       const mainSnap=await transaction.get(doc(cloud,'companies',COMPANY_ID,'data','main'));
+       const currentHash=mainSnap.exists()?(mainSnap.data()?.clientHash||dataHash(mainSnap.data()?.db)):'';
+       if(currentHash!==sourceHash)return false;
+       scheduleTargets.forEach(target=>transaction.set(target.ref,target.payload,{merge:false}));
+       return true;
+     });
+     if(!published){await Promise.all(jobs);roleViewPublishQueued=true;return}
+     scheduleTargets.forEach(target=>scopedViewHashCache.set(target.key,target.hash));
+   }
    await Promise.all(jobs);
  }catch(e){
    console.error('publishScopedViews',e);
    throw e;
  }
 }
-async function publishRoleViewsWithRetry(){
+async function publishRoleViewsWithRetry(sourceDb=null){
  if(cloudRole!=='owner')return;
+ if(sourceDb)roleViewPublishSourceDB=deepCopy(sourceDb);
  roleViewPublishQueued=true;if(roleViewPublishInFlight)return;
- roleViewPublishInFlight=true;roleViewPublishQueued=false;clearTimeout(roleViewRetryTimer);
- try{await Promise.all([publishScopedViews(),publishLessonMeta()]);roleViewRetryCount=0}
+ roleViewPublishInFlight=true;roleViewPublishQueued=false;clearTimeout(roleViewRetryTimer);const publishSource=roleViewPublishSourceDB;roleViewPublishSourceDB=null;
+ try{await Promise.all([publishScopedViews(publishSource),publishLessonMeta()]);roleViewRetryCount=0}
  catch(e){roleViewPublishQueued=true;roleViewRetryCount++;lessonMetaCacheReady=false;console.error('Role view background sync failed',e);reportOperationalError(e,{category:'role-view',area:'role-publish',retryable:true});cloudStatus(roleViewRetryCount<3?'主資料已同步；老師端資料正在背景補送。':'主資料已同步，但老師端資料持續補送中，請保持網路連線。',roleViewRetryCount<3?'pending':'error');roleViewRetryTimer=setTimeout(publishRoleViewsWithRetry,Math.min(30000,1000*Math.pow(2,Math.min(roleViewRetryCount,5))))}
  finally{roleViewPublishInFlight=false;if(roleViewPublishQueued&&!roleViewRetryCount)queueMicrotask(publishRoleViewsWithRetry)}
 }
@@ -1646,7 +1660,7 @@ async function uploadOwnerState(force=false){
    cloudStatus(localDirtyHash?'目前變更已同步，另有新變更準備同步…':committed.conflicts?`已安全合併同步；${committed.conflicts} 個同筆衝突已保留復原紀錄`:'已同步到雲端','ok');
 
    // 主資料成功後立即發布各角色檢視，不等待通知文件完成。
-   publishRoleViewsWithRetry();
+   publishRoleViewsWithRetry(committed.finalDb);
 
    queueScheduleChangeNotifications(committed.remoteBefore,committed.finalDb,committed.finalHash);
    lastPublishedOwnerDB=deepCopy(committed.finalDb);ownerBaselineReady=true;
@@ -1697,7 +1711,7 @@ function scheduleSchedulerChanges(){
 }
 async function applySchedulerRequest(requestRef,data){
  if(cloudRole!=='owner'||data?.status!=='pending')return;
- const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main'),schedulerViewRef=doc(cloud,'companies',COMPANY_ID,'schedulerViews',String(data.actorEmail||'').toLowerCase());
+ const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main');
  let notificationBefore=null,notificationAfter=null;
  await runTransaction(cloud,async transaction=>{
    const [requestSnap,mainSnap]=await Promise.all([transaction.get(requestRef),transaction.get(mainRef)]);if(!requestSnap.exists()||requestSnap.data()?.status!=='pending'||!mainSnap.exists())return;
@@ -1706,11 +1720,11 @@ async function applySchedulerRequest(requestRef,data){
    if(data.operation==='delete'){if(index>=0)after.lessons.splice(index,1)}
    else {if(!(after.students||[]).some(s=>String(s.id)===String(lesson.studentId))){const student=schedulerSafeStudent(data.student||{});if(student.id===String(lesson.studentId)&&String(student.name||'').trim())after.students.push({...student,billing:'hour',rate:0,note:''});else throw new Error('排課異動包含不存在的學生')}if(!lessonTeacherIds(lesson).every(tid=>(after.teachers||[]).some(t=>String(t.id)===tid)))throw new Error('排課異動包含不存在的老師');if(index>=0)after.lessons[index]={...after.lessons[index],...lesson};else after.lessons.push({...lesson,paymentStatus:'unpaid',chargeStudent:'yes',payTeacher:'yes',note:''})}
    notificationBefore=before;notificationAfter=after;
-   const audit=buildImmutableDataAudit(before,after),auditRecord=audit?(()=>{audit.eventId=`scheduler-${requestSnap.id}`;return immutableAuditRecord(audit)})():null,auditSnap=auditRecord?await transaction.get(auditRecord.ref):null,hash=dataHash(after),scopedDb=filteredSchedulerDB(after);transaction.set(mainRef,{db:after,updatedAt:serverTimestamp(),updatedBy:data.actorUid,clientHash:hash},{merge:false});
-   transaction.set(schedulerViewRef,{db:scopedDb,clientHash:dataHash(scopedDb),updatedAt:serverTimestamp(),email:String(data.actorEmail||'').toLowerCase()},{merge:false});
+   const audit=buildImmutableDataAudit(before,after),auditRecord=audit?(()=>{audit.eventId=`scheduler-${requestSnap.id}`;return immutableAuditRecord(audit)})():null,auditSnap=auditRecord?await transaction.get(auditRecord.ref):null,hash=dataHash(after);transaction.set(mainRef,{db:after,updatedAt:serverTimestamp(),updatedBy:data.actorUid,clientHash:hash},{merge:false});
    if(auditRecord&&!auditSnap.exists())transaction.set(auditRecord.ref,{...auditRecord.payload,action:`scheduler-schedule-${data.operation}`,targetType:'lesson',targetId:id,entityChanges:[...auditRecord.payload.entityChanges,`requested-by:${data.actorEmail}`].slice(0,80)});
    transaction.set(requestRef,{status:'applied',appliedAt:serverTimestamp(),appliedBy:cloudUid},{merge:true});
  });
+ if(notificationAfter)publishRoleViewsWithRetry(notificationAfter);
  if(notificationBefore&&notificationAfter)queueScheduleChangeNotifications(notificationBefore,notificationAfter,`scheduler-${requestRef.id}`,{uid:data.actorUid,name:SCHEDULER_ACCOUNT_EMAILS.has(String(data.actorEmail||'').toLowerCase())?'aa':'排課專員'});
 }
 function subscribeSchedulerRequests(){
@@ -1764,7 +1778,7 @@ function subscribeOwner(){
      if(!ownerUploadInFlight){clearTimeout(syncTimer);syncTimer=setTimeout(()=>uploadOwnerState(),80);}
      return;
    }
-   if(snapshotDecision==='unchanged'){publishRoleViewsWithRetry();return}
+   if(snapshotDecision==='unchanged'){publishRoleViewsWithRetry(incoming);return}
    applyingCloud=true;
    window.__danbridgeSetDB(deepCopy(incoming));
    applyCachedLessonReportsToCurrentDB();
@@ -1777,7 +1791,7 @@ function subscribeOwner(){
    lastPublishedOwnerDB=deepCopy(incoming);ownerBaselineReady=true;
    if(localDirtyHash===incomingHash){localDirtyHash='';clearOwnerSyncRecovery()}
    scheduleDailyCloudBackup();renderSyncRecoveryCenter();
-   publishRoleViewsWithRetry();
+   publishRoleViewsWithRetry(incoming);
    cloudStatus(`雲端資料已更新：學生 ${incoming.students?.length||0}、老師 ${incoming.teachers?.length||0}、課程 ${incoming.lessons?.length||0}`,'ok');
  },err=>{console.error('owner snapshot',err);reportOperationalError(err,{category:'cloud-read',area:'owner-snapshot',retryable:true});cloudStatus('讀取雲端主資料失敗：'+(err.message||err),'error')});
 }
@@ -1901,7 +1915,7 @@ installClassFocusMode();
 installBranchManagerAccessEvents();
 installRoleInteractionGuards();
 onAuthStateChanged(auth,async user=>{
- unsubscribeState?.();unsubscribeState=null;unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;scheduleNotificationDocuments=[];lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();
+ unsubscribeState?.();unsubscribeState=null;unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;scheduleNotificationDocuments=[];lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();roleViewPublishSourceDB=null;
  unsubscribeAccessGuard?.();unsubscribeAccessGuard=null;
  if(!user){lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);clearTimeout(dailyBackupTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudCanManageSchedule=false;schedulerBaselineLessons=[];schedulerSaveChain=Promise.resolve();schedulerOptimisticLessons=new Map();cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true,canManageSchedule:false});showCloudLogin();cloudStatus('尚未登入');return}
  try{
