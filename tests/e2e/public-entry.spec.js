@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.23';
+const CLOUD_RELEASE = '20.26.24';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -84,6 +84,7 @@ for (const schedulerAccount of [
     const contextHiddenOnStudents=getComputedStyle(contextMenu).display==='none';
     window.switchTab('students');
     const studentNavigationWorks=document.getElementById('students').classList.contains('active')&&document.body.dataset.activeSection==='students';
+    const studentContentVisible=getComputedStyle(document.getElementById('students')).display!=='none'&&getComputedStyle(document.querySelector('#students>.grid>.card.col-8')).display!=='none';
     document.getElementById('students').classList.remove('active');document.getElementById('calendar').classList.add('active');contextMenu.classList.remove('show');
     const sampleLesson=db.lessons[0];
     if(sampleLesson)window.editLesson(sampleLesson.id);
@@ -126,7 +127,7 @@ for (const schedulerAccount of [
       reportShortcutExists: Boolean(document.getElementById('teacherReportShortcut')),
       selectionPosition: getComputedStyle(selectionBar).position,
       selectionContained: selectionRect.left>=calendarCardRect.left-1&&selectionRect.right<=calendarCardRect.right+1
-      ,contextHiddenByDefault,contextVisibleOnCalendar,contextHiddenOnStudents,studentNavigationWorks
+      ,contextHiddenByDefault,contextVisibleOnCalendar,contextHiddenOnStudents,studentNavigationWorks,studentContentVisible
     };
   }, schedulerAccount);
   expect(result.modalLeft).toBeGreaterThanOrEqual(0);
@@ -157,6 +158,7 @@ for (const schedulerAccount of [
   expect(result.contextVisibleOnCalendar).toBe(true);
   expect(result.contextHiddenOnStudents).toBe(true);
   expect(result.studentNavigationWorks).toBe(true);
+  expect(result.studentContentVisible).toBe(true);
 });
 
 test('English mode translates the major application workspaces', async ({ page }) => {
