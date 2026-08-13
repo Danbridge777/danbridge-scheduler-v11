@@ -162,6 +162,59 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // staging 逐筆影子資料位於公司 wildcard 外，避免寬鬆 Owner 規則繞過欄位驗證。
+    // 目前只驗證 lessons、students、teachers；禁止實體刪除，刪除狀態必須留下墓碑。
+    match /stagingRecordShadows/{companyId}/collections/{collectionId}/records/{recordId} {
+      allow read: if isOwner() && companyId == 'danbridge';
+      allow create: if isOwner()
+        && companyId == 'danbridge'
+        && collectionId in ['lessons','students','teachers']
+        && request.resource.data.keys().hasOnly([
+          'companyId','collection','recordId','record','sourceHash','revision','deleted',
+          'environment','updatedAt','updatedBy','updatedByEmail'
+        ])
+        && request.resource.data.companyId == companyId
+        && request.resource.data.collection == collectionId
+        && request.resource.data.recordId == recordId
+        && request.resource.data.record is map
+        && request.resource.data.record.id == recordId
+        && request.resource.data.sourceHash is string
+        && request.resource.data.sourceHash.size() > 0
+        && request.resource.data.revision is int
+        && request.resource.data.revision == 1
+        && request.resource.data.deleted is bool
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedByEmail == emailKey();
+      allow update: if isOwner()
+        && companyId == 'danbridge'
+        && collectionId in ['lessons','students','teachers']
+        && request.resource.data.keys().hasOnly([
+          'companyId','collection','recordId','record','sourceHash','revision','deleted',
+          'environment','updatedAt','updatedBy','updatedByEmail'
+        ])
+        && request.resource.data.companyId == resource.data.companyId
+        && request.resource.data.collection == resource.data.collection
+        && request.resource.data.recordId == resource.data.recordId
+        && request.resource.data.environment == resource.data.environment
+        && request.resource.data.companyId == companyId
+        && request.resource.data.collection == collectionId
+        && request.resource.data.recordId == recordId
+        && request.resource.data.record is map
+        && request.resource.data.record.id == recordId
+        && request.resource.data.sourceHash is string
+        && request.resource.data.sourceHash.size() > 0
+        && request.resource.data.revision is int
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.deleted is bool
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedByEmail == emailKey();
+      allow delete: if false;
+    }
+
     // Owner 對公司命名空間具有完整權限。Firestore 會將重疊 match 以 OR 判斷，
     // 因此 lessonMeta、lessonReports、teacherViews 等新增子集合不會因漏寫 match 而阻擋 Owner。
     match /companies/{companyId}/{document=**} {

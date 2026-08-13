@@ -650,3 +650,40 @@ describe('分片世代權限與原子啟用', () => {
     assert.deepEqual((await getDoc(activationRef)).data(),{schema:'danbridge-sharded-activation-v1',activeGenerationId:'generation-test',sourceHash:'hash-v1',totalChunks:1,totalRecords:0});
   });
 });
+
+describe('staging 逐筆影子資料權限', () => {
+  const recordPath=collection=>`stagingRecordShadows/${COMPANY_ID}/collections/${collection}/records/record-1`;
+  const payload=(collection,record={id:'record-1'})=>({
+    companyId:COMPANY_ID,collection,recordId:'record-1',record,
+    sourceHash:'hash-v1',revision:1,deleted:false,environment:'staging',
+    updatedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL
+  });
+
+  test('只有 Owner 可讀寫三個核心集合的 staging 影子文件', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),manager=auth('manager-uid',MANAGER_EMAIL),scheduler=auth('scheduler-uid',SECOND_SCHEDULER_EMAIL);
+    await assertSucceeds(setDoc(doc(owner,recordPath('lessons')),payload('lessons')));
+    await assertSucceeds(getDoc(doc(owner,recordPath('lessons'))));
+    for(const db of [unauthenticated(),teacher,manager,scheduler]){
+      await assertFails(getDoc(doc(db,recordPath('lessons'))));
+      await assertFails(setDoc(doc(db,recordPath('lessons')),payload('lessons')));
+    }
+  });
+
+  test('拒絕非核心集合、production 標記與不完整 metadata', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL);
+    await assertFails(setDoc(doc(owner,recordPath('changes')),payload('changes')));
+    await assertFails(setDoc(doc(owner,recordPath('students')),{...payload('students'),environment:'production'}));
+    const missingRevision=payload('teachers');delete missingRevision.revision;
+    await assertFails(setDoc(doc(owner,recordPath('teachers')),missingRevision));
+    await assertFails(setDoc(doc(owner,recordPath('lessons')),{...payload('lessons'),extra:'forbidden'}));
+  });
+
+  test('revision 只能逐次加一且禁止實體刪除', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),recordRef=doc(owner,recordPath('lessons'));
+    await assertSucceeds(setDoc(recordRef,payload('lessons')));
+    await assertFails(setDoc(recordRef,{...payload('lessons'),revision:1,record:{id:'record-1',note:'重播'}}));
+    await assertFails(setDoc(recordRef,{...payload('lessons'),revision:3,record:{id:'record-1',note:'跳號'}}));
+    await assertSucceeds(setDoc(recordRef,{...payload('lessons'),revision:2,deleted:true,record:{id:'record-1'}}));
+    await assertFails(deleteDoc(recordRef));
+  });
+});
