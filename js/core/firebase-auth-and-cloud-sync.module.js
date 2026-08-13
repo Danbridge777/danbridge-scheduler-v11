@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.45';
+const APP_RELEASE='20.26.46';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -57,8 +57,16 @@ function inspectSchedulerLocalRecoveryCandidates(){
  schedulerEmergencyRecoveryCandidates=candidates.sort((a,b)=>b.lessons-a.lessons);return schedulerEmergencyRecoveryCandidates.map(({db,...summary})=>summary);
 }
 window.__danbridgeInspectSchedulerRecovery=inspectSchedulerLocalRecoveryCandidates;
+function buildSchedulerRecoveryDifferenceReport(){
+ inspectSchedulerLocalRecoveryCandidates();const source=schedulerEmergencyRecoveryCandidates.find(x=>x.label==='主本機資料'),comparison=schedulerEmergencyRecoveryCandidates.find(x=>x.label==='aa 角色快取');if(!source||!comparison)return null;
+ const lessonKey=row=>String(row?.id||''),studentKey=row=>String(row?.id||''),comparisonLessons=new Map(comparison.db.lessons.map(row=>[lessonKey(row),row])),comparisonStudents=new Map(comparison.db.students.map(row=>[studentKey(row),row]));
+ const missingLessons=source.db.lessons.filter(row=>!comparisonLessons.has(lessonKey(row))).map(row=>({id:row.id||'',date:row.date||'',start:row.start||row.startTime||'',end:row.end||row.endTime||'',teacherId:row.teacherId||'',teacher:row.teacher||row.teacherName||'',studentId:row.studentId||'',student:row.student||row.studentName||row.className||'',location:row.location||row.branch||'',room:row.room||row.classroom||'',raw:deepCopy(row)})).sort((a,b)=>`${a.date} ${a.start} ${a.id}`.localeCompare(`${b.date} ${b.start} ${b.id}`));
+ const missingStudents=source.db.students.filter(row=>!comparisonStudents.has(studentKey(row))).map(row=>deepCopy(row));return{generatedAt:new Date().toISOString(),release:APP_RELEASE,readOnly:true,source:{label:source.label,lessons:source.lessons,students:source.students},comparison:{label:comparison.label,lessons:comparison.lessons,students:comparison.students},missingLessonCount:missingLessons.length,missingStudentCount:missingStudents.length,missingLessons,missingStudents};
+}
+window.__danbridgeBuildSchedulerRecoveryDifferenceReport=buildSchedulerRecoveryDifferenceReport;
+function downloadSchedulerRecoveryDifferenceReport(){const report=buildSchedulerRecoveryDifferenceReport();if(!report)return alert('找不到可比較的主本機資料與 aa 角色快取。');const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`danbridge-aa-recovery-difference-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);alert(`唯讀差異報告已下載：\n缺少課程 ${report.missingLessonCount} 堂\n缺少學生 ${report.missingStudentCount} 位\n\n尚未還原或上傳任何資料。`)}
 function showSchedulerRecoveryInspector(){
- if(document.getElementById('schedulerRecoveryInspector'))return;const summaries=inspectSchedulerLocalRecoveryCandidates(),best=summaries[0];if(!best)return;const button=document.createElement('button');button.type='button';button.id='schedulerRecoveryInspector';button.className='btn';button.style.cssText='position:fixed;right:18px;bottom:92px;z-index:10002;background:#7f1d1d;color:#fff;border-color:#fecaca;box-shadow:0 10px 28px rgba(127,29,29,.28)';button.textContent=`檢查本機救援資料（最多 ${best.lessons} 堂）`;button.onclick=()=>alert(summaries.map((x,i)=>`${i+1}. ${x.label}\n課程 ${x.lessons}｜學生 ${x.students}｜老師 ${x.teachers}\n日期 ${x.from} ～ ${x.to}`).join('\n\n')+'\n\n目前僅掃描，尚未還原或上傳任何資料。');document.body.appendChild(button);
+ if(document.getElementById('schedulerRecoveryInspector'))return;const summaries=inspectSchedulerLocalRecoveryCandidates(),best=summaries[0];if(!best)return;const button=document.createElement('button');button.type='button';button.id='schedulerRecoveryInspector';button.className='btn';button.style.cssText='position:fixed;right:18px;bottom:92px;z-index:10002;background:#7f1d1d;color:#fff;border-color:#fecaca;box-shadow:0 10px 28px rgba(127,29,29,.28)';button.textContent=`下載唯讀救援差異（最多 ${best.lessons} 堂）`;button.onclick=downloadSchedulerRecoveryDifferenceReport;document.body.appendChild(button);
 }
 let unsubscribeScheduleRequests=null;
 let schedulerRequestQueue=[],schedulerRequestQueueIds=new Set(),schedulerRequestWorkerActive=false,schedulerRequestRetryTimer=null;
