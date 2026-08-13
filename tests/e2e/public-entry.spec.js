@@ -1,8 +1,8 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.25';
-const APP_SHELL_RELEASE = '20.23.2';
+const CLOUD_RELEASE = '20.26.26';
+const APP_SHELL_RELEASE = '20.26.26';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
@@ -59,6 +59,23 @@ test('teacher schedule hides the location legend', async ({ page }) => {
     element.dataset.roleUx = 'teacher';
   });
   await expect(page.locator('#calendar .location-legend')).toBeHidden();
+});
+
+test('owner lesson navigation paints before the heavy table render', async ({ page }) => {
+  await page.goto('/');
+  const result=await page.evaluate(async()=>{
+    document.body.classList.remove('auth-locked','teacher-cloud-role','branch-manager-cloud-role','wendy-cloud-role');
+    window.currentCloudRole=()=> 'owner';
+    const original=window.renderLessons;let rendered=false;
+    window.renderLessons=()=>{const start=performance.now();while(performance.now()-start<80){}rendered=true};
+    const start=performance.now();window.switchTab('lessons');const elapsed=performance.now()-start;
+    const immediate=document.getElementById('lessons').classList.contains('active')&&document.querySelector('nav button[data-tab="lessons"]').classList.contains('active');
+    await new Promise(resolve=>setTimeout(resolve,140));window.renderLessons=original;
+    return{elapsed,immediate,rendered};
+  });
+  expect(result.immediate).toBe(true);
+  expect(result.elapsed).toBeLessThan(30);
+  expect(result.rendered).toBe(true);
 });
 
 for (const schedulerAccount of [
