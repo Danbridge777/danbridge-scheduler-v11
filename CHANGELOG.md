@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.59（僅 staging 手動逐筆影子接線）
+
+- 新增 staging Owner-only 的手動 record-shadow 寫入與診斷入口。
+- 逐批 transaction 會先讀後寫，完成後重新讀取三個核心集合驗證。
+- 不接管主讀取、不掛入 `uploadOwnerState()`，失敗不影響既有主同步。
+
 ## 20.26.56（僅 staging 影子驗證狀態）
 
 - 新增 staging Owner-only 的唯讀影子狀態，顯示 queued、uploading、verified 或 failed，供逐步驗證使用。

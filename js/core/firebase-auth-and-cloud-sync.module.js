@@ -1,7 +1,8 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.56';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.59';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.59';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -14,7 +15,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.56';
+const APP_RELEASE='20.26.59';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1725,6 +1726,72 @@ function queueStagingShadowGeneration(db,sourceHash=dataHash(db)){
 }
 window.__danbridgeQueueStagingShadowGeneration=queueStagingShadowGeneration;
 window.__danbridgeGetStagingShadowDiagnostic=()=>canRunStagingShadow({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole})?deepCopy(stagingShadowDiagnostic):null;
+
+let stagingRecordShadowDiagnostic={state:'idle',sourceHash:'',totalWrites:0,completedWrites:0,totalBatches:0,completedBatches:0,activeCount:0,tombstoneCount:0,verified:false,error:'',startedAt:'',finishedAt:''};
+function setStagingRecordShadowDiagnostic(next){
+ stagingRecordShadowDiagnostic={...stagingRecordShadowDiagnostic,...next};
+ if(DANBRIDGE_ENVIRONMENT==='staging')document.body.dataset.stagingRecordShadowState=stagingRecordShadowDiagnostic.state;
+}
+function stagingRecordShadowGuard(){
+ if(DANBRIDGE_ENVIRONMENT!=='staging'||cloudRole!=='owner'||firebaseConfig.projectId!=='danbridge-d8877-staging')throw new Error('逐筆影子手動入口只允許 staging Owner');
+}
+function firestoreRecordShadowAdapter({failBatch=0}={}){
+ let transactionNumber=0;
+ return createFirebaseRecordShadowAdapter({
+  environment:DANBRIDGE_ENVIRONMENT,role:cloudRole,actor:{uid:cloudUid,email:cloudEmailKey},serverTimestamp,
+  getCollectionDocuments:async path=>{const snapshot=await getDocs(collection(cloud,...path.split('/')));return snapshot.docs.map(row=>({id:row.id,data:row.data()}))},
+  runBatchTransaction:async callback=>{
+   transactionNumber++;
+   if(failBatch===transactionNumber)throw new Error(`staging 測試注入：第 ${failBatch} 批失敗`);
+   return runTransaction(cloud,transaction=>callback({get:path=>transaction.get(doc(cloud,...path.split('/'))),set:(path,payload)=>transaction.set(doc(cloud,...path.split('/')),payload,{merge:false})}));
+  }
+ });
+}
+async function runStagingRecordShadow(options={}){
+ stagingRecordShadowGuard();
+ const targetDb=deepCopy(options.targetDb??window.__danbridgeGetDB?.()),sourceHash=String(options.sourceHash||dataHash(targetDb)),startedAt=new Date().toISOString();
+ setStagingRecordShadowDiagnostic({state:'reading',sourceHash,totalWrites:0,completedWrites:0,totalBatches:0,completedBatches:0,activeCount:0,tombstoneCount:0,verified:false,error:'',startedAt,finishedAt:''});
+ try{
+  const result=await firestoreRecordShadowAdapter({failBatch:Number(options.failBatch)||0}).synchronize(targetDb,{sourceHash,batchSize:options.batchSize,
+   onPlan:(plan,current)=>setStagingRecordShadowDiagnostic({state:plan.writes?'writing':'verifying',totalWrites:plan.writes,totalBatches:plan.batches.length,activeCount:current.activeCount,tombstoneCount:current.tombstoneCount}),
+   onBatchComplete:progress=>setStagingRecordShadowDiagnostic({state:progress.completedBatches===progress.totalBatches?'verifying':'writing',completedWrites:progress.completedWrites,completedBatches:progress.completedBatches})
+  });
+  setStagingRecordShadowDiagnostic({state:'verified',totalWrites:result.writes,completedWrites:result.writes,totalBatches:result.batches,completedBatches:result.batches,activeCount:result.activeCount,tombstoneCount:result.tombstoneCount,verified:true,error:'',finishedAt:new Date().toISOString()});
+  return deepCopy(stagingRecordShadowDiagnostic);
+ }catch(error){
+  setStagingRecordShadowDiagnostic({state:'failed',completedWrites:Number(error?.completedWrites)||stagingRecordShadowDiagnostic.completedWrites,completedBatches:Number(error?.completedBatches)||stagingRecordShadowDiagnostic.completedBatches,verified:false,error:String(error?.message||error).slice(0,500),finishedAt:new Date().toISOString()});
+  console.error('Staging record shadow failed',error);throw error;
+ }
+}
+if(DANBRIDGE_ENVIRONMENT==='staging'){
+ window.__danbridgeRunStagingRecordShadow=runStagingRecordShadow;
+ window.__danbridgeGetStagingRecordShadowDiagnostic=()=>{stagingRecordShadowGuard();return deepCopy(stagingRecordShadowDiagnostic)};
+}
+async function runStagingRecordShadowScenario(action){
+ stagingRecordShadowGuard();
+ const current=await firestoreRecordShadowAdapter().readState(),target=deepCopy(current.db);
+ const ids={lesson:'staging-record-writer-lesson',student:'staging-record-writer-student',teacher:'staging-record-writer-teacher'};
+ if(action==='inspect')return{action,activeCount:current.activeCount,tombstoneCount:current.tombstoneCount,revisions:{lesson:current.revisions.lessons[ids.lesson]||0,student:current.revisions.students[ids.student]||0,teacher:current.revisions.teachers[ids.teacher]||0},active:{lesson:current.db.lessons.some(row=>row.id===ids.lesson),student:current.db.students.some(row=>row.id===ids.student),teacher:current.db.teachers.some(row=>row.id===ids.teacher)}};
+ const upsert=(collection,record)=>{const index=target[collection].findIndex(row=>String(row.id)===String(record.id));if(index<0)target[collection].push(record);else target[collection][index]=record};
+ const remove=(collection,id)=>{target[collection]=target[collection].filter(row=>String(row.id)!==id)};
+ if(action==='create'){upsert('lessons',{id:ids.lesson,name:'STAGING_RECORD_WRITER_LESSON',testStep:'create'});upsert('students',{id:ids.student,name:'STAGING_RECORD_WRITER_STUDENT',testStep:'create'});upsert('teachers',{id:ids.teacher,name:'STAGING_RECORD_WRITER_TEACHER',testStep:'create'})}
+ else if(action==='modify'){upsert('lessons',{id:ids.lesson,name:'STAGING_RECORD_WRITER_LESSON_MODIFIED',testStep:'modify'})}
+ else if(action==='tombstone')remove('lessons',ids.lesson);
+ else if(action==='revive')upsert('lessons',{id:ids.lesson,name:'STAGING_RECORD_WRITER_LESSON_REVIVED',testStep:'revive'});
+ else if(action==='failure-resume'){
+  upsert('lessons',{id:ids.lesson,name:'STAGING_RECORD_WRITER_LESSON_RESUMED',testStep:'failure-resume'});upsert('students',{id:ids.student,name:'STAGING_RECORD_WRITER_STUDENT_RESUMED',testStep:'failure-resume'});upsert('teachers',{id:ids.teacher,name:'STAGING_RECORD_WRITER_TEACHER_RESUMED',testStep:'failure-resume'});
+  let failedDiagnostic=null;try{await runStagingRecordShadow({targetDb:target,sourceHash:'staging-record-test-failure',batchSize:1,failBatch:2})}catch{failedDiagnostic=deepCopy(stagingRecordShadowDiagnostic)}
+  const resumed=await runStagingRecordShadow({targetDb:target,sourceHash:'staging-record-test-resume',batchSize:1});return{action,failedDiagnostic,resumed};
+ }else if(action==='cleanup'){remove('lessons',ids.lesson);remove('students',ids.student);remove('teachers',ids.teacher)}
+ else throw new Error('未知的 staging record-shadow 測試動作');
+ return{action,result:await runStagingRecordShadow({targetDb:target,sourceHash:`staging-record-test-${action}`,batchSize:1})};
+}
+if(DANBRIDGE_ENVIRONMENT==='staging'){
+ const stagingRecordTestAction=new URLSearchParams(location.search).get('recordShadowTest');
+ if(stagingRecordTestAction){
+  let stagingRecordTestStarted=false;const timer=setInterval(async()=>{if(stagingRecordTestStarted||cloudRole!=='owner')return;stagingRecordTestStarted=true;clearInterval(timer);try{const result=await runStagingRecordShadowScenario(stagingRecordTestAction);document.body.dataset.stagingRecordShadowTestResult=JSON.stringify(result)}catch(error){document.body.dataset.stagingRecordShadowTestResult=JSON.stringify({action:stagingRecordTestAction,error:String(error?.message||error),diagnostic:stagingRecordShadowDiagnostic})}},200);
+ }
+}
 
 async function uploadOwnerState(force=false){
  if(cloudRole!=='owner'||applyingCloud)return;

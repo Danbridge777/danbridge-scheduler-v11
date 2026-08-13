@@ -8,6 +8,7 @@ function requireStagingOwner(environment,role){
  if(environment!=='staging'||role!=='owner')throw new Error('逐筆影子 adapter 只允許 staging Owner');
 }
 function snapshotValue(snapshot){
+ if(typeof snapshot?.exists==='function')return snapshot.exists()?snapshot.data():null;
  if(snapshot?.exists===false)return null;
  if(snapshot?.exists===true)return typeof snapshot.data==='function'?snapshot.data():snapshot.data;
  return snapshot??null;
@@ -39,12 +40,15 @@ export function createFirebaseRecordShadowAdapter({getCollectionDocuments,runBat
  return{
   enabled:environment==='staging'&&role==='owner',
   readState,
-  async synchronize(targetDb,{sourceHash,batchSize}={}){
+  async synchronize(targetDb,{sourceHash,batchSize,onPlan,onBatchComplete}={}){
    requireStagingOwner(environment,role);
    if(!actor?.uid||!String(actor?.email||'').trim())throw new Error('逐筆影子 adapter 缺少 Owner actor');
    const current=await readState();
    const plan=buildRecordShadowWriteBatches(current,targetDb,{companyId:COMPANY_ID,sourceHash,batchSize});
-   return executeRecordShadowBatches(plan,{writeBatch,readState,targetDb});
+   onPlan?.(plan,current);
+   let completedBatches=0,completedWrites=0;
+   const observedWriteBatch=async(operations,batch)=>{await writeBatch(operations,batch);completedBatches++;completedWrites+=batch.writes;onBatchComplete?.({completedBatches,completedWrites,totalBatches:plan.batches.length,totalWrites:plan.writes})};
+   return executeRecordShadowBatches(plan,{writeBatch:observedWriteBatch,readState,targetDb});
   }
  };
 }
