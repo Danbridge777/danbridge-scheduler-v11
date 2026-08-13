@@ -86,3 +86,55 @@ export function buildRecordShadowWritePlan(coreDiffs,{companyId='danbridge',sour
  if(operations.length>RECORD_SHADOW_SAFE_WRITE_LIMIT)throw new Error(`影子寫入筆數 ${operations.length} 超過單批安全上限 ${RECORD_SHADOW_SAFE_WRITE_LIMIT}`);
  return{companyId,sourceHash,operations,writes:operations.length};
 }
+
+function validateShadowDocument(collection,row,seen){
+ const id=String(row?.id??''),data=row?.data;
+ if(!validDocumentId(id)||!data||typeof data!=='object'||Array.isArray(data))throw new Error(`${collection} 影子文件格式無效`);
+ if(seen.has(id))throw new Error(`${collection} 影子文件包含重複 ID：${id}`);
+ seen.add(id);
+ if(data.companyId!=='danbridge'||data.collection!==collection||data.recordId!==id||String(data.record?.id??'')!==id)throw new Error(`${collection}/${id} 影子文件 identity 不一致`);
+ if(data.environment!=='staging')throw new Error(`${collection}/${id} 影子文件 environment 無效`);
+ if(!Number.isSafeInteger(data.revision)||data.revision<1)throw new Error(`${collection}/${id} 影子文件 revision 無效`);
+ if(typeof data.deleted!=='boolean')throw new Error(`${collection}/${id} 影子文件 deleted 無效`);
+ return data;
+}
+
+export function rebuildRecordShadowState(documentsByCollection={}){
+ const db={lessons:[],students:[],teachers:[]},revisions={lessons:{},students:{},teachers:{}};
+ let documentCount=0,activeCount=0,tombstoneCount=0;
+ for(const collection of Object.keys(documentsByCollection))if(!CORE_RECORD_COLLECTIONS.includes(collection))throw new Error(`影子文件包含非核心集合：${collection}`);
+ for(const collection of CORE_RECORD_COLLECTIONS){
+  const rows=documentsByCollection[collection]??[];
+  if(!Array.isArray(rows))throw new Error(`${collection} 影子文件必須是陣列`);
+  const seen=new Set();
+  for(const row of rows){
+   const data=validateShadowDocument(collection,row,seen);documentCount++;
+   revisions[collection][String(row.id)]=data.revision;
+   if(data.deleted)tombstoneCount++;
+   else{db[collection].push(clone(data.record));activeCount++}
+  }
+ }
+ return{db,revisions,documentCount,activeCount,tombstoneCount};
+}
+
+export function buildRecordShadowWriteBatches(currentState,targetDb,{companyId='danbridge',sourceHash,batchSize=RECORD_SHADOW_SAFE_WRITE_LIMIT}={}){
+ if(!Number.isSafeInteger(batchSize)||batchSize<1||batchSize>RECORD_SHADOW_SAFE_WRITE_LIMIT)throw new Error(`影子寫入 batchSize 必須介於 1 與 ${RECORD_SHADOW_SAFE_WRITE_LIMIT}`);
+ const currentDb=currentState?.db??currentState;
+ const revisions=currentState?.revisions??{};
+ const diff=buildCoreRecordDiffs(currentDb,targetDb);
+ const operations=[];
+ for(const collection of CORE_RECORD_COLLECTIONS){
+  const collectionDiff=diff.collections[collection];
+  for(const record of collectionDiff.creates)operations.push(shadowOperation('create',collection,record,{companyId,sourceHash,revisions}));
+  for(const record of collectionDiff.updates)operations.push(shadowOperation('update',collection,record,{companyId,sourceHash,revisions}));
+  for(const record of collectionDiff.deletes)operations.push(shadowOperation('delete',collection,record,{companyId,sourceHash,revisions}));
+ }
+ if(companyId!=='danbridge')throw new Error('影子寫入分批包含 Rules 未允許的 companyId');
+ if(typeof sourceHash!=='string'||!sourceHash.trim())throw new Error('影子寫入分批缺少有效 sourceHash');
+ const batches=[];
+ for(let offset=0;offset<operations.length;offset+=batchSize){
+  const batchOperations=operations.slice(offset,offset+batchSize);
+  batches.push({index:batches.length,operations:batchOperations,writes:batchOperations.length});
+ }
+ return{companyId,sourceHash,diff,batches,writes:operations.length};
+}

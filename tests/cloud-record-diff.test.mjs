@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildRecordCollectionDiff,buildCoreRecordDiffs,buildRecordShadowWritePlan} from '../js/core/cloud-record-diff.js';
+import {buildRecordCollectionDiff,buildCoreRecordDiffs,buildRecordShadowWritePlan,rebuildRecordShadowState,buildRecordShadowWriteBatches} from '../js/core/cloud-record-diff.js';
 
 const row=(id,value)=>({id,value,nested:{safe:true}});
 
@@ -124,4 +124,50 @@ test('影子寫入計畫拒絕空白雜湊、非核心集合與超過單批安�
  assert.throws(()=>buildRecordShadowWritePlan(invalid,{sourceHash:'hash'}),/非核心集合/);
  const many=buildCoreRecordDiffs({lessons:[],students:[],teachers:[]},{lessons:Array.from({length:401},(_,index)=>row(`lesson-${index}`,index)),students:[],teachers:[]});
  assert.throws(()=>buildRecordShadowWritePlan(many,{sourceHash:'hash'}),/超過單批安全上限 400/);
+});
+
+test('影子文件可重建目前核心資料，墓碑不回到有效資料但保留 revision',()=>{
+ const state=rebuildRecordShadowState({
+  lessons:[
+   {id:'active',data:{companyId:'danbridge',collection:'lessons',recordId:'active',record:row('active',2),revision:3,deleted:false,environment:'staging'}},
+   {id:'deleted',data:{companyId:'danbridge',collection:'lessons',recordId:'deleted',record:row('deleted',1),revision:7,deleted:true,environment:'staging'}}
+  ],students:[],teachers:[]
+ });
+ assert.deepEqual(state.db.lessons,[row('active',2)]);
+ assert.deepEqual(state.revisions.lessons,{active:3,deleted:7});
+ assert.equal(state.documentCount,2);
+ assert.equal(state.activeCount,1);
+ assert.equal(state.tombstoneCount,1);
+});
+
+test('影子文件 identity、環境、版號或重複 ID 異常時整批拒絕',()=>{
+ const valid={id:'one',data:{companyId:'danbridge',collection:'students',recordId:'one',record:row('one',1),revision:1,deleted:false,environment:'staging'}};
+ assert.throws(()=>rebuildRecordShadowState({lessons:[],students:[{...valid,data:{...valid.data,recordId:'other'}}],teachers:[]}),/identity/);
+ assert.throws(()=>rebuildRecordShadowState({lessons:[],students:[{...valid,data:{...valid.data,environment:'production'}}],teachers:[]}),/environment/);
+ assert.throws(()=>rebuildRecordShadowState({lessons:[],students:[{...valid,data:{...valid.data,revision:0}}],teachers:[]}),/revision/);
+ assert.throws(()=>rebuildRecordShadowState({lessons:[],students:[valid,structuredClone(valid)],teachers:[]}),/重複/);
+});
+
+test('大量逐筆差異拆成每批最多 400 筆且總操作不遺失',()=>{
+ const current={lessons:[],students:[],teachers:[]};
+ const target={lessons:Array.from({length:801},(_,index)=>row(`lesson-${index}`,index)),students:[],teachers:[]};
+ const result=buildRecordShadowWriteBatches(current,target,{sourceHash:'hash-801'});
+ assert.deepEqual(result.batches.map(batch=>batch.writes),[400,400,1]);
+ assert.equal(result.writes,801);
+ assert.equal(result.diff.counts.creates,801);
+ assert.equal(new Set(result.batches.flatMap(batch=>batch.operations.map(operation=>operation.path))).size,801);
+});
+
+test('分批規劃延續現有 revision、重建墓碑並對完全相同資料零寫入',()=>{
+ const current=rebuildRecordShadowState({
+  lessons:[{id:'revived',data:{companyId:'danbridge',collection:'lessons',recordId:'revived',record:row('revived',1),revision:9,deleted:true,environment:'staging'}}],students:[],teachers:[]
+ });
+ const target={lessons:[row('revived',2)],students:[],teachers:[]};
+ const revived=buildRecordShadowWriteBatches(current,target,{sourceHash:'hash-revived'});
+ assert.equal(revived.batches[0].operations[0].payload.revision,10);
+ assert.equal(revived.batches[0].operations[0].payload.deleted,false);
+ const identicalState=rebuildRecordShadowState({lessons:[{id:'same',data:{companyId:'danbridge',collection:'lessons',recordId:'same',record:row('same',1),revision:2,deleted:false,environment:'staging'}}],students:[],teachers:[]});
+ const identical=buildRecordShadowWriteBatches(identicalState,identicalState.db,{sourceHash:'same'});
+ assert.equal(identical.writes,0);
+ assert.deepEqual(identical.batches,[]);
 });
