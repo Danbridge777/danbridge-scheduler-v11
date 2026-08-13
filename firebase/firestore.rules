@@ -194,7 +194,7 @@ service cloud.firestore {
     match /companies/{companyId}/scheduleRequests/{requestId} {
       allow read: if isOwner() || (canManageSchedule(companyId) && resource.data.actorEmail == emailKey());
       allow create: if canManageSchedule(companyId)
-        && request.resource.data.keys().hasOnly(['companyId','operation','lessonId','lesson','actorUid','actorEmail','createdAt','status'])
+        && request.resource.data.keys().hasOnly(['companyId','operation','lessonId','lesson','student','actorUid','actorEmail','createdAt','status'])
         && request.resource.data.companyId == companyId
         && request.resource.data.operation in ['create','update','delete']
         && request.resource.data.lessonId is string
@@ -205,6 +205,10 @@ service cloud.firestore {
           'status','note','seriesId','lessonState','isDraft'
         ])
         && request.resource.data.lesson.id == request.resource.data.lessonId
+        && (!('student' in request.resource.data) || (request.resource.data.student is map
+          && request.resource.data.student.keys().hasOnly(['id','name','status','school','grade','level','preferredTeacherId','parent','contact','parentLine','parentEmail','homeAddress','courseType','branchIds'])
+          && request.resource.data.student.id == request.resource.data.lesson.studentId
+          && request.resource.data.student.name is string))
         && request.resource.data.actorUid == request.auth.uid
         && request.resource.data.actorEmail == emailKey()
         && request.resource.data.status == 'pending'

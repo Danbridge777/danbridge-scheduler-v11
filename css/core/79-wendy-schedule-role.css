@@ -64,8 +64,6 @@ body.wendy-cloud-role #calendar #selectionBar{
  justify-content:center!important;box-sizing:border-box!important
 }
 body.wendy-cloud-role #calendar #selectionBar.hidden{display:none!important}
-body.wendy-cloud-role #lessonModal .student-select-row>button,
-body.wendy-cloud-role #lessonModal #quickStudentBox,
 body.wendy-cloud-role #lessonModal .col-6:has(>#paymentStatus),
 body.wendy-cloud-role #lessonModal label:has(+ #paymentStatus),
 body.wendy-cloud-role #lessonModal #paymentStatus,
@@ -76,6 +74,8 @@ body.wendy-cloud-role #lessonModal #payTeacher,
 body.wendy-cloud-role>.floating-actions .v20-owner-action,
 body.wendy-cloud-role #v18Fab,
 body.wendy-cloud-role #v18FabMenu{display:none!important}
+body.wendy-cloud-role #quickStudentBox .col-6:has(>#quickBilling),
+body.wendy-cloud-role #quickStudentBox .col-6:has(>#quickRate){display:none!important}
 body.wendy-cloud-role #lessonModal .modal{border-color:#f0d0aa!important;box-shadow:0 28px 70px rgba(155,91,35,.18)!important}
 body.wendy-cloud-role #lessonModal .btn.primary{background:linear-gradient(135deg,#d88a3d,#bc6d2d)!important;border-color:#bc6d2d!important}
 body.wendy-cloud-role #lessonModal,
@@ -112,13 +112,15 @@ body.wendy-cloud-role #finance,
 body.wendy-cloud-role #settlement,
 body.wendy-cloud-role #data,
 body.wendy-cloud-role #security,
-body.wendy-cloud-role #students,
 body.wendy-cloud-role #teachers,
 body.wendy-cloud-role #makeups,
 body.wendy-cloud-role #camps,
 body.wendy-cloud-role #winterCamps{display:none!important}
 body.wendy-cloud-role #dashboard,
 body.wendy-cloud-role #lessons{display:none!important}
+body.wendy-cloud-role #students>.grid>.card:first-child,
+body.wendy-cloud-role #students th:nth-child(n+4),
+body.wendy-cloud-role #students td:nth-child(n+4){display:none!important}
 /* Wendy uses the exact Owner toolbar geometry; only data visibility differs. */
 body.wendy-cloud-role #calendar .calendar-toolbar-filters{display:grid!important;grid-template-columns:repeat(5,minmax(130px,1fr)) minmax(250px,1.55fr)!important;gap:12px!important}
 body.wendy-cloud-role #calendar .calendar-toolbar-filters>.calendar-field{display:flex!important;width:auto!important;max-width:none!important}

@@ -85,6 +85,7 @@ describe('aa 全老師排課權限', () => {
     await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/scheduler-2-request`), request));
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/scheduler-2-request`)));
     await assertSucceeds(getDoc(doc(db, `companies/${COMPANY_ID}/schedulerViews/${SECOND_SCHEDULER_EMAIL}`)));
+    await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/scheduler-new-student`), { ...request, lessonId: 'lesson-new-student', lesson: { ...request.lesson, id: 'lesson-new-student', studentId: 'student-new' }, student: { id: 'student-new', name: 'New Student', parent: 'Parent', contact: '0912345678', homeAddress: 'Address', courseType: '1對1' } }));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/data/main`)));
     await assertFails(getDoc(doc(db, `companies/${COMPANY_ID}/syncConflictBackups/conflict-1`)));
   });
@@ -112,6 +113,7 @@ describe('aa 全老師排課權限', () => {
     }
     const schedulingLesson = { id: 'lesson-private', date: '2026-08-13', start: '10:00', end: '11:00', studentId: 'student-1', teacherId: 'teacher-2', teacherIds: ['teacher-2'], address: '上課地址', meetingUrl: 'https://meet.example', note: '排課備註', lessonState: 'active' };
     await assertSucceeds(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/scheduling-fields`), { ...base, lesson: schedulingLesson }));
+    await assertFails(setDoc(doc(db, `companies/${COMPANY_ID}/scheduleRequests/private-student-rate`), { ...base, lesson: { ...schedulingLesson, studentId: 'student-new' }, student: { id: 'student-new', name: 'New Student', rate: 2000 } }));
   });
 });
 beforeEach(async () => {

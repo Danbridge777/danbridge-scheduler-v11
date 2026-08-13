@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.19';
+const APP_RELEASE='20.26.20';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -482,11 +482,14 @@ function schedulerSafeLesson(lesson={}){
  const allowed=['id','date','start','end','studentId','teacherId','teacherIds','title','campId','room','location','branchId','deliveryMode','address','onlinePlatform','meetingUrl','status','note','seriesId','lessonState','isDraft'];
  return Object.fromEntries(allowed.filter(key=>lesson[key]!==undefined).map(key=>[key,JSON.parse(JSON.stringify(lesson[key]))]));
 }
+function schedulerSafeStudent(student={}){
+ const allowed=['id','name','status','school','grade','level','preferredTeacherId','parent','contact','parentLine','parentEmail','homeAddress','courseType','branchIds'];
+ return Object.fromEntries(allowed.filter(key=>student[key]!==undefined).map(key=>[key,JSON.parse(JSON.stringify(student[key]))]));
+}
 function filteredSchedulerDB(source){
  const lessons=(source.lessons||[]).filter(l=>!l.isDraft).map(schedulerSafeLesson);
- const studentIds=new Set(lessons.map(l=>String(l.studentId||'')));
  const branches=(source.branches||window.DanbridgeAccess?.DEFAULT_BRANCHES||[]).map(b=>({id:b.id,name:b.name||'',rooms:Array.isArray(b.rooms)?b.rooms.map(String):[]}));
- return {...emptyDB(),branches,students:(source.students||[]).filter(s=>studentIds.has(String(s.id))).map(s=>({id:s.id,name:s.name||'',courseType:s.courseType||''})),teachers:(source.teachers||[]).filter(t=>!t.archivedAt).map(t=>({id:t.id,name:t.name||'',displayName:t.displayName||'',color:t.color||'',subjects:t.subjects||''})),lessons};
+ return {...emptyDB(),branches,students:(source.students||[]).filter(s=>!s.archivedAt).map(schedulerSafeStudent),teachers:(source.teachers||[]).filter(t=>!t.archivedAt).map(t=>({id:t.id,name:t.name||'',displayName:t.displayName||'',color:t.color||'',subjects:t.subjects||''})),lessons};
 }
 
 function lessonBranchId(l){return l?.branchId||window.DanbridgeAccess?.branchIdFromLocation?.(l?.location||'')||'art_museum'}
@@ -1164,7 +1167,7 @@ function applyRoleUI(profile,user){
    window.renderAll?.();
    applyingCloud=false;
 
-   const teacherAllowedTabs=new Set(cloudCanManageSchedule?['calendar']:['dashboard','calendar','lessons']);
+   const teacherAllowedTabs=new Set(cloudCanManageSchedule?['students','calendar']:['dashboard','calendar','lessons']);
    const teacherTabLabels={dashboard:'我的總覽',calendar:cloudCanManageSchedule?'全老師課表':'我的課表',lessons:'課程回報'};
    document.querySelectorAll('nav button[data-tab]').forEach(b=>{
      const allowed=teacherAllowedTabs.has(b.dataset.tab);
@@ -1183,7 +1186,7 @@ function applyRoleUI(profile,user){
    document.querySelectorAll(teacherHiddenSelector).forEach(e=>{const target=e.matches('select')?e.closest('.calendar-field,#lessons .toolbar>div')||e:e;markRoleIsolated(target)});
    const teacherAnalysis=document.getElementById('calendarAnalysis');if(teacherAnalysis){markRoleIsolated(teacherAnalysis);teacherAnalysis.replaceChildren()}
    if(!cloudCanManageSchedule)document.querySelectorAll('.floating-actions').forEach(e=>e.remove());
-   document.querySelectorAll(`#students,#teachers,#drafts,#makeups,#camps,#winterCamps,#settlement,#finance,#data,#security${cloudCanManageSchedule?',#dashboard,#lessons':''}`).forEach(e=>{markRoleIsolated(e);e.classList.remove('active')});
+   document.querySelectorAll(`#teachers,#drafts,#makeups,#camps,#winterCamps,#settlement,#finance,#data,#security${cloudCanManageSchedule?',#dashboard,#lessons':',#students'}`).forEach(e=>{markRoleIsolated(e);e.classList.remove('active')});
 
    // 隱藏公司營收、未收款、薪資、老師總數與公司異動等敏感資訊。
    ['mTeachers','mRevenue','mUnpaid','mPayroll','mChanges'].forEach(id=>{
@@ -1676,7 +1679,8 @@ async function queueSchedulerChanges(){
  for(const id of new Set([...before.keys(),...after.keys()])){
    const old=before.get(id),next=after.get(id);if(JSON.stringify(old)===JSON.stringify(next))continue;
    const operation=!old?'create':!next?'delete':'update',lesson=next||old,ref=doc(collection(cloud,'companies',COMPANY_ID,'scheduleRequests'));
-   jobs.push(setDoc(ref,{companyId:COMPANY_ID,operation,lessonId:id,lesson,actorUid:cloudUid,actorEmail:cloudEmailKey,createdAt:serverTimestamp(),status:'pending'},{merge:false}));
+   const student=operation==='create'?schedulerSafeStudent((window.__danbridgeGetDB?.().students||[]).find(s=>String(s.id)===String(lesson.studentId))||{}):undefined;
+   jobs.push(setDoc(ref,{companyId:COMPANY_ID,operation,lessonId:id,lesson,...(student?.id?{student}:{}),actorUid:cloudUid,actorEmail:cloudEmailKey,createdAt:serverTimestamp(),status:'pending'},{merge:false}));
  }
  if(!jobs.length)return;
  cloudStatus('Wendy 排課異動正在安全送出…','pending');await Promise.all(jobs);schedulerBaselineLessons=deepCopy(current);persistCurrentLocalView();window.renderAll?.();cloudStatus(`課表已立即更新，${jobs.length} 筆異動正在同步給 Owner、校區管理者與老師`,'ok');
@@ -1696,7 +1700,7 @@ async function applySchedulerRequest(requestRef,data){
    const before=deepCopy(mainSnap.data()?.db),after=deepCopy(before),id=String(data.lessonId||''),index=(after.lessons||[]).findIndex(l=>String(l.id)===id),lesson=schedulerSafeLesson(data.lesson||{});
    if(!id||String(lesson.id||'')!==id)throw new Error('排課異動 ID 不一致');
    if(data.operation==='delete'){if(index>=0)after.lessons.splice(index,1)}
-   else {if(!(after.students||[]).some(s=>String(s.id)===String(lesson.studentId))||!lessonTeacherIds(lesson).every(tid=>(after.teachers||[]).some(t=>String(t.id)===tid)))throw new Error('排課異動包含不存在的學生或老師');if(index>=0)after.lessons[index]={...after.lessons[index],...lesson};else after.lessons.push({...lesson,paymentStatus:'unpaid',chargeStudent:'yes',payTeacher:'yes',note:''})}
+   else {if(!(after.students||[]).some(s=>String(s.id)===String(lesson.studentId))){const student=schedulerSafeStudent(data.student||{});if(student.id===String(lesson.studentId)&&String(student.name||'').trim())after.students.push({...student,billing:'hour',rate:0,note:''});else throw new Error('排課異動包含不存在的學生')}if(!lessonTeacherIds(lesson).every(tid=>(after.teachers||[]).some(t=>String(t.id)===tid)))throw new Error('排課異動包含不存在的老師');if(index>=0)after.lessons[index]={...after.lessons[index],...lesson};else after.lessons.push({...lesson,paymentStatus:'unpaid',chargeStudent:'yes',payTeacher:'yes',note:''})}
    notificationBefore=before;notificationAfter=after;
    const audit=buildImmutableDataAudit(before,after),hash=dataHash(after),scopedDb=filteredSchedulerDB(after);transaction.set(mainRef,{db:after,updatedAt:serverTimestamp(),updatedBy:data.actorUid,clientHash:hash},{merge:false});
    transaction.set(schedulerViewRef,{db:scopedDb,clientHash:dataHash(scopedDb),updatedAt:serverTimestamp(),email:String(data.actorEmail||'').toLowerCase()},{merge:false});

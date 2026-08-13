@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.19';
+const CLOUD_RELEASE = '20.26.20';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -94,7 +94,7 @@ for (const schedulerAccount of [
       overflow: document.documentElement.scrollWidth - innerWidth,
       uncentered: visibleControls.filter(control => getComputedStyle(control).textAlign !== 'center').map(control => control.id || control.textContent.trim().slice(0, 20)),
       escaped: visibleControls.filter(control => { const rect = control.getBoundingClientRect(); return rect.left < modalRect.left - 1 || rect.right > modalRect.right + 1 || rect.left < -1 || rect.right > innerWidth + 1; }).map(control => control.id || control.textContent.trim().slice(0, 20)),
-      privateVisible: ['paymentStatus','chargeStudent','payTeacher','quickStudentBox'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none'),
+      privateVisible: ['paymentStatus','chargeStudent','payTeacher','quickBilling','quickRate'].filter(id => {const el=document.getElementById(id),rect=el.getBoundingClientRect();return getComputedStyle(el).display!=='none'&&rect.width>0&&rect.height>0}),
       scheduleFieldsHidden: ['lessonAddress','lessonMeetingUrl','lessonNote','lessonState'].filter(id => getComputedStyle(document.getElementById(id)).display === 'none'),
       singleClickOpenedEditor: !sampleLesson || document.getElementById('lessonId').value===sampleLesson.id,
       capabilityAllowsEditing: window.calendarOwnerCanEdit?.()===true,
@@ -109,7 +109,9 @@ for (const schedulerAccount of [
       editingToolsHidden: ['#calendar .calendar-head-add','#calendar .calendar-quick-add','#calendar .weekly-copy-btn','#calendar #selectionModeBtn','#calendar .day-add','#calendarContextMenu','#courseDrawerEditBtn'].filter(selector => {
         const element=document.querySelector(selector);return !element||element.hidden||getComputedStyle(element).display==='none';
       }),
-      forbiddenSections: ['dashboard','students','teachers','lessons','makeups','camps','finance','data','security'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none'),
+      forbiddenSections: ['dashboard','teachers','lessons','makeups','camps','finance','data','security'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none'),
+      studentSectionVisible: getComputedStyle(document.querySelector('nav button[data-tab="students"]')).display!=='none',
+      addStudentButtonVisible: getComputedStyle(document.querySelector('#lessonModal .student-select-row>button')).display!=='none',
       reportTabVisible: getComputedStyle(document.querySelector('nav button[data-tab="lessons"]')).display!=='none',
       reportShortcutExists: Boolean(document.getElementById('teacherReportShortcut')),
       selectionPosition: getComputedStyle(selectionBar).position,
@@ -134,6 +136,8 @@ for (const schedulerAccount of [
   expect(result.idleSelectionMarkers).toBe(0);
   expect(result.editingToolsHidden).toEqual([]);
   expect(result.forbiddenSections).toEqual([]);
+  expect(result.studentSectionVisible).toBe(true);
+  expect(result.addStudentButtonVisible).toBe(true);
   expect(result.reportTabVisible).toBe(false);
   expect(result.reportShortcutExists).toBe(false);
   expect(result.selectionPosition).toBe('static');
