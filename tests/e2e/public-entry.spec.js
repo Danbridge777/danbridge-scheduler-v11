@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.32';
+const CLOUD_RELEASE = '20.26.33';
 const APP_SHELL_RELEASE = '20.26.27';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -625,12 +625,14 @@ test('Wendy alone receives soft orange lesson cards without masking warnings', a
   const colors = await page.evaluate(() => {
     document.body.classList.add('teacher-cloud-role', 'wendy-teacher-role');
     const normal = document.createElement('div'); normal.className = 'week-event';
+    const month = document.createElement('div'); month.className = 'lesson';
     const warning = document.createElement('div'); warning.className = 'week-event teacher-overlap';
-    document.querySelector('#calendarCanvas')?.append(normal, warning);
-    const result = { normal: getComputedStyle(normal).backgroundImage, warning: getComputedStyle(warning).backgroundImage };
-    normal.remove(); warning.remove(); return result;
+    document.querySelector('#calendarCanvas')?.append(normal, month, warning);
+    const result = { normal: getComputedStyle(normal).backgroundImage, month: getComputedStyle(month).backgroundImage, warning: getComputedStyle(warning).backgroundImage };
+    normal.remove(); month.remove(); warning.remove(); return result;
   });
   expect(colors.normal).toContain('255, 247, 237');
+  expect(colors.month).toContain('255, 247, 237');
   expect(colors.warning).toContain('239, 68, 68');
 });
 

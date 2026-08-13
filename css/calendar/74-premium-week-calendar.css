@@ -195,12 +195,14 @@
 
 /* Wendy remains a standard teacher; only her visible lesson cards use a soft orange palette. */
 body.wendy-teacher-role #todayLessons .lesson:not(.teacher-overlap):not(.lesson-draft),
+body.wendy-teacher-role #calendarCanvas .lesson:not(.teacher-overlap):not(.lesson-draft),
 body.wendy-teacher-role #calendarCanvas .week-event:not(.teacher-overlap):not(.lesson-draft){
   background:linear-gradient(155deg,#fff7ed 0%,#ffedd5 100%)!important;
   border-color:#fed7aa!important;
   border-left-color:#f59e0b!important;
   box-shadow:0 4px 14px rgba(194,101,20,.10)!important;
 }
+body.wendy-teacher-role #calendarCanvas .lesson:not(.teacher-overlap):not(.lesson-draft)::before,
 body.wendy-teacher-role #calendarCanvas .week-event:not(.teacher-overlap):not(.lesson-draft)::before{
   background:#f59e0b!important;
 }
