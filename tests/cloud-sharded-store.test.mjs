@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {SHARDED_DB_COLLECTION_KEYS,createShardedSnapshot,assembleShardedSnapshot,createShardedActivation,chooseCloudReadSource,canRunStagingShadow} from '../js/core/cloud-sharded-store.js';
+import {SHARDED_DB_COLLECTION_KEYS,createShardedSnapshot,assembleShardedSnapshot,createShardedActivation,chooseCloudReadSource,resolveCloudReadSnapshot,canRunStagingShadow} from '../js/core/cloud-sharded-store.js';
 
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const completeDb=()=>Object.fromEntries(SHARDED_DB_COLLECTION_KEYS.map(key=>[key,[]]));
@@ -59,6 +59,32 @@ test('讀取來源必須同時符合已啟用的世代 ID 與雜湊',()=>{
  const activation={schema:'danbridge-sharded-activation-v1',activeGenerationId:'generation-a',sourceHash:'same-hash'};
  assert.equal(chooseCloudReadSource({activation,legacyHash:'same-hash',verifiedGenerationId:'generation-b',verifiedGenerationHash:'same-hash'}),'blocked');
  assert.equal(chooseCloudReadSource({activation,legacyHash:'same-hash',verifiedGenerationId:'generation-a',verifiedGenerationHash:'same-hash'}),'sharded');
+});
+
+test('只有完整驗證且可重組的啟用世代才取代舊主資料',()=>{
+ const legacyDb=completeDb();legacyDb.lessons=[{id:'legacy'}];
+ const shardedDb=completeDb();shardedDb.lessons=[{id:'sharded'}];
+ const snapshot=createShardedSnapshot(shardedDb,{hash,generationId:'generation-read'});
+ const activation={schema:'danbridge-sharded-activation-v1',activeGenerationId:snapshot.manifest.generationId,sourceHash:snapshot.manifest.sourceHash};
+ const resolved=resolveCloudReadSnapshot({legacyDb,activation,manifest:{...snapshot.manifest,status:'verified',verifiedHash:snapshot.manifest.sourceHash},chunks:snapshot.chunks,hash,legacyHash:snapshot.manifest.sourceHash});
+ assert.equal(resolved.source,'sharded');assert.deepEqual(resolved.db,shardedDb);assert.equal(resolved.error,'');
+});
+
+test('分片缺失或內容毀損時完整回退舊主資料且不回傳半套資料',()=>{
+ const legacyDb=completeDb();legacyDb.lessons=[{id:'legacy-safe',note:'must remain'}];
+ const shardedDb=completeDb();shardedDb.lessons=Array.from({length:80},(_,index)=>({id:`sharded-${index}`,note:'資料'.repeat(40)}));
+ const snapshot=createShardedSnapshot(shardedDb,{hash,maxChunkBytes:4096,generationId:'generation-corrupt'}),manifest={...snapshot.manifest,status:'verified',verifiedHash:snapshot.manifest.sourceHash};
+ const activation={schema:'danbridge-sharded-activation-v1',activeGenerationId:manifest.generationId,sourceHash:manifest.sourceHash};
+ const resolved=resolveCloudReadSnapshot({legacyDb,activation,manifest,chunks:snapshot.chunks.slice(0,-1),hash,legacyHash:manifest.sourceHash});
+ assert.equal(resolved.source,'legacy');assert.deepEqual(resolved.db,legacyDb);assert.notEqual(resolved.db,legacyDb);assert.match(resolved.error,/分片遺失|總分片數/);
+});
+
+test('啟用世代或雜湊不一致時不嘗試採用分片並完整回退舊主資料',()=>{
+ const legacyDb=completeDb();legacyDb.students=[{id:'student-safe'}];
+ const snapshot=createShardedSnapshot(completeDb(),{hash,generationId:'generation-new'}),manifest={...snapshot.manifest,status:'verified',verifiedHash:snapshot.manifest.sourceHash};
+ const activation={schema:'danbridge-sharded-activation-v1',activeGenerationId:'generation-old',sourceHash:manifest.sourceHash};
+ const resolved=resolveCloudReadSnapshot({legacyDb,activation,manifest,chunks:snapshot.chunks,hash,legacyHash:manifest.sourceHash});
+ assert.equal(resolved.source,'legacy');assert.deepEqual(resolved.db,legacyDb);assert.match(resolved.error,/啟用條件不符/);
 });
 
 test('影子分片硬鎖只允許 staging Owner',()=>{

@@ -85,3 +85,15 @@ export function chooseCloudReadSource({activation,legacyHash,verifiedGenerationI
  if(legacyHash&&legacyHash!==activation.sourceHash)return'blocked';
  return'sharded';
 }
+
+export function resolveCloudReadSnapshot({legacyDb,activation,manifest,chunks,hash,legacyHash}={}){
+ const fallback=error=>({source:'legacy',db:clone(legacyDb),error:String(error||'')});
+ try{
+  assertCompleteShape(legacyDb);
+  if(!activation)return fallback('');
+  if(manifest?.status!=='verified'||!manifest.verifiedHash||String(manifest.verifiedHash)!==String(manifest.sourceHash))return fallback('分片啟用條件不符：世代尚未完整驗證');
+  const source=chooseCloudReadSource({activation,legacyHash,verifiedGenerationId:manifest.generationId,verifiedGenerationHash:manifest.verifiedHash});
+  if(source!=='sharded')return fallback('分片啟用條件不符');
+  return{source:'sharded',db:assembleShardedSnapshot(manifest,chunks,{hash}),error:''};
+ }catch(error){return fallback(error?.message||error)}
+}

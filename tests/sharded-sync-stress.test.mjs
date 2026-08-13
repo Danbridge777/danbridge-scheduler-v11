@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {SHARDED_DB_COLLECTION_KEYS,createShardedSnapshot,assembleShardedSnapshot,createShardedActivation,chooseCloudReadSource} from '../js/core/cloud-sharded-store.js';
+import {SHARDED_DB_COLLECTION_KEYS,createShardedSnapshot,assembleShardedSnapshot,createShardedActivation,chooseCloudReadSource,resolveCloudReadSnapshot} from '../js/core/cloud-sharded-store.js';
 
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const db=()=>Object.fromEntries(SHARDED_DB_COLLECTION_KEYS.map(key=>[key,[]]));
@@ -30,6 +30,15 @@ test('中斷寫入缺少最後一片時維持 legacy，不得組出部分資料'
  const source=db();source.lessons=Array.from({length:120},(_,index)=>lesson('bulk',index));const {snapshot}=verify(source),partial=snapshot.chunks.slice(0,-1);
  assert.throws(()=>assembleShardedSnapshot(snapshot.manifest,partial,{hash}),/分片遺失|總分片數/);
  assert.equal(chooseCloudReadSource({activation:null,legacyHash:hash(source),verifiedGenerationHash:''}),'legacy');
+});
+
+test('大量資料的啟用世代中斷時完整保留 legacy 300 堂',()=>{
+ const legacy=db();legacy.teachers=[{id:'teacher-1'}];
+ for(const owner of ['daniel','catherine','aa'])for(let index=0;index<100;index++)legacy.lessons.push(lesson(owner,index));
+ const next=structuredClone(legacy);next.lessons.push(lesson('aa',100));
+ const {snapshot}=verify(next),activation=createShardedActivation(snapshot.manifest,{expectedLegacyHash:snapshot.manifest.sourceHash});
+ const resolved=resolveCloudReadSnapshot({legacyDb:legacy,activation,manifest:snapshot.manifest,chunks:snapshot.chunks.slice(0,-1),hash,legacyHash:snapshot.manifest.sourceHash});
+ assert.equal(resolved.source,'legacy');assert.equal(resolved.db.lessons.length,300);assert.equal(new Set(resolved.db.lessons.map(row=>row.id)).size,300);
 });
 
 test('無 ID changes 大量重複仍逐筆保留',()=>{
