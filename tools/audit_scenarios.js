@@ -319,7 +319,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:80},(_,i)=>({id:`l${i}`}))}).risky,true,'a large lesson reduction triggers the destructive-change guard');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.35'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.36'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource,/classList\.toggle\('wendy-teacher-role',cloudRole==='teacher'&&cloudEmailKey==='wendylee0820520@gmail\.com'\)/,'Wendy alone receives the teacher-card color marker');
 assert.match(cloudSource,/classList\.remove\('wendy-teacher-role'\)/,'Wendy card styling is removed immediately on sign-out');
 assert.doesNotMatch(cloudSource, /jobs\.push\(setDoc\(ref,[\s\S]{0,500}actorName/, 'aa schedule requests never add fields outside the Firestore allowlist');

@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.35';
+const CLOUD_RELEASE = '20.26.36';
 const APP_SHELL_RELEASE = '20.26.27';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -25,6 +25,24 @@ test('signed-out entry keeps private application content isolated', async ({ pag
 
   const isolation = await page.locator('main').evaluate(element => ({ display: getComputedStyle(element).display }));
   expect(isolation).toEqual({ display: 'none' });
+});
+
+test('sign-in area is integrated into the black-gold stage without a floating card', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  const panel = await page.locator('.auth-card-minimal').evaluate((el) => {
+    const style = getComputedStyle(el);
+    return {
+      radius: style.borderRadius,
+      shadow: style.boxShadow,
+      background: style.backgroundImage,
+      leftBorder: style.borderLeftWidth,
+      topBorder: style.borderTopWidth
+    };
+  });
+  expect(panel.radius).toBe('0px');
+  expect(panel.shadow).toBe('none');
+  expect(panel.background).toContain('linear-gradient');
+  expect(panel.leftBorder === '1px' || panel.topBorder === '1px').toBeTruthy();
 });
 
 test('critical teacher and finance resources load the current release', async ({ page }) => {

@@ -1,0 +1,25 @@
+/* Seamless black-gold sign-in panel: integrated with the stage, not a floating card. */
+.auth-card-minimal{
+  width:min(100%,520px)!important;
+  padding:clamp(30px,3.6vw,50px) clamp(24px,3.4vw,46px)!important;
+  border:0!important;
+  border-left:1px solid rgba(218,177,96,.22)!important;
+  border-radius:0!important;
+  background:linear-gradient(90deg,rgba(211,166,80,.035),transparent 38%)!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+}
+.auth-card-minimal .auth-card-seal{margin-bottom:clamp(42px,5vh,58px)}
+.auth-card-minimal .auth-meta{margin-top:clamp(42px,5vh,58px)!important}
+@media(max-width:900px){
+  .auth-card-minimal{
+    width:min(100%,620px)!important;
+    padding:34px 6px 10px!important;
+    border-left:0!important;
+    border-top:1px solid rgba(218,177,96,.22)!important;
+    background:linear-gradient(180deg,rgba(211,166,80,.035),transparent 34%)!important;
+  }
+}
+@media(max-width:560px){
+  .auth-card-minimal{padding:30px 4px 6px!important}
+}
