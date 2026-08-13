@@ -7,6 +7,10 @@ export const SHARDED_DB_COLLECTION_KEYS=Object.freeze([
 export const SHARDED_DB_SCHEMA='danbridge-sharded-db-v1';
 export const SHARDED_DB_ACTIVATION_SCHEMA='danbridge-sharded-activation-v1';
 
+export function canRunStagingShadow({environment,role}={}){
+ return environment==='staging'&&role==='owner';
+}
+
 function clone(value){return value===undefined?undefined:JSON.parse(JSON.stringify(value))}
 function byteLength(value){return new TextEncoder().encode(JSON.stringify(value)).length}
 function assertCompleteShape(db){

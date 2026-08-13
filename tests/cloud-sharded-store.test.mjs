@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {SHARDED_DB_COLLECTION_KEYS,createShardedSnapshot,assembleShardedSnapshot,createShardedActivation,chooseCloudReadSource} from '../js/core/cloud-sharded-store.js';
+import {SHARDED_DB_COLLECTION_KEYS,createShardedSnapshot,assembleShardedSnapshot,createShardedActivation,chooseCloudReadSource,canRunStagingShadow} from '../js/core/cloud-sharded-store.js';
 
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const completeDb=()=>Object.fromEntries(SHARDED_DB_COLLECTION_KEYS.map(key=>[key,[]]));
@@ -38,4 +38,10 @@ test('只有與最新舊主資料雜湊相同的完整世代可以原子啟用',
  assert.equal(chooseCloudReadSource({activation,legacyHash:snapshot.manifest.sourceHash,verifiedGenerationHash:snapshot.manifest.sourceHash}),'sharded');
  assert.equal(chooseCloudReadSource({activation,legacyHash:snapshot.manifest.sourceHash,verifiedGenerationHash:'corrupt'}),'blocked');
  assert.equal(chooseCloudReadSource({activation,legacyHash:'newer-legacy-write',verifiedGenerationHash:snapshot.manifest.sourceHash}),'blocked');
+});
+
+test('影子分片硬鎖只允許 staging Owner',()=>{
+ assert.equal(canRunStagingShadow({environment:'staging',role:'owner'}),true);
+ for(const environment of ['production','local',''])for(const role of ['owner','teacher','branch_manager',''])assert.equal(canRunStagingShadow({environment,role}),false);
+ for(const role of ['teacher','branch_manager',''])assert.equal(canRunStagingShadow({environment:'staging',role}),false);
 });

@@ -1,7 +1,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
-import {createShardedSnapshot,assembleShardedSnapshot} from './cloud-sharded-store.js?v=20.26.53';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.55';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -14,7 +14,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.53';
+const APP_RELEASE='20.26.55';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -73,6 +73,9 @@ let unsubscribeScheduleRequests=null;
 let schedulerRequestQueue=[],schedulerRequestQueueIds=new Set(),schedulerRequestWorkerActive=false,schedulerRequestRetryTimer=null;
 let schedulerQuarantinedRequestIds=new Set(),schedulerAppliedRequestCount=0;
 let applyingCloud=false;
+let stagingShadowQueued=null;
+let stagingShadowInFlight=false;
+let stagingShadowLastVerifiedHash='';
 let unsubscribeState=null;
 let unsubscribeAccessGuard=null;
 let syncTimer=null;
@@ -1673,6 +1676,42 @@ function subscribeScheduleNotifications(){
  },e=>{console.error('Schedule notification listener failed',e);cloudStatus('課表通知讀取失敗：'+(e?.message||e),'error')});
 }
 
+async function publishStagingShadowGeneration(db,sourceHash){
+ // 硬鎖：影子分片只允許 staging Owner 執行；正式環境與其他角色永遠不建立分片文件。
+ if(!canRunStagingShadow({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole}))return;
+ const generationRef=doc(collection(cloud,'companies',COMPANY_ID,'shardedGenerations'));
+ const snapshot=createShardedSnapshot(db,{hash:dataHash,maxChunkBytes:180000,generationId:generationRef.id});
+ if(snapshot.manifest.sourceHash!==sourceHash)throw new Error('影子分片來源版本在排程前已改變');
+ await setDoc(generationRef,{...snapshot.manifest,status:'uploading',environment:'staging',createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false});
+ await Promise.all(snapshot.chunks.map(chunk=>setDoc(doc(generationRef,'chunks',chunk.documentId),{generationId:generationRef.id,key:chunk.key,index:chunk.index,items:chunk.items,sourceHash,createdAt:serverTimestamp()},{merge:false})));
+ await setDoc(generationRef,{status:'uploaded',uploadedAt:serverTimestamp()},{merge:true});
+ const [manifestSnap,chunksSnap]=await Promise.all([getDoc(generationRef),getDocs(collection(generationRef,'chunks'))]);
+ if(!manifestSnap.exists())throw new Error('影子分片 manifest 寫入後遺失');
+ const manifest=manifestSnap.data(),chunks=chunksSnap.docs.map(row=>row.data());
+ const rebuilt=assembleShardedSnapshot(manifest,chunks,{hash:dataHash}),verifiedHash=dataHash(rebuilt);
+ if(verifiedHash!==sourceHash)throw new Error('影子分片讀回驗證與舊主資料不一致');
+ await setDoc(generationRef,{status:'verified',verifiedHash,verifiedAt:serverTimestamp()},{merge:true});
+ stagingShadowLastVerifiedHash=verifiedHash;
+}
+async function processStagingShadowQueue(){
+ if(stagingShadowInFlight||!canRunStagingShadow({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole}))return;
+ stagingShadowInFlight=true;
+ try{
+  while(stagingShadowQueued){
+   const queued=stagingShadowQueued;stagingShadowQueued=null;
+   if(queued.sourceHash===stagingShadowLastVerifiedHash)continue;
+   try{await publishStagingShadowGeneration(queued.db,queued.sourceHash)}
+   catch(error){console.error('Staging shadow sharding failed',error);reportOperationalError(error,{category:'cloud-write',area:'staging-shadow-shard',retryable:true})}
+  }
+ }finally{stagingShadowInFlight=false;if(stagingShadowQueued)queueMicrotask(processStagingShadowQueue)}
+}
+function queueStagingShadowGeneration(db,sourceHash=dataHash(db)){
+ if(!canRunStagingShadow({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole}))return false;
+ stagingShadowQueued={db:deepCopy(db),sourceHash:String(sourceHash)};
+ queueMicrotask(processStagingShadowQueue);return true;
+}
+window.__danbridgeQueueStagingShadowGeneration=queueStagingShadowGeneration;
+
 async function uploadOwnerState(force=false){
  if(cloudRole!=='owner'||applyingCloud)return;
  ownerUploadQueued=true;
@@ -1722,6 +1761,7 @@ async function uploadOwnerState(force=false){
 
    // 主資料成功後立即發布各角色檢視，不等待通知文件完成。
    publishRoleViewsWithRetry(committed.finalDb);
+   queueStagingShadowGeneration(committed.finalDb,committed.finalHash);
 
    queueScheduleChangeNotifications(committed.remoteBefore,committed.finalDb,committed.finalHash);
    lastPublishedOwnerDB=deepCopy(committed.finalDb);ownerBaselineReady=true;
@@ -1795,7 +1835,7 @@ async function applySchedulerRequest(requestRef,data){
    if(auditRecord&&!auditSnap.exists())transaction.set(auditRecord.ref,{...auditRecord.payload,action:`scheduler-schedule-${data.operation}`,targetType:'lesson',targetId:id,entityChanges:[...auditRecord.payload.entityChanges,`requested-by:${data.actorEmail}`].slice(0,80)});
    transaction.set(requestRef,{status:'applied',appliedAt:serverTimestamp(),appliedBy:cloudUid},{merge:true});
  });
- if(notificationAfter)publishRoleViewsWithRetry(notificationAfter);
+ if(notificationAfter){publishRoleViewsWithRetry(notificationAfter);queueStagingShadowGeneration(notificationAfter,dataHash(notificationAfter))}
  if(notificationBefore&&notificationAfter)queueScheduleChangeNotifications(notificationBefore,notificationAfter,`scheduler-${requestRef.id}`,{uid:data.actorUid,name:SCHEDULER_ACCOUNT_EMAILS.has(String(data.actorEmail||'').toLowerCase())?'aa':'排課專員'});
 }
 function subscribeSchedulerRequests(){
