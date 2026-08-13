@@ -1,4 +1,4 @@
-/* Wendy: teacher privacy boundary plus all-teacher schedule editing. */
+/* Scheduler specialist: teacher privacy boundary plus all-teacher schedule editing. */
 body.wendy-cloud-role{--wendy:#d88a3d;--wendy-soft:#fff6e9;--wendy-card:#fffaf3;--wendy-line:#f1d7b8}
 html body:not(.auth-locked)>nav button[hidden]{display:none!important}
 html body.wendy-cloud-role:not(.auth-locked)>nav button[data-tab="lessons"]{display:none!important}
@@ -123,6 +123,20 @@ body.wendy-cloud-role #lessons{display:none!important}
 body.wendy-cloud-role #students>.grid>.card:first-child,
 body.wendy-cloud-role #students th:nth-child(n+4),
 body.wendy-cloud-role #students td:nth-child(n+4){display:none!important}
+body.wendy-cloud-role #students>.grid{display:block!important;width:100%!important;max-width:none!important}
+body.wendy-cloud-role #students>.grid>.card.col-8{display:block!important;width:100%!important;max-width:none!important;margin:0!important}
+body.wendy-cloud-role #students .card.col-8>.toolbar{
+ display:grid!important;grid-template-columns:auto minmax(280px,1fr) minmax(200px,260px) minmax(180px,220px)!important;
+ align-items:end!important;gap:14px!important;width:100%!important
+}
+body.wendy-cloud-role #students .card.col-8>.toolbar>div{width:100%!important;min-width:0!important}
+body.wendy-cloud-role #students .table-wrap{width:100%!important}
+body.wendy-cloud-role #students table{width:100%!important;min-width:680px!important;table-layout:fixed!important}
+body.wendy-cloud-role #students th:nth-child(1){width:28%}
+body.wendy-cloud-role #students th:nth-child(2){width:38%}
+body.wendy-cloud-role #students th:nth-child(3){width:34%}
+@media(max-width:1050px){body.wendy-cloud-role #students .card.col-8>.toolbar{grid-template-columns:1fr 1fr!important}body.wendy-cloud-role #students .card.col-8>.toolbar>div:first-child{grid-column:1/-1}}
+@media(max-width:650px){body.wendy-cloud-role #students .card.col-8>.toolbar{grid-template-columns:1fr!important}body.wendy-cloud-role #students table{min-width:620px!important}}
 /* Wendy uses the exact Owner toolbar geometry; only data visibility differs. */
 body.wendy-cloud-role #calendar .calendar-toolbar-filters{display:grid!important;grid-template-columns:repeat(5,minmax(130px,1fr)) minmax(250px,1.55fr)!important;gap:12px!important}
 body.wendy-cloud-role #calendar .calendar-toolbar-filters>.calendar-field{display:flex!important;width:auto!important;max-width:none!important}

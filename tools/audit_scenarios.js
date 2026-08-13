@@ -318,7 +318,7 @@ assert.equal(context.dataHash({b:1,a:{d:2,c:3}}),context.dataHash({a:{c:3,d:2},b
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:95},(_,i)=>({id:`l${i}`}))}).risky,false,'a small lesson adjustment does not trigger the destructive-change guard');
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:80},(_,i)=>({id:`l${i}`}))}).risky,true,'a large lesson reduction triggers the destructive-change guard');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.24'/, 'operational errors identify the current deployed release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.25'/, 'operational errors identify the current deployed release');
 assert.match(cloudSource, /SCHEDULER_ACCOUNT_EMAILS=new Set\(\['aa0966626336@gmail\.com'\]\)/, 'the actual aa Gmail is the only approved scheduler account');
 assert.match(cloudSource, /RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set\(\['wendylee0820520@gmail\.com'\]\)/, 'Wendy is explicitly migrated back to a standard teacher');
 assert.match(cloudSource, /canManageSchedule=SCHEDULER_ACCOUNT_EMAILS\.has\(email\)/, 'approved scheduler Gmail accounts always receive all-teacher scheduling instead of relying on a checkbox');
@@ -631,7 +631,7 @@ assert.match(pointerDragMoveSource, /state\.moved=true[\s\S]*setPointerCapture/,
 const pwaSource = fs.readFileSync(path.join(root, 'js/core/pwa-installation.js'), 'utf8');
 assert.match(cloudSource, /if\(cloudRole==='owner'\)return \{\.\.\.meta,teacherIds\};[\s\S]*if\(!cloudTeacherId\)throw new Error/, 'every Owner can submit a lesson report without a linked teacher profile');
 assert.match(cloudSource, /const owners=\[\{email:OWNER_EMAIL[\s\S]*if\(a\.role==='owner'\)[\s\S]*for\(const owner of owners\)addRecipientItem/, 'every active Owner receives a large schedule-change notification');
-assert.match(cloudSource, /applySchedulerRequest[\s\S]*transaction\.set\(requestRef,\{status:'applied'[\s\S]*queueScheduleChangeNotifications\(notificationBefore,notificationAfter,`wendy-\$\{requestRef\.id\}`/, 'Wendy requests commit atomically while large role notifications continue in the retry queue');
+assert.match(cloudSource, /applySchedulerRequest[\s\S]*transaction\.set\(requestRef,\{status:'applied'[\s\S]*queueScheduleChangeNotifications\(notificationBefore,notificationAfter,`scheduler-\$\{requestRef\.id\}`/, 'scheduler requests commit atomically while large role notifications continue in the retry queue');
 assert.match(cloudSource, /課表已立即更新，[\s\S]*正在同步給 Owner、校區管理者與老師/, 'Wendy sees the locally updated all-teacher schedule immediately');
 assert.match(cloudSource, /schedulerSaveChain=schedulerSaveChain\.catch\(\(\)=>\{\}\)\.then\(queueSchedulerChanges\)/, 'rapid Wendy drag, paste and edit saves are serialized without duplicate schedule requests');
 assert.match(cloudSource, /for\(const \[id,desired\] of \[\.\.\.schedulerOptimisticLessons\]\)[\s\S]*serverLessons\.set\(id,deepCopy\(desired\)\)/, 'an intermediate server snapshot cannot erase Wendy optimistic drag, paste or edit results');

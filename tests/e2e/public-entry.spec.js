@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.24';
+const CLOUD_RELEASE = '20.26.25';
 const APP_SHELL_RELEASE = '20.23.2';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
@@ -85,6 +85,8 @@ for (const schedulerAccount of [
     window.switchTab('students');
     const studentNavigationWorks=document.getElementById('students').classList.contains('active')&&document.body.dataset.activeSection==='students';
     const studentContentVisible=getComputedStyle(document.getElementById('students')).display!=='none'&&getComputedStyle(document.querySelector('#students>.grid>.card.col-8')).display!=='none';
+    const studentCard=document.querySelector('#students>.grid>.card.col-8').getBoundingClientRect(),studentSection=document.getElementById('students').getBoundingClientRect();
+    const studentDirectoryUsesWidth=studentCard.width>=Math.min(680,studentSection.width*.8);
     document.getElementById('students').classList.remove('active');document.getElementById('calendar').classList.add('active');contextMenu.classList.remove('show');
     const sampleLesson=db.lessons[0];
     if(sampleLesson)window.editLesson(sampleLesson.id);
@@ -127,7 +129,7 @@ for (const schedulerAccount of [
       reportShortcutExists: Boolean(document.getElementById('teacherReportShortcut')),
       selectionPosition: getComputedStyle(selectionBar).position,
       selectionContained: selectionRect.left>=calendarCardRect.left-1&&selectionRect.right<=calendarCardRect.right+1
-      ,contextHiddenByDefault,contextVisibleOnCalendar,contextHiddenOnStudents,studentNavigationWorks,studentContentVisible
+      ,contextHiddenByDefault,contextVisibleOnCalendar,contextHiddenOnStudents,studentNavigationWorks,studentContentVisible,studentDirectoryUsesWidth
     };
   }, schedulerAccount);
   expect(result.modalLeft).toBeGreaterThanOrEqual(0);
@@ -159,6 +161,7 @@ for (const schedulerAccount of [
   expect(result.contextHiddenOnStudents).toBe(true);
   expect(result.studentNavigationWorks).toBe(true);
   expect(result.studentContentVisible).toBe(true);
+  expect(result.studentDirectoryUsesWidth).toBe(true);
 });
 
 test('English mode translates the major application workspaces', async ({ page }) => {
