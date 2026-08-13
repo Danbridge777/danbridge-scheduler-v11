@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.20';
+const APP_RELEASE='20.26.21';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1195,6 +1195,10 @@ function applyRoleUI(profile,user){
    markRoleIsolated(document.querySelector('.dashboard-changes'));
    markRoleIsolated(document.querySelector('#dashboard .card:nth-of-type(2)'));
    window.DanbridgeRoleResponsive?.apply?.();
+   if(cloudCanManageSchedule){
+     const addStudentButton=document.querySelector('#lessonModal .student-select-row>button');
+     if(addStudentButton){addStudentButton.hidden=false;addStudentButton.inert=false;addStudentButton.removeAttribute('aria-hidden');addStudentButton.style.setProperty('display','inline-flex','important')}
+   }
    setTimeout(()=>window.DanbridgeRoleResponsive?.apply?.(),500);
  }else if(profile.role==='branch_manager'){
    applyingCloud=true;window.__danbridgeSetDB(emptyDB());window.renderAll?.();applyingCloud=false;

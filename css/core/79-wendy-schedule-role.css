@@ -76,6 +76,7 @@ body.wendy-cloud-role #v18Fab,
 body.wendy-cloud-role #v18FabMenu{display:none!important}
 body.wendy-cloud-role #quickStudentBox .col-6:has(>#quickBilling),
 body.wendy-cloud-role #quickStudentBox .col-6:has(>#quickRate){display:none!important}
+html body.wendy-cloud-role #lessonModal .student-select-row>button{display:inline-flex!important;visibility:visible!important;opacity:1!important}
 body.wendy-cloud-role #lessonModal .modal{border-color:#f0d0aa!important;box-shadow:0 28px 70px rgba(155,91,35,.18)!important}
 body.wendy-cloud-role #lessonModal .btn.primary{background:linear-gradient(135deg,#d88a3d,#bc6d2d)!important;border-color:#bc6d2d!important}
 body.wendy-cloud-role #lessonModal,
