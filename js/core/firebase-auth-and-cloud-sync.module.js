@@ -13,7 +13,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.40';
+const APP_RELEASE='20.26.41';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -48,6 +48,7 @@ let schedulerSaveChain=Promise.resolve();
 let schedulerOptimisticLessons=new Map();
 let schedulerOptimisticStudents=new Map();
 let unsubscribeScheduleRequests=null;
+let schedulerRequestQueue=[],schedulerRequestQueueIds=new Set(),schedulerRequestWorkerActive=false,schedulerRequestRetryTimer=null;
 let applyingCloud=false;
 let unsubscribeState=null;
 let unsubscribeAccessGuard=null;
@@ -1733,7 +1734,16 @@ async function applySchedulerRequest(requestRef,data){
 function subscribeSchedulerRequests(){
  unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;if(cloudRole!=='owner')return;
  const q=query(collection(cloud,'companies',COMPANY_ID,'scheduleRequests'),where('status','==','pending'));
- unsubscribeScheduleRequests=onSnapshot(q,snap=>snap.docs.forEach(d=>applySchedulerRequest(d.ref,d.data()).catch(e=>{console.error('Scheduler request failed',e);cloudStatus('aa 排課異動套用失敗：'+(e.message||e),'error')})));
+ unsubscribeScheduleRequests=onSnapshot(q,snap=>{for(const d of snap.docs){if(schedulerRequestQueueIds.has(d.id))continue;schedulerRequestQueueIds.add(d.id);schedulerRequestQueue.push({id:d.id,ref:d.ref,data:d.data(),attempt:0})}processSchedulerRequestQueue()});
+}
+async function processSchedulerRequestQueue(){
+ if(schedulerRequestWorkerActive||cloudRole!=='owner')return;schedulerRequestWorkerActive=true;clearTimeout(schedulerRequestRetryTimer);
+ while(schedulerRequestQueue.length&&cloudRole==='owner'){
+  const item=schedulerRequestQueue[0];
+  try{await applySchedulerRequest(item.ref,item.data);schedulerRequestQueue.shift();schedulerRequestQueueIds.delete(item.id);await new Promise(resolve=>setTimeout(resolve,80))}
+  catch(e){item.attempt++;console.error('Scheduler request failed',e);const wait=Math.min(30000,1000*2**Math.min(item.attempt,5));cloudStatus(`aa 排課異動暫緩，${Math.ceil(wait/1000)} 秒後自動續傳：`+(e.message||e),'pending');schedulerRequestWorkerActive=false;schedulerRequestRetryTimer=setTimeout(processSchedulerRequestQueue,wait);return}
+ }
+ schedulerRequestWorkerActive=false;
 }
 function installCloudSave(){
  window.__danbridgeQueueCloudSave=queueOwnerCloudSave;
@@ -1925,7 +1935,7 @@ installRoleInteractionGuards();
 onAuthStateChanged(auth,async user=>{
  unsubscribeState?.();unsubscribeState=null;unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;scheduleNotificationDocuments=[];lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();roleViewPublishSourceDB=null;
  unsubscribeAccessGuard?.();unsubscribeAccessGuard=null;
- if(!user){lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);clearTimeout(dailyBackupTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudCanManageSchedule=false;schedulerBaselineLessons=[];schedulerBaselineStudents=[];schedulerSaveChain=Promise.resolve();schedulerOptimisticLessons=new Map();schedulerOptimisticStudents=new Map();cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';document.body.classList.remove('wendy-teacher-role');window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true,canManageSchedule:false});showCloudLogin();cloudStatus('尚未登入');return}
+ if(!user){lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);clearTimeout(dailyBackupTimer);clearTimeout(schedulerRequestRetryTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudCanManageSchedule=false;schedulerBaselineLessons=[];schedulerBaselineStudents=[];schedulerSaveChain=Promise.resolve();schedulerOptimisticLessons=new Map();schedulerOptimisticStudents=new Map();schedulerRequestQueue=[];schedulerRequestQueueIds=new Set();schedulerRequestWorkerActive=false;cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';document.body.classList.remove('wendy-teacher-role');window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true,canManageSchedule:false});showCloudLogin();cloudStatus('尚未登入');return}
  try{
    cloudStatus('正在載入權限…');const profile=await ensureProfile(user);try{await recordSuccessfulLogin(user,profile)}catch(e){console.warn('最後登入時間更新失敗：',e);reportOperationalError(e,{category:'cloud-write',area:'access-guard',retryable:true})}applyRoleUI(profile,user);showCloudApp();
    if(profile.role==='owner'){subscribeOwner();subscribeSchedulerRequests();setTimeout(()=>{renderCloudUserManager();renderBranchManagerAccess()},0)}else if(profile.role==='teacher'&&profile.canManageSchedule===true)subscribeSchedulerTeacher();else if(profile.role==='teacher')subscribeTeacher();else if(profile.role==='branch_manager')subscribeBranchManager();else throw new Error('不支援的角色：'+profile.role);subscribeRoleAccessGuard();subscribeLessonReports();subscribeScheduleNotifications();
