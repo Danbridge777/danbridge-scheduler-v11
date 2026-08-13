@@ -70,14 +70,18 @@ export function assembleShardedSnapshot(manifest,chunks,{hash}={}){
 
 export function createShardedActivation(manifest,{expectedLegacyHash,activatedAt='',activatedBy=''}={}){
  if(manifest?.schema!==SHARDED_DB_SCHEMA||!manifest.generationId||!manifest.sourceHash)throw new Error('不能啟用不完整的分片世代');
+ if(manifest.status!=='verified')throw new Error('分片世代尚未完整驗證，禁止啟用');
+ if(!manifest.verifiedHash||String(manifest.verifiedHash)!==String(manifest.sourceHash))throw new Error('分片世代驗證雜湊不符，禁止啟用');
+ if(!Number.isInteger(manifest.totalChunks)||manifest.totalChunks<0)throw new Error('分片數量無效，禁止啟用');
+ if(!Number.isInteger(manifest.totalRecords)||manifest.totalRecords<0)throw new Error('資料筆數無效，禁止啟用');
  if(String(expectedLegacyHash)!==String(manifest.sourceHash))throw new Error('正式主資料版本已改變，禁止啟用舊分片');
  return{schema:SHARDED_DB_ACTIVATION_SCHEMA,activeGenerationId:manifest.generationId,sourceHash:manifest.sourceHash,totalChunks:manifest.totalChunks,totalRecords:manifest.totalRecords,activatedAt:String(activatedAt),activatedBy:String(activatedBy)};
 }
 
-export function chooseCloudReadSource({activation,legacyHash,verifiedGenerationHash}){
+export function chooseCloudReadSource({activation,legacyHash,verifiedGenerationId,verifiedGenerationHash}){
  if(!activation)return'legacy';
  if(activation.schema!==SHARDED_DB_ACTIVATION_SCHEMA)return'blocked';
- if(!activation.activeGenerationId||activation.sourceHash!==verifiedGenerationHash)return'blocked';
+ if(!activation.activeGenerationId||activation.activeGenerationId!==verifiedGenerationId||activation.sourceHash!==verifiedGenerationHash)return'blocked';
  if(legacyHash&&legacyHash!==activation.sourceHash)return'blocked';
  return'sharded';
 }

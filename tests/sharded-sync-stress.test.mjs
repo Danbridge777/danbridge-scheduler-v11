@@ -6,7 +6,7 @@ import {SHARDED_DB_COLLECTION_KEYS,createShardedSnapshot,assembleShardedSnapshot
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const db=()=>Object.fromEntries(SHARDED_DB_COLLECTION_KEYS.map(key=>[key,[]]));
 const lesson=(owner,index)=>({id:`${owner}-${index}`,date:'2026-09-01',start:'10:00',end:'11:00',studentId:`student-${owner}-${index}`,teacherId:'teacher-1',teacherIds:['teacher-1']});
-const verify=value=>{const snapshot=createShardedSnapshot(value,{hash,maxChunkBytes:4096,generationId:`generation-${hash(value).slice(0,8)}`});return{snapshot,rebuilt:assembleShardedSnapshot(snapshot.manifest,snapshot.chunks,{hash})}};
+const verify=value=>{const snapshot=createShardedSnapshot(value,{hash,maxChunkBytes:4096,generationId:`generation-${hash(value).slice(0,8)}`});snapshot.manifest.status='verified';snapshot.manifest.verifiedHash=snapshot.manifest.sourceHash;return{snapshot,rebuilt:assembleShardedSnapshot(snapshot.manifest,snapshot.chunks,{hash})}};
 
 test('Daniel、Catherine、aa 各 100 堂進入分片後保留 300 個唯一 ID',()=>{
  const source=db();source.teachers=[{id:'teacher-1'}];
@@ -20,9 +20,9 @@ test('上傳期間的新修改不會被舊世代誤標完成',()=>{
  const first=db();first.lessons=[lesson('daniel',0)];const firstResult=verify(first);
  const newer=structuredClone(first);newer.lessons.push(lesson('daniel',1));const newerHash=hash(newer);
  const activation=createShardedActivation(firstResult.snapshot.manifest,{expectedLegacyHash:firstResult.snapshot.manifest.sourceHash});
- assert.equal(chooseCloudReadSource({activation,legacyHash:newerHash,verifiedGenerationHash:firstResult.snapshot.manifest.sourceHash}),'blocked');
+ assert.equal(chooseCloudReadSource({activation,legacyHash:newerHash,verifiedGenerationId:firstResult.snapshot.manifest.generationId,verifiedGenerationHash:firstResult.snapshot.manifest.sourceHash}),'blocked');
  const secondResult=verify(newer),secondActivation=createShardedActivation(secondResult.snapshot.manifest,{expectedLegacyHash:newerHash});
- assert.equal(chooseCloudReadSource({activation:secondActivation,legacyHash:newerHash,verifiedGenerationHash:newerHash}),'sharded');
+ assert.equal(chooseCloudReadSource({activation:secondActivation,legacyHash:newerHash,verifiedGenerationId:secondResult.snapshot.manifest.generationId,verifiedGenerationHash:newerHash}),'sharded');
  assert.equal(secondResult.rebuilt.lessons.length,2);
 });
 
