@@ -174,6 +174,49 @@ describe('Owner 權限', () => {
     assert.equal((await getDoc(mainRef)).data().atomicWendyLesson, 'lesson-atomic');
   });
 
+  test('既有 aa 稽核紀錄不會阻擋兩位 Owner 重試套用排課異動', async () => {
+    const owners = [
+      ['owner-uid', OWNER_EMAIL],
+      ['backup-owner-uid', BACKUP_OWNER_EMAIL]
+    ];
+    for (const [index, [uid, email]] of owners.entries()) {
+      const owner = auth(uid, email);
+      const requestId = `atomic-aa-existing-audit-${index}`;
+      const requestRef = doc(owner, `companies/${COMPANY_ID}/scheduleRequests/${requestId}`);
+      const mainRef = doc(owner, `companies/${COMPANY_ID}/data/main`);
+      const viewRef = doc(owner, `companies/${COMPANY_ID}/schedulerViews/${SECOND_SCHEDULER_EMAIL}`);
+      const auditRef = doc(owner, `companyAudit/scheduler-${requestId}`);
+      await testEnv.withSecurityRulesDisabled(async context => {
+        const admin = context.firestore();
+        await setDoc(doc(admin, `companies/${COMPANY_ID}/scheduleRequests/${requestId}`), {
+          companyId: COMPANY_ID,
+          actorEmail: SECOND_SCHEDULER_EMAIL,
+          status: 'pending'
+        });
+        await setDoc(doc(admin, `companyAudit/scheduler-${requestId}`), {
+          companyId: COMPANY_ID,
+          actorUid: uid,
+          actorEmail: email,
+          action: 'scheduler-request-applied'
+        });
+      });
+      await assertSucceeds(runTransaction(owner, async transaction => {
+        const [requestSnap, mainSnap, auditSnap] = await Promise.all([
+          transaction.get(requestRef),
+          transaction.get(mainRef),
+          transaction.get(auditRef)
+        ]);
+        assert.equal(requestSnap.data().status, 'pending');
+        assert.equal(auditSnap.exists(), true);
+        transaction.set(mainRef, { ...mainSnap.data(), [`atomicAaOwner${index}`]: requestId });
+        transaction.set(viewRef, { email: SECOND_SCHEDULER_EMAIL, db: { lessons: [{ id: requestId }] } });
+        transaction.set(requestRef, { status: 'applied', appliedAt: serverTimestamp(), appliedBy: uid }, { merge: true });
+      }));
+      assert.equal((await getDoc(requestRef)).data().status, 'applied');
+      assert.equal((await getDoc(auditRef)).data().action, 'scheduler-request-applied');
+    }
+  });
+
   test('同步衝突備份只有 Owner 可以讀寫', async () => {
     const owner = auth('owner-uid', OWNER_EMAIL);
     const backupOwner = auth('backup-owner-uid', BACKUP_OWNER_EMAIL);
