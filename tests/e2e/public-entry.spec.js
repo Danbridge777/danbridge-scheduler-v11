@@ -70,6 +70,16 @@ test('critical teacher and finance resources load the current release', async ({
   expect(appleIcon).toBe('./icon-192.png?v=20.18.1');
 });
 
+test('large schedule notification table stays on one aligned row', async ({ page }) => {
+  await page.goto('/');
+  const css = await page.locator('link[href*="46-v168-schedule-notifications.css"]').getAttribute('href');
+  expect(css).toContain('v=20.0.12');
+  const stylesheet = await (await page.request.get(css)).text();
+  expect(stylesheet).toContain('.schedule-notification-table{width:max-content;min-width:100%');
+  expect(stylesheet).toMatch(/\.schedule-notification-table th\{[^}]*white-space:nowrap;vertical-align:middle/);
+  expect(stylesheet).toMatch(/\.schedule-notification-table td\{[^}]*vertical-align:middle;[^}]*white-space:nowrap/);
+});
+
 test('teacher schedule hides the location legend', async ({ page }) => {
   await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
   await page.locator('body').evaluate(element => {
