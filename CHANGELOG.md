@@ -1,5 +1,16 @@
 # Changelog
 
+## 20.26.63（staging 快取版本一致性）
+
+- 更新 Service Worker cache key 與 app-shell PWA 程式版本，避免已登入分頁在 staging 部署後混用舊 HTML 與新版 record-shadow 模組。
+- 不改動既有 Owner／aa／老師同步、主資料讀取來源或 `uploadOwnerState()`；仍只允許 staging 手動 shadow 驗證。
+
+## 20.26.62（staging v2 legacy 邊界加固）
+
+- 阻止舊 Rules 留下的 v1 `writing` run 在 v2 Rules 下被升級為 `verified`。
+- run 更新與控制啟用再次強制核對 schema、company、environment、runId、coreHash 與三種筆數。
+- 讀取候選驗證增加 company identity；仍只回報候選資格，不接管任何讀取。
+
 ## 20.26.61（僅 staging record-shadow v2 coreHash）
 
 - 將整份公司資料的 `sourceHash` 與 lessons／students／teachers 可獨立重算的 `coreHash` 分離。

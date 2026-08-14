@@ -8,8 +8,15 @@ function identity(value){
  return{runId,sourceHash,coreHash,documentCount,activeCount,tombstoneCount};
 }
 
-function stable(value){if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])]));return value}
-export function canonicalRecordShadowCore(db){return Object.fromEntries(['lessons','students','teachers'].map(collection=>[collection,[...(db?.[collection]||[])].sort((a,b)=>String(a?.id??'').localeCompare(String(b?.id??''))).map(stable)]))}
+function stable(value){if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object'){if(typeof value.toMillis==='function')return{__timestampMillis:value.toMillis()};return Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])]))}return value}
+function compareId(left,right){const a=String(left?.id??''),b=String(right?.id??'');return a<b?-1:a>b?1:0}
+function validId(id){return id&&id.trim()===id&&!id.includes('/')&&id!=='.'&&id!=='..'&&!/^__.*__$/.test(id)&&new TextEncoder().encode(id).length<=1500}
+function canonicalRows(db,collection){
+ const rows=db?.[collection];if(!Array.isArray(rows))throw new Error(`${collection} 核心資料必須是陣列`);
+ const seen=new Set();for(const row of rows){const id=String(row?.id??'');if(!row||typeof row!=='object'||Array.isArray(row)||!validId(id)||seen.has(id))throw new Error(`${collection} 核心資料 ID 無效或重複`);seen.add(id)}
+ return[...rows].sort(compareId).map(stable);
+}
+export function canonicalRecordShadowCore(db){return Object.fromEntries(['lessons','students','teachers'].map(collection=>[collection,canonicalRows(db,collection)]))}
 
 export function buildRecordShadowRunManifest(value){return{schema:RUN_SCHEMA,environment:'staging',state:'writing',...identity(value)}}
 

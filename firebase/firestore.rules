@@ -255,6 +255,21 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'state','verifiedHash','verifiedAt','verifiedBy','verifiedByEmail'
         ])
+        && request.resource.data.schema == 'danbridge-record-shadow-run-v2'
+        && request.resource.data.companyId == companyId
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.runId == runId
+        && request.resource.data.sourceHash is string
+        && request.resource.data.sourceHash.size() > 0
+        && request.resource.data.coreHash is string
+        && request.resource.data.coreHash.size() > 0
+        && request.resource.data.documentCount is int
+        && request.resource.data.activeCount is int
+        && request.resource.data.tombstoneCount is int
+        && request.resource.data.documentCount >= 0
+        && request.resource.data.activeCount >= 0
+        && request.resource.data.tombstoneCount >= 0
+        && request.resource.data.documentCount == request.resource.data.activeCount + request.resource.data.tombstoneCount
         && request.resource.data.state == 'verified'
         && request.resource.data.verifiedHash == resource.data.sourceHash
         && request.resource.data.verifiedAt == request.time
@@ -288,6 +303,10 @@ service cloud.firestore {
         && request.resource.data.activatedAt == request.time
         && request.resource.data.activatedBy == request.auth.uid
         && request.resource.data.activatedByEmail == emailKey()
+        && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.schema == 'danbridge-record-shadow-run-v2'
+        && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.companyId == companyId
+        && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.environment == 'staging'
+        && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.runId == request.resource.data.activeRunId
         && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.state == 'verified'
         && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.sourceHash == request.resource.data.sourceHash
         && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.verifiedHash == request.resource.data.verifiedHash

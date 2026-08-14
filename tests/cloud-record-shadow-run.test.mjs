@@ -33,4 +33,7 @@ test('來源版本改變時禁止原子啟用 verified run',()=>{
 test('核心 hash 輸入固定集合、欄位與 ID 順序，不受 Firestore 回傳順序影響',()=>{
  const first=canonicalRecordShadowCore({lessons:[{id:'b',z:2,a:1},{id:'a'}],students:[],teachers:[]}),second=canonicalRecordShadowCore({teachers:[],students:[],lessons:[{id:'a'},{a:1,z:2,id:'b'}],ignored:[1]});
  assert.deepEqual(first,second);assert.deepEqual(Object.keys(first),['lessons','students','teachers']);
+ assert.throws(()=>canonicalRecordShadowCore({lessons:[],students:[]}),/teachers/);
+ assert.throws(()=>canonicalRecordShadowCore({lessons:[{id:'same'},{id:'same'}],students:[],teachers:[]}),/重複/);
+ assert.throws(()=>canonicalRecordShadowCore({lessons:[{id:' bad'}],students:[],teachers:[]}),/ID/);
 });

@@ -787,5 +787,16 @@ describe('staging record-shadow verified run 與原子啟用', () => {
     await assertFails(setDoc(controlRef,missing));
     await assertFails(setDoc(controlRef,activation('core-hash',{coreHash:'forged'})));
     await assertSucceeds(setDoc(controlRef,activation('core-hash')));
+    const backup=auth('backup-owner-uid',BACKUP_OWNER_EMAIL);
+    await assertSucceeds(setDoc(doc(backup,controlPath),activation('core-hash',{activatedBy:'backup-owner-uid',activatedByEmail:BACKUP_OWNER_EMAIL})));
+  });
+
+  test('舊 Rules 留下的 v1 writing run 不得在 v2 Rules 下升級為 verified', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),legacyRef=doc(owner,runPath('legacy-v1'));
+    await testEnv.withSecurityRulesDisabled(async context=>setDoc(doc(context.firestore(),runPath('legacy-v1')),{
+      schema:'danbridge-record-shadow-run-v1',companyId:COMPANY_ID,environment:'staging',state:'writing',runId:'legacy-v1',sourceHash:'hash-v1',documentCount:3,activeCount:2,tombstoneCount:1,
+      createdAt:Timestamp.now(),createdBy:'owner-uid',createdByEmail:OWNER_EMAIL
+    }));
+    await assertFails(updateDoc(legacyRef,verifiedFields));
   });
 });
