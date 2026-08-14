@@ -9,6 +9,7 @@ import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-cand
 import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.86';
 import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.86';
 import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest,buildAtomicRecordActivation,evaluateAtomicRecordActivation} from './cloud-record-activation.js?v=20.26.86';
+import {decideRecordReadTakeover} from './cloud-record-read-takeover.js?v=20.26.88';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -21,7 +22,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.87';
+const APP_RELEASE='20.26.88';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1917,6 +1918,25 @@ async function verifyStagingAtomicRecordActivationReadback(){
  if(!evaluation.eligible)throw new Error(`staging 原子控制讀回失敗：${evaluation.reason}`);
  return{state:'verified',sourceHash:storedHash,fullManifestId,roleManifestId,roleRunId:activation.roleRunId,documentCount:activation.documentCount,viewCount:activation.viewCount,roleDocumentCount:activation.roleDocumentCount,writes:0,readTakeover:false,writeTakeover:false};
 }
+async function runStagingRecordReadTakeoverExercise({auditFailures=false}={}){
+ stagingRecordShadowGuard();
+ const controlRef=doc(cloud,'stagingRecordActivationControls',COMPANY_ID),mainRef=doc(cloud,'companies',COMPANY_ID,'data','main');
+ const [controlSnapshot,mainSnapshot]=await Promise.all([getDoc(controlRef),getDoc(mainRef)]);
+ if(!controlSnapshot.exists()||!mainSnapshot.exists()||!mainSnapshot.data()?.db)throw new Error('staging 原子控制或 legacy 主資料不存在');
+ const activation=controlSnapshot.data(),legacyDb=deepCopy(mainSnapshot.data().db),legacyHash=String(mainSnapshot.data()?.clientHash||'');
+ if(!legacyHash||dataHash(legacyDb)!==legacyHash)throw new Error('staging legacy 主資料內容與 hash 不一致');
+ const [fullSnapshot,roleSnapshot]=await Promise.all([getDoc(doc(cloud,'stagingRecordCandidateManifests',COMPANY_ID,'manifests',String(activation.fullManifestId||''))),getDoc(doc(cloud,'stagingRecordCandidateManifests',COMPANY_ID,'manifests',String(activation.roleManifestId||'')))]);
+ if(!fullSnapshot.exists()||!roleSnapshot.exists())throw new Error('staging verified manifest 缺失');
+ const evaluation=evaluateAtomicRecordActivation({activation,fullManifest:fullSnapshot.data(),roleManifest:roleSnapshot.data(),currentSourceHash:legacyHash});
+ const candidate=await firestoreFullRecordShadowAdapter().verifyCandidate(legacyDb,{sourceHash:legacyHash});
+ const recordHash=dataHash(candidate.db),decision=decideRecordReadTakeover({environment:DANBRIDGE_ENVIRONMENT,activationEvaluation:evaluation,legacyHash,recordHash,recordDb:candidate.db,exercise:true});
+ if(decision.source!=='records')throw new Error(`staging 逐筆讀取演練拒絕：${decision.reason}`);
+ const beforeHash=dataHash(window.__danbridgeGetDB?.());applyingCloud=true;
+ try{window.__danbridgeSetDB(deepCopy(decision.db));applyCachedLessonReportsToCurrentDB();persistCurrentLocalView();window.renderAll?.();requestAnimationFrame(()=>window.renderDashboard?.())}finally{applyingCloud=false}
+ const appliedHash=dataHash(window.__danbridgeGetDB?.());if(appliedHash!==legacyHash)throw new Error('staging 逐筆資料套用畫面後 hash 不一致');
+ const audit={};if(auditFailures){const scenarios={interrupted:{eligible:false,reason:'manifest 中斷'},version:evaluation,missing:evaluation,extra:evaluation,hash:evaluation};for(const [name,scenarioEvaluation] of Object.entries(scenarios)){const changedHash=['version','hash'].includes(name)?`wrong-${name}`:legacyHash,changedDb=['missing','extra'].includes(name)?null:candidate.db,blocked=decideRecordReadTakeover({environment:'staging',activationEvaluation:scenarioEvaluation,legacyHash,recordHash:changedHash,recordDb:changedDb,exercise:true});audit[name]=blocked.source==='legacy'}if(Object.values(audit).some(value=>value!==true))throw new Error('staging 逐筆讀取 fail-closed 情境未全部拒絕')}
+ return{state:'verified',source:'records',sourceHash:legacyHash,beforeHash,appliedHash,collectionCount:candidate.collectionCount,documentCount:candidate.documentCount,activeCount:candidate.activeCount,tombstoneCount:candidate.tombstoneCount,audit,writes:0,automaticReadTakeover:false,writeTakeover:false};
+}
 if(DANBRIDGE_ENVIRONMENT==='staging'){
  window.__danbridgeRunStagingAtomicRecordActivation=runStagingAtomicRecordActivation;
  window.__danbridgeVerifyStagingAtomicRecordActivationReadback=verifyStagingAtomicRecordActivationReadback;
@@ -1924,6 +1944,9 @@ if(DANBRIDGE_ENVIRONMENT==='staging'){
  if(atomicActivationTest){let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingAtomicActivationResult=JSON.stringify(await runStagingAtomicRecordActivation({auditFailures:atomicActivationTest==='failures'}))}catch(error){document.body.dataset.stagingAtomicActivationResult=JSON.stringify({state:'blocked',error:String(error?.message||error),readTakeover:false,writeTakeover:false})}},200)}
  const atomicActivationReadback=new URLSearchParams(location.search).get('atomicActivationReadback');
  if(atomicActivationReadback){let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingAtomicActivationReadback=JSON.stringify(await verifyStagingAtomicRecordActivationReadback())}catch(error){document.body.dataset.stagingAtomicActivationReadback=JSON.stringify({state:'blocked',error:String(error?.message||error),writes:0,readTakeover:false,writeTakeover:false})}},200)}
+ window.__danbridgeRunStagingRecordReadTakeoverExercise=runStagingRecordReadTakeoverExercise;
+ const recordReadTakeoverTest=new URLSearchParams(location.search).get('recordReadTakeoverTest');
+ if(recordReadTakeoverTest){let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingRecordReadTakeoverResult=JSON.stringify(await runStagingRecordReadTakeoverExercise({auditFailures:recordReadTakeoverTest==='failures'}))}catch(error){document.body.dataset.stagingRecordReadTakeoverResult=JSON.stringify({state:'blocked',error:String(error?.message||error),writes:0,automaticReadTakeover:false,writeTakeover:false})}},200)}
 }
 async function runProductionFullRecordCandidateVerification(expectedSourceHash){
  productionFullRecordMigrationGuard();const targetDb=deepCopy(window.__danbridgeGetDB?.()),sourceHash=dataHash(targetDb);

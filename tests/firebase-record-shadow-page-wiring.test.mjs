@@ -15,7 +15,7 @@ test('頁面匯入獨立 record-shadow adapter 且只公開專屬手動入口',(
 });
 
 test('Checkpoint B 以版本化 service worker 解除舊 staging 快取',()=>{
- assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.87'/);
+ assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.88'/);
 });
 
 test('staging Owner URL 測試入口只操作專用 ID 並保留既有影子狀態',()=>{
@@ -118,4 +118,10 @@ test('staging 原子候選控制同時核對 full、role 與 main，且仍不接
  assert.match(source,/get\('atomicActivationReadback'\)/);
  assert.match(source,/verifyStagingAtomicRecordActivationReadback/);
  assert.match(source,/roleDocumentCount:activation\.roleDocumentCount,writes:0,readTakeover:false,writeTakeover:false/);
+});
+
+test('staging 手動逐筆讀取演練核對控制、manifest、legacy hash 與完整讀回',()=>{
+ assert.match(source,/runStagingRecordReadTakeoverExercise/);assert.match(source,/get\('recordReadTakeoverTest'\)/);
+ assert.match(source,/verifyCandidate\(legacyDb,\{sourceHash:legacyHash\}\)/);assert.match(source,/decideRecordReadTakeover/);assert.match(source,/appliedHash!==legacyHash/);
+ assert.match(source,/automaticReadTakeover:false,writeTakeover:false/);assert.doesNotMatch(source,/uploadOwnerState[^}]+runStagingRecordReadTakeoverExercise/);
 });
