@@ -1,12 +1,12 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.77';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.77';
-import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.77';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.77';
-import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.77';
-import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.77';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.79';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.79';
+import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.79';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.79';
+import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.79';
+import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.79';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -19,7 +19,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.77';
+const APP_RELEASE='20.26.79';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1805,6 +1805,39 @@ async function runProductionFullRecordMigration(expectedSourceHash){
 if(DANBRIDGE_ENVIRONMENT==='production'){
  const expectedProductionMigrationHash=new URLSearchParams(location.search).get('productionFullRecordMigration');
  if(expectedProductionMigrationHash){let installed=false;const timer=setInterval(()=>{if(installed||cloudRole!=='owner')return;installed=true;clearInterval(timer);const button=document.createElement('button');button.id='productionFullRecordMigrationButton';button.type='button';button.className='btn danger';button.style.cssText='position:fixed;right:18px;bottom:148px;z-index:10002';button.textContent='寫入 production 新逐筆集合';button.onclick=async()=>{button.disabled=true;button.textContent='production 逐筆寫入與讀回驗證中…';try{const result=await runProductionFullRecordMigration(expectedProductionMigrationHash);button.textContent=`production 已驗證 ${result.activeCount} 筆`;button.className='btn ok'}catch(error){button.disabled=false;button.textContent='production 遷移失敗，未切換讀取';cloudStatus(String(error?.message||error),'error')}};document.body.appendChild(button)},200)}
+}
+
+async function auditProductionRoleViews(sourceDb){
+ const accessDocs=await getCompanyAccessDocs(),issues=[],counts={owners:1,schedulers:0,teachers:0,branchManagers:0};
+ for(const accessDoc of accessDocs){
+  const access=accessDoc.data(),email=String(access.email||accessDoc.id||'').trim().toLowerCase();
+  if(access.active===false||!email)continue;
+  if(access.role==='owner'){if(email!==OWNER_EMAIL)counts.owners++;continue}
+  let expectedDb=null,storedDb=null,storedHash='',kind='';
+  if(access.role==='teacher'&&access.teacherId){
+   if(SCHEDULER_ACCOUNT_EMAILS.has(email)){kind='scheduler';counts.schedulers++;expectedDb=filteredSchedulerDB(sourceDb);const snapshot=await getDoc(doc(cloud,'companies',COMPANY_ID,'schedulerViews',email));if(snapshot.exists()){storedDb=snapshot.data()?.db;storedHash=String(snapshot.data()?.clientHash||'')}}
+   else{kind='teacher';counts.teachers++;expectedDb=filteredTeacherDB(sourceDb,access.teacherId);const snapshot=await getDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email));if(snapshot.exists()){storedDb=snapshot.data()?.db;storedHash=String(snapshot.data()?.clientHash||'')}}
+  }else if(access.role==='branch_manager'&&Array.isArray(access.branchIds)&&access.branchIds.length){kind='branch_manager';counts.branchManagers++;expectedDb=filteredBranchDB(sourceDb,access.branchIds);storedDb=access.scopedDb;storedHash=String(access.scopedClientHash||'')}
+  else continue;
+  const expectedHash=dataHash(expectedDb),actualHash=storedDb?dataHash(storedDb):'';
+  if(!storedDb||storedHash!==expectedHash||actualHash!==expectedHash)issues.push({email,kind,reason:!storedDb?'missing':(storedHash!==expectedHash?'stored-hash-mismatch':'content-hash-mismatch')});
+ }
+ return{...counts,total:counts.schedulers+counts.teachers+counts.branchManagers,verified:issues.length===0,issueCount:issues.length,issues};
+}
+async function runProductionFullRecordCandidateVerification(expectedSourceHash){
+ productionFullRecordMigrationGuard();const targetDb=deepCopy(window.__danbridgeGetDB?.()),sourceHash=dataHash(targetDb);
+ if(!expectedSourceHash||sourceHash!==expectedSourceHash)throw new Error(`production 候選來源不符：預期 ${expectedSourceHash||'—'}，實際 ${sourceHash}`);
+ const recordCandidate=await firestoreFullRecordShadowAdapter().verifyCandidate(targetDb,{sourceHash}),roleViews=await auditProductionRoleViews(targetDb),eligible=recordCandidate.candidateVerified===true&&roleViews.verified===true;
+ const result={state:eligible?'eligible':'blocked',sourceHash,collectionCount:recordCandidate.collectionCount,documentCount:recordCandidate.documentCount,activeCount:recordCandidate.activeCount,tombstoneCount:recordCandidate.tombstoneCount,recordCandidateVerified:true,roleViews,eligible,readTakeover:false,writes:0};
+ document.body.dataset.productionFullRecordCandidateState=result.state;document.body.dataset.productionFullRecordCandidateResult=JSON.stringify(result);return result;
+}
+if(DANBRIDGE_ENVIRONMENT==='production'){
+ const expectedProductionCandidateHash=new URLSearchParams(location.search).get('productionFullRecordVerify');
+ if(expectedProductionCandidateHash){let installed=false;const timer=setInterval(()=>{if(installed||cloudRole!=='owner')return;installed=true;clearInterval(timer);const button=document.createElement('button');button.id='productionFullRecordCandidateButton';button.type='button';button.className='btn';button.style.cssText='position:fixed;right:18px;bottom:92px;z-index:10002';button.textContent='唯讀驗證 production 候選';button.onclick=async()=>{button.disabled=true;button.textContent='唯讀核對逐筆集合與角色檢視中…';try{const result=await runProductionFullRecordCandidateVerification(expectedProductionCandidateHash);button.textContent=result.eligible?`候選通過 ${result.activeCount} 筆`:`候選阻擋：角色檢視 ${result.roleViews.issueCount} 筆不一致`;button.className=result.eligible?'btn ok':'btn danger'}catch(error){button.disabled=false;button.textContent='候選驗證失敗，未切換讀取';document.body.dataset.productionFullRecordCandidateState='failed';document.body.dataset.productionFullRecordCandidateResult=JSON.stringify({state:'failed',eligible:false,readTakeover:false,writes:0,error:String(error?.message||error).slice(0,500)});cloudStatus(String(error?.message||error),'error')}};document.body.appendChild(button)},200)}
+}
+if(DANBRIDGE_ENVIRONMENT==='staging'){
+ const stagingFullRecordCandidateHash=new URLSearchParams(location.search).get('fullRecordCandidateTest');
+ if(stagingFullRecordCandidateHash){let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);const targetDb=deepCopy(window.__danbridgeGetDB?.()),actualSourceHash=dataHash(targetDb),sourceHash=stagingFullRecordCandidateHash==='current'?actualSourceHash:stagingFullRecordCandidateHash;try{if(sourceHash!==actualSourceHash)throw new Error(`staging 候選來源不符：預期 ${sourceHash}，實際 ${actualSourceHash}`);const result=await firestoreFullRecordShadowAdapter().verifyCandidate(targetDb,{sourceHash});document.body.dataset.stagingFullRecordCandidateResult=JSON.stringify({state:'verified',sourceHash,collectionCount:result.collectionCount,documentCount:result.documentCount,activeCount:result.activeCount,tombstoneCount:result.tombstoneCount,activeSourceHashCount:result.activeSourceHashCount,matchingSourceHashCount:result.matchingSourceHashCount,distinctSourceHashCount:result.distinctSourceHashCount,candidateVerified:true,writes:0,readTakeover:false})}catch(error){document.body.dataset.stagingFullRecordCandidateResult=JSON.stringify({state:'blocked',writes:0,readTakeover:false,error:String(error?.message||error).slice(0,500)})}},200)}
 }
 
 function expectedRecordShadowRunCounts(current,targetDb){

@@ -48,3 +48,11 @@ export function verifyFullRecordShadowReadback(documentsByCollection,targetDb,{e
  const rebuilt=rebuildFullRecordShadowDb(documentsByCollection,{environment}),expected=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,collection==='changes'?clone(targetDb[collection]):[...targetDb[collection]].sort((a,b)=>String(a.id).localeCompare(String(b.id)))]));
  if(fingerprint(rebuilt.db)!==fingerprint(expected))throw new Error('全 16 集合逐筆讀回與主資料不一致');return{...rebuilt,verified:true};
 }
+export function verifyFullRecordShadowCandidate(documentsByCollection,targetDb,{environment='staging',expectedSourceHash}={}){
+ if(typeof expectedSourceHash!=='string'||!expectedSourceHash.trim())throw new Error('逐筆候選缺少預期 sourceHash');
+ const verified=verifyFullRecordShadowReadback(documentsByCollection,targetDb,{environment}),sourceHashes=new Set();let matchingSourceHashCount=0,activeSourceHashCount=0;
+ for(const collection of FULL_RECORD_COLLECTIONS)for(const row of documentsByCollection?.[collection]??[]){
+  if(row?.data?.deleted===true)continue;const sourceHash=String(row?.data?.sourceHash||'');if(!sourceHash)throw new Error(`${collection}/${String(row?.id??'')} 缺少 sourceHash`);activeSourceHashCount++;sourceHashes.add(sourceHash);if(sourceHash===expectedSourceHash)matchingSourceHashCount++;
+ }
+ return{...verified,sourceHash:expectedSourceHash,collectionCount:FULL_RECORD_COLLECTIONS.length,activeSourceHashCount,matchingSourceHashCount,distinctSourceHashCount:sourceHashes.size,candidateVerified:true};
+}

@@ -1,5 +1,16 @@
 # Changelog
 
+## 20.26.79（production 候選診斷快取修正）
+
+- 升級所有模組與 service worker 版本，確保 Owner／角色計數修正不會命中 20.26.78 舊快取。
+- 主要 Owner Daniel 與 companyAccess 中的備援 Owner 分開計數，避免漏算 Catherine。
+
+## 20.26.78（production 逐筆唯讀候選驗證）
+
+- 新增 Owner 手動唯讀候選檢查，核對 16 個逐筆集合的完整內容與筆數，並統計 active 文件的歷史來源 hash（未變文件不會為更新整體 hash 而重寫）。
+- 同步核對 aa、所有老師及校區管理者既有角色檢視；任一缺少或 hash 不符即標記 blocked。
+- 候選驗證固定回報 `writes: 0`、`readTakeover: false`，不寫回、不刪除，也不切換讀取來源。
+
 ## 20.26.77（production 隔離逐筆遷移）
 
 - 新增 `productionFullRecordShadows` 全 16 集合隔離命名空間；只允許 Owner、production identity 與逐次 revision，禁止實體刪除。

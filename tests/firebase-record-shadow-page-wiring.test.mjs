@@ -7,14 +7,14 @@ const adapterSource=fs.readFileSync(new URL('../js/core/firebase-record-shadow-a
 const pwaSource=fs.readFileSync(new URL('../js/core/pwa-installation.js',import.meta.url),'utf8');
 
 test('頁面匯入獨立 record-shadow adapter 且只公開專屬手動入口',()=>{
- assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.77'/);
+ assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.79'/);
  assert.match(source,/window\.__danbridgeRunStagingRecordShadow/);
  assert.match(source,/window\.__danbridgeGetStagingRecordShadowDiagnostic/);
  assert.doesNotMatch(source,/queueStagingRecordShadow[^\n]*uploadOwnerState|uploadOwnerState[^\n]*queueStagingRecordShadow/);
 });
 
 test('Checkpoint B 以版本化 service worker 解除舊 staging 快取',()=>{
- assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.77'/);
+ assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.79'/);
 });
 
 test('staging Owner URL 測試入口只操作專用 ID 並保留既有影子狀態',()=>{
@@ -64,4 +64,21 @@ test('production 逐筆遷移只能由帶 hash 的 Owner 手動啟用，且不�
  assert.match(source,/sourceHash!==expectedSourceHash/);
  assert.doesNotMatch(source,/uploadOwnerState[^}]+runProductionFullRecordMigration/);
  assert.doesNotMatch(source,/__danbridgeSetDB[^\n]+runProductionFullRecordMigration|runProductionFullRecordMigration[^\n]+__danbridgeSetDB/);
+});
+
+test('production 候選驗證只讀取逐筆集合與角色檢視，不寫入或接管讀取',()=>{
+ assert.match(source,/new URLSearchParams\(location\.search\)\.get\('productionFullRecordVerify'\)/);
+ assert.match(source,/button\.id='productionFullRecordCandidateButton'/);
+ assert.match(source,/verifyCandidate\(targetDb,\{sourceHash\}\)/);
+ assert.match(source,/auditProductionRoleViews\(targetDb\)/);
+ assert.match(source,/readTakeover:false,writes:0/);
+ assert.doesNotMatch(source,/productionFullRecordCandidateButton[^}]+setDoc|productionFullRecordCandidateButton[^}]+runTransaction/);
+ assert.doesNotMatch(source,/__danbridgeSetDB[^\n]+runProductionFullRecordCandidateVerification|runProductionFullRecordCandidateVerification[^\n]+__danbridgeSetDB/);
+});
+
+test('staging 實站候選入口支援正確與錯誤 sourceHash，且永遠唯讀',()=>{
+ assert.match(source,/get\('fullRecordCandidateTest'\)/);
+ assert.match(source,/stagingFullRecordCandidateResult/);
+ assert.match(source,/state:'blocked',writes:0,readTakeover:false/);
+ assert.doesNotMatch(source,/stagingFullRecordCandidateResult=JSON\.stringify\(\{\.\.\.result/);
 });
