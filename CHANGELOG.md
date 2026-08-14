@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.77（production 隔離逐筆遷移）
+
+- 新增 `productionFullRecordShadows` 全 16 集合隔離命名空間；只允許 Owner、production identity 與逐次 revision，禁止實體刪除。
+- production 遷移必須由人工按鈕啟動，且目前本機資料 hash 必須與已驗證備份來源完全相同；不接管讀取、不覆寫舊主文件。
+- staging 與 production adapter 共用相同重建驗證核心，但路徑及 environment identity 完全隔離。
+
 ## 20.26.76（主文件容量保護與年度容量驗證）
 
 - 主文件估計達 1,000,000 bytes 時保留本機待上傳資料並停止無效自動重試；Firestore 明確回報文件過大時同樣 fail closed。

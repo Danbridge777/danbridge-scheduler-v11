@@ -865,5 +865,9 @@ describe('staging record-shadow verified run 與原子啟用', () => {
     await assertSucceeds(setDoc(doc(owner,`stagingFullRecordShadows/${COMPANY_ID}/collections/changes/records/${changeId}`),change));
     await assertFails(setDoc(doc(owner,`stagingFullRecordShadows/${COMPANY_ID}/collections/changes/records/bad-change`),{...change,recordId:'bad-change'}));
     await assertFails(setDoc(doc(teacher,`stagingFullRecordShadows/${COMPANY_ID}/collections/teachers/records/teacher-1`),{...base,collection:'teachers',recordId:'teacher-1',record:{id:'teacher-1'},recordIndex:null,updatedBy:'teacher-uid',updatedByEmail:TEACHER_EMAIL}));
+    const productionBase={...base,environment:'production'},productionRef=doc(owner,`productionFullRecordShadows/${COMPANY_ID}/collections/lessons/records/lesson-1`),productionLesson={...productionBase,collection:'lessons',recordId:'lesson-1',record:{id:'lesson-1'},recordIndex:null};
+    await assertSucceeds(setDoc(productionRef,productionLesson));await assertSucceeds(setDoc(productionRef,{...productionLesson,revision:2,deleted:true}));await assertFails(deleteDoc(productionRef));
+    await assertFails(setDoc(doc(owner,`productionFullRecordShadows/${COMPANY_ID}/collections/teachers/records/staging-env`),{...base,collection:'teachers',recordId:'staging-env',record:{id:'staging-env'},recordIndex:null}));
+    await assertFails(setDoc(doc(teacher,`productionFullRecordShadows/${COMPANY_ID}/collections/teachers/records/teacher-1`),{...productionBase,collection:'teachers',recordId:'teacher-1',record:{id:'teacher-1'},recordIndex:null,updatedBy:'teacher-uid',updatedByEmail:TEACHER_EMAIL}));
   });
 });

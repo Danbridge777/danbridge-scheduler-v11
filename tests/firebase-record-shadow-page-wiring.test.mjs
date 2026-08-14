@@ -7,14 +7,14 @@ const adapterSource=fs.readFileSync(new URL('../js/core/firebase-record-shadow-a
 const pwaSource=fs.readFileSync(new URL('../js/core/pwa-installation.js',import.meta.url),'utf8');
 
 test('頁面匯入獨立 record-shadow adapter 且只公開專屬手動入口',()=>{
- assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.76'/);
+ assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.77'/);
  assert.match(source,/window\.__danbridgeRunStagingRecordShadow/);
  assert.match(source,/window\.__danbridgeGetStagingRecordShadowDiagnostic/);
  assert.doesNotMatch(source,/queueStagingRecordShadow[^\n]*uploadOwnerState|uploadOwnerState[^\n]*queueStagingRecordShadow/);
 });
 
 test('Checkpoint B 以版本化 service worker 解除舊 staging 快取',()=>{
- assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.76'/);
+ assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.77'/);
 });
 
 test('staging Owner URL 測試入口只操作專用 ID 並保留既有影子狀態',()=>{
@@ -54,4 +54,14 @@ test('Checkpoint C2 建立 verified run 並以 legacy clientHash 原子啟用，
  assert.match(source,/stagingRecordShadowRunTestResult/);
  assert.doesNotMatch(source,/uploadOwnerState[^}]+createVerifiedStagingRecordShadowRun/);
  assert.doesNotMatch(source,/__danbridgeSetDB[^\n]+evaluateRecordShadowReadCandidate|evaluateRecordShadowReadCandidate[^\n]+__danbridgeSetDB/);
+});
+
+test('production 逐筆遷移只能由帶 hash 的 Owner 手動啟用，且不接管讀取',()=>{
+ assert.match(source,/new URLSearchParams\(location\.search\)\.get\('productionFullRecordMigration'\)/);
+ assert.match(source,/button\.id='productionFullRecordMigrationButton'/);
+ assert.match(source,/button\.onclick=async\(\)=>/);
+ assert.match(source,/DANBRIDGE_ENVIRONMENT!=='production'\|\|cloudRole!=='owner'/);
+ assert.match(source,/sourceHash!==expectedSourceHash/);
+ assert.doesNotMatch(source,/uploadOwnerState[^}]+runProductionFullRecordMigration/);
+ assert.doesNotMatch(source,/__danbridgeSetDB[^\n]+runProductionFullRecordMigration|runProductionFullRecordMigration[^\n]+__danbridgeSetDB/);
 });
