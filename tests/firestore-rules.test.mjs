@@ -133,6 +133,21 @@ describe('staging 全資料與角色候選原子控制',()=>{
     await assertFails(setDoc(doc(owner,controlPath),controlPayload(activation)));
   });
 
+  test('低讀取量 live record 與整體版本控制必須由 Owner 同一交易推進',async()=>{
+    const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),{fullManifest,roleManifest,activation}=evidence('live-record');
+    await setDoc(doc(owner,`companies/${COMPANY_ID}/data/main`),{db:{},clientHash:'source-hash-1'});
+    await runTransaction(owner,async transaction=>{transaction.set(doc(owner,manifestPath(fullManifest.manifestId)),withAudit(fullManifest));transaction.set(doc(owner,manifestPath(roleManifest.manifestId)),withAudit(roleManifest));transaction.set(doc(owner,controlPath),controlPayload(activation))});
+    const liveControlRef=doc(owner,`stagingLiveRecordControls/${COMPANY_ID}`),initial={schema:'danbridge-live-record-control-v1',environment:'staging',companyId:COMPANY_ID,state:'active',dataHash:'source-hash-1',rootRevision:0,lastOperationId:'',lastCollection:'',lastRecordId:'',updatedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL};
+    await assertSucceeds(setDoc(liveControlRef,initial));
+    const recordRef=doc(owner,`stagingLiveRecords/${COMPANY_ID}/collections/lessons/records/lesson-live-1`),operationId='device-1:1',record={schema:'danbridge-full-record-shadow-v1',companyId:COMPANY_ID,collection:'lessons',recordId:'lesson-live-1',record:{id:'lesson-live-1',name:'safe'},recordIndex:null,sourceHash:'hash-live-1',revision:1,deleted:false,environment:'staging',lastOperationId:operationId,updatedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL};
+    await assertFails(setDoc(recordRef,record));
+    await assertSucceeds(runTransaction(owner,async transaction=>{transaction.set(recordRef,record);transaction.set(liveControlRef,{...initial,dataHash:'hash-live-1',rootRevision:1,lastOperationId:operationId,lastCollection:'lessons',lastRecordId:'lesson-live-1'},{merge:false})}));
+    assert.equal((await getDoc(recordRef)).data().revision,1);
+    await assertFails(updateDoc(recordRef,{revision:2,lastOperationId:'forged'}));
+    await assertFails(getDoc(doc(teacher,recordRef.path)));await assertFails(setDoc(doc(teacher,`stagingLiveRecords/${COMPANY_ID}/collections/lessons/records/teacher-write`),{...record,recordId:'teacher-write',record:{id:'teacher-write'},updatedBy:'teacher-uid',updatedByEmail:TEACHER_EMAIL}));
+    await assertFails(deleteDoc(recordRef));await assertFails(deleteDoc(liveControlRef));
+  });
+
   test('manifest 不可覆寫刪除，非 Owner 不可讀寫或建立控制',async()=>{
     const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),scheduler=auth('scheduler-2-uid',SECOND_SCHEDULER_EMAIL),{fullManifest,roleManifest,activation}=evidence('permission');
     await setDoc(doc(owner,`companies/${COMPANY_ID}/data/main`),{db:{},clientHash:'source-hash-1'});

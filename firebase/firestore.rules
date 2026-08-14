@@ -261,6 +261,76 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // 低讀取量 live 逐筆層：每次只允許 Owner 原子更新一份 record 與一份全域版本控制。
+    match /stagingLiveRecords/{companyId}/collections/{collectionId}/records/{recordId} {
+      allow read: if isOwner() && companyId == 'danbridge';
+      allow create, update: if isOwner()
+        && companyId == 'danbridge'
+        && collectionId in ['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches']
+        && request.resource.data.keys().hasOnly(['schema','companyId','collection','recordId','record','recordIndex','sourceHash','revision','deleted','environment','lastOperationId','updatedAt','updatedBy','updatedByEmail'])
+        && request.resource.data.schema == 'danbridge-full-record-shadow-v1'
+        && request.resource.data.companyId == companyId
+        && request.resource.data.collection == collectionId
+        && request.resource.data.recordId == recordId
+        && request.resource.data.record is map
+        && ((collectionId == 'changes' && request.resource.data.recordIndex is int && request.resource.data.recordIndex >= 0 && recordId.matches('seq_[0-9]{8}_[0-9a-f]{8}')) || (collectionId != 'changes' && request.resource.data.recordIndex == null && request.resource.data.record.id == recordId))
+        && request.resource.data.sourceHash is string
+        && request.resource.data.sourceHash.size() > 0
+        && request.resource.data.revision is int
+        && request.resource.data.revision == (resource == null ? 1 : resource.data.revision + 1)
+        && request.resource.data.deleted is bool
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.lastOperationId is string
+        && request.resource.data.lastOperationId.size() > 0
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedByEmail == emailKey()
+        && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.lastOperationId == request.resource.data.lastOperationId
+        && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.lastCollection == collectionId
+        && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.lastRecordId == recordId
+        && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.dataHash == request.resource.data.sourceHash;
+      allow delete: if false;
+    }
+
+    match /stagingLiveRecordControls/{companyId} {
+      allow read: if isOwner() && companyId == 'danbridge';
+      allow create: if isOwner()
+        && companyId == 'danbridge'
+        && request.resource.data.keys().hasOnly(['schema','environment','companyId','state','dataHash','rootRevision','lastOperationId','lastCollection','lastRecordId','updatedAt','updatedBy','updatedByEmail'])
+        && request.resource.data.schema == 'danbridge-live-record-control-v1'
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.companyId == companyId
+        && request.resource.data.state == 'active'
+        && request.resource.data.dataHash == get(/databases/$(database)/documents/stagingRecordActivationControls/$(companyId)).data.sourceHash
+        && request.resource.data.rootRevision == 0
+        && request.resource.data.lastOperationId == ''
+        && request.resource.data.lastCollection == ''
+        && request.resource.data.lastRecordId == ''
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedByEmail == emailKey();
+      allow update: if isOwner()
+        && companyId == 'danbridge'
+        && request.resource.data.keys().hasOnly(['schema','environment','companyId','state','dataHash','rootRevision','lastOperationId','lastCollection','lastRecordId','updatedAt','updatedBy','updatedByEmail'])
+        && request.resource.data.schema == resource.data.schema
+        && request.resource.data.environment == resource.data.environment
+        && request.resource.data.companyId == resource.data.companyId
+        && request.resource.data.state == 'active'
+        && request.resource.data.rootRevision == resource.data.rootRevision + 1
+        && request.resource.data.lastOperationId is string
+        && request.resource.data.lastOperationId.size() > 0
+        && request.resource.data.lastOperationId != resource.data.lastOperationId
+        && request.resource.data.lastCollection in ['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches']
+        && request.resource.data.lastRecordId is string
+        && request.resource.data.lastRecordId.size() > 0
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedByEmail == emailKey()
+        && getAfter(/databases/$(database)/documents/stagingLiveRecords/$(companyId)/collections/$(request.resource.data.lastCollection)/records/$(request.resource.data.lastRecordId)).data.lastOperationId == request.resource.data.lastOperationId
+        && getAfter(/databases/$(database)/documents/stagingLiveRecords/$(companyId)/collections/$(request.resource.data.lastCollection)/records/$(request.resource.data.lastRecordId)).data.sourceHash == request.resource.data.dataHash;
+      allow delete: if false;
+    }
+
     // production 初始逐筆遷移命名空間；不接管任何讀取，禁止非 Owner 與實體刪除。
     match /productionFullRecordShadows/{companyId}/collections/{collectionId}/records/{recordId} {
       allow read: if isOwner() && companyId == 'danbridge';
