@@ -7,14 +7,14 @@ const adapterSource=fs.readFileSync(new URL('../js/core/firebase-record-shadow-a
 const pwaSource=fs.readFileSync(new URL('../js/core/pwa-installation.js',import.meta.url),'utf8');
 
 test('頁面匯入獨立 record-shadow adapter 且只公開專屬手動入口',()=>{
- assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.59'/);
+ assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.60'/);
  assert.match(source,/window\.__danbridgeRunStagingRecordShadow/);
  assert.match(source,/window\.__danbridgeGetStagingRecordShadowDiagnostic/);
  assert.doesNotMatch(source,/queueStagingRecordShadow[^\n]*uploadOwnerState|uploadOwnerState[^\n]*queueStagingRecordShadow/);
 });
 
 test('Checkpoint B 以版本化 service worker 解除舊 staging 快取',()=>{
- assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.59'/);
+ assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.60'/);
 });
 
 test('staging Owner URL 測試入口只操作專用 ID 並保留既有影子狀態',()=>{
@@ -38,4 +38,17 @@ test('Firestore adapter 使用逐集合讀取與 transaction，不使用 deleteD
  assert.match(source,/getDocs\(collection\(cloud,/);
  assert.match(source,/runTransaction\(cloud/);
  assert.doesNotMatch(source,/deleteDoc\([^\n]*stagingRecordShadows/);
+});
+
+test('Checkpoint C2 建立 verified run 並以 legacy clientHash 原子啟用，但不接管讀取或既有上傳',()=>{
+ assert.match(source,/buildRecordShadowRunManifest/);
+ assert.match(source,/verifyRecordShadowRun/);
+ assert.match(source,/buildRecordShadowActivation/);
+ assert.match(source,/stagingRecordShadowRuns/);
+ assert.match(source,/stagingRecordShadowControls/);
+ assert.match(source,/transaction\.get\(runRef\)/);
+ assert.match(source,/transaction\.get\(mainRef\)/);
+ assert.match(source,/recordShadowRunTest/);
+ assert.match(source,/stagingRecordShadowRunTestResult/);
+ assert.doesNotMatch(source,/uploadOwnerState[^}]+createVerifiedStagingRecordShadowRun/);
 });

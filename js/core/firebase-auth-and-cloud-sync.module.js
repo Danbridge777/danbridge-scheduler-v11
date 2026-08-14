@@ -1,8 +1,9 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.59';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.59';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.60';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.60';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation} from './cloud-record-shadow-run.js?v=20.26.60';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -15,7 +16,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.59';
+const APP_RELEASE='20.26.60';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1763,9 +1764,65 @@ async function runStagingRecordShadow(options={}){
   console.error('Staging record shadow failed',error);throw error;
  }
 }
+
+function expectedRecordShadowRunCounts(current,targetDb){
+ let documentCount=0,activeCount=0;
+ for(const collectionName of ['lessons','students','teachers']){
+  const ids=new Set(Object.keys(current?.revisions?.[collectionName]||{}));
+  for(const row of targetDb?.[collectionName]||[])ids.add(String(row.id));
+  documentCount+=ids.size;activeCount+=(targetDb?.[collectionName]||[]).length;
+ }
+ return{documentCount,activeCount,tombstoneCount:documentCount-activeCount};
+}
+async function createVerifiedStagingRecordShadowRun(targetDb,{interrupt=false,readbackMutation}={}){
+ stagingRecordShadowGuard();
+ const adapter=firestoreRecordShadowAdapter(),current=await adapter.readState(),sourceHash=dataHash(targetDb),runRef=doc(collection(cloud,'stagingRecordShadowRuns',COMPANY_ID,'runs'));
+ const manifest=buildRecordShadowRunManifest({runId:runRef.id,sourceHash,...expectedRecordShadowRunCounts(current,targetDb)});
+ await setDoc(runRef,{...manifest,companyId:COMPANY_ID,createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false});
+ if(interrupt)return{runId:runRef.id,manifest,interrupted:true};
+ const result=await adapter.synchronize(targetDb,{sourceHash});
+ let readback={runId:runRef.id,sourceHash,documentCount:result.activeCount+result.tombstoneCount,activeCount:result.activeCount,tombstoneCount:result.tombstoneCount};
+ if(typeof readbackMutation==='function')readback=readbackMutation({...readback});
+ const verified=verifyRecordShadowRun(manifest,readback);
+ await setDoc(runRef,{state:'verified',verifiedHash:verified.verifiedHash,verifiedAt:serverTimestamp(),verifiedBy:cloudUid,verifiedByEmail:cloudEmailKey},{merge:true});
+ return{runId:runRef.id,manifest:verified,result};
+}
+async function activateVerifiedStagingRecordShadowRun(runId,{forceRulesVersionCheck=false}={}){
+ stagingRecordShadowGuard();
+ const runRef=doc(cloud,'stagingRecordShadowRuns',COMPANY_ID,'runs',runId),mainRef=doc(cloud,'companies',COMPANY_ID,'data','main'),controlRef=doc(cloud,'stagingRecordShadowControls',COMPANY_ID);
+ return runTransaction(cloud,async transaction=>{
+  const [runSnap,mainSnap]=await Promise.all([transaction.get(runRef),transaction.get(mainRef)]);
+  if(!runSnap.exists()||!mainSnap.exists())throw new Error('run 或主資料不存在，禁止啟用');
+  const run=runSnap.data(),currentSourceHash=forceRulesVersionCheck?run.sourceHash:String(mainSnap.data()?.clientHash||'');
+  const activation=buildRecordShadowActivation(run,{currentSourceHash});
+  transaction.set(controlRef,{...activation,companyId:COMPANY_ID,activatedAt:serverTimestamp(),activatedBy:cloudUid,activatedByEmail:cloudEmailKey},{merge:false});
+  return activation;
+ });
+}
+async function runStagingRecordShadowRunScenario(){
+ stagingRecordShadowGuard();
+ const target=deepCopy(window.__danbridgeGetDB?.()),results={};
+ const interrupted=await createVerifiedStagingRecordShadowRun(target,{interrupt:true});results.interrupted={runId:interrupted.runId,blocked:false};
+ try{await activateVerifiedStagingRecordShadowRun(interrupted.runId,{forceRulesVersionCheck:true})}catch{results.interrupted.blocked=true}
+ for(const [name,readbackMutation] of [
+  ['missing',value=>({...value,documentCount:value.documentCount-1,activeCount:Math.max(0,value.activeCount-1)})],
+  ['extra',value=>({...value,documentCount:value.documentCount+1,tombstoneCount:value.tombstoneCount+1})],
+  ['hashMismatch',value=>({...value,sourceHash:value.sourceHash+'-mismatch'})]
+ ]){
+  try{await createVerifiedStagingRecordShadowRun(target,{readbackMutation});results[name]={blocked:false}}
+  catch(error){results[name]={blocked:true,error:String(error?.message||error)}}
+ }
+ const changed=deepCopy(target),versionLessonId='staging-record-run-version-change';changed.lessons=[...(changed.lessons||[]).filter(row=>String(row.id)!==versionLessonId),{id:versionLessonId,name:'STAGING_RECORD_RUN_VERSION_CHANGE'}];
+ const stale=await createVerifiedStagingRecordShadowRun(changed);results.versionChanged={runId:stale.runId,blocked:false};
+ try{await activateVerifiedStagingRecordShadowRun(stale.runId,{forceRulesVersionCheck:true})}catch(error){results.versionChanged={...results.versionChanged,blocked:true,error:String(error?.message||error)}}
+ const verified=await createVerifiedStagingRecordShadowRun(target),activation=await activateVerifiedStagingRecordShadowRun(verified.runId);
+ results.success={runId:verified.runId,verified:true,activated:true,sourceHash:activation.sourceHash,documentCount:activation.documentCount,activeCount:activation.activeCount,tombstoneCount:activation.tombstoneCount};
+ return results;
+}
 if(DANBRIDGE_ENVIRONMENT==='staging'){
  window.__danbridgeRunStagingRecordShadow=runStagingRecordShadow;
  window.__danbridgeGetStagingRecordShadowDiagnostic=()=>{stagingRecordShadowGuard();return deepCopy(stagingRecordShadowDiagnostic)};
+ window.__danbridgeRunStagingRecordShadowRunScenario=runStagingRecordShadowRunScenario;
 }
 async function runStagingRecordShadowScenario(action){
  stagingRecordShadowGuard();
@@ -1790,6 +1847,10 @@ if(DANBRIDGE_ENVIRONMENT==='staging'){
  const stagingRecordTestAction=new URLSearchParams(location.search).get('recordShadowTest');
  if(stagingRecordTestAction){
   let stagingRecordTestStarted=false;const timer=setInterval(async()=>{if(stagingRecordTestStarted||cloudRole!=='owner')return;stagingRecordTestStarted=true;clearInterval(timer);try{const result=await runStagingRecordShadowScenario(stagingRecordTestAction);document.body.dataset.stagingRecordShadowTestResult=JSON.stringify(result)}catch(error){document.body.dataset.stagingRecordShadowTestResult=JSON.stringify({action:stagingRecordTestAction,error:String(error?.message||error),diagnostic:stagingRecordShadowDiagnostic})}},200);
+ }
+ const stagingRecordRunTest=new URLSearchParams(location.search).get('recordShadowRunTest');
+ if(stagingRecordRunTest==='checkpoint-c2'){
+  let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingRecordShadowRunTestResult=JSON.stringify(await runStagingRecordShadowRunScenario())}catch(error){document.body.dataset.stagingRecordShadowRunTestResult=JSON.stringify({error:String(error?.message||error)})}},200);
  }
 }
 

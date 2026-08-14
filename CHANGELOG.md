@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.60（僅 staging record-shadow verified run 與原子啟用控制）
+
+- 新增 Owner 專用、不可實體刪除的 record-shadow run manifest，只有完整讀回驗證後才能由 `writing` 單向轉為 `verified`。
+- 新增 staging 原子啟用控制；啟用內容必須完全吻合 verified run 與 legacy 主文件當下的 `clientHash`。
+- Emulator 與 staging 手動測試涵蓋中斷、來源版本改變、缺筆、多筆及 hash 不符；沒有接管讀取，也沒有接入 `uploadOwnerState()`。
+
 ## 20.26.59（僅 staging 手動逐筆影子接線）
 
 - 新增 staging Owner-only 的手動 record-shadow 寫入與診斷入口。

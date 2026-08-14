@@ -215,6 +215,85 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // verified run 與啟用指標位於公司 wildcard 外。它們只描述 staging 影子資料，
+    // 不會改變目前讀取來源；啟用指標仍須與 legacy 主文件的 clientHash 完全一致。
+    match /stagingRecordShadowRuns/{companyId}/runs/{runId} {
+      allow read: if isOwner() && companyId == 'danbridge';
+      allow create: if isOwner()
+        && companyId == 'danbridge'
+        && request.resource.data.keys().hasOnly([
+          'schema','companyId','environment','state','runId','sourceHash',
+          'documentCount','activeCount','tombstoneCount','createdAt','createdBy','createdByEmail'
+        ])
+        && request.resource.data.schema == 'danbridge-record-shadow-run-v1'
+        && request.resource.data.companyId == companyId
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.state == 'writing'
+        && request.resource.data.runId == runId
+        && request.resource.data.sourceHash is string
+        && request.resource.data.sourceHash.size() > 0
+        && request.resource.data.documentCount is int
+        && request.resource.data.activeCount is int
+        && request.resource.data.tombstoneCount is int
+        && request.resource.data.documentCount >= 0
+        && request.resource.data.activeCount >= 0
+        && request.resource.data.tombstoneCount >= 0
+        && request.resource.data.documentCount == request.resource.data.activeCount + request.resource.data.tombstoneCount
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdByEmail == emailKey();
+      allow update: if isOwner()
+        && companyId == 'danbridge'
+        && resource.data.state == 'writing'
+        && request.resource.data.keys().hasOnly([
+          'schema','companyId','environment','state','runId','sourceHash',
+          'documentCount','activeCount','tombstoneCount','createdAt','createdBy','createdByEmail',
+          'verifiedHash','verifiedAt','verifiedBy','verifiedByEmail'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'state','verifiedHash','verifiedAt','verifiedBy','verifiedByEmail'
+        ])
+        && request.resource.data.state == 'verified'
+        && request.resource.data.verifiedHash == resource.data.sourceHash
+        && request.resource.data.verifiedAt == request.time
+        && request.resource.data.verifiedBy == request.auth.uid
+        && request.resource.data.verifiedByEmail == emailKey();
+      allow delete: if false;
+    }
+
+    match /stagingRecordShadowControls/{companyId} {
+      allow read: if isOwner() && companyId == 'danbridge';
+      allow create, update: if isOwner()
+        && companyId == 'danbridge'
+        && request.resource.data.keys().hasOnly([
+          'schema','companyId','environment','activeRunId','sourceHash','verifiedHash',
+          'documentCount','activeCount','tombstoneCount','activatedAt','activatedBy','activatedByEmail'
+        ])
+        && request.resource.data.schema == 'danbridge-record-shadow-activation-v1'
+        && request.resource.data.companyId == companyId
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.activeRunId is string
+        && request.resource.data.activeRunId.size() > 0
+        && request.resource.data.sourceHash is string
+        && request.resource.data.sourceHash.size() > 0
+        && request.resource.data.verifiedHash == request.resource.data.sourceHash
+        && request.resource.data.documentCount is int
+        && request.resource.data.activeCount is int
+        && request.resource.data.tombstoneCount is int
+        && request.resource.data.documentCount == request.resource.data.activeCount + request.resource.data.tombstoneCount
+        && request.resource.data.activatedAt == request.time
+        && request.resource.data.activatedBy == request.auth.uid
+        && request.resource.data.activatedByEmail == emailKey()
+        && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.state == 'verified'
+        && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.sourceHash == request.resource.data.sourceHash
+        && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.verifiedHash == request.resource.data.verifiedHash
+        && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.documentCount == request.resource.data.documentCount
+        && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.activeCount == request.resource.data.activeCount
+        && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.tombstoneCount == request.resource.data.tombstoneCount
+        && get(/databases/$(database)/documents/companies/$(companyId)/data/main).data.clientHash == request.resource.data.sourceHash;
+      allow delete: if false;
+    }
+
     // Owner 對公司命名空間具有完整權限。Firestore 會將重疊 match 以 OR 判斷，
     // 因此 lessonMeta、lessonReports、teacherViews 等新增子集合不會因漏寫 match 而阻擋 Owner。
     match /companies/{companyId}/{document=**} {

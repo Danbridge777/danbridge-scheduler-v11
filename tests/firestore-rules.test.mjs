@@ -19,6 +19,7 @@ import {
   setDoc,
   updateDoc
 } from 'firebase/firestore';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun} from '../js/core/cloud-record-shadow-run.js';
 
 const PROJECT_ID = 'danbridge-rules-test';
 const COMPANY_ID = 'danbridge';
@@ -685,5 +686,92 @@ describe('staging 逐筆影子資料權限', () => {
     await assertFails(setDoc(recordRef,{...payload('lessons'),revision:3,record:{id:'record-1',note:'跳號'}}));
     await assertSucceeds(setDoc(recordRef,{...payload('lessons'),revision:2,deleted:true,record:{id:'record-1'}}));
     await assertFails(deleteDoc(recordRef));
+  });
+});
+
+describe('staging record-shadow verified run 與原子啟用', () => {
+  const runPath=id=>`stagingRecordShadowRuns/${COMPANY_ID}/runs/${id}`;
+  const controlPath=`stagingRecordShadowControls/${COMPANY_ID}`;
+  const writingRun=(id='run-1',overrides={})=>({
+    schema:'danbridge-record-shadow-run-v1',companyId:COMPANY_ID,environment:'staging',state:'writing',
+    runId:id,sourceHash:'hash-v1',documentCount:3,activeCount:2,tombstoneCount:1,
+    createdAt:serverTimestamp(),createdBy:'owner-uid',createdByEmail:OWNER_EMAIL,...overrides
+  });
+  const verifiedFields={state:'verified',verifiedHash:'hash-v1',verifiedAt:serverTimestamp(),verifiedBy:'owner-uid',verifiedByEmail:OWNER_EMAIL};
+  const activation=(runId='run-1',overrides={})=>({
+    schema:'danbridge-record-shadow-activation-v1',companyId:COMPANY_ID,environment:'staging',
+    activeRunId:runId,sourceHash:'hash-v1',verifiedHash:'hash-v1',documentCount:3,activeCount:2,tombstoneCount:1,
+    activatedAt:serverTimestamp(),activatedBy:'owner-uid',activatedByEmail:OWNER_EMAIL,...overrides
+  });
+
+  test('只有 Owner 可讀寫，且 run/control 均禁止實體刪除', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),runRef=doc(owner,runPath('role-run'));
+    await assertSucceeds(setDoc(runRef,writingRun('role-run')));
+    await assertSucceeds(getDoc(runRef));
+    for(const db of [unauthenticated(),auth('teacher-uid',TEACHER_EMAIL),auth('manager-uid',MANAGER_EMAIL),auth('scheduler-uid',SECOND_SCHEDULER_EMAIL)]){
+      await assertFails(getDoc(doc(db,runPath('role-run'))));
+      await assertFails(setDoc(doc(db,runPath('forbidden')),writingRun('forbidden')));
+      await assertFails(setDoc(doc(db,controlPath),activation('role-run')));
+    }
+    await assertFails(deleteDoc(runRef));
+  });
+
+  test('中斷 writing run、hash 不符、缺筆或多筆計數都不能啟用', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),mainRef=doc(owner,`companies/${COMPANY_ID}/data/main`),runRef=doc(owner,runPath('run-1')),controlRef=doc(owner,controlPath);
+    await setDoc(mainRef,{db:{},clientHash:'hash-v1'});
+    await assertSucceeds(setDoc(runRef,writingRun()));
+    await assertFails(setDoc(controlRef,activation()));
+    await assertFails(updateDoc(runRef,{...verifiedFields,verifiedHash:'wrong-hash'}));
+    await assertSucceeds(updateDoc(runRef,verifiedFields));
+    await assertFails(setDoc(controlRef,activation('run-1',{sourceHash:'wrong-hash',verifiedHash:'wrong-hash'})));
+    await assertFails(setDoc(controlRef,activation('run-1',{documentCount:2,activeCount:1,tombstoneCount:1})));
+    await assertFails(setDoc(controlRef,activation('run-1',{documentCount:4,activeCount:3,tombstoneCount:1})));
+  });
+
+  test('Emulator 實際逐筆讀回的缺筆、多筆與文件 hash 不符都不能 verified', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),manifest=buildRecordShadowRunManifest({runId:'readback',sourceHash:'hash-v1',documentCount:2,activeCount:2,tombstoneCount:0});
+    const record=(id,sourceHash='hash-v1',revision=1)=>({companyId:COMPANY_ID,collection:'lessons',recordId:id,record:{id},sourceHash,revision,deleted:false,environment:'staging',updatedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL});
+    const records=collection(owner,`stagingRecordShadows/${COMPANY_ID}/collections/lessons/records`);
+    const readback=async()=>{
+      const rows=(await getDocs(records)).docs.map(row=>row.data()),hashes=new Set(rows.map(row=>row.sourceHash));
+      return{runId:'readback',sourceHash:hashes.size===1?[...hashes][0]:'mixed-hash',documentCount:rows.length,activeCount:rows.filter(row=>!row.deleted).length,tombstoneCount:rows.filter(row=>row.deleted).length};
+    };
+    await setDoc(doc(records,'one'),record('one'));
+    let actual=await readback();assert.throws(()=>verifyRecordShadowRun(manifest,actual),/文件數/);
+    await setDoc(doc(records,'two'),record('two'));
+    await setDoc(doc(records,'three'),record('three'));
+    actual=await readback();assert.throws(()=>verifyRecordShadowRun(manifest,actual),/文件數/);
+    await assertFails(deleteDoc(doc(records,'three')));
+    await testEnv.withSecurityRulesDisabled(async context=>deleteDoc(doc(context.firestore(),`stagingRecordShadows/${COMPANY_ID}/collections/lessons/records/three`)));
+    await setDoc(doc(records,'two'),record('two','hash-v2',2));
+    actual=await readback();assert.throws(()=>verifyRecordShadowRun(manifest,actual),/hash/);
+  });
+
+  test('來源版本改變會阻止啟用；恢復相同版本後才能原子建立小型控制文件', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),mainRef=doc(owner,`companies/${COMPANY_ID}/data/main`),runRef=doc(owner,runPath('run-atomic')),controlRef=doc(owner,controlPath);
+    await setDoc(mainRef,{db:{},clientHash:'hash-v1'});
+    await assertSucceeds(setDoc(runRef,writingRun('run-atomic')));
+    await assertSucceeds(updateDoc(runRef,verifiedFields));
+    await setDoc(mainRef,{db:{newer:true},clientHash:'hash-v2'});
+    await assertFails(setDoc(controlRef,activation('run-atomic')));
+    assert.equal((await getDoc(controlRef)).exists(),false);
+    await setDoc(mainRef,{db:{},clientHash:'hash-v1'});
+    await assertSucceeds(setDoc(controlRef,activation('run-atomic')));
+    const saved=(await getDoc(controlRef)).data();
+    assert.equal(saved.activeRunId,'run-atomic');
+    assert.equal(saved.sourceHash,'hash-v1');
+    await assertFails(deleteDoc(controlRef));
+  });
+
+  test('run identity、計數與 staging metadata 建立後不可改寫或重播 verified', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),runRef=doc(owner,runPath('immutable'));
+    await assertFails(setDoc(runRef,writingRun('immutable',{environment:'production'})));
+    await assertFails(setDoc(runRef,writingRun('other')));
+    await assertFails(setDoc(runRef,writingRun('immutable',{documentCount:4})));
+    await assertSucceeds(setDoc(runRef,writingRun('immutable')));
+    await assertFails(updateDoc(runRef,{sourceHash:'hash-v2'}));
+    await assertFails(updateDoc(runRef,{documentCount:4,activeCount:3}));
+    await assertSucceeds(updateDoc(runRef,verifiedFields));
+    await assertFails(updateDoc(runRef,{...verifiedFields,verifiedAt:serverTimestamp()}));
   });
 });
