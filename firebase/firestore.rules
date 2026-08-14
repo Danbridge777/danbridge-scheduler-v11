@@ -222,16 +222,18 @@ service cloud.firestore {
       allow create: if isOwner()
         && companyId == 'danbridge'
         && request.resource.data.keys().hasOnly([
-          'schema','companyId','environment','state','runId','sourceHash',
+          'schema','companyId','environment','state','runId','sourceHash','coreHash',
           'documentCount','activeCount','tombstoneCount','createdAt','createdBy','createdByEmail'
         ])
-        && request.resource.data.schema == 'danbridge-record-shadow-run-v1'
+        && request.resource.data.schema == 'danbridge-record-shadow-run-v2'
         && request.resource.data.companyId == companyId
         && request.resource.data.environment == 'staging'
         && request.resource.data.state == 'writing'
         && request.resource.data.runId == runId
         && request.resource.data.sourceHash is string
         && request.resource.data.sourceHash.size() > 0
+        && request.resource.data.coreHash is string
+        && request.resource.data.coreHash.size() > 0
         && request.resource.data.documentCount is int
         && request.resource.data.activeCount is int
         && request.resource.data.tombstoneCount is int
@@ -246,7 +248,7 @@ service cloud.firestore {
         && companyId == 'danbridge'
         && resource.data.state == 'writing'
         && request.resource.data.keys().hasOnly([
-          'schema','companyId','environment','state','runId','sourceHash',
+          'schema','companyId','environment','state','runId','sourceHash','coreHash',
           'documentCount','activeCount','tombstoneCount','createdAt','createdBy','createdByEmail',
           'verifiedHash','verifiedAt','verifiedBy','verifiedByEmail'
         ])
@@ -266,10 +268,10 @@ service cloud.firestore {
       allow create, update: if isOwner()
         && companyId == 'danbridge'
         && request.resource.data.keys().hasOnly([
-          'schema','companyId','environment','activeRunId','sourceHash','verifiedHash',
+          'schema','companyId','environment','activeRunId','sourceHash','verifiedHash','coreHash',
           'documentCount','activeCount','tombstoneCount','activatedAt','activatedBy','activatedByEmail'
         ])
-        && request.resource.data.schema == 'danbridge-record-shadow-activation-v1'
+        && request.resource.data.schema == 'danbridge-record-shadow-activation-v2'
         && request.resource.data.companyId == companyId
         && request.resource.data.environment == 'staging'
         && request.resource.data.activeRunId is string
@@ -277,6 +279,8 @@ service cloud.firestore {
         && request.resource.data.sourceHash is string
         && request.resource.data.sourceHash.size() > 0
         && request.resource.data.verifiedHash == request.resource.data.sourceHash
+        && request.resource.data.coreHash is string
+        && request.resource.data.coreHash.size() > 0
         && request.resource.data.documentCount is int
         && request.resource.data.activeCount is int
         && request.resource.data.tombstoneCount is int
@@ -287,6 +291,7 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.state == 'verified'
         && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.sourceHash == request.resource.data.sourceHash
         && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.verifiedHash == request.resource.data.verifiedHash
+        && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.coreHash == request.resource.data.coreHash
         && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.documentCount == request.resource.data.documentCount
         && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.activeCount == request.resource.data.activeCount
         && get(/databases/$(database)/documents/stagingRecordShadowRuns/$(companyId)/runs/$(request.resource.data.activeRunId)).data.tombstoneCount == request.resource.data.tombstoneCount

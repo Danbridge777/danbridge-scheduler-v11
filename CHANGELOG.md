@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.61（僅 staging record-shadow v2 coreHash）
+
+- 將整份公司資料的 `sourceHash` 與 lessons／students／teachers 可獨立重算的 `coreHash` 分離。
+- v1 run／control 明確不具讀取候選資格；v2 必須同時通過完整來源版本、核心內容、筆數與墓碑數驗證。
+- 仍未接管讀取、未接入 `uploadOwnerState()`，僅供 Emulator 與 staging 安全驗證。
+
 ## 20.26.60（僅 staging record-shadow verified run 與原子啟用控制）
 
 - 新增 Owner 專用、不可實體刪除的 record-shadow run manifest，只有完整讀回驗證後才能由 `writing` 單向轉為 `verified`。

@@ -40,6 +40,6 @@ export async function executeRecordShadowBatches(plan,{writeBatch,readState,targ
   }
   completedBatches++;completedWrites+=batch.writes;
  }
- const verification=verifyRecordShadowTarget(await readState(),targetDb);
- return{writes:completedWrites,batches:completedBatches,...verification};
+ const state=await readState(),verification=verifyRecordShadowTarget(state,targetDb);
+ return{writes:completedWrites,batches:completedBatches,...verification,state};
 }

@@ -693,14 +693,14 @@ describe('staging record-shadow verified run 與原子啟用', () => {
   const runPath=id=>`stagingRecordShadowRuns/${COMPANY_ID}/runs/${id}`;
   const controlPath=`stagingRecordShadowControls/${COMPANY_ID}`;
   const writingRun=(id='run-1',overrides={})=>({
-    schema:'danbridge-record-shadow-run-v1',companyId:COMPANY_ID,environment:'staging',state:'writing',
-    runId:id,sourceHash:'hash-v1',documentCount:3,activeCount:2,tombstoneCount:1,
+    schema:'danbridge-record-shadow-run-v2',companyId:COMPANY_ID,environment:'staging',state:'writing',
+    runId:id,sourceHash:'hash-v1',coreHash:'core-v1',documentCount:3,activeCount:2,tombstoneCount:1,
     createdAt:serverTimestamp(),createdBy:'owner-uid',createdByEmail:OWNER_EMAIL,...overrides
   });
   const verifiedFields={state:'verified',verifiedHash:'hash-v1',verifiedAt:serverTimestamp(),verifiedBy:'owner-uid',verifiedByEmail:OWNER_EMAIL};
   const activation=(runId='run-1',overrides={})=>({
-    schema:'danbridge-record-shadow-activation-v1',companyId:COMPANY_ID,environment:'staging',
-    activeRunId:runId,sourceHash:'hash-v1',verifiedHash:'hash-v1',documentCount:3,activeCount:2,tombstoneCount:1,
+    schema:'danbridge-record-shadow-activation-v2',companyId:COMPANY_ID,environment:'staging',
+    activeRunId:runId,sourceHash:'hash-v1',verifiedHash:'hash-v1',coreHash:'core-v1',documentCount:3,activeCount:2,tombstoneCount:1,
     activatedAt:serverTimestamp(),activatedBy:'owner-uid',activatedByEmail:OWNER_EMAIL,...overrides
   });
 
@@ -729,12 +729,12 @@ describe('staging record-shadow verified run 與原子啟用', () => {
   });
 
   test('Emulator 實際逐筆讀回的缺筆、多筆與文件 hash 不符都不能 verified', async () => {
-    const owner=auth('owner-uid',OWNER_EMAIL),manifest=buildRecordShadowRunManifest({runId:'readback',sourceHash:'hash-v1',documentCount:2,activeCount:2,tombstoneCount:0});
+    const owner=auth('owner-uid',OWNER_EMAIL),manifest=buildRecordShadowRunManifest({runId:'readback',sourceHash:'hash-v1',coreHash:'core-v1',documentCount:2,activeCount:2,tombstoneCount:0});
     const record=(id,sourceHash='hash-v1',revision=1)=>({companyId:COMPANY_ID,collection:'lessons',recordId:id,record:{id},sourceHash,revision,deleted:false,environment:'staging',updatedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL});
     const records=collection(owner,`stagingRecordShadows/${COMPANY_ID}/collections/lessons/records`);
     const readback=async()=>{
       const rows=(await getDocs(records)).docs.map(row=>row.data()),hashes=new Set(rows.map(row=>row.sourceHash));
-      return{runId:'readback',sourceHash:hashes.size===1?[...hashes][0]:'mixed-hash',documentCount:rows.length,activeCount:rows.filter(row=>!row.deleted).length,tombstoneCount:rows.filter(row=>row.deleted).length};
+      return{runId:'readback',sourceHash:hashes.size===1?[...hashes][0]:'mixed-hash',coreHash:'core-v1',documentCount:rows.length,activeCount:rows.filter(row=>!row.deleted).length,tombstoneCount:rows.filter(row=>row.deleted).length};
     };
     await setDoc(doc(records,'one'),record('one'));
     let actual=await readback();assert.throws(()=>verifyRecordShadowRun(manifest,actual),/文件數/);
@@ -765,7 +765,9 @@ describe('staging record-shadow verified run 與原子啟用', () => {
 
   test('run identity、計數與 staging metadata 建立後不可改寫或重播 verified', async () => {
     const owner=auth('owner-uid',OWNER_EMAIL),runRef=doc(owner,runPath('immutable'));
+    await assertFails(setDoc(runRef,writingRun('immutable',{schema:'danbridge-record-shadow-run-v1'})));
     await assertFails(setDoc(runRef,writingRun('immutable',{environment:'production'})));
+    await assertFails(setDoc(runRef,writingRun('immutable',{coreHash:''})));
     await assertFails(setDoc(runRef,writingRun('other')));
     await assertFails(setDoc(runRef,writingRun('immutable',{documentCount:4})));
     await assertSucceeds(setDoc(runRef,writingRun('immutable')));
@@ -773,5 +775,17 @@ describe('staging record-shadow verified run 與原子啟用', () => {
     await assertFails(updateDoc(runRef,{documentCount:4,activeCount:3}));
     await assertSucceeds(updateDoc(runRef,verifiedFields));
     await assertFails(updateDoc(runRef,{...verifiedFields,verifiedAt:serverTimestamp()}));
+  });
+
+  test('v1 或缺少、偽造 coreHash 的控制文件一律拒絕', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),mainRef=doc(owner,`companies/${COMPANY_ID}/data/main`),runRef=doc(owner,runPath('core-hash')),controlRef=doc(owner,controlPath);
+    await setDoc(mainRef,{db:{},clientHash:'hash-v1'});
+    await setDoc(runRef,writingRun('core-hash'));
+    await updateDoc(runRef,verifiedFields);
+    await assertFails(setDoc(controlRef,activation('core-hash',{schema:'danbridge-record-shadow-activation-v1'})));
+    const missing=activation('core-hash');delete missing.coreHash;
+    await assertFails(setDoc(controlRef,missing));
+    await assertFails(setDoc(controlRef,activation('core-hash',{coreHash:'forged'})));
+    await assertSucceeds(setDoc(controlRef,activation('core-hash')));
   });
 });

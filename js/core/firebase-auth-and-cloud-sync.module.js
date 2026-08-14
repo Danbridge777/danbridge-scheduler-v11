@@ -1,9 +1,10 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.60';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.60';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation} from './cloud-record-shadow-run.js?v=20.26.60';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.61';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.61';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.61';
+import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.61';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -16,7 +17,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.60';
+const APP_RELEASE='20.26.61';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1776,12 +1777,12 @@ function expectedRecordShadowRunCounts(current,targetDb){
 }
 async function createVerifiedStagingRecordShadowRun(targetDb,{interrupt=false,readbackMutation}={}){
  stagingRecordShadowGuard();
- const adapter=firestoreRecordShadowAdapter(),current=await adapter.readState(),sourceHash=dataHash(targetDb),runRef=doc(collection(cloud,'stagingRecordShadowRuns',COMPANY_ID,'runs'));
- const manifest=buildRecordShadowRunManifest({runId:runRef.id,sourceHash,...expectedRecordShadowRunCounts(current,targetDb)});
+ const adapter=firestoreRecordShadowAdapter(),current=await adapter.readState(),sourceHash=dataHash(targetDb),coreHash=dataHash(canonicalRecordShadowCore(targetDb)),runRef=doc(collection(cloud,'stagingRecordShadowRuns',COMPANY_ID,'runs'));
+ const manifest=buildRecordShadowRunManifest({runId:runRef.id,sourceHash,coreHash,...expectedRecordShadowRunCounts(current,targetDb)});
  await setDoc(runRef,{...manifest,companyId:COMPANY_ID,createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false});
  if(interrupt)return{runId:runRef.id,manifest,interrupted:true};
  const result=await adapter.synchronize(targetDb,{sourceHash});
- let readback={runId:runRef.id,sourceHash,documentCount:result.activeCount+result.tombstoneCount,activeCount:result.activeCount,tombstoneCount:result.tombstoneCount};
+ let readback={runId:runRef.id,sourceHash,coreHash:dataHash(canonicalRecordShadowCore(result.state.db)),documentCount:result.activeCount+result.tombstoneCount,activeCount:result.activeCount,tombstoneCount:result.tombstoneCount};
  if(typeof readbackMutation==='function')readback=readbackMutation({...readback});
  const verified=verifyRecordShadowRun(manifest,readback);
  await setDoc(runRef,{state:'verified',verifiedHash:verified.verifiedHash,verifiedAt:serverTimestamp(),verifiedBy:cloudUid,verifiedByEmail:cloudEmailKey},{merge:true});
@@ -1807,7 +1808,8 @@ async function runStagingRecordShadowRunScenario(){
  for(const [name,readbackMutation] of [
   ['missing',value=>({...value,documentCount:value.documentCount-1,activeCount:Math.max(0,value.activeCount-1)})],
   ['extra',value=>({...value,documentCount:value.documentCount+1,tombstoneCount:value.tombstoneCount+1})],
-  ['hashMismatch',value=>({...value,sourceHash:value.sourceHash+'-mismatch'})]
+  ['hashMismatch',value=>({...value,sourceHash:value.sourceHash+'-mismatch'})],
+  ['coreHashMismatch',value=>({...value,coreHash:value.coreHash+'-mismatch'})]
  ]){
   try{await createVerifiedStagingRecordShadowRun(target,{readbackMutation});results[name]={blocked:false}}
   catch(error){results[name]={blocked:true,error:String(error?.message||error)}}
@@ -1816,7 +1818,9 @@ async function runStagingRecordShadowRunScenario(){
  const stale=await createVerifiedStagingRecordShadowRun(changed);results.versionChanged={runId:stale.runId,blocked:false};
  try{await activateVerifiedStagingRecordShadowRun(stale.runId,{forceRulesVersionCheck:true})}catch(error){results.versionChanged={...results.versionChanged,blocked:true,error:String(error?.message||error)}}
  const verified=await createVerifiedStagingRecordShadowRun(target),activation=await activateVerifiedStagingRecordShadowRun(verified.runId);
- results.success={runId:verified.runId,verified:true,activated:true,sourceHash:activation.sourceHash,documentCount:activation.documentCount,activeCount:activation.activeCount,tombstoneCount:activation.tombstoneCount};
+ const [controlSnap,runSnap,mainSnap,shadowReadback]=await Promise.all([getDoc(doc(cloud,'stagingRecordShadowControls',COMPANY_ID)),getDoc(doc(cloud,'stagingRecordShadowRuns',COMPANY_ID,'runs',verified.runId)),getDoc(doc(cloud,'companies',COMPANY_ID,'data','main')),firestoreRecordShadowAdapter().readState()]);
+ const candidate=evaluateRecordShadowReadCandidate({activation:controlSnap.data(),run:runSnap.data(),readback:shadowReadback,currentSourceHash:String(mainSnap.data()?.clientHash||''),hashCore:value=>dataHash(canonicalRecordShadowCore(value))});
+ results.success={runId:verified.runId,verified:true,activated:true,candidateEligible:candidate.eligible,candidateReason:candidate.reason,sourceHash:activation.sourceHash,coreHash:activation.coreHash,documentCount:activation.documentCount,activeCount:activation.activeCount,tombstoneCount:activation.tombstoneCount};
  return results;
 }
 if(DANBRIDGE_ENVIRONMENT==='staging'){

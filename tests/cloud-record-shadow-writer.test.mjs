@@ -31,7 +31,8 @@ test('協調器嚴格依序寫入並在全部批次後讀回驗證',async()=>{
  const store=memoryShadowStore(),events=[];
  const result=await executeRecordShadowBatches(plan,{writeBatch:async operations=>{events.push(`write-${operations.length}`);await store.writeBatch(operations)},readState:async()=>{events.push('verify');return store.readState()},targetDb:target});
  assert.deepEqual(events,['write-2','write-2','write-1','verify']);
- assert.deepEqual(result,{writes:5,batches:3,verified:true,activeCount:5,tombstoneCount:0});
+ assert.deepEqual({...result,state:undefined},{writes:5,batches:3,verified:true,activeCount:5,tombstoneCount:0,state:undefined});
+ assert.deepEqual(result.state.db,target);
 });
 
 test('第二批失敗立即停止，不執行第三批也不宣告驗證成功',async()=>{
