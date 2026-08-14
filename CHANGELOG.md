@@ -1,5 +1,12 @@
 # Changelog
 
+## 20.26.70（staging 不可覆寫備份隔離復原演練）
+
+- 從指定 v2 verified immutable backup 重新讀取全部 Firestore 分片、驗證 SHA-256，再只寫入 staging restore-drill 沙盒。
+- 沙盒寫完後再次雲端讀回重組，只有來源與復原 SHA-256、分片數、總筆數一致且主文件版本前後未變，才建立不可覆寫 verified receipt。
+- 提供獨立 receipt 讀回驗證入口，重新整理後仍會重新查詢來源備份、沙盒分片、receipt 與主文件版本，不依賴前一次記憶體結果。
+- 不寫入主文件、不接管讀取、不掛入 `uploadOwnerState()`；production 不部署。
+
 ## 20.26.68（staging 遷移前不可覆寫備份）
 
 - 新增位於公司 Owner 萬用寫入範圍之外的 staging 遷移備份；分片與 verified manifest 建立後，Owner 也不能更新或刪除。

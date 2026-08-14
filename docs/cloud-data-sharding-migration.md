@@ -48,3 +48,11 @@
 - 完整性雜湊必須是 canonical JSON 的 64 字元 SHA-256；早期 v1 非加密雜湊 run 不具最終遷移保護點資格。
 - 分片全部寫完後必須從 Firestore 重新讀回並重組 16 個集合；來源版本、SHA-256、集合筆數、總筆數或分片數任一不符，皆不得建立 verified manifest。
 - 目前仍是 staging Owner 手動入口，未接入 `uploadOwnerState()`、未接管讀取，也未部署 production。
+
+## staging 隔離復原演練
+
+- 只接受 v2 verified immutable backup ID，先重新讀取 manifest 與全部來源分片並驗證 SHA-256。
+- 重建的 16 集合只寫入頂層 `stagingMigrationRestoreDrills` 沙盒，不寫入 `companies/danbridge/data/main`。
+- 沙盒分片寫完後再次從 Firestore 讀回、重組、核對集合筆數、總筆數與 SHA-256。
+- 演練前後主文件 `clientHash` 必須相同；任何版本變動都不建立 verified receipt。
+- 沙盒分片與 receipt 同樣只能建立，Owner 不能更新或刪除；老師、排課專員與校區管理者不能讀取。

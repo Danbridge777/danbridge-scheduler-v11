@@ -822,4 +822,23 @@ describe('staging record-shadow verified run 與原子啟用', () => {
     await assertFails(deleteDoc(manifestRef));
     await assertFails(getDoc(doc(teacher,`stagingMigrationBackups/${COMPANY_ID}/runs/${backupId}`)));
   });
+
+  test('隔離復原沙盒與 verified receipt 不能覆寫、刪除或由老師讀取', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),drillId='restore-drill-1',sha='b'.repeat(64);
+    const chunkRef=doc(owner,`stagingMigrationRestoreDrills/${COMPANY_ID}/runs/${drillId}/chunks/lessons-0000`);
+    const chunk={schema:'danbridge-immutable-migration-backup-chunk-v2',environment:'staging',backupId:drillId,sourceBackupId:'source-backup-1',chunkId:'lessons-0000',collection:'lessons',index:0,items:[{id:'lesson-1'}],sourceHash:sha,sourceVersionHash:'legacy-hash-v1',createdAt:serverTimestamp(),createdBy:'owner-uid',createdByEmail:OWNER_EMAIL};
+    await assertSucceeds(setDoc(chunkRef,chunk));
+    await assertFails(updateDoc(chunkRef,{items:[]}));
+    await assertFails(deleteDoc(chunkRef));
+    await assertFails(getDoc(doc(teacher,`stagingMigrationRestoreDrills/${COMPANY_ID}/runs/${drillId}/chunks/lessons-0000`)));
+
+    const receiptRef=doc(owner,`stagingMigrationRestoreDrills/${COMPANY_ID}/runs/${drillId}`);
+    const receipt={schema:'danbridge-migration-restore-drill-v1',environment:'staging',state:'verified',drillId,sourceBackupId:'source-backup-1',sourceHash:sha,restoredHash:sha,sourceChunkCount:1,restoredChunkCount:1,recordCount:1,collections:{lessons:{count:1,chunks:1}},mainVersionHash:'legacy-hash-v1',mainUnchanged:true,verifiedAt:serverTimestamp(),verifiedBy:'owner-uid',verifiedByEmail:OWNER_EMAIL};
+    await assertFails(setDoc(doc(owner,`stagingMigrationRestoreDrills/${COMPANY_ID}/runs/wrong-hash`),{...receipt,drillId:'wrong-hash',restoredHash:'c'.repeat(64)}));
+    await assertFails(setDoc(doc(owner,`stagingMigrationRestoreDrills/${COMPANY_ID}/runs/main-changed`),{...receipt,drillId:'main-changed',mainUnchanged:false}));
+    await assertSucceeds(setDoc(receiptRef,receipt));
+    await assertFails(updateDoc(receiptRef,{recordCount:2}));
+    await assertFails(deleteDoc(receiptRef));
+    await assertFails(getDoc(doc(teacher,`stagingMigrationRestoreDrills/${COMPANY_ID}/runs/${drillId}`)));
+  });
 });

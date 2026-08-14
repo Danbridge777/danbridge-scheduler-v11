@@ -1,11 +1,11 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.68';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.68';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.68';
-import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.68';
-import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.68';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.70';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.70';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.70';
+import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.70';
+import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.70';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -18,7 +18,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.68';
+const APP_RELEASE='20.26.70';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1915,6 +1915,82 @@ if(DANBRIDGE_ENVIRONMENT==='staging'){
  const migrationBackupTest=new URLSearchParams(location.search).get('migrationBackupTest');
  if(migrationBackupTest==='verified'){
   let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingMigrationBackupTestResult=JSON.stringify(await createVerifiedStagingMigrationBackup())}catch(error){document.body.dataset.stagingMigrationBackupTestResult=JSON.stringify({error:String(error?.message||error),diagnostic:stagingMigrationBackupDiagnostic})}},200);
+ }
+}
+
+let stagingMigrationRestoreDiagnostic={state:'idle',drillId:'',sourceBackupId:'',sourceHash:'',chunkCount:0,recordCount:0,completedChunks:0,verified:false,mainUnchanged:false,error:''};
+function setStagingMigrationRestoreDiagnostic(next){
+ stagingMigrationRestoreDiagnostic={...stagingMigrationRestoreDiagnostic,...next};
+ document.body.dataset.stagingMigrationRestoreState=stagingMigrationRestoreDiagnostic.state;
+}
+async function runStagingMigrationRestoreDrill(sourceBackupId){
+ stagingMigrationBackupGuard();
+ const backupId=String(sourceBackupId||'').trim();if(!/^[A-Za-z0-9_-]{8,128}$/.test(backupId))throw new Error('復原演練 backupId 無效');
+ const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main'),backupRef=doc(cloud,'stagingMigrationBackups',COMPANY_ID,'runs',backupId);
+ const [mainBeforeSnap,backupSnap,sourceChunksSnap]=await Promise.all([getDoc(mainRef),getDoc(backupRef),getDocs(collection(cloud,'stagingMigrationBackups',COMPANY_ID,'runs',backupId,'chunks'))]);
+ if(!mainBeforeSnap.exists()||!backupSnap.exists())throw new Error('主資料或 verified 備份不存在');
+ const backup=backupSnap.data();verifyImmutableMigrationBackupManifest(backup,{currentSourceHash:backup.sourceHash});
+ const sourcePlan={...deepCopy(backup),state:'uploading'};
+ const sourceReadback=verifyImmutableMigrationBackupReadback(sourcePlan,sourceChunksSnap.docs.map(row=>row.data()));
+ if(sourceReadback.verifiedHash!==backup.sourceHash)throw new Error('來源備份重新讀回 SHA-256 不符');
+ const drillRef=doc(collection(cloud,'stagingMigrationRestoreDrills',COMPANY_ID,'runs'));
+ const {plan,chunks}=prepareImmutableMigrationBackup(sourceReadback.db,{backupId:drillRef.id,sourceVersionHash:backup.sourceVersionHash});
+ if(plan.sourceHash!==backup.sourceHash||plan.recordCount!==backup.recordCount)throw new Error('復原沙盒規劃與來源備份不一致');
+ setStagingMigrationRestoreDiagnostic({state:'writing',drillId:drillRef.id,sourceBackupId:backupId,sourceHash:backup.sourceHash,chunkCount:chunks.length,recordCount:plan.recordCount,completedChunks:0,verified:false,mainUnchanged:false,error:''});
+ try{
+  for(let offset=0;offset<chunks.length;offset+=100){
+   const batch=chunks.slice(offset,offset+100);
+   await runTransaction(cloud,async transaction=>{
+    const refs=batch.map(chunk=>doc(cloud,'stagingMigrationRestoreDrills',COMPANY_ID,'runs',drillRef.id,'chunks',chunk.chunkId));
+    const existing=await Promise.all(refs.map(ref=>transaction.get(ref)));
+    const duplicateIndex=existing.findIndex(snapshot=>snapshot.exists());if(duplicateIndex>=0)throw new Error(`復原沙盒分片已存在：${batch[duplicateIndex].chunkId}`);
+    batch.forEach((chunk,index)=>transaction.set(refs[index],{...chunk,sourceBackupId:backupId,createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false}));
+   });
+   setStagingMigrationRestoreDiagnostic({completedChunks:Math.min(offset+batch.length,chunks.length)});
+  }
+  setStagingMigrationRestoreDiagnostic({state:'verifying'});
+  const [sandboxChunksSnap,mainAfterSnap]=await Promise.all([getDocs(collection(cloud,'stagingMigrationRestoreDrills',COMPANY_ID,'runs',drillRef.id,'chunks')),getDoc(mainRef)]);
+  const restored=verifyImmutableMigrationBackupReadback(plan,sandboxChunksSnap.docs.map(row=>row.data()));
+  const mainVersionHash=String(mainBeforeSnap.data()?.clientHash||''),mainAfterHash=String(mainAfterSnap.data()?.clientHash||'');
+  if(!mainVersionHash||mainAfterHash!==mainVersionHash)throw new Error('復原演練期間主文件版本改變，不建立 verified receipt');
+  if(restored.verifiedHash!==backup.sourceHash)throw new Error('復原沙盒 SHA-256 與來源備份不一致');
+  const receipt={schema:'danbridge-migration-restore-drill-v1',environment:'staging',state:'verified',drillId:drillRef.id,sourceBackupId:backupId,sourceHash:backup.sourceHash,restoredHash:restored.verifiedHash,sourceChunkCount:backup.chunkCount,restoredChunkCount:sandboxChunksSnap.size,recordCount:restored.recordCount,collections:deepCopy(backup.collections),mainVersionHash,mainUnchanged:true,verifiedAt:serverTimestamp(),verifiedBy:cloudUid,verifiedByEmail:cloudEmailKey};
+  await setDoc(drillRef,receipt,{merge:false});
+  setStagingMigrationRestoreDiagnostic({state:'verified',verified:true,completedChunks:chunks.length,mainUnchanged:true});
+  return{drillId:drillRef.id,sourceBackupId:backupId,sourceHash:backup.sourceHash,restoredHash:restored.verifiedHash,sourceChunkCount:backup.chunkCount,restoredChunkCount:sandboxChunksSnap.size,recordCount:restored.recordCount,collections:deepCopy(backup.collections),mainVersionHash,mainUnchanged:true};
+ }catch(error){
+  setStagingMigrationRestoreDiagnostic({state:'failed',verified:false,error:String(error?.message||error).slice(0,500)});
+  throw error;
+ }
+}
+async function verifyStagingMigrationRestoreReceipt(drillIdValue){
+ stagingMigrationBackupGuard();
+ const drillId=String(drillIdValue||'').trim();if(!/^[A-Za-z0-9_-]{8,128}$/.test(drillId))throw new Error('復原演練 drillId 無效');
+ const receiptRef=doc(cloud,'stagingMigrationRestoreDrills',COMPANY_ID,'runs',drillId);
+ const receiptSnap=await getDoc(receiptRef);if(!receiptSnap.exists())throw new Error('復原演練 receipt 不存在');
+ const receipt=receiptSnap.data();
+ if(receipt.schema!=='danbridge-migration-restore-drill-v1'||receipt.environment!=='staging'||receipt.state!=='verified'||receipt.drillId!==drillId||receipt.mainUnchanged!==true)throw new Error('復原演練 receipt 狀態無效');
+ const [backupSnap,chunksSnap,mainSnap]=await Promise.all([getDoc(doc(cloud,'stagingMigrationBackups',COMPANY_ID,'runs',receipt.sourceBackupId)),getDocs(collection(cloud,'stagingMigrationRestoreDrills',COMPANY_ID,'runs',drillId,'chunks')),getDoc(doc(cloud,'companies',COMPANY_ID,'data','main'))]);
+ if(!backupSnap.exists()||!mainSnap.exists())throw new Error('來源備份或主資料不存在');
+ const backup=backupSnap.data();verifyImmutableMigrationBackupManifest(backup,{currentSourceHash:backup.sourceHash});
+ const plan={...deepCopy(backup),backupId:drillId,state:'uploading'};
+ const restored=verifyImmutableMigrationBackupReadback(plan,chunksSnap.docs.map(row=>row.data()));
+ if(receipt.sourceHash!==backup.sourceHash||receipt.restoredHash!==restored.verifiedHash||receipt.sourceHash!==receipt.restoredHash)throw new Error('持久化 receipt SHA-256 不符');
+ if(receipt.sourceChunkCount!==backup.chunkCount||receipt.restoredChunkCount!==chunksSnap.size||receipt.recordCount!==restored.recordCount)throw new Error('持久化 receipt 分片或筆數不符');
+ if(String(mainSnap.data()?.clientHash||'')!==receipt.mainVersionHash)throw new Error('receipt 建立後主文件版本已改變');
+ return{drillId,sourceBackupId:receipt.sourceBackupId,sourceHash:receipt.sourceHash,restoredHash:receipt.restoredHash,sourceChunkCount:receipt.sourceChunkCount,restoredChunkCount:receipt.restoredChunkCount,recordCount:receipt.recordCount,mainVersionHash:receipt.mainVersionHash,mainUnchanged:true,persisted:true};
+}
+if(DANBRIDGE_ENVIRONMENT==='staging'){
+ window.__danbridgeRunStagingMigrationRestoreDrill=runStagingMigrationRestoreDrill;
+ window.__danbridgeVerifyStagingMigrationRestoreReceipt=verifyStagingMigrationRestoreReceipt;
+ window.__danbridgeGetStagingMigrationRestoreDiagnostic=()=>{stagingMigrationBackupGuard();return deepCopy(stagingMigrationRestoreDiagnostic)};
+ const migrationRestoreDrill=new URLSearchParams(location.search).get('migrationRestoreDrill');
+ if(migrationRestoreDrill){
+  let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingMigrationRestoreTestResult=JSON.stringify(await runStagingMigrationRestoreDrill(migrationRestoreDrill))}catch(error){document.body.dataset.stagingMigrationRestoreTestResult=JSON.stringify({error:String(error?.message||error),diagnostic:stagingMigrationRestoreDiagnostic})}},200);
+ }
+ const migrationRestoreVerify=new URLSearchParams(location.search).get('migrationRestoreVerify');
+ if(migrationRestoreVerify){
+  let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingMigrationRestoreVerifyResult=JSON.stringify(await verifyStagingMigrationRestoreReceipt(migrationRestoreVerify))}catch(error){document.body.dataset.stagingMigrationRestoreVerifyResult=JSON.stringify({error:String(error?.message||error)})}},200);
  }
 }
 

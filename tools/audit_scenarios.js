@@ -319,7 +319,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:80},(_,i)=>({id:`l${i}`}))}).risky,true,'a large lesson reduction triggers the destructive-change guard');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.68'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.70'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -340,6 +340,9 @@ assert.match(cloudSource, /cloudCanManageSchedule[\s\S]*'quickParentName','quick
 assert.match(cloudSource, /function createVerifiedStagingMigrationBackup\(\)[\s\S]*stagingMigrationBackups[\s\S]*verifyImmutableMigrationBackupReadback[\s\S]*latestHash!==sourceHash[\s\S]*sealImmutableMigrationBackup/, 'staging migration backup is sealed only after cloud readback and an unchanged source version');
 assert.match(cloudSource, /const existing=await Promise\.all\(refs\.map\(ref=>transaction\.get\(ref\)\)\)[\s\S]*batch\.forEach\(\(chunk,index\)=>transaction\.set/, 'immutable backup transaction completes every read before the first write');
 assert.doesNotMatch(cloudSource, /function uploadOwnerState\(force=false\)[\s\S]{0,900}createVerifiedStagingMigrationBackup/, 'immutable migration backup is not attached to owner upload');
+assert.match(cloudSource, /function runStagingMigrationRestoreDrill\(sourceBackupId\)[\s\S]*stagingMigrationBackups[\s\S]*verifyImmutableMigrationBackupReadback[\s\S]*stagingMigrationRestoreDrills[\s\S]*mainAfterHash!==mainVersionHash[\s\S]*mainUnchanged:true/, 'restore drill re-reads the immutable backup, restores only to the sandbox and proves the main document stayed unchanged');
+assert.match(cloudSource, /function verifyStagingMigrationRestoreReceipt\(drillIdValue\)[\s\S]*receiptSnap[\s\S]*verifyImmutableMigrationBackupReadback[\s\S]*persisted:true/, 'a fresh page can independently read and verify the persisted restore receipt and sandbox');
+assert.doesNotMatch(cloudSource, /function uploadOwnerState\(force=false\)[\s\S]{0,900}runStagingMigrationRestoreDrill/, 'restore drill is not attached to owner upload');
 assert.match(cloudSource, /SCHEDULER_ACCOUNT_EMAILS\.has\(email\)[\s\S]*canManageSchedule:true,readOnly:false[\s\S]*schedulerViews/, 'owner publishing automatically repairs aa access and her dedicated scheduler view');
 assert.match(cloudSource, /RETIRED_SCHEDULER_ACCOUNT_EMAILS\.has\(email\)[\s\S]*canManageSchedule:deleteField\(\)[\s\S]*scopedDb:deleteField\(\)[\s\S]*teacherViews/, 'owner publishing fully deletes Wendy scheduler fields and restores her teacher-only view');
 assert.match(cloudSource, /if\(snapshotDecision==='unchanged'\)\{publishRoleViewsWithRetry\(incoming\);return\}/, 'owner login republishes role views from the verified current main snapshot even when it is unchanged');
