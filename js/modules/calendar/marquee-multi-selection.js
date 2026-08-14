@@ -44,8 +44,12 @@
 
   function toggleCard(card){
     const id=card?.dataset.id;if(!id)return;
+    const wasSelecting=selectionMode||selectedLessonIds.size>0;
     if(selectedLessonIds.has(id))selectedLessonIds.delete(id);else selectedLessonIds.add(id);
-    selectionMode=selectedLessonIds.size>0;updateSelectionCount();refresh();
+    selectionMode=selectedLessonIds.size>0;updateSelectionCount();
+    /* 單筆點選只更新目前卡片；避免每次都掃描畫面上全部課程而造成操作延遲。 */
+    card.classList.toggle('selected',selectedLessonIds.has(id));
+    if(!wasSelecting||!selectionMode)refresh();
   }
 
   function beginMarquee(event){

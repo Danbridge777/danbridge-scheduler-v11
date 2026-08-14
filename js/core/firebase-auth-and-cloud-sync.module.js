@@ -1,12 +1,12 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.74';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.74';
-import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.74';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.74';
-import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.74';
-import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.74';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.76';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.76';
+import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.76';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.76';
+import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.76';
+import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.76';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -19,7 +19,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.74';
+const APP_RELEASE='20.26.76';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -107,6 +107,7 @@ let ownerUploadInFlight=false;
 let ownerUploadQueued=false;
 let ownerRetryTimer=null;
 let ownerRetryCount=0;
+let ownerUploadCapacityBlocked=false;
 const scheduleNotificationDeliveryJobs=new Map();
 let roleViewPublishInFlight=false;
 let roleViewPublishQueued=false;
@@ -276,6 +277,11 @@ function ownerLessonShrinkRisk(beforeDb,afterDb){
  return{risky,before,after,removed,ratio:before?removed/before:0};
 }
 function ownerRetryDelay(retryCount){return Math.min(30000,1000*Math.pow(2,Math.min(Math.max(0,retryCount),5)))}
+function ownerMainDocumentBytes(sourceDb){return new TextEncoder().encode(JSON.stringify({db:sourceDb})).length}
+function ownerUploadCapacityError(error){
+ const code=String(error?.code||'').replace(/^firestore\//,'').toLowerCase(),message=String(error?.message||error||'').toLowerCase();
+ return code==='invalid-argument'&&(message.includes('maximum allowed size')||message.includes('exceeds the maximum')||message.includes('document')&&message.includes('size'));
+}
 function safeErrorCode(error){
  const raw=String(error?.code||error?.name||'unknown').toLowerCase();
  return raw.replace(/[^a-z0-9._/-]/g,'-').slice(0,80)||'unknown';
@@ -301,7 +307,7 @@ function flushOperationalErrors(){while(errorEventQueue.length)void sendOperatio
 window.addEventListener('error',event=>reportOperationalError(event.error||{name:'window-error'}));
 window.addEventListener('unhandledrejection',event=>reportOperationalError(event.reason||{name:'promise-rejection'},{area:'promise'}));
 function withSyncTimeout(promise,ms=15000){return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('雲端連線逾時，將自動重試')),ms))])}
-function scheduleOwnerRetry(){clearTimeout(ownerRetryTimer);if(cloudRole!=='owner'||!ownerUploadQueued)return;ownerRetryTimer=setTimeout(()=>uploadOwnerState(),ownerRetryDelay(ownerRetryCount))}
+function scheduleOwnerRetry(){clearTimeout(ownerRetryTimer);if(cloudRole!=='owner'||!ownerUploadQueued||ownerUploadCapacityBlocked)return;ownerRetryTimer=setTimeout(()=>uploadOwnerState(),ownerRetryDelay(ownerRetryCount))}
 function setOfflineStatus(){if(!navigator.onLine){cloudStatus('目前離線；所有變更已先保存在這台裝置，恢復網路後會自動同步。','offline')}}
 function setAuthCard(message='Sign in with your authorized Google account to continue.'){
  const screen=document.getElementById('authScreen');
@@ -2059,6 +2065,13 @@ async function uploadOwnerState(force=false){
  const previousPublished=lastPublishedOwnerDB?deepCopy(lastPublishedOwnerDB):(ownerRecoveryBaseDB?deepCopy(ownerRecoveryBaseDB):null);
  const currentScore=window.__danbridgeDataScore?.(current)||0;
  if(currentScore===0){cloudStatus('已阻止空白資料上傳；請先確認本機或版本紀錄中的資料。','error');ownerUploadQueued=false;return}
+ const estimatedMainBytes=ownerMainDocumentBytes(current);
+ if(estimatedMainBytes>=1000000){
+  ownerUploadCapacityBlocked=true;ownerUploadQueued=true;clearTimeout(ownerRetryTimer);clearTimeout(syncTimer);
+  cloudStatus(`主資料已達 ${formatHealthBytes(estimatedMainBytes)}，超過安全寫入容量；本機變更與復原資料已保留，已停止自動重試。`,'error');
+  persistOwnerSyncRecovery();renderSyncRecoveryCenter();return;
+ }
+ ownerUploadCapacityBlocked=false;
  const hash=dataHash(current);
  const shrink=ownerLessonShrinkRisk(previousPublished,current);
  if(shrink.risky&&approvedLessonShrinkHash!==hash){
@@ -2109,9 +2122,11 @@ async function uploadOwnerState(force=false){
      migrateLegacyLessonCloudDocuments().catch(e=>console.error('Legacy lesson migration background task failed',e));
    }
  }catch(e){
-   console.error('Owner cloud sync failed at '+syncStage,e);reportOperationalError(e,{category:'cloud-write',area:'owner-upload',retryable:true});ownerUploadQueued=true;ownerRetryCount++;
+   const capacityBlocked=ownerUploadCapacityError(e);ownerUploadCapacityBlocked=capacityBlocked;
+   console.error('Owner cloud sync failed at '+syncStage,e);reportOperationalError(e,{category:'cloud-write',area:'owner-upload',retryable:!capacityBlocked});ownerUploadQueued=true;if(!capacityBlocked)ownerRetryCount++;
+   if(capacityBlocked)clearTimeout(ownerRetryTimer);
    const retrying=navigator.onLine&&ownerRetryCount<3;
-   cloudStatus((navigator.onLine?`雲端連線較慢（${syncStage}），系統正在自動重試：`:'目前離線，變更已保存在本機：')+(e.message||e),navigator.onLine?(retrying?'pending':'error'):'offline');
+   cloudStatus(capacityBlocked?'主資料超過 Firestore 1 MiB 上限；本機變更與復原資料已保留，已停止自動重試。':(navigator.onLine?`雲端連線較慢（${syncStage}），系統正在自動重試：`:'目前離線，變更已保存在本機：')+(e.message||e),capacityBlocked?'error':navigator.onLine?(retrying?'pending':'error'):'offline');
    persistOwnerSyncRecovery();renderSyncRecoveryCenter();
    scheduleOwnerRetry();
  }finally{
