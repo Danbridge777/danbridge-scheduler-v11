@@ -856,4 +856,14 @@ describe('staging record-shadow verified run 與原子啟用', () => {
     sample=setup('emulator-version');await writeRows('emulator-version',sample.chunks);rows=await readRows('emulator-version');verifyImmutableMigrationBackupReadback(sample.plan,rows);assert.throws(()=>{if('main-v2'!==sample.plan.sourceVersionHash)throw new Error('主文件版本改變')},/版本改變/);
     sample=setup('emulator-resume');const split=Math.max(1,Math.floor(sample.chunks.length/2));await writeRows('emulator-resume',sample.chunks.slice(0,split));rows=await readRows('emulator-resume');assert.throws(()=>verifyImmutableMigrationBackupReadback(sample.plan,rows),/分片數|遺失/);await writeRows('emulator-resume',sample.chunks.slice(split));rows=await readRows('emulator-resume');assert.equal(verifyImmutableMigrationBackupReadback(sample.plan,rows).recordCount,3);
   });
+
+  test('全 16 集合影子規則允許 Owner 逐筆 revision，拒絕錯誤 changes 與其他角色',async()=>{
+    const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),base={schema:'danbridge-full-record-shadow-v1',companyId:COMPANY_ID,sourceHash:'main-hash',revision:1,deleted:false,environment:'staging',updatedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL};
+    const lessonRef=doc(owner,`stagingFullRecordShadows/${COMPANY_ID}/collections/lessons/records/lesson-1`),lesson={...base,collection:'lessons',recordId:'lesson-1',record:{id:'lesson-1'},recordIndex:null};
+    await assertSucceeds(setDoc(lessonRef,lesson));await assertSucceeds(setDoc(lessonRef,{...lesson,revision:2,deleted:true}));await assertFails(deleteDoc(lessonRef));
+    const changeId='seq_00000000_1234abcd',change={...base,collection:'changes',recordId:changeId,record:{type:'新增'},recordIndex:0};
+    await assertSucceeds(setDoc(doc(owner,`stagingFullRecordShadows/${COMPANY_ID}/collections/changes/records/${changeId}`),change));
+    await assertFails(setDoc(doc(owner,`stagingFullRecordShadows/${COMPANY_ID}/collections/changes/records/bad-change`),{...change,recordId:'bad-change'}));
+    await assertFails(setDoc(doc(teacher,`stagingFullRecordShadows/${COMPANY_ID}/collections/teachers/records/teacher-1`),{...base,collection:'teachers',recordId:'teacher-1',record:{id:'teacher-1'},recordIndex:null,updatedBy:'teacher-uid',updatedByEmail:TEACHER_EMAIL}));
+  });
 });

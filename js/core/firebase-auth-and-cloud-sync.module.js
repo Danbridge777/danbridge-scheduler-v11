@@ -1,11 +1,12 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.72';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.72';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.72';
-import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.72';
-import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.72';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.74';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.74';
+import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.74';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.74';
+import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.74';
+import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.74';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -18,7 +19,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.72';
+const APP_RELEASE='20.26.74';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1771,6 +1772,19 @@ async function runStagingRecordShadow(options={}){
   setStagingRecordShadowDiagnostic({state:'failed',completedWrites:Number(error?.completedWrites)||stagingRecordShadowDiagnostic.completedWrites,completedBatches:Number(error?.completedBatches)||stagingRecordShadowDiagnostic.completedBatches,verified:false,error:String(error?.message||error).slice(0,500),finishedAt:new Date().toISOString()});
   console.error('Staging record shadow failed',error);throw error;
  }
+}
+
+let stagingFullRecordShadowDiagnostic={state:'idle',sourceHash:'',totalWrites:0,completedWrites:0,totalBatches:0,completedBatches:0,documentCount:0,activeCount:0,tombstoneCount:0,verified:false,error:''};
+function setStagingFullRecordShadowDiagnostic(next){stagingFullRecordShadowDiagnostic={...stagingFullRecordShadowDiagnostic,...next};document.body.dataset.stagingFullRecordShadowState=stagingFullRecordShadowDiagnostic.state}
+function firestoreFullRecordShadowAdapter({failBatch=0}={}){let transactionNumber=0;return createFirebaseFullRecordShadowAdapter({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole,actor:{uid:cloudUid,email:cloudEmailKey},serverTimestamp,getCollectionDocuments:async path=>{const snapshot=await getDocs(collection(cloud,...path.split('/')));return snapshot.docs.map(row=>({id:row.id,data:row.data()}))},runBatchTransaction:async callback=>{transactionNumber++;if(failBatch===transactionNumber)throw new Error(`staging 全資料測試注入：第 ${failBatch} 批失敗`);return runTransaction(cloud,transaction=>callback({get:path=>transaction.get(doc(cloud,...path.split('/'))),set:(path,payload)=>transaction.set(doc(cloud,...path.split('/')),payload,{merge:false})}))}})}
+async function runStagingFullRecordShadow({failBatch=0,batchSize=400,targetDb:providedTargetDb}={}){
+ stagingRecordShadowGuard();const targetDb=deepCopy(providedTargetDb??window.__danbridgeGetDB?.()),sourceHash=dataHash(targetDb);setStagingFullRecordShadowDiagnostic({state:'reading',sourceHash,totalWrites:0,completedWrites:0,totalBatches:0,completedBatches:0,documentCount:0,activeCount:0,tombstoneCount:0,verified:false,error:''});
+ try{const result=await firestoreFullRecordShadowAdapter({failBatch}).synchronize(targetDb,{sourceHash,batchSize,onBatchComplete:progress=>setStagingFullRecordShadowDiagnostic({state:'writing',...progress})});setStagingFullRecordShadowDiagnostic({state:'verified',totalWrites:result.writes,completedWrites:result.writes,totalBatches:result.batches,completedBatches:result.batches,documentCount:result.documentCount,activeCount:result.activeCount,tombstoneCount:result.tombstoneCount,verified:true,error:''});return deepCopy(stagingFullRecordShadowDiagnostic)}catch(error){setStagingFullRecordShadowDiagnostic({state:'failed',completedWrites:Number(error?.completedWrites)||stagingFullRecordShadowDiagnostic.completedWrites,completedBatches:Number(error?.completedBatches)||stagingFullRecordShadowDiagnostic.completedBatches,verified:false,error:String(error?.message||error).slice(0,500)});throw error}
+}
+if(DANBRIDGE_ENVIRONMENT==='staging'){
+ window.__danbridgeRunStagingFullRecordShadow=runStagingFullRecordShadow;
+ const fullRecordShadowTest=new URLSearchParams(location.search).get('fullRecordShadowTest');
+ if(fullRecordShadowTest){let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{let result;if(fullRecordShadowTest==='failure-resume'){const main=deepCopy(window.__danbridgeGetDB?.()),altered=deepCopy(main),testIds=['staging-full-interrupt-1','staging-full-interrupt-2','staging-full-interrupt-3'];altered.branches=[...(altered.branches||[]).filter(row=>!testIds.includes(String(row.id))),...testIds.map((id,index)=>({id,name:`STAGING_FULL_INTERRUPT_${index+1}`,rooms:[]}))];let failed=null;try{await runStagingFullRecordShadow({failBatch:2,batchSize:1,targetDb:altered})}catch{failed=deepCopy(stagingFullRecordShadowDiagnostic)}result={failed,resumed:await runStagingFullRecordShadow({batchSize:1,targetDb:altered}),cleanup:await runStagingFullRecordShadow({batchSize:1,targetDb:main})}}else result=await runStagingFullRecordShadow();document.body.dataset.stagingFullRecordShadowTestResult=JSON.stringify(result)}catch(error){document.body.dataset.stagingFullRecordShadowTestResult=JSON.stringify({error:String(error?.message||error),diagnostic:stagingFullRecordShadowDiagnostic})}},200)}
 }
 
 function expectedRecordShadowRunCounts(current,targetDb){

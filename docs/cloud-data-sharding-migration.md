@@ -56,3 +56,12 @@
 - 沙盒分片寫完後再次從 Firestore 讀回、重組、核對集合筆數、總筆數與 SHA-256。
 - 演練前後主文件 `clientHash` 必須相同；任何版本變動都不建立 verified receipt。
 - 沙盒分片與 receipt 同樣只能建立，Owner 不能更新或刪除；老師、排課專員與校區管理者不能讀取。
+
+## staging 全 16 集合逐筆影子層
+
+- 使用獨立 `stagingFullRecordShadows` 命名空間，涵蓋本規格列出的全部 16 集合，不取代既有三集合影子層。
+- 除 `changes` 外，每筆文件沿用資料本身的穩定 ID；缺少、重複或無效 ID 時整批停止。
+- `changes` 不增加業務 ID，影子文件鍵由原始序號與 canonical 內容指紋組成；重新讀回時強制序號連續並保留重複內容。
+- 每次新增、修改、墓碑及墓碑重建都增加 revision；transaction 必須先讀完同批現況才寫，衝突立即停止。
+- staging 實機已完成首次 16 筆寫入、逐集合雲端讀回、第二批中斷、只續傳剩餘兩筆、清理墓碑與重新整理零寫入驗證。
+- 此層仍是 staging Owner 手動入口，不接入 `uploadOwnerState()`、不接管任何角色讀取，也不部署 production。
