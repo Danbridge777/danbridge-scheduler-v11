@@ -360,6 +360,89 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // staging 原子啟用證據。manifest 只能在候選完整讀回後建立且不可覆寫；
+    // control 仍明確關閉讀寫接管，僅作為下一階段的 fail-closed 驗證點。
+    match /stagingRecordCandidateManifests/{companyId}/manifests/{manifestId} {
+      allow read: if isOwner() && companyId == 'danbridge';
+      allow create: if isOwner()
+        && companyId == 'danbridge'
+        && request.resource.data.keys().hasOnly([
+          'schema','kind','environment','companyId','state','verified','manifestId','runId',
+          'sourceHash','verifiedHash','collectionCount','documentCount','activeCount','tombstoneCount',
+          'viewCount','createdAt','createdBy','createdByEmail'
+        ])
+        && request.resource.data.schema == 'danbridge-record-candidate-manifest-v1'
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.companyId == companyId
+        && request.resource.data.manifestId == manifestId
+        && request.resource.data.state == 'verified'
+        && request.resource.data.verified == true
+        && request.resource.data.sourceHash is string
+        && request.resource.data.sourceHash.size() >= 8
+        && request.resource.data.verifiedHash == request.resource.data.sourceHash
+        && request.resource.data.documentCount is int
+        && request.resource.data.documentCount >= 0
+        && (
+          (request.resource.data.kind == 'full-records'
+            && request.resource.data.keys().hasAll(['collectionCount','activeCount','tombstoneCount'])
+            && request.resource.data.collectionCount == 16
+            && request.resource.data.activeCount is int
+            && request.resource.data.activeCount >= 0
+            && request.resource.data.tombstoneCount is int
+            && request.resource.data.tombstoneCount >= 0
+            && request.resource.data.documentCount == request.resource.data.activeCount + request.resource.data.tombstoneCount)
+          || (request.resource.data.kind == 'role-views'
+            && request.resource.data.keys().hasAll(['runId','viewCount'])
+            && request.resource.data.runId is string
+            && request.resource.data.runId.size() >= 8
+            && request.resource.data.viewCount is int
+            && request.resource.data.viewCount > 0
+            && request.resource.data.documentCount >= request.resource.data.viewCount)
+        )
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdByEmail == emailKey();
+      allow update, delete: if false;
+    }
+
+    match /stagingRecordActivationControls/{companyId} {
+      allow read: if isOwner() && companyId == 'danbridge';
+      allow create, update: if isOwner()
+        && companyId == 'danbridge'
+        && request.resource.data.keys().hasOnly([
+          'schema','environment','companyId','state','sourceHash','fullManifestId','roleManifestId',
+          'fullVerifiedHash','roleVerifiedHash','roleRunId','collectionCount','documentCount',
+          'activeCount','tombstoneCount','viewCount','roleDocumentCount','readTakeover','writeTakeover',
+          'activatedAt','activatedBy','activatedByEmail'
+        ])
+        && request.resource.data.schema == 'danbridge-record-activation-v1'
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.companyId == companyId
+        && request.resource.data.state == 'verified'
+        && request.resource.data.readTakeover == false
+        && request.resource.data.writeTakeover == false
+        && request.resource.data.activatedAt == request.time
+        && request.resource.data.activatedBy == request.auth.uid
+        && request.resource.data.activatedByEmail == emailKey()
+        && get(/databases/$(database)/documents/companies/$(companyId)/data/main).data.clientHash == request.resource.data.sourceHash
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.fullManifestId)).data.kind == 'full-records'
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.fullManifestId)).data.state == 'verified'
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.fullManifestId)).data.sourceHash == request.resource.data.sourceHash
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.fullManifestId)).data.verifiedHash == request.resource.data.fullVerifiedHash
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.fullManifestId)).data.collectionCount == request.resource.data.collectionCount
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.fullManifestId)).data.documentCount == request.resource.data.documentCount
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.fullManifestId)).data.activeCount == request.resource.data.activeCount
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.fullManifestId)).data.tombstoneCount == request.resource.data.tombstoneCount
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.roleManifestId)).data.kind == 'role-views'
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.roleManifestId)).data.state == 'verified'
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.roleManifestId)).data.sourceHash == request.resource.data.sourceHash
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.roleManifestId)).data.verifiedHash == request.resource.data.roleVerifiedHash
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.roleManifestId)).data.runId == request.resource.data.roleRunId
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.roleManifestId)).data.viewCount == request.resource.data.viewCount
+        && getAfter(/databases/$(database)/documents/stagingRecordCandidateManifests/$(companyId)/manifests/$(request.resource.data.roleManifestId)).data.documentCount == request.resource.data.roleDocumentCount;
+      allow delete: if false;
+    }
+
     // verified run 與啟用指標位於公司 wildcard 外。它們只描述 staging 影子資料，
     // 不會改變目前讀取來源；啟用指標仍須與 legacy 主文件的 clientHash 完全一致。
     match /stagingRecordShadowRuns/{companyId}/runs/{runId} {

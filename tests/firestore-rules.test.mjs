@@ -21,6 +21,7 @@ import {
 } from 'firebase/firestore';
 import {buildRecordShadowRunManifest,verifyRecordShadowRun} from '../js/core/cloud-record-shadow-run.js';
 import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback} from '../js/core/cloud-immutable-migration-backup.js';
+import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest,buildAtomicRecordActivation} from '../js/core/cloud-record-activation.js';
 
 const PROJECT_ID = 'danbridge-rules-test';
 const COMPANY_ID = 'danbridge';
@@ -78,6 +79,72 @@ async function seed() {
 
 before(async () => {
   testEnv = await initializeTestEnvironment({ projectId: PROJECT_ID });
+});
+
+describe('staging 全資料與角色候選原子控制',()=>{
+  const manifestPath=id=>`stagingRecordCandidateManifests/${COMPANY_ID}/manifests/${id}`;
+  const controlPath=`stagingRecordActivationControls/${COMPANY_ID}`;
+  const withAudit=(payload,uid='owner-uid',email=OWNER_EMAIL)=>({...payload,createdAt:serverTimestamp(),createdBy:uid,createdByEmail:email});
+  const evidence=(suffix='ok')=>{
+    const fullManifest=buildFullRecordCandidateManifest({environment:'staging',manifestId:`full-${suffix}`,sourceHash:'source-hash-1',collectionCount:16,documentCount:1709,activeCount:1709,tombstoneCount:0});
+    const roleManifest=buildRoleViewCandidateManifest({environment:'staging',manifestId:`role-${suffix}`,runId:`role-run-${suffix}`,sourceHash:'source-hash-1',viewCount:7,documentCount:2353});
+    return{fullManifest,roleManifest,activation:buildAtomicRecordActivation({environment:'staging',fullManifest,roleManifest,currentSourceHash:'source-hash-1'})};
+  };
+  const controlPayload=(activation,uid='owner-uid',email=OWNER_EMAIL)=>({...activation,activatedAt:serverTimestamp(),activatedBy:uid,activatedByEmail:email});
+
+  test('同一交易建立兩份 verified manifest 與不接管讀寫的控制文件',async()=>{
+    const owner=auth('owner-uid',OWNER_EMAIL),{fullManifest,roleManifest,activation}=evidence('atomic');
+    await setDoc(doc(owner,`companies/${COMPANY_ID}/data/main`),{db:{},clientHash:'source-hash-1'});
+    await assertSucceeds(runTransaction(owner,async transaction=>{
+      transaction.set(doc(owner,manifestPath(fullManifest.manifestId)),withAudit(fullManifest));
+      transaction.set(doc(owner,manifestPath(roleManifest.manifestId)),withAudit(roleManifest));
+      transaction.set(doc(owner,controlPath),controlPayload(activation));
+    }));
+    const saved=(await getDoc(doc(owner,controlPath))).data();
+    assert.equal(saved.readTakeover,false);assert.equal(saved.writeTakeover,false);assert.equal(saved.viewCount,7);
+    const backup=auth('backup-owner-uid',BACKUP_OWNER_EMAIL),backupEvidence=evidence('backup-owner');
+    await assertSucceeds(runTransaction(backup,async transaction=>{
+      transaction.set(doc(backup,manifestPath(backupEvidence.fullManifest.manifestId)),withAudit(backupEvidence.fullManifest,'backup-owner-uid',BACKUP_OWNER_EMAIL));
+      transaction.set(doc(backup,manifestPath(backupEvidence.roleManifest.manifestId)),withAudit(backupEvidence.roleManifest,'backup-owner-uid',BACKUP_OWNER_EMAIL));
+      transaction.set(doc(backup,controlPath),controlPayload(backupEvidence.activation,'backup-owner-uid',BACKUP_OWNER_EMAIL));
+    }));
+    assert.equal((await getDoc(doc(backup,controlPath))).data().activatedByEmail,BACKUP_OWNER_EMAIL);
+  });
+
+  test('中斷、版本改變、缺筆、多筆、hash 或 run 不符全部 fail-closed',async()=>{
+    const owner=auth('owner-uid',OWNER_EMAIL),{fullManifest,roleManifest,activation}=evidence('blocked');
+    await setDoc(doc(owner,`companies/${COMPANY_ID}/data/main`),{db:{},clientHash:'source-hash-1'});
+    await assertFails(setDoc(doc(owner,controlPath),controlPayload(activation)));
+    await assertSucceeds(setDoc(doc(owner,manifestPath(fullManifest.manifestId)),withAudit(fullManifest)));
+    await assertSucceeds(setDoc(doc(owner,manifestPath(roleManifest.manifestId)),withAudit(roleManifest)));
+    for(const changed of [
+      {sourceHash:'source-hash-2'},
+      {documentCount:1708},
+      {documentCount:1710},
+      {fullVerifiedHash:'wrong-hash'},
+      {roleVerifiedHash:'wrong-hash'},
+      {roleRunId:'wrong-run'},
+      {viewCount:6},
+      {roleDocumentCount:2352},
+      {readTakeover:true},
+      {writeTakeover:true}
+    ])await assertFails(setDoc(doc(owner,controlPath),controlPayload({...activation,...changed})));
+    await setDoc(doc(owner,`companies/${COMPANY_ID}/data/main`),{db:{newer:true},clientHash:'source-hash-2'});
+    await assertFails(setDoc(doc(owner,controlPath),controlPayload(activation)));
+  });
+
+  test('manifest 不可覆寫刪除，非 Owner 不可讀寫或建立控制',async()=>{
+    const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),scheduler=auth('scheduler-2-uid',SECOND_SCHEDULER_EMAIL),{fullManifest,roleManifest,activation}=evidence('permission');
+    await setDoc(doc(owner,`companies/${COMPANY_ID}/data/main`),{db:{},clientHash:'source-hash-1'});
+    await assertSucceeds(setDoc(doc(owner,manifestPath(fullManifest.manifestId)),withAudit(fullManifest)));
+    await assertSucceeds(setDoc(doc(owner,manifestPath(roleManifest.manifestId)),withAudit(roleManifest)));
+    await assertFails(updateDoc(doc(owner,manifestPath(fullManifest.manifestId)),{documentCount:1708}));
+    await assertFails(deleteDoc(doc(owner,manifestPath(fullManifest.manifestId))));
+    for(const db of [teacher,scheduler,unauthenticated()]){
+      await assertFails(getDoc(doc(db,manifestPath(fullManifest.manifestId))));
+      await assertFails(setDoc(doc(db,controlPath),controlPayload(activation,'forged',TEACHER_EMAIL)));
+    }
+  });
 });
 
 describe('aa 全老師排課權限', () => {

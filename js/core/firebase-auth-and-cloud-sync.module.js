@@ -1,13 +1,14 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.84';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.84';
-import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.84';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.84';
-import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.84';
-import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.84';
-import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.84';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.86';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.86';
+import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.86';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.86';
+import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.86';
+import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.86';
+import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.86';
+import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest,buildAtomicRecordActivation,evaluateAtomicRecordActivation} from './cloud-record-activation.js?v=20.26.86';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -20,7 +21,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.84';
+const APP_RELEASE='20.26.87';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1864,6 +1865,65 @@ async function runProductionRoleViewCandidate(expectedSourceHash){
 if(DANBRIDGE_ENVIRONMENT==='production'){
  const expectedProductionRoleHash=new URLSearchParams(location.search).get('productionRoleViewCandidate');
  if(expectedProductionRoleHash){let installed=false;const timer=setInterval(()=>{if(installed||cloudRole!=='owner')return;installed=true;clearInterval(timer);const button=document.createElement('button');button.id='productionRoleViewCandidateButton';button.type='button';button.className='btn danger';button.style.cssText='position:fixed;right:18px;bottom:204px;z-index:10002';button.textContent='建立 production 角色逐筆候選';button.onclick=async()=>{button.disabled=true;button.textContent='production 角色候選寫入與讀回中…';try{const result=await runProductionRoleViewCandidate(expectedProductionRoleHash);document.body.dataset.productionRoleViewCandidateResult=JSON.stringify(result);button.textContent=`角色候選通過 ${result.viewCount} 個角色`;button.className='btn ok'}catch(error){document.body.dataset.productionRoleViewCandidateResult=JSON.stringify({state:'blocked',error:String(error?.message||error),readTakeover:false});button.disabled=false;button.textContent='角色候選失敗，未切換讀取';cloudStatus(String(error?.message||error),'error')}};document.body.appendChild(button)},200)}
+}
+async function runStagingAtomicRecordActivation({auditFailures=false}={}){
+ stagingRecordShadowGuard();
+ const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main'),mainSnapshot=await getDoc(mainRef);
+ if(!mainSnapshot.exists()||!mainSnapshot.data()?.db)throw new Error('staging 雲端主資料不存在');
+ const sourceDb=deepCopy(mainSnapshot.data().db),sourceHash=dataHash(sourceDb),storedSourceHash=String(mainSnapshot.data()?.clientHash||'');
+ if(!storedSourceHash||storedSourceHash!==sourceHash)throw new Error(`staging 雲端主資料 hash 不一致：內容 ${sourceHash}，標記 ${storedSourceHash||'—'}`);
+ const fullAdapter=firestoreFullRecordShadowAdapter();
+ await fullAdapter.synchronize(sourceDb,{sourceHash,batchSize:400});
+ const fullResult=await fullAdapter.verifyCandidate(sourceDb,{sourceHash});
+ document.body.dataset.stagingAtomicFullCounts=JSON.stringify({collectionCount:fullResult.collectionCount,documentCount:fullResult.documentCount,activeCount:fullResult.activeCount,tombstoneCount:fullResult.tombstoneCount});
+ const views=await buildCurrentRoleViewCandidates(sourceDb),roleRunId=doc(collection(cloud,'stagingRoleViewCandidates',COMPANY_ID,'runs')).id;
+ if(!views.length)throw new Error('staging 沒有可驗證的現行角色');
+ const roleResult=await firestoreRoleViewCandidateAdapter().writeAndVerify({runId:roleRunId,sourceHash,views,batchSize:400});
+ const fullManifestId=doc(collection(cloud,'stagingRecordCandidateManifests',COMPANY_ID,'manifests')).id,roleManifestId=doc(collection(cloud,'stagingRecordCandidateManifests',COMPANY_ID,'manifests')).id;
+ const fullManifest=buildFullRecordCandidateManifest({environment:'staging',manifestId:fullManifestId,sourceHash,collectionCount:fullResult.collectionCount,documentCount:fullResult.documentCount,activeCount:fullResult.activeCount,tombstoneCount:fullResult.tombstoneCount});
+ const roleManifest=buildRoleViewCandidateManifest({environment:'staging',manifestId:roleManifestId,runId:roleRunId,sourceHash,viewCount:roleResult.viewCount,documentCount:roleResult.documentCount});
+ const activation=buildAtomicRecordActivation({environment:'staging',fullManifest,roleManifest,currentSourceHash:sourceHash});
+ const fullRef=doc(cloud,'stagingRecordCandidateManifests',COMPANY_ID,'manifests',fullManifestId),roleRef=doc(cloud,'stagingRecordCandidateManifests',COMPANY_ID,'manifests',roleManifestId),controlRef=doc(cloud,'stagingRecordActivationControls',COMPANY_ID);
+ const audit={};
+ if(auditFailures){
+  try{await setDoc(controlRef,{...activation,activatedAt:serverTimestamp(),activatedBy:cloudUid,activatedByEmail:cloudEmailKey},{merge:false});audit.interrupted=false}catch{audit.interrupted=true}
+  await runTransaction(cloud,async transaction=>{const main=await transaction.get(mainRef);if(String(main.data()?.clientHash||'')!==sourceHash)throw new Error('staging 主資料版本已改變');transaction.set(fullRef,{...fullManifest,createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false});transaction.set(roleRef,{...roleManifest,createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false})});
+  for(const [name,changed] of Object.entries({version:{sourceHash:`${sourceHash}-changed`},missing:{documentCount:Math.max(0,activation.documentCount-1)},extra:{documentCount:activation.documentCount+1},hash:{fullVerifiedHash:'wrong-hash'},role:{roleRunId:'wrong-run'}})){
+   try{await setDoc(controlRef,{...activation,...changed,activatedAt:serverTimestamp(),activatedBy:cloudUid,activatedByEmail:cloudEmailKey},{merge:false});audit[name]=false}catch{audit[name]=true}
+  }
+ }
+ await runTransaction(cloud,async transaction=>{
+  const [main,full,role]=await Promise.all([transaction.get(mainRef),transaction.get(fullRef),transaction.get(roleRef)]);
+  if(String(main.data()?.clientHash||'')!==sourceHash)throw new Error('staging 主資料版本已改變');
+  if(auditFailures&&(!full.exists()||!role.exists()))throw new Error('staging manifest 中斷後缺失');
+  if(!auditFailures){transaction.set(fullRef,{...fullManifest,createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false});transaction.set(roleRef,{...roleManifest,createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false})}
+  transaction.set(controlRef,{...activation,activatedAt:serverTimestamp(),activatedBy:cloudUid,activatedByEmail:cloudEmailKey},{merge:false});
+ });
+ const [savedFull,savedRole,savedControl]=await Promise.all([getDoc(fullRef),getDoc(roleRef),getDoc(controlRef)]),evaluation=evaluateAtomicRecordActivation({activation:savedControl.data(),fullManifest:savedFull.data(),roleManifest:savedRole.data(),currentSourceHash:sourceHash});
+ if(!evaluation.eligible)throw new Error(`staging 原子控制讀回失敗：${evaluation.reason}`);
+ return{state:'verified',sourceHash,fullManifestId,roleManifestId,roleRunId,collectionCount:activation.collectionCount,documentCount:activation.documentCount,activeCount:activation.activeCount,tombstoneCount:activation.tombstoneCount,viewCount:activation.viewCount,roleDocumentCount:activation.roleDocumentCount,audit,readTakeover:false,writeTakeover:false};
+}
+async function verifyStagingAtomicRecordActivationReadback(){
+ stagingRecordShadowGuard();
+ const controlRef=doc(cloud,'stagingRecordActivationControls',COMPANY_ID),mainRef=doc(cloud,'companies',COMPANY_ID,'data','main'),[controlSnapshot,mainSnapshot]=await Promise.all([getDoc(controlRef),getDoc(mainRef)]);
+ if(!controlSnapshot.exists()||!mainSnapshot.exists()||!mainSnapshot.data()?.db)throw new Error('staging 原子控制或主資料不存在');
+ const activation=controlSnapshot.data(),fullManifestId=String(activation.fullManifestId||''),roleManifestId=String(activation.roleManifestId||'');
+ if(!fullManifestId||!roleManifestId)throw new Error('staging 原子控制缺少 manifest identity');
+ const [fullSnapshot,roleSnapshot]=await Promise.all([getDoc(doc(cloud,'stagingRecordCandidateManifests',COMPANY_ID,'manifests',fullManifestId)),getDoc(doc(cloud,'stagingRecordCandidateManifests',COMPANY_ID,'manifests',roleManifestId))]);
+ if(!fullSnapshot.exists()||!roleSnapshot.exists())throw new Error('staging 原子控制 manifest 缺失');
+ const contentHash=dataHash(mainSnapshot.data().db),storedHash=String(mainSnapshot.data()?.clientHash||'');
+ if(!storedHash||contentHash!==storedHash)throw new Error('staging 雲端主資料 hash 不一致');
+ const evaluation=evaluateAtomicRecordActivation({activation,fullManifest:fullSnapshot.data(),roleManifest:roleSnapshot.data(),currentSourceHash:storedHash});
+ if(!evaluation.eligible)throw new Error(`staging 原子控制讀回失敗：${evaluation.reason}`);
+ return{state:'verified',sourceHash:storedHash,fullManifestId,roleManifestId,roleRunId:activation.roleRunId,documentCount:activation.documentCount,viewCount:activation.viewCount,roleDocumentCount:activation.roleDocumentCount,writes:0,readTakeover:false,writeTakeover:false};
+}
+if(DANBRIDGE_ENVIRONMENT==='staging'){
+ window.__danbridgeRunStagingAtomicRecordActivation=runStagingAtomicRecordActivation;
+ window.__danbridgeVerifyStagingAtomicRecordActivationReadback=verifyStagingAtomicRecordActivationReadback;
+ const atomicActivationTest=new URLSearchParams(location.search).get('atomicActivationTest');
+ if(atomicActivationTest){let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingAtomicActivationResult=JSON.stringify(await runStagingAtomicRecordActivation({auditFailures:atomicActivationTest==='failures'}))}catch(error){document.body.dataset.stagingAtomicActivationResult=JSON.stringify({state:'blocked',error:String(error?.message||error),readTakeover:false,writeTakeover:false})}},200)}
+ const atomicActivationReadback=new URLSearchParams(location.search).get('atomicActivationReadback');
+ if(atomicActivationReadback){let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingAtomicActivationReadback=JSON.stringify(await verifyStagingAtomicRecordActivationReadback())}catch(error){document.body.dataset.stagingAtomicActivationReadback=JSON.stringify({state:'blocked',error:String(error?.message||error),writes:0,readTakeover:false,writeTakeover:false})}},200)}
 }
 async function runProductionFullRecordCandidateVerification(expectedSourceHash){
  productionFullRecordMigrationGuard();const targetDb=deepCopy(window.__danbridgeGetDB?.()),sourceHash=dataHash(targetDb);

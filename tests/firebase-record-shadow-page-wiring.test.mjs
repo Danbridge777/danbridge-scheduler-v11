@@ -8,14 +8,14 @@ const roleCandidateAdapterSource=fs.readFileSync(new URL('../js/core/firebase-ro
 const pwaSource=fs.readFileSync(new URL('../js/core/pwa-installation.js',import.meta.url),'utf8');
 
 test('頁面匯入獨立 record-shadow adapter 且只公開專屬手動入口',()=>{
- assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.84'/);
+ assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.86'/);
  assert.match(source,/window\.__danbridgeRunStagingRecordShadow/);
  assert.match(source,/window\.__danbridgeGetStagingRecordShadowDiagnostic/);
  assert.doesNotMatch(source,/queueStagingRecordShadow[^\n]*uploadOwnerState|uploadOwnerState[^\n]*queueStagingRecordShadow/);
 });
 
 test('Checkpoint B 以版本化 service worker 解除舊 staging 快取',()=>{
- assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.84'/);
+ assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.87'/);
 });
 
 test('staging Owner URL 測試入口只操作專用 ID 並保留既有影子狀態',()=>{
@@ -104,4 +104,18 @@ test('production 角色逐筆候選需要目前來源 hash 與 Owner 手動按�
  assert.match(source,/permissionsSource:'existing-filter-functions',readTakeover:false/);
  assert.doesNotMatch(source,/uploadOwnerState[^}]+runProductionRoleViewCandidate/);
  assert.doesNotMatch(source,/__danbridgeSetDB[^\n]+runProductionRoleViewCandidate|runProductionRoleViewCandidate[^\n]+__danbridgeSetDB/);
+});
+
+test('staging 原子候選控制同時核對 full、role 與 main，且仍不接管讀寫',()=>{
+ assert.match(source,/get\('atomicActivationTest'\)/);
+ assert.match(source,/runStagingAtomicRecordActivation/);
+ assert.match(source,/stagingRecordCandidateManifests/);
+ assert.match(source,/stagingRecordActivationControls/);
+ assert.match(source,/evaluateAtomicRecordActivation/);
+ assert.match(source,/readTakeover:false,writeTakeover:false/);
+ assert.doesNotMatch(source,/uploadOwnerState[^}]+runStagingAtomicRecordActivation/);
+ assert.doesNotMatch(source,/__danbridgeSetDB[^\n]+runStagingAtomicRecordActivation|runStagingAtomicRecordActivation[^\n]+__danbridgeSetDB/);
+ assert.match(source,/get\('atomicActivationReadback'\)/);
+ assert.match(source,/verifyStagingAtomicRecordActivationReadback/);
+ assert.match(source,/roleDocumentCount:activation\.roleDocumentCount,writes:0,readTakeover:false,writeTakeover:false/);
 });
