@@ -1,5 +1,10 @@
 # Changelog
 
+## 20.26.64（排課專員表單隱私隔離）
+
+- 實際 staging 多角色操作發現並修正：aa 排課專員的課程與快速學生表單不再顯示家長、聯絡方式、地址、收費、付款或薪資控制。
+- 不改變 aa 的課表新增／修改流程，也不改變 Owner、Catherine、一般老師或 production 資料流程；後端財務欄位白名單限制維持不變。
+
 ## 20.26.63（staging 快取版本一致性）
 
 - 更新 Service Worker cache key 與 app-shell PWA 程式版本，避免已登入分頁在 staging 部署後混用舊 HTML 與新版 record-shadow 模組。

@@ -319,7 +319,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i)=>({id:`l${i}`}))},{lessons:Array.from({length:80},(_,i)=>({id:`l${i}`}))}).risky,true,'a large lesson reduction triggers the destructive-change guard');
 assert.match(cloudSource, /catch\(e\)[\s\S]*ownerUploadQueued=true;ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'a failed owner upload stays queued, becomes visible, and schedules a retry');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.63'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.64'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -336,6 +336,7 @@ assert.match(cloudSource, /SCHEDULER_ACCOUNT_EMAILS=new Set\(\['aa0966626336@gma
 assert.match(cloudSource, /RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set\(\['wendylee0820520@gmail\.com'\]\)/, 'Wendy is explicitly migrated back to a standard teacher');
 assert.match(cloudSource, /canManageSchedule=SCHEDULER_ACCOUNT_EMAILS\.has\(email\)/, 'approved scheduler Gmail accounts always receive all-teacher scheduling instead of relying on a checkbox');
 assert.match(cloudSource, /function applyRoleUI\(profile,user\)[\s\S]*teacherHiddenSelector[\s\S]*document\.querySelectorAll\(teacherHiddenSelector\)\.forEach[\s\S]*markRoleIsolated/, 'authenticated teacher role actively isolates every owner-only control');
+assert.match(cloudSource, /cloudCanManageSchedule[\s\S]*'quickParentName','quickParentContact','quickHomeAddress','quickBilling','quickRate','paymentStatus','chargeStudent','payTeacher'[\s\S]*markRoleIsolated/, 'aa scheduling UI isolates parent contact, address, billing, payment and payroll controls');
 assert.match(cloudSource, /SCHEDULER_ACCOUNT_EMAILS\.has\(email\)[\s\S]*canManageSchedule:true,readOnly:false[\s\S]*schedulerViews/, 'owner publishing automatically repairs aa access and her dedicated scheduler view');
 assert.match(cloudSource, /RETIRED_SCHEDULER_ACCOUNT_EMAILS\.has\(email\)[\s\S]*canManageSchedule:deleteField\(\)[\s\S]*scopedDb:deleteField\(\)[\s\S]*teacherViews/, 'owner publishing fully deletes Wendy scheduler fields and restores her teacher-only view');
 assert.match(cloudSource, /if\(snapshotDecision==='unchanged'\)\{publishRoleViewsWithRetry\(incoming\);return\}/, 'owner login republishes role views from the verified current main snapshot even when it is unchanged');
