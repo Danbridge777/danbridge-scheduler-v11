@@ -1,5 +1,14 @@
 # Changelog
 
+## 20.26.68（staging 遷移前不可覆寫備份）
+
+- 新增位於公司 Owner 萬用寫入範圍之外的 staging 遷移備份；分片與 verified manifest 建立後，Owner 也不能更新或刪除。
+- 只有從 staging 主文件建立、完整雲端讀回並驗證 16 集合筆數與 SHA-256，且備份期間主資料版本未改變，才建立 verified manifest。
+- staging 實機測試確認每批 transaction 先完成所有既有分片讀取，再開始不可覆寫寫入，符合 Firestore 交易讀寫順序。
+- v2 manifest 使用真正的 64 字元 SHA-256；舊 v1 非加密雜湊備份不具最終遷移保護點資格。
+- staging 實機診斷分開顯示 legacy 來源版本與 SHA-256，避免把既有 clientHash 誤標為備份完整性雜湊。
+- 僅提供 staging Owner 手動測試入口；不接管讀取、不掛入 `uploadOwnerState()`，production 不部署。
+
 ## 20.26.64（排課專員表單隱私隔離）
 
 - 實際 staging 多角色操作發現並修正：aa 排課專員的課程與快速學生表單不再顯示家長、聯絡方式、地址、收費、付款或薪資控制。

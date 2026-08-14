@@ -40,3 +40,11 @@
 - aa pending／隔離數、Owner 待上傳狀態、角色檢視待送狀態。
 - 最近安全快照日期與雜湊。
 - Emulator 雙 Owner 各新增 100 堂、舊 Base 修改、同欄衝突、刪除對修改、三來源連寫全部通過證據。
+
+## staging 遷移前不可覆寫備份
+
+- 備份使用頂層 `stagingMigrationBackups` 命名空間，不受 `companies/{companyId}/{document=**}` Owner 萬用寫入規則影響。
+- 每個分片與 v2 verified manifest 都只能建立，任何 Owner 均不能更新或刪除。
+- 完整性雜湊必須是 canonical JSON 的 64 字元 SHA-256；早期 v1 非加密雜湊 run 不具最終遷移保護點資格。
+- 分片全部寫完後必須從 Firestore 重新讀回並重組 16 個集合；來源版本、SHA-256、集合筆數、總筆數或分片數任一不符，皆不得建立 verified manifest。
+- 目前仍是 staging Owner 手動入口，未接入 `uploadOwnerState()`、未接管讀取，也未部署 production。

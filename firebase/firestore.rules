@@ -318,6 +318,61 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // 遷移前最後防線位於 companies 萬用 Owner 寫入範圍之外。
+    // 分片與 verified manifest 只能建立一次；前端 Owner 無法更新或刪除既有備份。
+    match /stagingMigrationBackups/{companyId}/runs/{runId} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly(['schema','environment','state','backupId','sourceHash','sourceVersionHash','collectionOrder','collections','chunkCount','recordCount','maxChunkBytes','verifiedHash','verifiedBy','verifiedByEmail','verifiedAt'])
+        && request.resource.data.schema == 'danbridge-immutable-migration-backup-v2'
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.state == 'verified'
+        && request.resource.data.backupId == runId
+        && request.resource.data.sourceHash is string
+        && request.resource.data.sourceHash.size() > 0
+        && request.resource.data.sourceHash.size() == 64
+        && request.resource.data.sourceVersionHash is string
+        && request.resource.data.sourceVersionHash.size() > 0
+        && request.resource.data.verifiedHash == request.resource.data.sourceHash
+        && request.resource.data.collectionOrder is list
+        && request.resource.data.collectionOrder.size() == 16
+        && request.resource.data.collections is map
+        && request.resource.data.chunkCount is int
+        && request.resource.data.chunkCount >= 0
+        && request.resource.data.recordCount is int
+        && request.resource.data.recordCount >= 0
+        && request.resource.data.maxChunkBytes is int
+        && request.resource.data.maxChunkBytes >= 4096
+        && request.resource.data.maxChunkBytes <= 180000
+        && request.resource.data.verifiedBy == request.auth.uid
+        && request.resource.data.verifiedByEmail == emailKey()
+        && request.resource.data.verifiedAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /stagingMigrationBackups/{companyId}/runs/{runId}/chunks/{chunkId} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly(['schema','environment','backupId','chunkId','collection','index','items','sourceHash','sourceVersionHash','createdAt','createdBy','createdByEmail'])
+        && request.resource.data.schema == 'danbridge-immutable-migration-backup-chunk-v2'
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.backupId == runId
+        && request.resource.data.chunkId == chunkId
+        && request.resource.data.collection in ['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches']
+        && request.resource.data.index is int
+        && request.resource.data.index >= 0
+        && request.resource.data.items is list
+        && request.resource.data.sourceHash is string
+        && request.resource.data.sourceHash.size() > 0
+        && request.resource.data.sourceHash.size() == 64
+        && request.resource.data.sourceVersionHash is string
+        && request.resource.data.sourceVersionHash.size() > 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdByEmail == emailKey();
+      allow update, delete: if false;
+    }
+
     // Owner 對公司命名空間具有完整權限。Firestore 會將重疊 match 以 OR 判斷，
     // 因此 lessonMeta、lessonReports、teacherViews 等新增子集合不會因漏寫 match 而阻擋 Owner。
     match /companies/{companyId}/{document=**} {

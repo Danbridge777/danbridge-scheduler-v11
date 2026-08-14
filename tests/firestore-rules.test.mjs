@@ -799,4 +799,27 @@ describe('staging record-shadow verified run 與原子啟用', () => {
     }));
     await assertFails(updateDoc(legacyRef,verifiedFields));
   });
+
+  test('遷移前備份分片與 verified manifest 建立後不可覆寫或刪除', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),backupId='migration-backup-1',sha='a'.repeat(64);
+    const chunkRef=doc(owner,`stagingMigrationBackups/${COMPANY_ID}/runs/${backupId}/chunks/lessons-0000`);
+    const chunk={schema:'danbridge-immutable-migration-backup-chunk-v2',environment:'staging',backupId,chunkId:'lessons-0000',collection:'lessons',index:0,items:[{id:'lesson-1'}],sourceHash:sha,sourceVersionHash:'legacy-hash-v1',createdAt:serverTimestamp(),createdBy:'owner-uid',createdByEmail:OWNER_EMAIL};
+    await assertSucceeds(setDoc(chunkRef,chunk));
+    await assertFails(setDoc(chunkRef,{...chunk,items:[]}));
+    await assertFails(updateDoc(chunkRef,{sourceHash:'hash-v2'}));
+    await assertFails(deleteDoc(chunkRef));
+    await assertFails(getDoc(doc(teacher,`stagingMigrationBackups/${COMPANY_ID}/runs/${backupId}/chunks/lessons-0000`)));
+    await assertFails(setDoc(doc(teacher,`stagingMigrationBackups/${COMPANY_ID}/runs/teacher/chunks/lessons-0000`),{...chunk,backupId:'teacher',createdBy:'teacher-uid',createdByEmail:TEACHER_EMAIL}));
+
+    const collectionOrder=['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches'];
+    const collections=Object.fromEntries(collectionOrder.map(key=>[key,{count:key==='lessons'?1:0,chunks:key==='lessons'?1:0}]));
+    const manifestRef=doc(owner,`stagingMigrationBackups/${COMPANY_ID}/runs/${backupId}`);
+    const manifest={schema:'danbridge-immutable-migration-backup-v2',environment:'staging',state:'verified',backupId,sourceHash:sha,sourceVersionHash:'legacy-hash-v1',collectionOrder,collections,chunkCount:1,recordCount:1,maxChunkBytes:180000,verifiedHash:sha,verifiedBy:'owner-uid',verifiedByEmail:OWNER_EMAIL,verifiedAt:serverTimestamp()};
+    await assertFails(setDoc(doc(owner,`stagingMigrationBackups/${COMPANY_ID}/runs/production`),{...manifest,backupId:'production',environment:'production'}));
+    await assertFails(setDoc(doc(owner,`stagingMigrationBackups/${COMPANY_ID}/runs/wrong-hash`),{...manifest,backupId:'wrong-hash',verifiedHash:'other'}));
+    await assertSucceeds(setDoc(manifestRef,manifest));
+    await assertFails(updateDoc(manifestRef,{recordCount:2}));
+    await assertFails(deleteDoc(manifestRef));
+    await assertFails(getDoc(doc(teacher,`stagingMigrationBackups/${COMPANY_ID}/runs/${backupId}`)));
+  });
 });
