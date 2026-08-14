@@ -870,4 +870,16 @@ describe('staging record-shadow verified run 與原子啟用', () => {
     await assertFails(setDoc(doc(owner,`productionFullRecordShadows/${COMPANY_ID}/collections/teachers/records/staging-env`),{...base,collection:'teachers',recordId:'staging-env',record:{id:'staging-env'},recordIndex:null}));
     await assertFails(setDoc(doc(teacher,`productionFullRecordShadows/${COMPANY_ID}/collections/teachers/records/teacher-1`),{...productionBase,collection:'teachers',recordId:'teacher-1',record:{id:'teacher-1'},recordIndex:null,updatedBy:'teacher-uid',updatedByEmail:TEACHER_EMAIL}));
   });
+
+  test('隔離角色逐筆候選只允許 Daniel／Catherine Owner，其他現行角色完全不可讀寫',async()=>{
+    const owner=auth('owner-uid',OWNER_EMAIL),backupOwner=auth('backup-owner-uid',BACKUP_OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),scheduler=auth('scheduler-2-uid',SECOND_SCHEDULER_EMAIL),manager=auth('manager-uid',MANAGER_EMAIL),runId='role-run-12345678';
+    const payload=(environment,email=SECOND_SCHEDULER_EMAIL)=>({schema:'danbridge-role-view-candidate-v1',environment,companyId:COMPANY_ID,runId,sourceHash:'source-hash-123',viewId:'aa-view',email,kind:'scheduler',viewHash:'view-hash-123',collection:'lessons',recordId:'lesson-1',record:{id:'lesson-1'},recordIndex:0,createdAt:serverTimestamp(),createdBy:'owner-uid',createdByEmail:OWNER_EMAIL});
+    const stagingPath=`stagingRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/aa-view/collections/lessons/records/lesson-1`,stagingRef=doc(owner,stagingPath);
+    await assertSucceeds(setDoc(stagingRef,payload('staging')));await assertSucceeds(getDoc(stagingRef));await assertFails(updateDoc(stagingRef,{viewHash:'changed-hash'}));await assertFails(deleteDoc(stagingRef));
+    for(const db of [teacher,scheduler,manager]){await assertFails(getDoc(doc(db,stagingPath)));await assertFails(setDoc(doc(db,`stagingRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/aa-view/collections/lessons/records/${db===teacher?'teacher-write':db===scheduler?'scheduler-write':'manager-write'}`),{...payload('staging'),recordId:db===teacher?'teacher-write':db===scheduler?'scheduler-write':'manager-write',record:{id:db===teacher?'teacher-write':db===scheduler?'scheduler-write':'manager-write'},createdBy:'forged',createdByEmail:TEACHER_EMAIL}))}
+    const backupPath=`stagingRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/backup-view/collections/lessons/records/lesson-backup`;
+    await assertSucceeds(setDoc(doc(backupOwner,backupPath),{...payload('staging',BACKUP_OWNER_EMAIL),viewId:'backup-view',recordId:'lesson-backup',record:{id:'lesson-backup'},createdBy:'backup-owner-uid',createdByEmail:BACKUP_OWNER_EMAIL}));
+    const productionPath=`productionRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/aa-view/collections/lessons/records/lesson-1`;
+    await assertSucceeds(setDoc(doc(owner,productionPath),payload('production')));await assertFails(getDoc(doc(scheduler,productionPath)));await assertFails(setDoc(doc(owner,`productionRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/aa-view/collections/lessons/records/wrong-env`),{...payload('staging'),recordId:'wrong-env',record:{id:'wrong-env'}}));
+  });
 });

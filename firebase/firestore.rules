@@ -307,6 +307,59 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // 角色檢視逐筆候選：每個 run 完全隔離且不可覆寫；尚未成為 aa／老師／管理者讀取來源。
+    match /stagingRoleViewCandidates/{companyId}/runs/{runId}/views/{viewId}/collections/{collectionId}/records/{recordId} {
+      allow read: if isOwner() && companyId == 'danbridge';
+      allow create: if isOwner()
+        && companyId == 'danbridge'
+        && collectionId in ['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches']
+        && request.resource.data.keys().hasOnly(['schema','environment','companyId','runId','sourceHash','viewId','email','kind','viewHash','collection','recordId','record','recordIndex','createdAt','createdBy','createdByEmail'])
+        && request.resource.data.schema == 'danbridge-role-view-candidate-v1'
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.companyId == companyId
+        && request.resource.data.runId == runId
+        && request.resource.data.viewId == viewId
+        && request.resource.data.collection == collectionId
+        && request.resource.data.recordId == recordId
+        && request.resource.data.email is string
+        && request.resource.data.kind in ['scheduler','teacher','branch_manager']
+        && request.resource.data.sourceHash is string && request.resource.data.sourceHash.size() >= 8
+        && request.resource.data.viewHash is string && request.resource.data.viewHash.size() >= 8
+        && request.resource.data.record is map
+        && request.resource.data.recordIndex is int && request.resource.data.recordIndex >= 0
+        && ((collectionId == 'changes' && recordId.matches('seq_[0-9]{8}_[0-9a-f]{8}')) || (collectionId != 'changes' && request.resource.data.record.id == recordId))
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdByEmail == emailKey();
+      allow update, delete: if false;
+    }
+
+    match /productionRoleViewCandidates/{companyId}/runs/{runId}/views/{viewId}/collections/{collectionId}/records/{recordId} {
+      allow read: if isOwner() && companyId == 'danbridge';
+      allow create: if isOwner()
+        && companyId == 'danbridge'
+        && collectionId in ['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches']
+        && request.resource.data.keys().hasOnly(['schema','environment','companyId','runId','sourceHash','viewId','email','kind','viewHash','collection','recordId','record','recordIndex','createdAt','createdBy','createdByEmail'])
+        && request.resource.data.schema == 'danbridge-role-view-candidate-v1'
+        && request.resource.data.environment == 'production'
+        && request.resource.data.companyId == companyId
+        && request.resource.data.runId == runId
+        && request.resource.data.viewId == viewId
+        && request.resource.data.collection == collectionId
+        && request.resource.data.recordId == recordId
+        && request.resource.data.email is string
+        && request.resource.data.kind in ['scheduler','teacher','branch_manager']
+        && request.resource.data.sourceHash is string && request.resource.data.sourceHash.size() >= 8
+        && request.resource.data.viewHash is string && request.resource.data.viewHash.size() >= 8
+        && request.resource.data.record is map
+        && request.resource.data.recordIndex is int && request.resource.data.recordIndex >= 0
+        && ((collectionId == 'changes' && recordId.matches('seq_[0-9]{8}_[0-9a-f]{8}')) || (collectionId != 'changes' && request.resource.data.record.id == recordId))
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdByEmail == emailKey();
+      allow update, delete: if false;
+    }
+
     // verified run 與啟用指標位於公司 wildcard 外。它們只描述 staging 影子資料，
     // 不會改變目前讀取來源；啟用指標仍須與 legacy 主文件的 clientHash 完全一致。
     match /stagingRecordShadowRuns/{companyId}/runs/{runId} {

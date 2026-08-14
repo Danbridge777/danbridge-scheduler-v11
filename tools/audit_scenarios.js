@@ -320,7 +320,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.79'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.83'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -493,6 +493,8 @@ assert.deepEqual(Array.from(branchView.students,row=>row.id), ['s1']);
 assert.deepEqual(Array.from(branchView.teachers,row=>row.id), ['t1']);
 assert.deepEqual(Array.from(branchView.fixedExpenses, row => row.id), ['expense']);
 assert.deepEqual(Array.from(branchView.collectionRecords,row=>row.id), ['payment']);
+assert.match(cloudSource,/function buildCurrentRoleViewCandidates[\s\S]*filteredSchedulerDB\(sourceDb\)[\s\S]*filteredTeacherDB\(sourceDb,access\.teacherId\)[\s\S]*filteredBranchDB\(sourceDb,access\.branchIds\)/,'role-record candidates reuse the exact live permission projections instead of a duplicate permission model');
+assert.match(cloudSource,/function stagingRoleViewCandidateGuard\(\)\{if\(DANBRIDGE_ENVIRONMENT!==\x27staging\x27\|\|cloudRole!==\x27owner\x27\)/,'role-record candidate writes remain staging Owner only');
 
 const notificationStart = cloudSource.indexOf('const SCHEDULE_NOTIFICATION_FIELDS');
 const notificationEnd = cloudSource.indexOf('async function publishScheduleChangeNotifications');

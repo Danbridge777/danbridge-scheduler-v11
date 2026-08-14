@@ -4,17 +4,18 @@ import fs from 'node:fs';
 
 const source=fs.readFileSync(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');
 const adapterSource=fs.readFileSync(new URL('../js/core/firebase-record-shadow-adapter.js',import.meta.url),'utf8');
+const roleCandidateAdapterSource=fs.readFileSync(new URL('../js/core/firebase-role-view-candidate-adapter.js',import.meta.url),'utf8');
 const pwaSource=fs.readFileSync(new URL('../js/core/pwa-installation.js',import.meta.url),'utf8');
 
 test('頁面匯入獨立 record-shadow adapter 且只公開專屬手動入口',()=>{
- assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.79'/);
+ assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.83'/);
  assert.match(source,/window\.__danbridgeRunStagingRecordShadow/);
  assert.match(source,/window\.__danbridgeGetStagingRecordShadowDiagnostic/);
  assert.doesNotMatch(source,/queueStagingRecordShadow[^\n]*uploadOwnerState|uploadOwnerState[^\n]*queueStagingRecordShadow/);
 });
 
 test('Checkpoint B 以版本化 service worker 解除舊 staging 快取',()=>{
- assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.79'/);
+ assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.83'/);
 });
 
 test('staging Owner URL 測試入口只操作專用 ID 並保留既有影子狀態',()=>{
@@ -81,4 +82,16 @@ test('staging 實站候選入口支援正確與錯誤 sourceHash，且永遠唯�
  assert.match(source,/stagingFullRecordCandidateResult/);
  assert.match(source,/state:'blocked',writes:0,readTakeover:false/);
  assert.doesNotMatch(source,/stagingFullRecordCandidateResult=JSON\.stringify\(\{\.\.\.result/);
+});
+
+test('角色逐筆候選直接重用現行 aa、老師、管理者篩選且不接管讀取',()=>{
+ assert.match(source,/buildCurrentRoleViewCandidates/);
+ assert.match(source,/kind='scheduler';db=filteredSchedulerDB\(sourceDb\)/);
+ assert.match(source,/kind='teacher';db=filteredTeacherDB\(sourceDb,access\.teacherId\)/);
+ assert.match(source,/kind='branch_manager';db=filteredBranchDB\(sourceDb,access\.branchIds\)/);
+ assert.match(source,/get\('roleViewCandidateTest'\)/);
+ assert.match(source,/permissionsSource:'existing-filter-functions',readTakeover:false/);
+ assert.doesNotMatch(source,/publishScopedViews[^}]+writeAndVerify|uploadOwnerState[^}]+writeAndVerify/);
+ assert.doesNotMatch(source,/__danbridgeSetDB[^\n]+runStagingRoleViewCandidateScenario|runStagingRoleViewCandidateScenario[^\n]+__danbridgeSetDB/);
+ assert.doesNotMatch(roleCandidateAdapterSource,/deleteDoc|updateDoc|schedulerViews|teacherViews|branchViews/);
 });

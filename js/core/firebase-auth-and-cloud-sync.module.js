@@ -1,12 +1,13 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.79';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.79';
-import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.79';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.79';
-import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.79';
-import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.79';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.83';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.83';
+import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.83';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.83';
+import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.83';
+import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.83';
+import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.83';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -19,7 +20,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.79';
+const APP_RELEASE='20.26.83';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1823,6 +1824,34 @@ async function auditProductionRoleViews(sourceDb){
   if(!storedDb||storedHash!==expectedHash||actualHash!==expectedHash)issues.push({email,kind,reason:!storedDb?'missing':(storedHash!==expectedHash?'stored-hash-mismatch':'content-hash-mismatch')});
  }
  return{...counts,total:counts.schedulers+counts.teachers+counts.branchManagers,verified:issues.length===0,issueCount:issues.length,issues};
+}
+async function buildCurrentRoleViewCandidates(sourceDb){
+ const accessDocs=await getCompanyAccessDocs(),views=[];
+ for(const accessDoc of accessDocs){
+  const access=accessDoc.data(),email=String(access.email||accessDoc.id||'').trim().toLowerCase();
+  if(access.active===false||!email||access.role==='owner')continue;
+  let kind='',db=null;
+  if(access.role==='teacher'&&access.teacherId){if(SCHEDULER_ACCOUNT_EMAILS.has(email)){kind='scheduler';db=filteredSchedulerDB(sourceDb)}else{kind='teacher';db=filteredTeacherDB(sourceDb,access.teacherId)}}
+  else if(access.role==='branch_manager'&&Array.isArray(access.branchIds)&&access.branchIds.length){kind='branch_manager';db=filteredBranchDB(sourceDb,access.branchIds)}
+  if(!db)continue;
+  views.push({viewId:`${kind}--${encodeURIComponent(email)}`,email,kind,db,viewHash:dataHash(db)});
+ }
+ return views.sort((a,b)=>a.viewId.localeCompare(b.viewId));
+}
+function stagingRoleViewCandidateGuard(){if(DANBRIDGE_ENVIRONMENT!=='staging'||cloudRole!=='owner')throw new Error('staging 角色逐筆候選只允許 staging Owner')}
+function firestoreRoleViewCandidateAdapter({failBatch=0}={}){let transactionNumber=0;return createFirebaseRoleViewCandidateAdapter({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole,actor:{uid:cloudUid,email:cloudEmailKey},serverTimestamp,hashDb:dataHash,getCollectionDocuments:async path=>{const snapshot=await getDocs(collection(cloud,...path.split('/')));return snapshot.docs.map(row=>({id:row.id,data:row.data()}))},runBatchTransaction:async callback=>{transactionNumber++;if(failBatch===transactionNumber)throw new Error(`staging 角色候選測試注入：第 ${failBatch} 批失敗`);return runTransaction(cloud,transaction=>callback({get:path=>transaction.get(doc(cloud,...path.split('/'))),set:(path,payload)=>transaction.set(doc(cloud,...path.split('/')),payload,{merge:false})}))}})}
+async function runStagingRoleViewCandidateScenario({failureResume=false}={}){
+ stagingRoleViewCandidateGuard();const sourceDb=deepCopy(window.__danbridgeGetDB?.()),sourceHash=dataHash(sourceDb),views=await buildCurrentRoleViewCandidates(sourceDb),runId=doc(collection(cloud,'stagingRoleViewCandidates',COMPANY_ID,'runs')).id;
+ if(!views.length)throw new Error('staging 沒有可驗證的現行角色');
+ const options={runId,sourceHash,views,batchSize:400};let interrupted=null;
+ if(failureResume){try{await firestoreRoleViewCandidateAdapter({failBatch:2}).writeAndVerify(options)}catch(error){interrupted={blocked:true,completedBatches:Number(error?.completedBatches)||0,completedWrites:Number(error?.completedWrites)||0,error:String(error?.message||error)}}}
+ const result=await firestoreRoleViewCandidateAdapter().writeAndVerify(options);
+ return{state:'verified',runId,sourceHash,viewCount:result.viewCount,documentCount:result.documentCount,writes:result.writes,skippedWrites:result.skippedWrites,interrupted,permissionsSource:'existing-filter-functions',readTakeover:false};
+}
+if(DANBRIDGE_ENVIRONMENT==='staging'){
+ window.__danbridgeRunStagingRoleViewCandidate=runStagingRoleViewCandidateScenario;
+ const roleViewCandidateTest=new URLSearchParams(location.search).get('roleViewCandidateTest');
+ if(roleViewCandidateTest){let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingRoleViewCandidateResult=JSON.stringify(await runStagingRoleViewCandidateScenario({failureResume:roleViewCandidateTest==='failure-resume'}))}catch(error){document.body.dataset.stagingRoleViewCandidateResult=JSON.stringify({state:'blocked',error:String(error?.message||error),readTakeover:false})}},200)}
 }
 async function runProductionFullRecordCandidateVerification(expectedSourceHash){
  productionFullRecordMigrationGuard();const targetDb=deepCopy(window.__danbridgeGetDB?.()),sourceHash=dataHash(targetDb);
