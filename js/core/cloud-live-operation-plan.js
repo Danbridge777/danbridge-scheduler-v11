@@ -82,6 +82,7 @@ export function buildLiveOperationPlan(currentState,targetDb,{deviceId,startSequ
   for(const id of [...newById.keys()].filter(id=>!oldById.has(id)).sort()){const kind=revisionFor(revisions,collection,id)>0?'revives':'creates';appendOperation(collection,newById.get(id),{kind})}
  }
  const finalHash=recordDataHash(targetDb);if(runningHash!==finalHash)throw new Error('逐筆操作規劃後最終 hash 不符');
- const plan={schema:'danbridge-live-operation-plan-v1',environment:'staging',companyId:'danbridge',deviceId,startSequence,nextSequence:sequence,baseHash,finalHash,collectionCount:FULL_RECORD_COLLECTIONS.length,operations,operationCount:operations.length,counts,estimatedFirestoreReads:operations.length*2,estimatedFirestoreWrites:operations.length*2};
+ const sourceCounts=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,before[collection].length])),targetCounts=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,after[collection].length]));
+ const plan={schema:'danbridge-live-operation-plan-v1',environment:'staging',companyId:'danbridge',deviceId,startSequence,nextSequence:sequence,baseHash,finalHash,collectionCount:FULL_RECORD_COLLECTIONS.length,sourceCounts,targetCounts,sourceRecordCount:Object.values(sourceCounts).reduce((sum,count)=>sum+count,0),targetRecordCount:Object.values(targetCounts).reduce((sum,count)=>sum+count,0),operations,operationCount:operations.length,counts,estimatedFirestoreReads:operations.length*2,estimatedFirestoreWrites:operations.length*2};
  verifyLiveOperationPlan(plan,currentDb,targetDb,{revisions:currentState.revisions});return plan;
 }
