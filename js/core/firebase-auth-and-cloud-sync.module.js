@@ -1,11 +1,11 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.70';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.70';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.70';
-import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.70';
-import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.70';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.72';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.72';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.72';
+import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.72';
+import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.72';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -18,7 +18,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.70';
+const APP_RELEASE='20.26.72';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1980,9 +1980,47 @@ async function verifyStagingMigrationRestoreReceipt(drillIdValue){
  if(String(mainSnap.data()?.clientHash||'')!==receipt.mainVersionHash)throw new Error('receipt 建立後主文件版本已改變');
  return{drillId,sourceBackupId:receipt.sourceBackupId,sourceHash:receipt.sourceHash,restoredHash:receipt.restoredHash,sourceChunkCount:receipt.sourceChunkCount,restoredChunkCount:receipt.restoredChunkCount,recordCount:receipt.recordCount,mainVersionHash:receipt.mainVersionHash,mainUnchanged:true,persisted:true};
 }
+async function runStagingMigrationRestoreFailureScenario(sourceBackupId,scenarioValue){
+ stagingMigrationBackupGuard();
+ const backupId=String(sourceBackupId||'').trim(),scenario=String(scenarioValue||'').trim();
+ if(!/^[A-Za-z0-9_-]{8,128}$/.test(backupId))throw new Error('失敗演練 backupId 無效');
+ if(!['missing-chunk','extra-chunk','hash-mismatch','version-change','interruption-resume'].includes(scenario))throw new Error('未知的復原失敗演練情境');
+ const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main'),backupRef=doc(cloud,'stagingMigrationBackups',COMPANY_ID,'runs',backupId);
+ const [mainBeforeSnap,backupSnap,sourceChunksSnap]=await Promise.all([getDoc(mainRef),getDoc(backupRef),getDocs(collection(cloud,'stagingMigrationBackups',COMPANY_ID,'runs',backupId,'chunks'))]);
+ if(!mainBeforeSnap.exists()||!backupSnap.exists())throw new Error('失敗演練來源不存在');
+ const backup=backupSnap.data();verifyImmutableMigrationBackupManifest(backup,{currentSourceHash:backup.sourceHash});
+ const sourcePlan={...deepCopy(backup),state:'uploading'},sourceReadback=verifyImmutableMigrationBackupReadback(sourcePlan,sourceChunksSnap.docs.map(row=>row.data()));
+ const drillRef=doc(collection(cloud,'stagingMigrationRestoreDrills',COMPANY_ID,'runs')),{plan,chunks}=prepareImmutableMigrationBackup(sourceReadback.db,{backupId:drillRef.id,sourceVersionHash:backup.sourceVersionHash});
+ const writeChunks=async rows=>{for(let offset=0;offset<rows.length;offset+=100){const batch=rows.slice(offset,offset+100);await runTransaction(cloud,async transaction=>{const refs=batch.map(chunk=>doc(cloud,'stagingMigrationRestoreDrills',COMPANY_ID,'runs',drillRef.id,'chunks',chunk.chunkId)),existing=await Promise.all(refs.map(ref=>transaction.get(ref)));if(existing.some(snapshot=>snapshot.exists()))throw new Error('失敗演練分片意外重複');batch.forEach((chunk,index)=>transaction.set(refs[index],{...chunk,sourceBackupId:backupId,createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false}))})}};
+ const readSandbox=async()=>{const snapshot=await getDocs(collection(cloud,'stagingMigrationRestoreDrills',COMPANY_ID,'runs',drillRef.id,'chunks'));return{snapshot,rows:snapshot.docs.map(row=>row.data())}};
+ const mainVersionHash=String(mainBeforeSnap.data()?.clientHash||'');
+ if(scenario==='interruption-resume'){
+  const split=Math.max(1,Math.floor(chunks.length/2));await writeChunks(chunks.slice(0,split));
+  let interruptedError='';try{const partial=await readSandbox();verifyImmutableMigrationBackupReadback(plan,partial.rows)}catch(error){interruptedError=String(error?.message||error)}
+  if(!interruptedError)throw new Error('中斷後的不完整分片未被拒絕');
+  await writeChunks(chunks.slice(split));const resumed=await readSandbox(),restored=verifyImmutableMigrationBackupReadback(plan,resumed.rows),mainAfter=await getDoc(mainRef);
+  if(restored.verifiedHash!==backup.sourceHash||String(mainAfter.data()?.clientHash||'')!==mainVersionHash)throw new Error('中斷續跑驗證失敗或主資料改變');
+  return{scenario,drillId:drillRef.id,rejected:true,interruptedError,resumed:true,chunkCount:resumed.snapshot.size,recordCount:restored.recordCount,sourceHash:backup.sourceHash,restoredHash:restored.verifiedHash,mainUnchanged:true,receiptCreated:false};
+ }
+ let faultChunks=chunks.map(row=>deepCopy(row));
+ if(scenario==='missing-chunk')faultChunks=faultChunks.slice(1);
+ if(scenario==='extra-chunk'){const extra=deepCopy(faultChunks.at(-1));extra.index=9999;extra.chunkId=`${extra.collection}-9999`;faultChunks.push(extra)}
+ if(scenario==='hash-mismatch'){const first=faultChunks.find(row=>row.items.length);if(!first)throw new Error('沒有可破壞的測試分片');first.items[0]={...first.items[0],__restoreFault:'hash-mismatch'}}
+ await writeChunks(faultChunks);const sandbox=await readSandbox();let rejection='';
+ try{
+  const restored=verifyImmutableMigrationBackupReadback(plan,sandbox.rows);
+  const currentMain=await getDoc(mainRef),expectedMainVersion=scenario==='version-change'?`stale-${mainVersionHash}`:mainVersionHash;
+  if(String(currentMain.data()?.clientHash||'')!==expectedMainVersion)throw new Error('復原演練期間主文件版本改變，不建立 verified receipt');
+  if(restored.verifiedHash!==backup.sourceHash)throw new Error('復原沙盒 SHA-256 與來源備份不一致');
+ }catch(error){rejection=String(error?.message||error)}
+ if(!rejection)throw new Error(`${scenario} 未被 fail-closed 拒絕`);
+ const mainAfter=await getDoc(mainRef);if(String(mainAfter.data()?.clientHash||'')!==mainVersionHash)throw new Error('失敗演練不應改變主資料');
+ return{scenario,drillId:drillRef.id,rejected:true,rejection,writtenChunkCount:sandbox.snapshot.size,expectedChunkCount:plan.chunkCount,mainVersionHash,mainUnchanged:true,receiptCreated:false};
+}
 if(DANBRIDGE_ENVIRONMENT==='staging'){
  window.__danbridgeRunStagingMigrationRestoreDrill=runStagingMigrationRestoreDrill;
  window.__danbridgeVerifyStagingMigrationRestoreReceipt=verifyStagingMigrationRestoreReceipt;
+ window.__danbridgeRunStagingMigrationRestoreFailureScenario=runStagingMigrationRestoreFailureScenario;
  window.__danbridgeGetStagingMigrationRestoreDiagnostic=()=>{stagingMigrationBackupGuard();return deepCopy(stagingMigrationRestoreDiagnostic)};
  const migrationRestoreDrill=new URLSearchParams(location.search).get('migrationRestoreDrill');
  if(migrationRestoreDrill){
@@ -1991,6 +2029,10 @@ if(DANBRIDGE_ENVIRONMENT==='staging'){
  const migrationRestoreVerify=new URLSearchParams(location.search).get('migrationRestoreVerify');
  if(migrationRestoreVerify){
   let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingMigrationRestoreVerifyResult=JSON.stringify(await verifyStagingMigrationRestoreReceipt(migrationRestoreVerify))}catch(error){document.body.dataset.stagingMigrationRestoreVerifyResult=JSON.stringify({error:String(error?.message||error)})}},200);
+ }
+ const migrationRestoreFailure=new URLSearchParams(location.search).get('migrationRestoreFailure'),migrationRestoreFailureBackup=new URLSearchParams(location.search).get('migrationRestoreBackup');
+ if(migrationRestoreFailure&&migrationRestoreFailureBackup){
+  let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingMigrationRestoreFailureResult=JSON.stringify(await runStagingMigrationRestoreFailureScenario(migrationRestoreFailureBackup,migrationRestoreFailure))}catch(error){document.body.dataset.stagingMigrationRestoreFailureResult=JSON.stringify({scenario:migrationRestoreFailure,error:String(error?.message||error)})}},200);
  }
 }
 

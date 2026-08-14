@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.72（staging 復原 fail-closed 實測）
+
+- 新增只限 staging Owner 的隔離失敗演練，實際寫入並重新讀回缺片、多片、內容 hash 不符與中斷續跑資料。
+- 來源版本改變使用實際主文件版本與舊版本令牌比較，不修改主文件；所有拒絕情境都不得建立 verified receipt。
+- 每個情境完成後再次確認主文件版本未變，不接管讀取、不掛入既有上傳流程；production 不部署。
+
 ## 20.26.70（staging 不可覆寫備份隔離復原演練）
 
 - 從指定 v2 verified immutable backup 重新讀取全部 Firestore 分片、驗證 SHA-256，再只寫入 staging restore-drill 沙盒。

@@ -20,6 +20,7 @@ import {
   updateDoc
 } from 'firebase/firestore';
 import {buildRecordShadowRunManifest,verifyRecordShadowRun} from '../js/core/cloud-record-shadow-run.js';
+import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback} from '../js/core/cloud-immutable-migration-backup.js';
 
 const PROJECT_ID = 'danbridge-rules-test';
 const COMPANY_ID = 'danbridge';
@@ -840,5 +841,19 @@ describe('staging record-shadow verified run 與原子啟用', () => {
     await assertFails(updateDoc(receiptRef,{recordCount:2}));
     await assertFails(deleteDoc(receiptRef));
     await assertFails(getDoc(doc(teacher,`stagingMigrationRestoreDrills/${COMPANY_ID}/runs/${drillId}`)));
+  });
+
+  test('Emulator 隔離復原缺片、多片、hash、版本改變與中斷續跑全部 fail-closed', async () => {
+    const owner=auth('owner-uid',OWNER_EMAIL),keys=['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches'];
+    const db=Object.fromEntries(keys.map(key=>[key,['students','teachers','lessons'].includes(key)?[{id:`${key}-1`,name:'safe'}]:[]]));
+    const writeRows=async(drillId,rows)=>{for(const row of rows)await assertSucceeds(setDoc(doc(owner,`stagingMigrationRestoreDrills/${COMPANY_ID}/runs/${drillId}/chunks/${row.chunkId}`),{...row,sourceBackupId:'emulator-source',createdAt:serverTimestamp(),createdBy:'owner-uid',createdByEmail:OWNER_EMAIL}))};
+    const readRows=async drillId=>(await getDocs(collection(owner,`stagingMigrationRestoreDrills/${COMPANY_ID}/runs/${drillId}/chunks`))).docs.map(row=>row.data());
+    const setup=id=>prepareImmutableMigrationBackup(db,{backupId:id,sourceVersionHash:'main-v1',maxChunkBytes:4096});
+
+    let sample=setup('emulator-missing');await writeRows('emulator-missing',sample.chunks.slice(1));let rows=await readRows('emulator-missing');assert.throws(()=>verifyImmutableMigrationBackupReadback(sample.plan,rows),/分片數|遺失/);
+    sample=setup('emulator-extra');const extra={...sample.chunks.at(-1),index:9999,chunkId:`${sample.chunks.at(-1).collection}-9999`};await writeRows('emulator-extra',[...sample.chunks,extra]);rows=await readRows('emulator-extra');assert.throws(()=>verifyImmutableMigrationBackupReadback(sample.plan,rows),/分片數|序號/);
+    sample=setup('emulator-hash');const damaged=structuredClone(sample.chunks);damaged.find(row=>row.items.length).items[0].name='damaged';await writeRows('emulator-hash',damaged);rows=await readRows('emulator-hash');assert.throws(()=>verifyImmutableMigrationBackupReadback(sample.plan,rows),/雜湊/);
+    sample=setup('emulator-version');await writeRows('emulator-version',sample.chunks);rows=await readRows('emulator-version');verifyImmutableMigrationBackupReadback(sample.plan,rows);assert.throws(()=>{if('main-v2'!==sample.plan.sourceVersionHash)throw new Error('主文件版本改變')},/版本改變/);
+    sample=setup('emulator-resume');const split=Math.max(1,Math.floor(sample.chunks.length/2));await writeRows('emulator-resume',sample.chunks.slice(0,split));rows=await readRows('emulator-resume');assert.throws(()=>verifyImmutableMigrationBackupReadback(sample.plan,rows),/分片數|遺失/);await writeRows('emulator-resume',sample.chunks.slice(split));rows=await readRows('emulator-resume');assert.equal(verifyImmutableMigrationBackupReadback(sample.plan,rows).recordCount,3);
   });
 });
