@@ -1,13 +1,13 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.83';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.83';
-import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.83';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.83';
-import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.83';
-import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.83';
-import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.83';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.84';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.84';
+import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.84';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.84';
+import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.84';
+import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.84';
+import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.84';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -20,7 +20,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.83';
+const APP_RELEASE='20.26.84';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1852,6 +1852,18 @@ if(DANBRIDGE_ENVIRONMENT==='staging'){
  window.__danbridgeRunStagingRoleViewCandidate=runStagingRoleViewCandidateScenario;
  const roleViewCandidateTest=new URLSearchParams(location.search).get('roleViewCandidateTest');
  if(roleViewCandidateTest){let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingRoleViewCandidateResult=JSON.stringify(await runStagingRoleViewCandidateScenario({failureResume:roleViewCandidateTest==='failure-resume'}))}catch(error){document.body.dataset.stagingRoleViewCandidateResult=JSON.stringify({state:'blocked',error:String(error?.message||error),readTakeover:false})}},200)}
+}
+async function runProductionRoleViewCandidate(expectedSourceHash){
+ productionFullRecordMigrationGuard();const sourceDb=deepCopy(window.__danbridgeGetDB?.()),sourceHash=dataHash(sourceDb);
+ if(!expectedSourceHash||sourceHash!==expectedSourceHash)throw new Error(`production 角色候選來源不符：預期 ${expectedSourceHash||'—'}，實際 ${sourceHash}`);
+ const views=await buildCurrentRoleViewCandidates(sourceDb),runId=doc(collection(cloud,'productionRoleViewCandidates',COMPANY_ID,'runs')).id;
+ if(!views.length)throw new Error('production 沒有可驗證的現行角色');
+ const result=await firestoreRoleViewCandidateAdapter().writeAndVerify({runId,sourceHash,views,batchSize:400});
+ return{state:'verified',runId,sourceHash,viewCount:result.viewCount,documentCount:result.documentCount,writes:result.writes,skippedWrites:result.skippedWrites,permissionsSource:'existing-filter-functions',readTakeover:false};
+}
+if(DANBRIDGE_ENVIRONMENT==='production'){
+ const expectedProductionRoleHash=new URLSearchParams(location.search).get('productionRoleViewCandidate');
+ if(expectedProductionRoleHash){let installed=false;const timer=setInterval(()=>{if(installed||cloudRole!=='owner')return;installed=true;clearInterval(timer);const button=document.createElement('button');button.id='productionRoleViewCandidateButton';button.type='button';button.className='btn danger';button.style.cssText='position:fixed;right:18px;bottom:204px;z-index:10002';button.textContent='建立 production 角色逐筆候選';button.onclick=async()=>{button.disabled=true;button.textContent='production 角色候選寫入與讀回中…';try{const result=await runProductionRoleViewCandidate(expectedProductionRoleHash);document.body.dataset.productionRoleViewCandidateResult=JSON.stringify(result);button.textContent=`角色候選通過 ${result.viewCount} 個角色`;button.className='btn ok'}catch(error){document.body.dataset.productionRoleViewCandidateResult=JSON.stringify({state:'blocked',error:String(error?.message||error),readTakeover:false});button.disabled=false;button.textContent='角色候選失敗，未切換讀取';cloudStatus(String(error?.message||error),'error')}};document.body.appendChild(button)},200)}
 }
 async function runProductionFullRecordCandidateVerification(expectedSourceHash){
  productionFullRecordMigrationGuard();const targetDb=deepCopy(window.__danbridgeGetDB?.()),sourceHash=dataHash(targetDb);

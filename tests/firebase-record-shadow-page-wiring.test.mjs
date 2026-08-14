@@ -8,14 +8,14 @@ const roleCandidateAdapterSource=fs.readFileSync(new URL('../js/core/firebase-ro
 const pwaSource=fs.readFileSync(new URL('../js/core/pwa-installation.js',import.meta.url),'utf8');
 
 test('頁面匯入獨立 record-shadow adapter 且只公開專屬手動入口',()=>{
- assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.83'/);
+ assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.84'/);
  assert.match(source,/window\.__danbridgeRunStagingRecordShadow/);
  assert.match(source,/window\.__danbridgeGetStagingRecordShadowDiagnostic/);
  assert.doesNotMatch(source,/queueStagingRecordShadow[^\n]*uploadOwnerState|uploadOwnerState[^\n]*queueStagingRecordShadow/);
 });
 
 test('Checkpoint B 以版本化 service worker 解除舊 staging 快取',()=>{
- assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.83'/);
+ assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.84'/);
 });
 
 test('staging Owner URL 測試入口只操作專用 ID 並保留既有影子狀態',()=>{
@@ -94,4 +94,14 @@ test('角色逐筆候選直接重用現行 aa、老師、管理者篩選且不�
  assert.doesNotMatch(source,/publishScopedViews[^}]+writeAndVerify|uploadOwnerState[^}]+writeAndVerify/);
  assert.doesNotMatch(source,/__danbridgeSetDB[^\n]+runStagingRoleViewCandidateScenario|runStagingRoleViewCandidateScenario[^\n]+__danbridgeSetDB/);
  assert.doesNotMatch(roleCandidateAdapterSource,/deleteDoc|updateDoc|schedulerViews|teacherViews|branchViews/);
+});
+
+test('production 角色逐筆候選需要目前來源 hash 與 Owner 手動按鈕，且不接管讀取',()=>{
+ assert.match(source,/get\('productionRoleViewCandidate'\)/);
+ assert.match(source,/button\.id='productionRoleViewCandidateButton'/);
+ assert.match(source,/sourceHash!==expectedSourceHash/);
+ assert.match(source,/runProductionRoleViewCandidate/);
+ assert.match(source,/permissionsSource:'existing-filter-functions',readTakeover:false/);
+ assert.doesNotMatch(source,/uploadOwnerState[^}]+runProductionRoleViewCandidate/);
+ assert.doesNotMatch(source,/__danbridgeSetDB[^\n]+runProductionRoleViewCandidate|runProductionRoleViewCandidate[^\n]+__danbridgeSetDB/);
 });
