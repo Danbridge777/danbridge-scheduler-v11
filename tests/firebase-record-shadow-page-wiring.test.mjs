@@ -15,7 +15,7 @@ test('頁面匯入獨立 record-shadow adapter 且只公開專屬手動入口',(
 });
 
 test('Checkpoint B 以版本化 service worker 解除舊 staging 快取',()=>{
- assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.92'/);
+ assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.93'/);
 });
 
 test('staging Owner URL 測試入口只操作專用 ID 並保留既有影子狀態',()=>{
@@ -84,6 +84,13 @@ test('staging 實站候選入口支援正確與錯誤 sourceHash，且永遠唯�
  assert.doesNotMatch(source,/stagingFullRecordCandidateResult=JSON\.stringify\(\{\.\.\.result/);
 });
 
+test('staging 備份、復原、重讀與失敗演練全部需要可見手動按鈕，不會因開啟網址自動寫入',()=>{
+ assert.match(source,/function installStagingMigrationActionButton/);
+ for(const id of ['stagingMigrationBackupButton','stagingMigrationRestoreButton','stagingMigrationRestoreVerifyButton','stagingMigrationRestoreFailureButton'])assert.match(source,new RegExp(`id:'${id}'`));
+ assert.match(source,/button\.onclick=async\(\)=>/);assert.match(source,/successLabel\(result\)/);
+ for(const hiddenResult of ['stagingMigrationBackupTestResult','stagingMigrationRestoreTestResult','stagingMigrationRestoreVerifyResult','stagingMigrationRestoreFailureResult'])assert.doesNotMatch(source,new RegExp(hiddenResult));
+});
+
 test('角色逐筆候選直接重用現行 aa、老師、管理者篩選且不接管讀取',()=>{
  assert.match(source,/buildCurrentRoleViewCandidates/);
  assert.match(source,/kind='scheduler';db=filteredSchedulerDB\(sourceDb\)/);
@@ -127,7 +134,7 @@ test('staging 手動逐筆讀取演練核對控制、manifest、legacy hash 與�
 });
 
 test('staging live 預檢只讀取證據與逐筆現況，不寫入、不接管且不掛入既有同步',()=>{
- assert.match(source,/import \{buildStagingLivePreflight\} from '\.\/cloud-staging-live-preflight\.js\?v=20\.26\.92'/);
+ assert.match(source,/import \{buildStagingLivePreflight\} from '\.\/cloud-staging-live-preflight\.js\?v=20\.26\.93'/);
  assert.match(source,/stagingLivePreflightGuard/);assert.match(source,/firebaseConfig\.projectId!=='danbridge-d8877-staging'/);
  assert.match(source,/readStagingLiveRecordSource/);assert.match(source,/stagingLiveRecords/);assert.match(source,/verifyStagingMigrationRestoreReceipt/);
  assert.match(source,/get\('stagingLivePreflight'\)/);assert.match(source,/button\.id='stagingLiveOperationPreflightButton'/);assert.match(source,/button\.onclick=async\(\)=>/);

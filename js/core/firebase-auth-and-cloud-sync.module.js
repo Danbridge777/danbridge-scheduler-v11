@@ -12,14 +12,14 @@ import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest,buildAto
 import {decideRecordReadTakeover} from './cloud-record-read-takeover.js?v=20.26.88';
 import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js?v=20.26.89';
 import {recordDataHash} from './cloud-record-data-hash.js?v=20.26.89';
-import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.92';
-import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.92';
-import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.92';
-import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.92';
-import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.92';
-import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.92';
-import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.92';
-import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.92';
+import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.93';
+import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.93';
+import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.93';
+import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.93';
+import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.93';
+import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.93';
+import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.93';
+import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.93';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -32,7 +32,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.92';
+const APP_RELEASE='20.26.93';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1800,6 +1800,9 @@ async function runStagingFullRecordShadow({failBatch=0,batchSize=400,targetDb:pr
  stagingRecordShadowGuard();const targetDb=deepCopy(providedTargetDb??window.__danbridgeGetDB?.()),sourceHash=dataHash(targetDb);setStagingFullRecordShadowDiagnostic({state:'reading',sourceHash,totalWrites:0,completedWrites:0,totalBatches:0,completedBatches:0,documentCount:0,activeCount:0,tombstoneCount:0,verified:false,error:''});
  try{const result=await firestoreFullRecordShadowAdapter({failBatch}).synchronize(targetDb,{sourceHash,batchSize,onBatchComplete:progress=>setStagingFullRecordShadowDiagnostic({state:'writing',...progress})});setStagingFullRecordShadowDiagnostic({state:'verified',totalWrites:result.writes,completedWrites:result.writes,totalBatches:result.batches,completedBatches:result.batches,documentCount:result.documentCount,activeCount:result.activeCount,tombstoneCount:result.tombstoneCount,verified:true,error:''});return deepCopy(stagingFullRecordShadowDiagnostic)}catch(error){setStagingFullRecordShadowDiagnostic({state:'failed',completedWrites:Number(error?.completedWrites)||stagingFullRecordShadowDiagnostic.completedWrites,completedBatches:Number(error?.completedBatches)||stagingFullRecordShadowDiagnostic.completedBatches,verified:false,error:String(error?.message||error).slice(0,500)});throw error}
 }
+function installStagingMigrationActionButton({id,label,runningLabel,successLabel,run}){
+ let installed=false;const timer=setInterval(()=>{if(installed||cloudRole!=='owner')return;installed=true;clearInterval(timer);const button=document.createElement('button');button.id=id;button.type='button';button.className='btn';button.style.cssText='position:fixed;right:18px;bottom:36px;z-index:10002';button.textContent=label;button.onclick=async()=>{button.disabled=true;button.textContent=runningLabel;try{const result=await run();button.textContent=successLabel(result);button.className='btn ok'}catch(error){button.disabled=false;button.textContent=`已阻擋：${String(error?.message||error).slice(0,120)}`;button.className='btn danger';cloudStatus(String(error?.message||error),'error')}};document.body.appendChild(button)},200)
+}
 if(DANBRIDGE_ENVIRONMENT==='staging'){
  window.__danbridgeRunStagingFullRecordShadow=runStagingFullRecordShadow;
  const fullRecordShadowTest=new URLSearchParams(location.search).get('fullRecordShadowTest');
@@ -2114,9 +2117,7 @@ if(DANBRIDGE_ENVIRONMENT==='staging'){
  window.__danbridgeCreateStagingMigrationBackup=createVerifiedStagingMigrationBackup;
  window.__danbridgeGetStagingMigrationBackupDiagnostic=()=>{stagingMigrationBackupGuard();return deepCopy(stagingMigrationBackupDiagnostic)};
  const migrationBackupTest=new URLSearchParams(location.search).get('migrationBackupTest');
- if(migrationBackupTest==='verified'){
-  let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingMigrationBackupTestResult=JSON.stringify(await createVerifiedStagingMigrationBackup())}catch(error){document.body.dataset.stagingMigrationBackupTestResult=JSON.stringify({error:String(error?.message||error),diagnostic:stagingMigrationBackupDiagnostic})}},200);
- }
+ if(migrationBackupTest==='verified')installStagingMigrationActionButton({id:'stagingMigrationBackupButton',label:'建立 staging verified 備份',runningLabel:'逐片備份並完整讀回中…',run:createVerifiedStagingMigrationBackup,successLabel:result=>`備份通過 ${result.backupId}｜${result.recordCount} 筆`});
 }
 
 let stagingMigrationRestoreDiagnostic={state:'idle',drillId:'',sourceBackupId:'',sourceHash:'',chunkCount:0,recordCount:0,completedChunks:0,verified:false,mainUnchanged:false,error:''};
@@ -2224,17 +2225,11 @@ if(DANBRIDGE_ENVIRONMENT==='staging'){
  window.__danbridgeRunStagingMigrationRestoreFailureScenario=runStagingMigrationRestoreFailureScenario;
  window.__danbridgeGetStagingMigrationRestoreDiagnostic=()=>{stagingMigrationBackupGuard();return deepCopy(stagingMigrationRestoreDiagnostic)};
  const migrationRestoreDrill=new URLSearchParams(location.search).get('migrationRestoreDrill');
- if(migrationRestoreDrill){
-  let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingMigrationRestoreTestResult=JSON.stringify(await runStagingMigrationRestoreDrill(migrationRestoreDrill))}catch(error){document.body.dataset.stagingMigrationRestoreTestResult=JSON.stringify({error:String(error?.message||error),diagnostic:stagingMigrationRestoreDiagnostic})}},200);
- }
+ if(migrationRestoreDrill)installStagingMigrationActionButton({id:'stagingMigrationRestoreButton',label:'執行 staging 復原演練',runningLabel:'逐片重建、讀回並比對主資料中…',run:()=>runStagingMigrationRestoreDrill(migrationRestoreDrill),successLabel:result=>`復原通過 ${result.drillId}｜主資料未變`});
  const migrationRestoreVerify=new URLSearchParams(location.search).get('migrationRestoreVerify');
- if(migrationRestoreVerify){
-  let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingMigrationRestoreVerifyResult=JSON.stringify(await verifyStagingMigrationRestoreReceipt(migrationRestoreVerify))}catch(error){document.body.dataset.stagingMigrationRestoreVerifyResult=JSON.stringify({error:String(error?.message||error)})}},200);
- }
+ if(migrationRestoreVerify)installStagingMigrationActionButton({id:'stagingMigrationRestoreVerifyButton',label:'重新讀回 staging 復原憑證',runningLabel:'重新讀取備份、分片與主資料中…',run:()=>verifyStagingMigrationRestoreReceipt(migrationRestoreVerify),successLabel:result=>`憑證通過 ${result.drillId}｜${result.recordCount} 筆`});
  const migrationRestoreFailure=new URLSearchParams(location.search).get('migrationRestoreFailure'),migrationRestoreFailureBackup=new URLSearchParams(location.search).get('migrationRestoreBackup');
- if(migrationRestoreFailure&&migrationRestoreFailureBackup){
-  let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingMigrationRestoreFailureResult=JSON.stringify(await runStagingMigrationRestoreFailureScenario(migrationRestoreFailureBackup,migrationRestoreFailure))}catch(error){document.body.dataset.stagingMigrationRestoreFailureResult=JSON.stringify({scenario:migrationRestoreFailure,error:String(error?.message||error)})}},200);
- }
+ if(migrationRestoreFailure&&migrationRestoreFailureBackup)installStagingMigrationActionButton({id:'stagingMigrationRestoreFailureButton',label:`執行失敗演練：${migrationRestoreFailure}`,runningLabel:'建立隔離沙盒並驗證 fail-closed…',run:()=>runStagingMigrationRestoreFailureScenario(migrationRestoreFailureBackup,migrationRestoreFailure),successLabel:result=>`已正確拒絕 ${result.scenario}｜主資料未變`});
 }
 
 let stagingLivePreflightDiagnostic={state:'idle',manifestHash:'',operationCount:0,sourceRecordCount:0,targetRecordCount:0,estimatedReads:0,estimatedWrites:0,readBudget:0,writeBudget:0,liveControlExists:false,writes:0,featureFlagOnly:true,uploadOwnerStateAttached:false,readTakeover:false,productionAllowed:false,error:''},stagingLivePreflightEvidence=null;
