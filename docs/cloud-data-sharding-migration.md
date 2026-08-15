@@ -75,7 +75,17 @@
 - 執行前先把完整 manifest 與操作計畫放進同一個 environment／email／manifest 專屬 IndexedDB 原子封套，並重新計算逐筆清單 hash；保存完成後才允許同一交易建立不可覆寫雲端 manifest 與 v2 控制。每次續傳都先核對雲端 manifest；若中斷發生在雲端 manifest 建立前，則由本機封套完整驗證並冪等補建，因此不能遺失恢復依據，也不能越過失敗或隔離的首筆。
 - 每筆 record、控制與不可覆寫完成憑證必須在同一交易推進；實體刪除永久禁止。另一台裝置即使已往後執行，較早操作仍可由憑證辨認為已完成，不會重寫或假確認。完成後重新讀回 16 集合，SHA-256、文件數、有效數與墓碑數全部一致才將控制由 `verifying` 改為 `active`，啟用後再做第二次完整讀回。
 - 前一輪只有在 `active` 完成狀態才能原子換綁下一份 manifest；全域 root revision 延續、每輪 confirmed 計數歸零。Emulator 已連續驗證新增、修改、墓碑、墓碑重建 revision 1→4。
-- 這些執行元件目前只存在本機程式碼，仍未部署 staging 或 production；`uploadOwnerStateAttached: false`、`readTakeover: false`、`productionAllowed: false`。
+- 這些執行元件已於 2026-08-15 以 release `20.26.91` 部署到 `danbridge-d8877-staging`，只提供 Owner 手動測試入口；仍未部署 production，且 `uploadOwnerStateAttached: false`、`readTakeover: false`、`productionAllowed: false`。
+
+## 2026-08-15 staging live gate 紀錄
+
+- staging Hosting 與 Firestore Rules 只用完整專案 ID `danbridge-d8877-staging` 部署；本機 `.firebaserc` 的 default 是 production，因此禁止省略 `--project danbridge-d8877-staging`。
+- staging 線上 `index.html`、`sw.js`、主同步模組、live activation、Firebase adapter 與瀏覽器永久日誌模組的 SHA-256 已逐一比對本機且完全一致。
+- Daniel Owner 實際登入後確認 staging legacy 主資料仍是學生 1、老師 1、課程 1；沒有接管讀取或掛入 `uploadOwnerState()`。
+- 2026-08-15 13:45（Asia/Taipei）建立當下版本不可覆寫備份時，Firestore 在第一批交易回覆 `Quota exceeded`。候選 backup ID `erLB88af6FaAsDyTHEFo` 的 `completedChunks` 為 0、`verified` 為 false，禁止作為任何後續預檢或執行證據，也不應嘗試補成 verified。
+- 配額重置後必須從當下 legacy 主文件重新產生全新 backup ID，完成全部分片讀回與 verified manifest，再以該新 ID 建立全新 restore drill／receipt；不得重用本次失敗 ID或更舊版本的 receipt。
+- 第一輪 live 執行仍須先按「唯讀預檢」，核對 `writes: 0`、16 集合、來源／目標 hash、文件／有效／墓碑數和保守配額；只有同一頁面證據保持不變時，才可按獨立的手動執行按鈕。
+- staging 實跑尚待完成：首次逐筆建立、修改、墓碑、墓碑重建、重整後第二次讀回、失敗／中斷續傳、雙分頁競爭與 Daniel／Catherine／aa／一般老師角色矩陣。完成前不得接管任何讀寫，也不得部署 production。
 
 ## 舊碼與回復安全網保留原則
 

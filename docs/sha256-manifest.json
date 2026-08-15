@@ -101,7 +101,7 @@
   "docs/HOSTING_ROLLBACK_REHEARSAL.md": "dfb184d540c99c50b87aafc950a67a0654bf2925631be034af8f5620da99cbd2",
   "docs/RELEASE_CHECKLIST.md": "167a8a96eeffc5a9a53dad1ac8e934886b467a6ee3e95002195f47f784bc7918",
   "docs/STAGING_ENVIRONMENT.md": "22a10352da5e81ebea74552c80a1e7e8608d4c9899ac2712f7a4dda88fb00c02",
-  "docs/cloud-data-sharding-migration.md": "a8c544ca596c9dada71ca9a9e5707fb82daa34793fa616e6e1d7a85fdaebc0f9",
+  "docs/cloud-data-sharding-migration.md": "b3e4d4a39be3c30903ef1419c8056dc5b17402780aed5c8be317291c399a0524",
   "firebase/DEPLOY_RULES.md": "8cc74e651ee58b59a87a7a3f9ed8ef773ac99644e7a9e57f461892737e707595",
   "firebase/firestore.rules": "4ef6882c618a31106ec1c8c4a47cef8a86845e01182121127c40a6f7f563d37d",
   "firebase.json": "f3b70414ab3b554546e82578c8c0705acd05a0418eca05e76365484dc3dfe8a9",
