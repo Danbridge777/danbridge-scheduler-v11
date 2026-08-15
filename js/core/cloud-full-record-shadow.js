@@ -10,7 +10,10 @@ const validId=value=>{const id=String(value??'');return id&&id.trim()===id&&!id.
 function shortHash(value){let hash=2166136261;for(const byte of new TextEncoder().encode(fingerprint(value))){hash^=byte;hash=Math.imul(hash,16777619)}return(hash>>>0).toString(16).padStart(8,'0')}
 function materialize(collection,rows){
  if(!Array.isArray(rows))throw new Error(`${collection} 必須是陣列`);
- const seen=new Set();return rows.map((record,index)=>{
+ // Legacy changes are displayed newest-first. Store them oldest-first so a new
+ // legacy change becomes one immutable append instead of renumbering history.
+ const orderedRows=collection==='changes'?[...rows].reverse():rows;
+ const seen=new Set();return orderedRows.map((record,index)=>{
   if(!record||typeof record!=='object'||Array.isArray(record))throw new Error(`${collection} 第 ${index+1} 筆格式無效`);
   const recordId=collection==='changes'?`seq_${String(index).padStart(8,'0')}_${shortHash(record)}`:String(record.id??'');
   if(!validId(recordId)||seen.has(recordId))throw new Error(`${collection} 包含無效或重複 ID：${recordId}`);seen.add(recordId);
@@ -41,7 +44,7 @@ export function buildFullRecordShadowPlan(documentsByCollection,targetDb,{source
 }
 export function rebuildFullRecordShadowDb(documentsByCollection,{environment='staging'}={}){
  const current=readCurrent(documentsByCollection,environment),db={};let documentCount=0,activeCount=0,tombstoneCount=0;
- for(const collection of FULL_RECORD_COLLECTIONS){const rows=[...current.active[collection].values()];documentCount+=rows.length+current.tombstones[collection].size;activeCount+=rows.length;tombstoneCount+=current.tombstones[collection].size;if(collection==='changes'){rows.sort((a,b)=>a.recordIndex-b.recordIndex);rows.forEach((row,index)=>{if(row.recordIndex!==index)throw new Error('changes 影子序號不連續')})}else rows.sort((a,b)=>String(a.recordId).localeCompare(String(b.recordId)));db[collection]=rows.map(row=>clone(row.record))}
+ for(const collection of FULL_RECORD_COLLECTIONS){const rows=[...current.active[collection].values()];documentCount+=rows.length+current.tombstones[collection].size;activeCount+=rows.length;tombstoneCount+=current.tombstones[collection].size;if(collection==='changes'){rows.sort((a,b)=>a.recordIndex-b.recordIndex);rows.forEach((row,index)=>{if(row.recordIndex!==index)throw new Error('changes 影子序號不連續')});db[collection]=rows.map(row=>clone(row.record)).reverse()}else{rows.sort((a,b)=>String(a.recordId).localeCompare(String(b.recordId)));db[collection]=rows.map(row=>clone(row.record))}}
  return{db,documentCount,activeCount,tombstoneCount,revisions:current.revisions};
 }
 export function verifyFullRecordShadowReadback(documentsByCollection,targetDb,{environment='staging'}={}){

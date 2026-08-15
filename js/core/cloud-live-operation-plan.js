@@ -1,5 +1,5 @@
-import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js';
-import {recordDataHash} from './cloud-record-data-hash.js';
+import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.95';
+import {recordDataHash} from './cloud-record-data-hash.js?v=20.26.95';
 import {buildLiveRecordOperation} from './cloud-live-record-operation.js';
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 
@@ -52,7 +52,7 @@ function applyToWorkingState(state,operation){
 }
 
 function workingStateDb(state){
- return Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,collection==='changes'?clone(state[collection]):[...state[collection].values()].map(clone)]));
+ return Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,collection==='changes'?clone(state[collection]).reverse():[...state[collection].values()].map(clone)]));
 }
 
 export function verifyLiveOperationPlan(plan,currentDb,targetDb,{revisions={}}={}){
