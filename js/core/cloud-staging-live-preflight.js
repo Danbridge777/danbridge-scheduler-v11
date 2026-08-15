@@ -1,4 +1,4 @@
-import {buildLiveOperationPlan} from './cloud-live-operation-plan.js?v=20.26.95';
+import {buildLiveOperationPlan} from './cloud-live-operation-plan.js?v=20.26.96';
 import {buildStagingExecutionManifest,verifyStagingExecutionManifest} from './cloud-staging-execution-manifest.js';
 import {recordDataHash} from './cloud-record-data-hash.js';
 

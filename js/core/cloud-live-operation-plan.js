@@ -1,5 +1,5 @@
-import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.95';
-import {recordDataHash} from './cloud-record-data-hash.js?v=20.26.95';
+import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.96';
+import {recordDataHash} from './cloud-record-data-hash.js?v=20.26.96';
 import {buildLiveRecordOperation} from './cloud-live-record-operation.js';
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 
@@ -27,7 +27,11 @@ function assertCurrentRevisions(materialized,revisions){
 
 function assertAppendOnlyChanges(beforeItems,afterItems){
  if(afterItems.length<beforeItems.length)throw new Error('changes 是永久操作日誌，禁止刪除歷史');
- for(let index=0;index<beforeItems.length;index++)if(beforeItems[index].recordId!==afterItems[index].recordId||!same(beforeItems[index].record,afterItems[index].record))throw new Error(`changes 是永久操作日誌，禁止修改或重排第 ${index+1} 筆`);
+ for(let index=0;index<beforeItems.length;index++)if(beforeItems[index].recordId!==afterItems[index].recordId||!same(beforeItems[index].record,afterItems[index].record)){
+  let prefix=0,suffix=0;while(prefix<beforeItems.length&&prefix<afterItems.length&&same(beforeItems[prefix].record,afterItems[prefix].record))prefix++;while(suffix<beforeItems.length&&suffix<afterItems.length&&same(beforeItems[beforeItems.length-1-suffix].record,afterItems[afterItems.length-1-suffix].record))suffix++;
+  const remaining=afterItems.map(item=>item.record),overlap=beforeItems.reduce((count,item)=>{const match=remaining.findIndex(record=>same(item.record,record));if(match<0)return count;remaining.splice(match,1);return count+1},0);
+  throw new Error(`changes 永久操作日誌不相容：來源 ${beforeItems.length}、目標 ${afterItems.length}、前綴 ${prefix}、後綴 ${suffix}、相同內容 ${overlap}，已阻止寫入`);
+ }
 }
 
 function operationChainHash(previousHash,operation){
