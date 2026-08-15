@@ -1,5 +1,5 @@
-import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.96';
-import {recordDataHash} from './cloud-record-data-hash.js?v=20.26.96';
+import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.97';
+import {recordDataHash} from './cloud-record-data-hash.js?v=20.26.97';
 import {buildLiveRecordOperation} from './cloud-live-record-operation.js';
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 
@@ -25,13 +25,21 @@ function assertCurrentRevisions(materialized,revisions){
  }
 }
 
-function assertAppendOnlyChanges(beforeItems,afterItems){
- if(afterItems.length<beforeItems.length)throw new Error('changes 是永久操作日誌，禁止刪除歷史');
- for(let index=0;index<beforeItems.length;index++)if(beforeItems[index].recordId!==afterItems[index].recordId||!same(beforeItems[index].record,afterItems[index].record)){
-  let prefix=0,suffix=0;while(prefix<beforeItems.length&&prefix<afterItems.length&&same(beforeItems[prefix].record,afterItems[prefix].record))prefix++;while(suffix<beforeItems.length&&suffix<afterItems.length&&same(beforeItems[beforeItems.length-1-suffix].record,afterItems[afterItems.length-1-suffix].record))suffix++;
-  const remaining=afterItems.map(item=>item.record),overlap=beforeItems.reduce((count,item)=>{const match=remaining.findIndex(record=>same(item.record,record));if(match<0)return count;remaining.splice(match,1);return count+1},0);
-  throw new Error(`changes 永久操作日誌不相容：來源 ${beforeItems.length}、目標 ${afterItems.length}、前綴 ${prefix}、後綴 ${suffix}、相同內容 ${overlap}，已阻止寫入`);
- }
+function incompatibleChanges(beforeItems,afterItems){
+ let prefix=0,suffix=0;while(prefix<beforeItems.length&&prefix<afterItems.length&&same(beforeItems[prefix].record,afterItems[prefix].record))prefix++;while(suffix<beforeItems.length&&suffix<afterItems.length&&same(beforeItems[beforeItems.length-1-suffix].record,afterItems[afterItems.length-1-suffix].record))suffix++;
+ const remaining=afterItems.map(item=>item.record),overlap=beforeItems.reduce((count,item)=>{const match=remaining.findIndex(record=>same(item.record,record));if(match<0)return count;remaining.splice(match,1);return count+1},0);
+ return new Error(`changes 永久操作日誌不相容：來源 ${beforeItems.length}、目標 ${afterItems.length}、前綴 ${prefix}、後綴 ${suffix}、相同內容 ${overlap}，已阻止寫入`);
+}
+
+export function canonicalizeLiveTargetDb(currentDb,targetDb){
+ const current=clone(currentDb),target=clone(targetDb),before=materializeFullRecordDb(current).changes,candidate=materializeFullRecordDb(target).changes;
+ if(candidate.length<before.length)throw new Error('changes 是永久操作日誌，禁止刪除歷史');
+ const remaining=candidate.map(item=>clone(item.record));
+ for(const item of before){const match=remaining.findIndex(record=>same(item.record,record));if(match<0)throw incompatibleChanges(before,candidate);remaining.splice(match,1)}
+ // Legacy 合併可能重排整個顯示陣列。逐筆層保留既有永久順序，
+ // 只把尚未出現的紀錄依 legacy 的舊到新方向接在尾端。
+ target.changes=[...before.map(item=>clone(item.record)),...remaining].reverse();
+ return target;
 }
 
 function operationChainHash(previousHash,operation){
@@ -61,7 +69,7 @@ function workingStateDb(state){
 
 export function verifyLiveOperationPlan(plan,currentDb,targetDb,{revisions={}}={}){
  if(plan?.schema!=='danbridge-live-operation-plan-v1'||!Array.isArray(plan.operations))throw new Error('逐筆操作計畫格式無效');
- const working=createWorkingState(currentDb),nextRevisions=clone(revisions),initialHash=recordDataHash(currentDb),targetHash=recordDataHash(targetDb);
+ const canonicalTargetDb=canonicalizeLiveTargetDb(currentDb,targetDb),working=createWorkingState(currentDb),nextRevisions=clone(revisions),initialHash=recordDataHash(currentDb),targetHash=recordDataHash(canonicalTargetDb);
  if(plan.baseHash!==initialHash)throw new Error('逐筆操作計畫起始 hash 不符');
  let runningHash=initialHash;
  for(let index=0;index<plan.operations.length;index++){
@@ -83,8 +91,8 @@ export function verifyLiveOperationPlan(plan,currentDb,targetDb,{revisions={}}={
 export function buildLiveOperationPlan(currentState,targetDb,{deviceId,startSequence=1,expectedBaseHash}={}){
  if(!validDeviceId(deviceId))throw new Error('逐筆操作計畫 deviceId 無效');
  if(!Number.isSafeInteger(startSequence)||startSequence<1)throw new Error('逐筆操作計畫起始序號無效');
- const currentDb=clone(currentState?.db),revisions=clone(currentState?.revisions),before=materializeFullRecordDb(currentDb),after=materializeFullRecordDb(targetDb);
- assertCurrentRevisions(before,revisions);assertAppendOnlyChanges(before.changes,after.changes);
+ const currentDb=clone(currentState?.db),canonicalTargetDb=canonicalizeLiveTargetDb(currentDb,targetDb),revisions=clone(currentState?.revisions),before=materializeFullRecordDb(currentDb),after=materializeFullRecordDb(canonicalTargetDb);
+ assertCurrentRevisions(before,revisions);
  const baseHash=recordDataHash(currentDb);if(expectedBaseHash!==undefined&&expectedBaseHash!==baseHash)throw new Error('逐筆操作計畫來源 hash 已改變');
  const drafts=[],counts=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,{creates:0,updates:0,tombstones:0,revives:0,writes:0}]));
  let sequence=startSequence;
@@ -100,10 +108,10 @@ export function buildLiveOperationPlan(currentState,targetDb,{deviceId,startSequ
   for(const id of [...newById.keys()].filter(id=>oldById.has(id)&&!same(oldById.get(id).record,newById.get(id).record)).sort())appendDraft(collection,newById.get(id),{kind:'updates'});
   for(const id of [...newById.keys()].filter(id=>!oldById.has(id)).sort()){const kind=revisionFor(revisions,collection,id)>0?'revives':'creates';appendDraft(collection,newById.get(id),{kind})}
  }
- const finalHash=recordDataHash(targetDb),operations=[];let runningHash=baseHash;
+ const finalHash=recordDataHash(canonicalTargetDb),operations=[];let runningHash=baseHash;
  for(let index=0;index<drafts.length;index++){const draft=drafts[index],nextHash=index===drafts.length-1?finalHash:operationChainHash(runningHash,draft),operation=buildLiveRecordOperation({...draft,baseHash:runningHash,nextHash});operations.push(operation);runningHash=nextHash}
  if(runningHash!==finalHash)throw new Error('逐筆操作規劃後最終 hash 不符');
  const sourceCounts=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,before[collection].length])),targetCounts=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,after[collection].length]));
  const plan={schema:'danbridge-live-operation-plan-v1',environment:'staging',companyId:'danbridge',deviceId,startSequence,nextSequence:sequence,baseHash,finalHash,collectionCount:FULL_RECORD_COLLECTIONS.length,sourceCounts,targetCounts,sourceRecordCount:Object.values(sourceCounts).reduce((sum,count)=>sum+count,0),targetRecordCount:Object.values(targetCounts).reduce((sum,count)=>sum+count,0),operations,operationCount:operations.length,counts,estimatedFirestoreReads:operations.length*3,estimatedFirestoreWrites:operations.length*3};
- verifyLiveOperationPlan(plan,currentDb,targetDb,{revisions:currentState.revisions});return plan;
+ verifyLiveOperationPlan(plan,currentDb,canonicalTargetDb,{revisions:currentState.revisions});return plan;
 }

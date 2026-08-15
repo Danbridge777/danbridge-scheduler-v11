@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.97（legacy 重排安全對齊）
+
+- staging 實站確認舊 `changes` 會重排既有 11 筆內容；逐筆層改以完整內容與重複次數配對既有紀錄，保留永久順序，只追加真正新增的紀錄。
+- verified 備份仍核對未改寫的 legacy 主資料；逐筆 target hash、revision 與文件數只使用對齊後的永久序列，兩條證據不可互相替代。
+- 歷史缺筆或內容改變仍 fail-closed；不接管讀取、不掛入既有上傳、不部署 production。
+
 ## 20.26.96（staging changes 安全診斷）
 
 - staging 逐筆預檢若發現 `changes` 與現有永久序列不相容，畫面只顯示來源／目標筆數、前綴／後綴符合數與內容重疊數，不輸出學生、老師或異動內容。

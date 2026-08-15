@@ -1,7 +1,7 @@
-import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.96';
+import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.97';
 import {recordDataHash} from './cloud-record-data-hash.js';
 import {IMMUTABLE_MIGRATION_BACKUP_SCHEMA,sha256Canonical,verifyImmutableMigrationBackupManifest} from './cloud-immutable-migration-backup.js';
-import {verifyLiveOperationPlan} from './cloud-live-operation-plan.js?v=20.26.96';
+import {verifyLiveOperationPlan} from './cloud-live-operation-plan.js?v=20.26.97';
 
 const id=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{8,128}$/.test(value);
 const count=(value,label)=>{if(!Number.isSafeInteger(value)||value<0)throw new Error(`${label} 無效`);return value};
@@ -33,14 +33,14 @@ function finalDocumentCounts(sourceRevisions,targetMaterialized){
  return counts;
 }
 
-export function buildStagingExecutionManifest({plan,sourceDb,sourceRevisions,targetDb,backup,restoreReceipt,legacyVersionHash,readBudget,writeBudget,createdAt,maxOperationsPerRun=100}={}){
+export function buildStagingExecutionManifest({plan,sourceDb,sourceRevisions,targetDb,legacyTargetDb=targetDb,backup,restoreReceipt,legacyVersionHash,readBudget,writeBudget,createdAt,maxOperationsPerRun=100}={}){
  if(plan?.schema!=='danbridge-live-operation-plan-v1'||plan.environment!=='staging'||plan.companyId!=='danbridge'||plan.collectionCount!==FULL_RECORD_COLLECTIONS.length||!Array.isArray(plan.operations)||plan.operationCount!==plan.operations.length)throw new Error('staging 執行計畫格式無效');
  const operationCount=count(plan.operationCount,'staging 操作筆數'),planReads=count(plan.estimatedFirestoreReads,'staging 計畫讀取數'),planWrites=count(plan.estimatedFirestoreWrites,'staging 計畫寫入數');
  if(planReads!==operationCount*3||planWrites!==operationCount*3||!recordHash(plan.baseHash)||!recordHash(plan.finalHash))throw new Error('staging 執行計畫配額或 hash 無效');
  const sourceRecordCount=verifyCounts(plan.sourceCounts,'來源'),targetRecordCount=verifyCounts(plan.targetCounts,'目標');
  if(sourceRecordCount!==plan.sourceRecordCount||targetRecordCount!==plan.targetRecordCount)throw new Error('staging 執行計畫總筆數不符');
  const sourceMaterialized=materializeFullRecordDb(sourceDb),targetMaterialized=materializeFullRecordDb(targetDb),actualSourceCounts=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,sourceMaterialized[collection].length])),actualTargetCounts=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,targetMaterialized[collection].length]));
- const sourceRecordHash=recordDataHash(sourceDb),targetRecordHash=recordDataHash(targetDb),backupSha256=sha256Canonical(targetDb),targetDocumentCounts=finalDocumentCounts(sourceRevisions,targetMaterialized),targetDocumentCount=verifyCounts(targetDocumentCounts,'完成文件'),targetActiveCount=targetRecordCount,targetTombstoneCount=targetDocumentCount-targetActiveCount;
+ const sourceRecordHash=recordDataHash(sourceDb),targetRecordHash=recordDataHash(targetDb),backupSha256=sha256Canonical(legacyTargetDb),targetDocumentCounts=finalDocumentCounts(sourceRevisions,targetMaterialized),targetDocumentCount=verifyCounts(targetDocumentCounts,'完成文件'),targetActiveCount=targetRecordCount,targetTombstoneCount=targetDocumentCount-targetActiveCount;
  if(plan.baseHash!==sourceRecordHash||plan.finalHash!==targetRecordHash||!same(plan.sourceCounts,actualSourceCounts)||!same(plan.targetCounts,actualTargetCounts))throw new Error('staging 執行計畫與來源或目標逐筆資料不符');
  try{verifyLiveOperationPlan(plan,sourceDb,targetDb,{revisions:sourceRevisions})}catch{throw new Error('staging 執行計畫完整 revision/hash 鏈驗證失敗')}
  try{verifyImmutableMigrationBackupManifest(backup,{currentSourceHash:backupSha256})}catch{throw new Error('staging 執行前 verified 備份不符')}

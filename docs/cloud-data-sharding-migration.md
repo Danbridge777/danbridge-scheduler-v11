@@ -80,6 +80,7 @@
 - release `20.26.94` 讓逐筆執行與重整續傳按鈕顯示完整 manifest SHA-256，所有續傳證據可直接由畫面核對。
 - release `20.26.95` 將 legacy 最新在前的 `changes` 轉成逐筆層最舊到最新的永久追加序列，避免正常新增被誤判成歷史重排；讀回仍恢復原畫面順序。
 - release `20.26.96` 在 `changes` 不相容時只顯示不含業務內容的方向與重疊計數，供 staging 實站定位；預檢仍為零寫入。
+- release `20.26.97` 依實站證據將 legacy 重排的既有 `changes` 以完整內容與重複次數對齊，保留逐筆永久順序並只追加新紀錄；原始 legacy 內容仍由 verified 備份獨立核對。
 - 這些執行元件只部署到 `danbridge-d8877-staging`，只提供 Owner 手動測試入口；仍未部署 production，且 `uploadOwnerStateAttached: false`、`readTakeover: false`、`productionAllowed: false`。
 
 ## 2026-08-15 staging live gate 紀錄

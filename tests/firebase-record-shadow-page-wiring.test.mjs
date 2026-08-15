@@ -15,7 +15,7 @@ test('頁面匯入獨立 record-shadow adapter 且只公開專屬手動入口',(
 });
 
 test('Checkpoint B 以版本化 service worker 解除舊 staging 快取',()=>{
- assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.96'/);
+ assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.97'/);
 });
 
 test('staging Owner URL 測試入口只操作專用 ID 並保留既有影子狀態',()=>{
@@ -134,7 +134,7 @@ test('staging 手動逐筆讀取演練核對控制、manifest、legacy hash 與�
 });
 
 test('staging live 預檢只讀取證據與逐筆現況，不寫入、不接管且不掛入既有同步',()=>{
- assert.match(source,/import \{buildStagingLivePreflight\} from '\.\/cloud-staging-live-preflight\.js\?v=20\.26\.96'/);
+ assert.match(source,/import \{buildStagingLivePreflight\} from '\.\/cloud-staging-live-preflight\.js\?v=20\.26\.97'/);
  assert.match(source,/stagingLivePreflightGuard/);assert.match(source,/firebaseConfig\.projectId!=='danbridge-d8877-staging'/);
  assert.match(source,/readStagingLiveRecordSource/);assert.match(source,/stagingLiveRecords/);assert.match(source,/verifyStagingMigrationRestoreReceipt/);
  assert.match(source,/get\('stagingLivePreflight'\)/);assert.match(source,/button\.id='stagingLiveOperationPreflightButton'/);assert.match(source,/button\.onclick=async\(\)=>/);
