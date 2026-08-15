@@ -70,6 +70,15 @@
 
 - 首次灌入時 live 逐筆集合可以是空的；遷移前 verified 備份與復原 receipt 必須對應即將遷入的完整 legacy 目標資料，不可錯拿空的 live 來源比對。
 - 預檢會唯讀取得 legacy 主文件、不可覆寫備份、持久化復原 receipt、16 個 live 集合與 live 控制文件，再重新演算每筆 operation 的 revision 與前後 SHA-256 鏈。
-- manifest 鎖定完整 operation plan hash、來源與目標逐集合筆數、總筆數、預估讀寫量及本次配額上限；任何版本改變、缺集合、筆數或 hash 不符都停止。
-- 頁面入口只存在於 `danbridge-d8877-staging` 的 Owner 明確功能旗標，且目前只產生記憶體內計畫與摘要：`writes: 0`、`uploadOwnerStateAttached: false`、`readTakeover: false`、`productionAllowed: false`。
-- 本階段尚未建立 live 控制、尚未將操作加入永久日誌、尚未啟動 worker，也未部署 staging 或 production。
+- manifest 同時鎖定完整 operation plan hash 與逐筆 operation list hash、來源與目標逐集合筆數、有效／墓碑／實體文件數、本次配額上限及含三輪交易讀取重試的保守預估；每筆按 record、控制、不可覆寫憑證實際計為 3 讀／3 寫。每輪最多 100 筆，分批輪數、每輪重新核對五份啟用證據、三次中斷／雙分頁額外重進、兩次全量讀回與最終啟用成本都另行計入。任何版本改變、缺集合、筆數或 hash 不符都停止。
+- 唯讀預檢與執行入口嚴格分離：預檢永遠是 `writes: 0`；執行必須另帶 `stagingLiveExecute=manual` 並由 Owner 再按一次按鈕，不會自動觸發。
+- 執行前先把完整 manifest 與操作計畫放進同一個 environment／email／manifest 專屬 IndexedDB 原子封套，並重新計算逐筆清單 hash；保存完成後才允許同一交易建立不可覆寫雲端 manifest 與 v2 控制。每次續傳都先核對雲端 manifest；若中斷發生在雲端 manifest 建立前，則由本機封套完整驗證並冪等補建，因此不能遺失恢復依據，也不能越過失敗或隔離的首筆。
+- 每筆 record、控制與不可覆寫完成憑證必須在同一交易推進；實體刪除永久禁止。另一台裝置即使已往後執行，較早操作仍可由憑證辨認為已完成，不會重寫或假確認。完成後重新讀回 16 集合，SHA-256、文件數、有效數與墓碑數全部一致才將控制由 `verifying` 改為 `active`，啟用後再做第二次完整讀回。
+- 前一輪只有在 `active` 完成狀態才能原子換綁下一份 manifest；全域 root revision 延續、每輪 confirmed 計數歸零。Emulator 已連續驗證新增、修改、墓碑、墓碑重建 revision 1→4。
+- 這些執行元件目前只存在本機程式碼，仍未部署 staging 或 production；`uploadOwnerStateAttached: false`、`readTakeover: false`、`productionAllowed: false`。
+
+## 舊碼與回復安全網保留原則
+
+- 已淘汰的 live v1 控制格式與寫入邏輯已由 v2 manifest 綁定控制取代，Rules 不再接受 v1。
+- 目前其餘 legacy 主文件、不可覆寫備份、復原沙盒、既有候選影子與角色檢視仍有比對或回復用途，不屬於死碼；在 staging 真人回歸、讀取候選、回復演練與觀察期全部完成前不得刪除。
+- 每次清理前必須先做全專案引用掃描與完整回歸；找不到明確零入口、零測試、零回復依賴證據時一律保留。

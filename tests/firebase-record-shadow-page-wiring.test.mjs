@@ -15,7 +15,7 @@ test('頁面匯入獨立 record-shadow adapter 且只公開專屬手動入口',(
 });
 
 test('Checkpoint B 以版本化 service worker 解除舊 staging 快取',()=>{
- assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.89'/);
+ assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.91'/);
 });
 
 test('staging Owner URL 測試入口只操作專用 ID 並保留既有影子狀態',()=>{
@@ -131,7 +131,20 @@ test('staging live 預檢只讀取證據與逐筆現況，不寫入、不接管�
  assert.match(source,/stagingLivePreflightGuard/);assert.match(source,/firebaseConfig\.projectId!=='danbridge-d8877-staging'/);
  assert.match(source,/readStagingLiveRecordSource/);assert.match(source,/stagingLiveRecords/);assert.match(source,/verifyStagingMigrationRestoreReceipt/);
  assert.match(source,/get\('stagingLivePreflight'\)/);assert.match(source,/button\.id='stagingLiveOperationPreflightButton'/);assert.match(source,/button\.onclick=async\(\)=>/);
- const block=source.slice(source.indexOf('let stagingLivePreflightDiagnostic='),source.indexOf('async function uploadOwnerState'));
+ const block=source.slice(source.indexOf('async function prepareStagingLiveOperationPreflight'),source.indexOf('function stagingFirestoreTransaction'));
  assert.doesNotMatch(block,/setDoc\(|runTransaction\(|deleteDoc\(|__danbridgeSetDB|uploadOwnerState\(/);
  assert.match(block,/writes:0,featureFlagOnly:true,uploadOwnerStateAttached:false,readTakeover:false,productionAllowed:false/);
+});
+
+test('staging live 執行先永久保存完整日誌，再原子啟用並只走獨立手動入口',()=>{
+ for(const imported of ['createBrowserOperationJournalStorage','createBrowserStagingLiveExecutionStorage','createOperationJournal','enqueueOperationPlan','runOperationWorker','createFirebaseLiveRecordOperationAdapter','createFirebaseStagingLiveActivationAdapter','verifyStagingLiveJournalRows'])assert.match(source,new RegExp(`import \\{[^}]*${imported}`));
+ const block=source.slice(source.indexOf('function stagingFirestoreTransaction'),source.indexOf("if(DANBRIDGE_ENVIRONMENT==='staging')",source.indexOf('function stagingFirestoreTransaction'))),execute=block.slice(block.indexOf('async function executePreparedStagingLiveOperationPlan'));
+ assert.ok(execute.indexOf('await enqueueOperationPlan')<execute.indexOf('runPersistedStagingLiveExecution'));
+ assert.ok(block.indexOf('await activation.activate')<block.indexOf('runOperationWorker'));
+ assert.match(block,/resumeStagingLiveOperationPlan/);assert.match(block,/verifyStagingLiveJournalRows\(manifest,rows\)/);assert.match(block,/operationListHash/);assert.match(block,/activation\.finalize/);assert.match(block,/maxOperations:manifest\.maxOperationsPerRun/);
+ assert.match(block,/verified\.documentCount!==manifest\.targetDocumentCount/);assert.match(block,/verified\.activeCount!==manifest\.targetActiveCount/);assert.match(block,/verified\.tombstoneCount!==manifest\.targetTombstoneCount/);
+ assert.match(block,/snapshot\.exists\(\)\?stripStagingExecutionManifestAudit\(snapshot\.data\(\)\):await local\.loadManifest\(\)/);
+ assert.doesNotMatch(block,/__danbridgeSetDB|uploadOwnerState\(/);assert.match(block,/readTakeover:false,uploadOwnerStateAttached:false,productionAllowed:false/);
+ assert.match(source,/button\.id='stagingLiveOperationExecuteButton'/);assert.match(source,/get\('stagingLiveExecute'\)==='manual'/);assert.match(source,/button\.id='stagingLiveOperationResumeButton'/);
+ assert.match(source,/source\.control&&source\.control\.state!=='active'/);assert.match(source,/maxOperationsPerRun:livePreflightMaxOperations/);
 });

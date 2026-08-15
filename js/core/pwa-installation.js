@@ -122,7 +122,7 @@
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
         reloadAcceptedUpdate();
       });
-      navigator.serviceWorker.register('./sw.js?v=20.26.89',{scope:'./'}).then(reg=>{
+      navigator.serviceWorker.register('./sw.js?v=20.26.91',{scope:'./'}).then(reg=>{
         reg.update().catch(()=>{});
         if(reg.waiting&&navigator.serviceWorker.controller)offerUpdate(reg.waiting);
         reg.addEventListener('updatefound',()=>{

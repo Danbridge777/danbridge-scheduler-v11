@@ -70,6 +70,96 @@ service cloud.firestore {
         && data.reportedForTeacherIds.hasOnly(meta(companyId, lessonId).teacherIds)
         && meta(companyId, lessonId).teacherIds.hasOnly(data.reportedForTeacherIds);
     }
+    function liveExecutionManifest(companyId, manifestHash) {
+      return getAfter(/databases/$(database)/documents/stagingLiveExecutionManifests/$(companyId)/runs/$(manifestHash)).data;
+    }
+    function liveControlMatchesManifest(companyId) {
+      let manifest = liveExecutionManifest(companyId, request.resource.data.executionManifestHash);
+      return request.resource.data.executionManifestHash.matches('[0-9a-f]{64}')
+        && request.resource.data.dataHash == manifest.sourceRecordHash
+        && request.resource.data.targetDataHash == manifest.targetRecordHash
+        && request.resource.data.backupId == manifest.backupId
+        && request.resource.data.restoreDrillId == manifest.restoreDrillId
+        && request.resource.data.legacyVersionHash == manifest.legacyVersionHash
+        && request.resource.data.operationCount == manifest.operationCount
+        && request.resource.data.expectedDocumentCount == manifest.targetDocumentCount
+        && request.resource.data.expectedActiveCount == manifest.targetActiveCount
+        && request.resource.data.expectedTombstoneCount == manifest.targetTombstoneCount
+        && get(/databases/$(database)/documents/companies/$(companyId)/data/main).data.clientHash == request.resource.data.legacyVersionHash;
+    }
+    function liveControlSameExecution() {
+      return request.resource.data.executionManifestHash == resource.data.executionManifestHash
+        && request.resource.data.backupId == resource.data.backupId
+        && request.resource.data.restoreDrillId == resource.data.restoreDrillId
+        && request.resource.data.legacyVersionHash == resource.data.legacyVersionHash
+        && request.resource.data.targetDataHash == resource.data.targetDataHash
+        && request.resource.data.executionBaseRootRevision == resource.data.executionBaseRootRevision
+        && request.resource.data.operationCount == resource.data.operationCount
+        && request.resource.data.expectedDocumentCount == resource.data.expectedDocumentCount
+        && request.resource.data.expectedActiveCount == resource.data.expectedActiveCount
+        && request.resource.data.expectedTombstoneCount == resource.data.expectedTombstoneCount;
+    }
+    function liveControlMigrationIsValid(companyId) {
+      let recordAfter = getAfter(/databases/$(database)/documents/stagingLiveRecords/$(companyId)/collections/$(request.resource.data.lastCollection)/records/$(request.resource.data.lastRecordId)).data;
+      let receiptAfter = getAfter(/databases/$(database)/documents/stagingLiveOperationReceipts/$(companyId)/runs/$(request.resource.data.executionManifestHash)/operations/$(request.resource.data.lastOperationId)).data;
+      return liveControlSameExecution()
+        && request.resource.data.rootRevision == resource.data.rootRevision + 1
+        && request.resource.data.confirmedOperationCount == resource.data.confirmedOperationCount + 1
+        && request.resource.data.rootRevision == request.resource.data.executionBaseRootRevision + request.resource.data.confirmedOperationCount
+        && ((request.resource.data.confirmedOperationCount < request.resource.data.operationCount && request.resource.data.state == 'migrating') || (request.resource.data.confirmedOperationCount == request.resource.data.operationCount && request.resource.data.state == 'verifying' && request.resource.data.dataHash == request.resource.data.targetDataHash))
+        && request.resource.data.lastOperationId is string
+        && request.resource.data.lastOperationId.size() > 0
+        && request.resource.data.lastOperationId != resource.data.lastOperationId
+        && request.resource.data.lastCollection in ['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches']
+        && request.resource.data.lastRecordId is string
+        && request.resource.data.lastRecordId.size() > 0
+        && request.resource.data.verifiedHash == ''
+        && request.resource.data.verifiedDocumentCount == 0
+        && request.resource.data.verifiedActiveCount == 0
+        && request.resource.data.verifiedTombstoneCount == 0
+        && recordAfter.lastOperationId == request.resource.data.lastOperationId
+        && recordAfter.sourceHash == request.resource.data.dataHash
+        && recordAfter.executionManifestHash == request.resource.data.executionManifestHash
+        && receiptAfter.operationId == request.resource.data.lastOperationId
+        && receiptAfter.executionManifestHash == request.resource.data.executionManifestHash
+        && receiptAfter.collection == request.resource.data.lastCollection
+        && receiptAfter.recordId == request.resource.data.lastRecordId
+        && receiptAfter.nextHash == request.resource.data.dataHash
+        && receiptAfter.rootRevision == request.resource.data.rootRevision;
+    }
+    function liveControlFinalizationIsValid() {
+      return liveControlSameExecution()
+        && request.resource.data.state == 'active'
+        && request.resource.data.dataHash == resource.data.dataHash
+        && request.resource.data.dataHash == request.resource.data.targetDataHash
+        && request.resource.data.rootRevision == resource.data.rootRevision
+        && request.resource.data.confirmedOperationCount == resource.data.confirmedOperationCount
+        && request.resource.data.confirmedOperationCount == request.resource.data.operationCount
+        && request.resource.data.lastOperationId == resource.data.lastOperationId
+        && request.resource.data.lastCollection == resource.data.lastCollection
+        && request.resource.data.lastRecordId == resource.data.lastRecordId
+        && request.resource.data.verifiedHash == request.resource.data.targetDataHash
+        && request.resource.data.verifiedDocumentCount == request.resource.data.expectedDocumentCount
+        && request.resource.data.verifiedActiveCount == request.resource.data.expectedActiveCount
+        && request.resource.data.verifiedTombstoneCount == request.resource.data.expectedTombstoneCount;
+    }
+    function liveControlRearmIsValid(companyId) {
+      return request.resource.data.executionManifestHash != resource.data.executionManifestHash
+        && existsAfter(/databases/$(database)/documents/stagingLiveExecutionManifests/$(companyId)/runs/$(request.resource.data.executionManifestHash))
+        && liveControlMatchesManifest(companyId)
+        && request.resource.data.dataHash == resource.data.dataHash
+        && request.resource.data.rootRevision == resource.data.rootRevision
+        && request.resource.data.executionBaseRootRevision == resource.data.rootRevision
+        && request.resource.data.confirmedOperationCount == 0
+        && ((request.resource.data.operationCount == 0 && request.resource.data.state == 'verifying') || (request.resource.data.operationCount > 0 && request.resource.data.state == 'migrating'))
+        && request.resource.data.lastOperationId == ''
+        && request.resource.data.lastCollection == ''
+        && request.resource.data.lastRecordId == ''
+        && request.resource.data.verifiedHash == ''
+        && request.resource.data.verifiedDocumentCount == 0
+        && request.resource.data.verifiedActiveCount == 0
+        && request.resource.data.verifiedTombstoneCount == 0;
+    }
 
 
     match /users/{uid} {
@@ -261,13 +351,94 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 低讀取量 live 逐筆層：每次只允許 Owner 原子更新一份 record 與一份全域版本控制。
+    // live 執行 manifest：只能建立一次，並且綁定 verified 備份、復原 receipt 與當下 legacy 版本。
+    match /stagingLiveExecutionManifests/{companyId}/runs/{manifestHash} {
+      allow read: if isOwner() && companyId == 'danbridge';
+      allow create: if isOwner()
+        && companyId == 'danbridge'
+        && request.resource.data.keys().hasOnly([
+          'schema','environment','companyId','state','createdAt','backupId','backupSha256','restoreDrillId','legacyVersionHash',
+          'operationPlanHash','operationListHash','sourceRecordHash','targetRecordHash','sourceRecordCount','targetRecordCount','sourceCounts','targetCounts',
+          'targetDocumentCount','targetActiveCount','targetTombstoneCount','targetDocumentCounts','operationCount','maxOperationsPerRun',
+          'plannedExecutionPasses','activationAttemptAllowance','transactionRetryAllowance',
+          'estimatedReads','estimatedWrites','readBudget','writeBudget','requiredScenarios','featureFlagOnly','uploadOwnerStateAttached',
+          'readTakeover','productionAllowed','manifestHash','persistedAt','persistedBy','persistedByEmail'
+        ])
+        && request.resource.data.schema == 'danbridge-staging-execution-manifest-v1'
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.companyId == companyId
+        && request.resource.data.state == 'ready'
+        && request.resource.data.manifestHash == manifestHash
+        && manifestHash.matches('[0-9a-f]{64}')
+        && request.resource.data.createdAt is string
+        && request.resource.data.backupId is string
+        && request.resource.data.restoreDrillId is string
+        && request.resource.data.legacyVersionHash is string
+        && request.resource.data.backupSha256.matches('[0-9a-f]{64}')
+        && request.resource.data.operationPlanHash.matches('[0-9a-f]{64}')
+        && request.resource.data.operationListHash.matches('[0-9a-f]{64}')
+        && request.resource.data.sourceRecordHash.matches('record-v1:[0-9a-f]{64}')
+        && request.resource.data.targetRecordHash.matches('record-v1:[0-9a-f]{64}')
+        && request.resource.data.sourceRecordCount is int
+        && request.resource.data.sourceRecordCount >= 0
+        && request.resource.data.targetRecordCount is int
+        && request.resource.data.targetRecordCount >= 0
+        && request.resource.data.sourceCounts is map
+        && request.resource.data.targetCounts is map
+        && request.resource.data.targetDocumentCounts is map
+        && request.resource.data.targetDocumentCount is int
+        && request.resource.data.targetDocumentCount >= 0
+        && request.resource.data.targetActiveCount is int
+        && request.resource.data.targetActiveCount >= 0
+        && request.resource.data.targetActiveCount == request.resource.data.targetRecordCount
+        && request.resource.data.targetTombstoneCount is int
+        && request.resource.data.targetTombstoneCount >= 0
+        && request.resource.data.targetDocumentCount == request.resource.data.targetActiveCount + request.resource.data.targetTombstoneCount
+        && request.resource.data.operationCount is int
+        && request.resource.data.operationCount >= 0
+        && request.resource.data.maxOperationsPerRun is int
+        && request.resource.data.maxOperationsPerRun >= 1
+        && request.resource.data.maxOperationsPerRun <= 100
+        && request.resource.data.plannedExecutionPasses is int
+        && request.resource.data.plannedExecutionPasses >= 1
+        && request.resource.data.operationCount <= request.resource.data.plannedExecutionPasses * request.resource.data.maxOperationsPerRun
+        && (request.resource.data.operationCount == 0 || request.resource.data.operationCount > (request.resource.data.plannedExecutionPasses - 1) * request.resource.data.maxOperationsPerRun)
+        && request.resource.data.activationAttemptAllowance == request.resource.data.plannedExecutionPasses + 3
+        && request.resource.data.transactionRetryAllowance == 3
+        && request.resource.data.estimatedReads is int
+        && request.resource.data.estimatedReads == request.resource.data.operationCount * 9 + (request.resource.data.targetDocumentCount + 17) * 2 + request.resource.data.activationAttemptAllowance * 15 + 6
+        && request.resource.data.estimatedWrites is int
+        && request.resource.data.estimatedWrites == request.resource.data.operationCount * 3 + 3
+        && request.resource.data.readBudget is int
+        && request.resource.data.writeBudget is int
+        && request.resource.data.readBudget >= request.resource.data.estimatedReads
+        && request.resource.data.writeBudget >= request.resource.data.estimatedWrites
+        && request.resource.data.requiredScenarios == ['create','modify','tombstone','revive','refresh-readback','failure-resume','two-tab-race','role-matrix']
+        && request.resource.data.featureFlagOnly == true
+        && request.resource.data.uploadOwnerStateAttached == false
+        && request.resource.data.readTakeover == false
+        && request.resource.data.productionAllowed == false
+        && get(/databases/$(database)/documents/stagingMigrationBackups/$(companyId)/runs/$(request.resource.data.backupId)).data.sourceHash == request.resource.data.backupSha256
+        && get(/databases/$(database)/documents/stagingMigrationBackups/$(companyId)/runs/$(request.resource.data.backupId)).data.sourceVersionHash == request.resource.data.legacyVersionHash
+        && get(/databases/$(database)/documents/stagingMigrationRestoreDrills/$(companyId)/runs/$(request.resource.data.restoreDrillId)).data.sourceBackupId == request.resource.data.backupId
+        && get(/databases/$(database)/documents/stagingMigrationRestoreDrills/$(companyId)/runs/$(request.resource.data.restoreDrillId)).data.sourceHash == request.resource.data.backupSha256
+        && get(/databases/$(database)/documents/stagingMigrationRestoreDrills/$(companyId)/runs/$(request.resource.data.restoreDrillId)).data.restoredHash == request.resource.data.backupSha256
+        && get(/databases/$(database)/documents/stagingMigrationRestoreDrills/$(companyId)/runs/$(request.resource.data.restoreDrillId)).data.mainVersionHash == request.resource.data.legacyVersionHash
+        && get(/databases/$(database)/documents/stagingMigrationRestoreDrills/$(companyId)/runs/$(request.resource.data.restoreDrillId)).data.mainUnchanged == true
+        && get(/databases/$(database)/documents/companies/$(companyId)/data/main).data.clientHash == request.resource.data.legacyVersionHash
+        && request.resource.data.persistedAt == request.time
+        && request.resource.data.persistedBy == request.auth.uid
+        && request.resource.data.persistedByEmail == emailKey();
+      allow update, delete: if false;
+    }
+
+    // 低讀取量 live 逐筆層：每次只允許 Owner 原子更新一份 record 與 manifest 綁定控制。
     match /stagingLiveRecords/{companyId}/collections/{collectionId}/records/{recordId} {
       allow read: if isOwner() && companyId == 'danbridge';
       allow create, update: if isOwner()
         && companyId == 'danbridge'
         && collectionId in ['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches']
-        && request.resource.data.keys().hasOnly(['schema','companyId','collection','recordId','record','recordIndex','sourceHash','revision','deleted','environment','lastOperationId','updatedAt','updatedBy','updatedByEmail'])
+        && request.resource.data.keys().hasOnly(['schema','companyId','collection','recordId','record','recordIndex','sourceHash','revision','deleted','environment','lastOperationId','executionManifestHash','updatedAt','updatedBy','updatedByEmail'])
         && request.resource.data.schema == 'danbridge-full-record-shadow-v1'
         && request.resource.data.companyId == companyId
         && request.resource.data.collection == collectionId
@@ -282,52 +453,97 @@ service cloud.firestore {
         && request.resource.data.environment == 'staging'
         && request.resource.data.lastOperationId is string
         && request.resource.data.lastOperationId.size() > 0
+        && request.resource.data.executionManifestHash.matches('[0-9a-f]{64}')
         && request.resource.data.updatedAt == request.time
         && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.updatedByEmail == emailKey()
         && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.lastOperationId == request.resource.data.lastOperationId
         && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.lastCollection == collectionId
         && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.lastRecordId == recordId
-        && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.dataHash == request.resource.data.sourceHash;
+        && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.dataHash == request.resource.data.sourceHash
+        && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.executionManifestHash == request.resource.data.executionManifestHash;
       allow delete: if false;
+    }
+
+    // 每筆完成憑證不可覆寫；即使另一台裝置已往後執行，舊操作仍可安全辨認為已完成。
+    match /stagingLiveOperationReceipts/{companyId}/runs/{manifestHash}/operations/{operationId} {
+      allow read: if isOwner() && companyId == 'danbridge';
+      allow create: if isOwner()
+        && companyId == 'danbridge'
+        && manifestHash.matches('[0-9a-f]{64}')
+        && operationId.size() > 0
+        && operationId.size() <= 1500
+        && request.resource.data.keys().hasOnly(['schema','environment','companyId','executionManifestHash','operationId','operationHash','collection','recordId','nextHash','revision','deleted','rootRevision','updatedAt','updatedBy','updatedByEmail'])
+        && request.resource.data.schema == 'danbridge-live-operation-receipt-v1'
+        && request.resource.data.environment == 'staging'
+        && request.resource.data.companyId == companyId
+        && request.resource.data.executionManifestHash == manifestHash
+        && request.resource.data.operationId == operationId
+        && request.resource.data.operationHash.matches('[0-9a-f]{64}')
+        && request.resource.data.collection in ['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches']
+        && request.resource.data.recordId is string
+        && request.resource.data.recordId.size() > 0
+        && request.resource.data.nextHash.matches('record-v1:[0-9a-f]{64}')
+        && request.resource.data.revision is int
+        && request.resource.data.revision >= 1
+        && request.resource.data.deleted is bool
+        && request.resource.data.rootRevision is int
+        && request.resource.data.rootRevision >= 1
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedByEmail == emailKey()
+        && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.executionManifestHash == manifestHash
+        && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.lastOperationId == operationId
+        && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.lastCollection == request.resource.data.collection
+        && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.lastRecordId == request.resource.data.recordId
+        && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.dataHash == request.resource.data.nextHash
+        && getAfter(/databases/$(database)/documents/stagingLiveRecordControls/$(companyId)).data.rootRevision == request.resource.data.rootRevision
+        && getAfter(/databases/$(database)/documents/stagingLiveRecords/$(companyId)/collections/$(request.resource.data.collection)/records/$(request.resource.data.recordId)).data.lastOperationId == operationId
+        && getAfter(/databases/$(database)/documents/stagingLiveRecords/$(companyId)/collections/$(request.resource.data.collection)/records/$(request.resource.data.recordId)).data.revision == request.resource.data.revision
+        && getAfter(/databases/$(database)/documents/stagingLiveRecords/$(companyId)/collections/$(request.resource.data.collection)/records/$(request.resource.data.recordId)).data.deleted == request.resource.data.deleted;
+      allow update, delete: if false;
     }
 
     match /stagingLiveRecordControls/{companyId} {
       allow read: if isOwner() && companyId == 'danbridge';
-      allow create: if isOwner()
+      allow create: if resource == null
+        && isOwner()
         && companyId == 'danbridge'
-        && request.resource.data.keys().hasOnly(['schema','environment','companyId','state','dataHash','rootRevision','lastOperationId','lastCollection','lastRecordId','updatedAt','updatedBy','updatedByEmail'])
-        && request.resource.data.schema == 'danbridge-live-record-control-v1'
+        && request.resource.data.keys().hasOnly(['schema','environment','companyId','state','executionManifestHash','backupId','restoreDrillId','legacyVersionHash','dataHash','targetDataHash','rootRevision','executionBaseRootRevision','operationCount','confirmedOperationCount','expectedDocumentCount','expectedActiveCount','expectedTombstoneCount','lastOperationId','lastCollection','lastRecordId','verifiedHash','verifiedDocumentCount','verifiedActiveCount','verifiedTombstoneCount','updatedAt','updatedBy','updatedByEmail'])
+        && request.resource.data.schema == 'danbridge-live-record-control-v2'
         && request.resource.data.environment == 'staging'
         && request.resource.data.companyId == companyId
-        && request.resource.data.state == 'active'
-        && request.resource.data.dataHash == get(/databases/$(database)/documents/stagingRecordActivationControls/$(companyId)).data.sourceHash
+        && ((request.resource.data.operationCount == 0 && request.resource.data.state == 'verifying') || (request.resource.data.operationCount > 0 && request.resource.data.state == 'migrating'))
+        && existsAfter(/databases/$(database)/documents/stagingLiveExecutionManifests/$(companyId)/runs/$(request.resource.data.executionManifestHash))
+        && liveControlMatchesManifest(companyId)
         && request.resource.data.rootRevision == 0
+        && request.resource.data.executionBaseRootRevision == 0
+        && request.resource.data.confirmedOperationCount == 0
         && request.resource.data.lastOperationId == ''
         && request.resource.data.lastCollection == ''
         && request.resource.data.lastRecordId == ''
+        && request.resource.data.verifiedHash == ''
+        && request.resource.data.verifiedDocumentCount == 0
+        && request.resource.data.verifiedActiveCount == 0
+        && request.resource.data.verifiedTombstoneCount == 0
         && request.resource.data.updatedAt == request.time
         && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.updatedByEmail == emailKey();
-      allow update: if isOwner()
+      allow update: if resource != null
+        && isOwner()
         && companyId == 'danbridge'
-        && request.resource.data.keys().hasOnly(['schema','environment','companyId','state','dataHash','rootRevision','lastOperationId','lastCollection','lastRecordId','updatedAt','updatedBy','updatedByEmail'])
+        && request.resource.data.keys().hasOnly(['schema','environment','companyId','state','executionManifestHash','backupId','restoreDrillId','legacyVersionHash','dataHash','targetDataHash','rootRevision','executionBaseRootRevision','operationCount','confirmedOperationCount','expectedDocumentCount','expectedActiveCount','expectedTombstoneCount','lastOperationId','lastCollection','lastRecordId','verifiedHash','verifiedDocumentCount','verifiedActiveCount','verifiedTombstoneCount','updatedAt','updatedBy','updatedByEmail'])
         && request.resource.data.schema == resource.data.schema
         && request.resource.data.environment == resource.data.environment
         && request.resource.data.companyId == resource.data.companyId
-        && request.resource.data.state == 'active'
-        && request.resource.data.rootRevision == resource.data.rootRevision + 1
-        && request.resource.data.lastOperationId is string
-        && request.resource.data.lastOperationId.size() > 0
-        && request.resource.data.lastOperationId != resource.data.lastOperationId
-        && request.resource.data.lastCollection in ['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches']
-        && request.resource.data.lastRecordId is string
-        && request.resource.data.lastRecordId.size() > 0
         && request.resource.data.updatedAt == request.time
         && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.updatedByEmail == emailKey()
-        && getAfter(/databases/$(database)/documents/stagingLiveRecords/$(companyId)/collections/$(request.resource.data.lastCollection)/records/$(request.resource.data.lastRecordId)).data.lastOperationId == request.resource.data.lastOperationId
-        && getAfter(/databases/$(database)/documents/stagingLiveRecords/$(companyId)/collections/$(request.resource.data.lastCollection)/records/$(request.resource.data.lastRecordId)).data.sourceHash == request.resource.data.dataHash;
+        && (resource.data.state == 'migrating'
+          ? liveControlMigrationIsValid(companyId)
+          : (resource.data.state == 'verifying'
+            ? liveControlFinalizationIsValid()
+            : (resource.data.state == 'active' ? liveControlRearmIsValid(companyId) : false)));
       allow delete: if false;
     }
 
