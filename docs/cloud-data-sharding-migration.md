@@ -65,3 +65,11 @@
 - 每次新增、修改、墓碑及墓碑重建都增加 revision；transaction 必須先讀完同批現況才寫，衝突立即停止。
 - staging 實機已完成首次 16 筆寫入、逐集合雲端讀回、第二批中斷、只續傳剩餘兩筆、清理墓碑與重新整理零寫入驗證。
 - 此層仍是 staging Owner 手動入口，不接入 `uploadOwnerState()`、不接管任何角色讀取，也不部署 production。
+
+## staging live 逐筆執行預檢
+
+- 首次灌入時 live 逐筆集合可以是空的；遷移前 verified 備份與復原 receipt 必須對應即將遷入的完整 legacy 目標資料，不可錯拿空的 live 來源比對。
+- 預檢會唯讀取得 legacy 主文件、不可覆寫備份、持久化復原 receipt、16 個 live 集合與 live 控制文件，再重新演算每筆 operation 的 revision 與前後 SHA-256 鏈。
+- manifest 鎖定完整 operation plan hash、來源與目標逐集合筆數、總筆數、預估讀寫量及本次配額上限；任何版本改變、缺集合、筆數或 hash 不符都停止。
+- 頁面入口只存在於 `danbridge-d8877-staging` 的 Owner 明確功能旗標，且目前只產生記憶體內計畫與摘要：`writes: 0`、`uploadOwnerStateAttached: false`、`readTakeover: false`、`productionAllowed: false`。
+- 本階段尚未建立 live 控制、尚未將操作加入永久日誌、尚未啟動 worker，也未部署 staging 或 production。

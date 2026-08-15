@@ -10,6 +10,9 @@ import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,s
 import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.86';
 import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest,buildAtomicRecordActivation,evaluateAtomicRecordActivation} from './cloud-record-activation.js?v=20.26.86';
 import {decideRecordReadTakeover} from './cloud-record-read-takeover.js?v=20.26.88';
+import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js?v=20.26.89';
+import {recordDataHash} from './cloud-record-data-hash.js?v=20.26.89';
+import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.89';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -22,7 +25,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.88';
+const APP_RELEASE='20.26.89';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -2225,6 +2228,42 @@ if(DANBRIDGE_ENVIRONMENT==='staging'){
  if(migrationRestoreFailure&&migrationRestoreFailureBackup){
   let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingMigrationRestoreFailureResult=JSON.stringify(await runStagingMigrationRestoreFailureScenario(migrationRestoreFailureBackup,migrationRestoreFailure))}catch(error){document.body.dataset.stagingMigrationRestoreFailureResult=JSON.stringify({scenario:migrationRestoreFailure,error:String(error?.message||error)})}},200);
  }
+}
+
+let stagingLivePreflightDiagnostic={state:'idle',manifestHash:'',operationCount:0,sourceRecordCount:0,targetRecordCount:0,estimatedReads:0,estimatedWrites:0,readBudget:0,writeBudget:0,liveControlExists:false,writes:0,featureFlagOnly:true,uploadOwnerStateAttached:false,readTakeover:false,productionAllowed:false,error:''},stagingLivePreflightEvidence=null;
+function stagingLivePreflightGuard(){
+ if(DANBRIDGE_ENVIRONMENT!=='staging'||cloudRole!=='owner'||firebaseConfig.projectId!=='danbridge-d8877-staging')throw new Error('live 逐筆預檢只允許 staging Owner');
+}
+function setStagingLivePreflightDiagnostic(next){stagingLivePreflightDiagnostic={...stagingLivePreflightDiagnostic,...next};document.body.dataset.stagingLivePreflightState=stagingLivePreflightDiagnostic.state}
+async function readStagingLiveRecordSource(){
+ stagingLivePreflightGuard();
+ const [controlSnapshot,...snapshots]=await Promise.all([getDoc(doc(cloud,'stagingLiveRecordControls',COMPANY_ID)),...FULL_RECORD_COLLECTIONS.map(collectionName=>getDocs(collection(cloud,'stagingLiveRecords',COMPANY_ID,'collections',collectionName,'records')))]),documentsByCollection={};
+ FULL_RECORD_COLLECTIONS.forEach((collectionName,index)=>{documentsByCollection[collectionName]=snapshots[index].docs.map(row=>({id:row.id,data:row.data()}))});
+ const rebuilt=rebuildFullRecordShadowDb(documentsByCollection,{environment:'staging'}),sourceRecordHash=recordDataHash(rebuilt.db),control=controlSnapshot.exists()?controlSnapshot.data():null;
+ if(!control&&rebuilt.documentCount)throw new Error('live 逐筆文件存在但控制文件缺失');
+ if(control){if(control.schema!=='danbridge-live-record-control-v1'||control.environment!=='staging'||control.companyId!==COMPANY_ID||control.state!=='active'||control.dataHash!==sourceRecordHash||!Number.isSafeInteger(control.rootRevision)||control.rootRevision<rebuilt.documentCount)throw new Error('live 逐筆控制與實際文件不一致')}
+ return{db:rebuilt.db,revisions:rebuilt.revisions,sourceRecordHash,documentCount:rebuilt.documentCount,activeCount:rebuilt.activeCount,tombstoneCount:rebuilt.tombstoneCount,control,liveControlExists:Boolean(control),nextSequence:control?control.rootRevision+1:1};
+}
+async function prepareStagingLiveOperationPreflight({backupId,restoreDrillId,readBudget,writeBudget,deviceId}={}){
+ stagingLivePreflightGuard();
+ const cleanBackupId=String(backupId||'').trim(),cleanRestoreDrillId=String(restoreDrillId||'').trim();
+ if(!/^[A-Za-z0-9_-]{8,128}$/.test(cleanBackupId)||!/^[A-Za-z0-9_-]{8,128}$/.test(cleanRestoreDrillId))throw new Error('live 逐筆預檢 backupId 或 drillId 無效');
+ setStagingLivePreflightDiagnostic({state:'reading',error:''});
+ try{
+  const [mainSnapshot,backupSnapshot,restoreReceipt,source]=await Promise.all([getDoc(doc(cloud,'companies',COMPANY_ID,'data','main')),getDoc(doc(cloud,'stagingMigrationBackups',COMPANY_ID,'runs',cleanBackupId)),verifyStagingMigrationRestoreReceipt(cleanRestoreDrillId),readStagingLiveRecordSource()]);
+  if(!mainSnapshot.exists()||!backupSnapshot.exists()||!mainSnapshot.data()?.db)throw new Error('live 逐筆預檢來源、備份或 legacy 主資料不存在');
+  const targetDb=deepCopy(mainSnapshot.data().db),legacyVersionHash=String(mainSnapshot.data()?.clientHash||'');if(!legacyVersionHash||dataHash(targetDb)!==legacyVersionHash)throw new Error('live 逐筆預檢 legacy 內容與版本不符');
+  const resolvedDeviceId=String(deviceId||`staging-${cloudUid}`).replace(/[^A-Za-z0-9_.:-]/g,'_').slice(0,120),result=buildStagingLivePreflight({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole,projectId:firebaseConfig.projectId,sourceState:{db:source.db,revisions:source.revisions},targetDb,backup:backupSnapshot.data(),restoreReceipt,legacyVersionHash,deviceId:resolvedDeviceId,startSequence:source.nextSequence,readBudget:Number(readBudget),writeBudget:Number(writeBudget),createdAt:new Date().toISOString()});
+  const summary={state:'ready',manifestHash:result.manifest.manifestHash,operationCount:result.plan.operationCount,sourceRecordCount:result.manifest.sourceRecordCount,targetRecordCount:result.manifest.targetRecordCount,estimatedReads:result.manifest.estimatedReads,estimatedWrites:result.manifest.estimatedWrites,readBudget:result.manifest.readBudget,writeBudget:result.manifest.writeBudget,liveControlExists:source.liveControlExists,writes:0,featureFlagOnly:true,uploadOwnerStateAttached:false,readTakeover:false,productionAllowed:false,error:''};
+  stagingLivePreflightEvidence=result;setStagingLivePreflightDiagnostic(summary);document.body.dataset.stagingLivePreflightResult=JSON.stringify(summary);return deepCopy(result);
+ }catch(error){stagingLivePreflightEvidence=null;setStagingLivePreflightDiagnostic({state:'blocked',writes:0,featureFlagOnly:true,uploadOwnerStateAttached:false,readTakeover:false,productionAllowed:false,error:String(error?.message||error).slice(0,500)});document.body.dataset.stagingLivePreflightResult=JSON.stringify(stagingLivePreflightDiagnostic);throw error}
+}
+if(DANBRIDGE_ENVIRONMENT==='staging'){
+ window.__danbridgePrepareStagingLiveOperationPreflight=prepareStagingLiveOperationPreflight;
+ window.__danbridgeGetStagingLivePreflightDiagnostic=()=>{stagingLivePreflightGuard();return deepCopy(stagingLivePreflightDiagnostic)};
+ window.__danbridgeGetStagingLivePreflightEvidence=()=>{stagingLivePreflightGuard();return stagingLivePreflightEvidence?deepCopy(stagingLivePreflightEvidence):null};
+ const livePreflightParams=new URLSearchParams(location.search),livePreflightBackupId=livePreflightParams.get('stagingLivePreflight'),livePreflightRestoreDrillId=livePreflightParams.get('stagingLiveRestore'),livePreflightReadBudget=livePreflightParams.get('stagingLiveReadBudget'),livePreflightWriteBudget=livePreflightParams.get('stagingLiveWriteBudget');
+ if(livePreflightBackupId&&livePreflightRestoreDrillId&&livePreflightReadBudget&&livePreflightWriteBudget){let installed=false;const timer=setInterval(()=>{if(installed||cloudRole!=='owner')return;installed=true;clearInterval(timer);const button=document.createElement('button');button.id='stagingLiveOperationPreflightButton';button.type='button';button.className='btn';button.style.cssText='position:fixed;right:18px;bottom:36px;z-index:10002';button.textContent='唯讀預檢 staging 逐筆計畫';button.onclick=async()=>{button.disabled=true;button.textContent='讀取備份、復原證據與逐筆現況中…';try{const result=await prepareStagingLiveOperationPreflight({backupId:livePreflightBackupId,restoreDrillId:livePreflightRestoreDrillId,readBudget:livePreflightReadBudget,writeBudget:livePreflightWriteBudget});button.textContent=`預檢通過：${result.plan.operationCount} 筆，尚未寫入`;button.className='btn ok'}catch(error){button.disabled=false;button.textContent='預檢阻擋，未寫入';cloudStatus(String(error?.message||error),'error')}};document.body.appendChild(button)},200)}
 }
 
 async function uploadOwnerState(force=false){

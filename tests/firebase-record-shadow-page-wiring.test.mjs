@@ -15,7 +15,7 @@ test('頁面匯入獨立 record-shadow adapter 且只公開專屬手動入口',(
 });
 
 test('Checkpoint B 以版本化 service worker 解除舊 staging 快取',()=>{
- assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.88'/);
+ assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.89'/);
 });
 
 test('staging Owner URL 測試入口只操作專用 ID 並保留既有影子狀態',()=>{
@@ -124,4 +124,14 @@ test('staging 手動逐筆讀取演練核對控制、manifest、legacy hash 與�
  assert.match(source,/runStagingRecordReadTakeoverExercise/);assert.match(source,/get\('recordReadTakeoverTest'\)/);
  assert.match(source,/verifyCandidate\(legacyDb,\{sourceHash:legacyHash\}\)/);assert.match(source,/decideRecordReadTakeover/);assert.match(source,/appliedHash!==legacyHash/);
  assert.match(source,/automaticReadTakeover:false,writeTakeover:false/);assert.doesNotMatch(source,/uploadOwnerState[^}]+runStagingRecordReadTakeoverExercise/);
+});
+
+test('staging live 預檢只讀取證據與逐筆現況，不寫入、不接管且不掛入既有同步',()=>{
+ assert.match(source,/import \{buildStagingLivePreflight\} from '\.\/cloud-staging-live-preflight\.js\?v=20\.26\.89'/);
+ assert.match(source,/stagingLivePreflightGuard/);assert.match(source,/firebaseConfig\.projectId!=='danbridge-d8877-staging'/);
+ assert.match(source,/readStagingLiveRecordSource/);assert.match(source,/stagingLiveRecords/);assert.match(source,/verifyStagingMigrationRestoreReceipt/);
+ assert.match(source,/get\('stagingLivePreflight'\)/);assert.match(source,/button\.id='stagingLiveOperationPreflightButton'/);assert.match(source,/button\.onclick=async\(\)=>/);
+ const block=source.slice(source.indexOf('let stagingLivePreflightDiagnostic='),source.indexOf('async function uploadOwnerState'));
+ assert.doesNotMatch(block,/setDoc\(|runTransaction\(|deleteDoc\(|__danbridgeSetDB|uploadOwnerState\(/);
+ assert.match(block,/writes:0,featureFlagOnly:true,uploadOwnerStateAttached:false,readTakeover:false,productionAllowed:false/);
 });
