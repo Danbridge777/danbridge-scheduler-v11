@@ -3,7 +3,7 @@ from pathlib import Path
 import re, subprocess, sys, hashlib, json
 ROOT = Path(__file__).resolve().parents[1]
 EXCLUDED_DIRS={'.git','.firebase','.npm-cache','node_modules','playwright-report','test-results'}
-EXCLUDED_FILES={'firestore-debug.log'}
+EXCLUDED_FILES={'firebase-debug.log','firestore-debug.log'}
 def included(p):
     rel=p.relative_to(ROOT)
     return not any(part in EXCLUDED_DIRS for part in rel.parts) and rel.name not in EXCLUDED_FILES

@@ -1,14 +1,14 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.91';
+const CLOUD_RELEASE = '20.26.92';
 const APP_SHELL_RELEASE = '20.26.27';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
 const ROLE_UX_RELEASE = '20.26.4';
 const ROLE_UX_STYLE_RELEASE = '20.25.10';
-const PWA_RELEASE = '20.26.91';
+const PWA_RELEASE = '20.26.92';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
@@ -30,9 +30,9 @@ test('signed-out entry keeps private application content isolated', async ({ pag
 test('永久操作日誌在重新整理後仍可從 IndexedDB 完整讀回',async({page},testInfo)=>{
   await page.goto('/index.html',{waitUntil:'domcontentloaded'});
   const key=`staging:e2e@example.com:${testInfo.project.name}-${Date.now()}`,rows=[{schema:'danbridge-operation-journal-v1',operationId:'device:1',status:'pending',attempts:0,operation:{operationId:'device:1',recordId:'lesson-1'}}];
-  await page.evaluate(async({key,rows})=>{const{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.91'),storage=createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key});await storage.save(rows);sessionStorage.setItem('e2eJournalKey',key)},{key,rows});
+  await page.evaluate(async({key,rows})=>{const{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.92'),storage=createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key});await storage.save(rows);sessionStorage.setItem('e2eJournalKey',key)},{key,rows});
   await page.reload({waitUntil:'domcontentloaded'});
-  const readback=await page.evaluate(async()=>{const key=sessionStorage.getItem('e2eJournalKey'),{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.91');return createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key}).load()});
+  const readback=await page.evaluate(async()=>{const key=sessionStorage.getItem('e2eJournalKey'),{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.92');return createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key}).load()});
   expect(readback).toEqual(rows);
 });
 

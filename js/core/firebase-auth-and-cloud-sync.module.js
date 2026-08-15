@@ -12,14 +12,14 @@ import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest,buildAto
 import {decideRecordReadTakeover} from './cloud-record-read-takeover.js?v=20.26.88';
 import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js?v=20.26.89';
 import {recordDataHash} from './cloud-record-data-hash.js?v=20.26.89';
-import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.89';
-import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.91';
-import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.91';
-import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.91';
-import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.91';
-import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.91';
-import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.91';
-import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.91';
+import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.92';
+import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.92';
+import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.92';
+import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.92';
+import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.92';
+import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.92';
+import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.92';
+import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.92';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -32,7 +32,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.91';
+const APP_RELEASE='20.26.92';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');

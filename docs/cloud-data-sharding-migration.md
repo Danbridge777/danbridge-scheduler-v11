@@ -75,7 +75,8 @@
 - 執行前先把完整 manifest 與操作計畫放進同一個 environment／email／manifest 專屬 IndexedDB 原子封套，並重新計算逐筆清單 hash；保存完成後才允許同一交易建立不可覆寫雲端 manifest 與 v2 控制。每次續傳都先核對雲端 manifest；若中斷發生在雲端 manifest 建立前，則由本機封套完整驗證並冪等補建，因此不能遺失恢復依據，也不能越過失敗或隔離的首筆。
 - 每筆 record、控制與不可覆寫完成憑證必須在同一交易推進；實體刪除永久禁止。另一台裝置即使已往後執行，較早操作仍可由憑證辨認為已完成，不會重寫或假確認。完成後重新讀回 16 集合，SHA-256、文件數、有效數與墓碑數全部一致才將控制由 `verifying` 改為 `active`，啟用後再做第二次完整讀回。
 - 前一輪只有在 `active` 完成狀態才能原子換綁下一份 manifest；全域 root revision 延續、每輪 confirmed 計數歸零。Emulator 已連續驗證新增、修改、墓碑、墓碑重建 revision 1→4。
-- 這些執行元件已於 2026-08-15 以 release `20.26.91` 部署到 `danbridge-d8877-staging`，只提供 Owner 手動測試入口；仍未部署 production，且 `uploadOwnerStateAttached: false`、`readTakeover: false`、`productionAllowed: false`。
+- release `20.26.92` 將逐筆計畫由每筆重算整份資料 SHA-256，改為每筆不可竄改的小型 SHA-256 鏈，最後仍重新建立完整 16 集合並核對整份 SHA-256；實際 1,709 筆備份由 128 秒降至 1 秒內，10,000 筆首次建立也完成完整 hash／revision 重建驗證。
+- 這些執行元件只部署到 `danbridge-d8877-staging`，只提供 Owner 手動測試入口；仍未部署 production，且 `uploadOwnerStateAttached: false`、`readTakeover: false`、`productionAllowed: false`。
 
 ## 2026-08-15 staging live gate 紀錄
 
