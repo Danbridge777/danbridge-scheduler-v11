@@ -4,12 +4,6 @@ service cloud.firestore {
     function signedIn() { return request.auth != null && request.auth.token.email is string; }
     function emailKey() { return request.auth.token.email.lower(); }
     function isPrimaryOwner() { return signedIn() && emailKey() == 'a0965487920@gmail.com'; }
-    function ownerProfileExists() {
-      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-    function ownerProfile() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
     function isOwner() {
       return signedIn() && (
         isPrimaryOwner()
