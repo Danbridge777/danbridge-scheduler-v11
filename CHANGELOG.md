@@ -1,5 +1,10 @@
 # Changelog
 
+## 20.26.94（可見 manifest 續傳證據）
+
+- staging 逐筆執行與重新整理續傳按鈕直接顯示完整 manifest SHA-256，暫停、完成與續傳都能從畫面核對同一身份，不需讀取隱藏狀態。
+- 只調整 staging 手動測試證據；逐筆內容、Firestore 路徑、權限、墓碑、日誌、讀取來源與 production 全部不變。
+
 ## 20.26.93（staging 可見手動遷移驗證）
 
 - staging verified 備份、復原演練、憑證重讀與失敗情境改成可見的 Owner 手動按鈕；只開啟或重整測試網址不再自動寫入。

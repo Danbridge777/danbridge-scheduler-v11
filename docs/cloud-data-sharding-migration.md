@@ -77,6 +77,7 @@
 - 前一輪只有在 `active` 完成狀態才能原子換綁下一份 manifest；全域 root revision 延續、每輪 confirmed 計數歸零。Emulator 已連續驗證新增、修改、墓碑、墓碑重建 revision 1→4。
 - release `20.26.92` 將逐筆計畫由每筆重算整份資料 SHA-256，改為每筆不可竄改的小型 SHA-256 鏈，最後仍重新建立完整 16 集合並核對整份 SHA-256；實際 1,709 筆備份由 128 秒降至 1 秒內，10,000 筆首次建立也完成完整 hash／revision 重建驗證。
 - release `20.26.93` 將 verified 備份、復原、憑證重讀與失敗演練改成可見的 Owner 手動按鈕；開啟或重整測試網址不會自動寫入，實測不再依賴隱藏狀態。
+- release `20.26.94` 讓逐筆執行與重整續傳按鈕顯示完整 manifest SHA-256，所有續傳證據可直接由畫面核對。
 - 這些執行元件只部署到 `danbridge-d8877-staging`，只提供 Owner 手動測試入口；仍未部署 production，且 `uploadOwnerStateAttached: false`、`readTakeover: false`、`productionAllowed: false`。
 
 ## 2026-08-15 staging live gate 紀錄
