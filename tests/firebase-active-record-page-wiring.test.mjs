@@ -1,0 +1,262 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const source=fs.readFileSync(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');
+const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const camps=fs.readFileSync(new URL('../js/modules/camps/camp-management.js',import.meta.url),'utf8');
+const block=(from,to)=>source.slice(source.indexOf(from),source.indexOf(to,source.indexOf(from)));
+const sourceBlock=(text,from,to)=>text.slice(text.indexOf(from),text.indexOf(to,text.indexOf(from)));
+
+test('browser Firebase SDK鎖定12.17.1，V2 candidate factory只允許staging明確呼叫且不自動接runtime',()=>{
+ const imports=[...source.matchAll(/https:\/\/www\.gstatic\.com\/firebasejs\/([^/]+)\/firebase-(?:app|auth|firestore)\.js/g)].map(match=>match[1]);
+ assert.deepEqual(imports,['12.17.1','12.17.1','12.17.1']);
+ assert.doesNotMatch(source,/firebasejs\/12\.16\.0/);
+ assert.match(source,/getDocFromServer/);
+ assert.match(source,/createFirebaseRecordSyncV2TakeoverCandidateAdapter/);
+ assert.equal((source.match(/createExplicitStagingV2TakeoverCandidateBinder/g)||[]).length,1);
+ const factory=block('export function createExplicitStagingV2TakeoverCandidateBinder','// 舊版 Header');
+ assert.match(factory,/DANBRIDGE_ENVIRONMENT!=='staging'/);
+ assert.match(factory,/danbridge-d8877-staging/);
+ assert.match(factory,/auth\.app!==app\|\|cloud\.app!==app/);
+ assert.match(factory,/getIdTokenResult\(true\)/);
+ assert.match(factory,/claims,'sub'.+claims,'user_id'.+claims,'email'.+claims,'aud'.+claims,'iss'/s);
+ assert.match(factory,/https:\/\/securetoken\.google\.com\/danbridge-d8877-staging/);
+ assert.match(factory,/recordSyncV2CutoverOperator/);
+ assert.match(factory,/new Set\(\[RECORD_SYNC_V2_TAKEOVER_CANDIDATE_CONTROL_PATH\(targetV2Epoch\),RECORD_SYNC_V2_TAKEOVER_CANDIDATE_HEAD_PATH\(targetV2Epoch\)\]\)/);
+ assert.match(factory,/getDocFromServer\(reference\(path\)\)/);
+ assert.match(factory,/merge:false/);
+ assert.doesNotMatch(factory,/cloudRole|cloudUid|cloudEmailKey|onAuthStateChanged|activeRecordMode|window\.|readTakeoverEnabled:true|writeTakeoverEnabled:true/);
+});
+
+test('Firestore 使用多分頁持久快取，不因第二分頁退回記憶體',()=>{
+ assert.match(source,/import \{ initializeFirestore, persistentLocalCache, persistentMultipleTabManager,/);
+ assert.match(source,/initializeFirestore\(app,\{localCache:persistentLocalCache\(\{tabManager:persistentMultipleTabManager\(\)\}\)\}\)/);
+ assert.doesNotMatch(source,/enableIndexedDbPersistence|getFirestore\(app\)/);
+});
+
+test('同帳號雙分頁登入權限初始化會串行化並使用有限權杖重試',()=>{
+ assert.match(source,/import \{loadProfileAfterAuthReady\} from '\.\/cloud-auth-profile-bootstrap\.js\?v=20\.26\.113'/);
+ const auth=block('async function loadSignedInProfile','function loginTimeValue');
+ assert.match(auth,/loadProfileAfterAuthReady\(\{user,loadProfile:\(\)=>ensureProfile\(user\)\}\)/);
+ assert.match(auth,/navigator\.locks\?\.request\? navigator\.locks\.request\(lockName,load\):load\(\)/);
+ assert.match(source,/const profile=await loadSignedInProfile\(user\)/);
+});
+
+test('頁面明確匯入 Owner 日常逐筆、角色發布、候選封存與原子啟用 adapter',()=>{
+ for(const name of ['createActiveRecordPageController','createFirebaseActiveRecordStreamAdapter','createFirebaseActiveRecordOperationAdapter','createFirebaseRecordSyncConflictBackupAdapter','createFirebaseRoleRecordViewAdapter','createFirebaseRoleRecordStreamAdapter','createFirebaseRecordSyncCandidateAdapter','createFirebaseRecordSyncActivationAdapter'])assert.match(source,new RegExp(`import \\{${name}\\}`));
+});
+
+test('staging 候選依序核對備份、逐筆續傳、封存與第二次讀回，production 無入口',()=>{
+ const flow=block('async function verifyStagingRecordSyncProtection','let preparedRecordSyncRoleEvidence');
+ for(const marker of ['verifyStagingMigrationRestoreReceipt','candidateAdapter.open','runStagingFullRecordShadow','verifyCandidate','candidateAdapter.seal','candidateAdapter.read'])assert.match(flow,new RegExp(marker.replace('.','\\.')));
+ assert.ok(flow.indexOf('candidateAdapter.open')<flow.indexOf('runStagingFullRecordShadow'));
+ assert.ok(flow.indexOf('runStagingFullRecordShadow')<flow.indexOf('candidateAdapter.seal'));
+ assert.ok(flow.indexOf('candidateAdapter.seal')<flow.lastIndexOf('verifyCandidate'));
+ assert.match(source,/if\(DANBRIDGE_ENVIRONMENT==='staging'\)\{\s*window\.__danbridgeVerifyStagingRecordSyncProtection/);
+});
+
+test('角色證據不能自動填通過，完整實測後才可在記憶體準備並手動原子啟用',()=>{
+ const flow=block('let preparedRecordSyncRoleEvidence','let stagingLivePreflightDiagnostic');
+ assert.match(flow,/RECORD_SYNC_ROLE_SCENARIOS\.some\(scenario=>results\[scenario\]!==true\)/);
+ assert.match(flow,/prepareStagingRecordSyncRoleEvidenceFromReceipts/);
+ assert.match(flow,/verifyRoleViewReceiptSet/);
+ assert.match(flow,/stagingRecordSyncActivationPanel/);
+ assert.match(flow,/id="stagingRecordSyncActivateButton" disabled/);
+ assert.match(html,/#stagingRecordSyncActivationPanel\{display:block\}/);
+ assert.match(flow,/writes:0,readTakeover:false,writeTakeover:false/);
+ assert.match(flow,/async function executePreparedStagingRecordSyncActivation/);
+ assert.match(flow,/adapter\.activate\(preparedRecordSyncActivation\)/);
+ assert.doesNotMatch(flow,/Object\.fromEntries\(RECORD_SYNC_ROLE_SCENARIOS\.map\(key=>\[key,true\]\)\)/);
+});
+
+test('角色候選 manifest 與每位本人收據不可變，URL 只顯示按鈕不會自動寫入',()=>{
+ assert.match(source,/cloud-role-view-verification\.js\?v=20\.26\.106/);
+ assert.match(source,/stagingRoleViewCandidateManifests/);
+ assert.match(source,/stagingRoleViewVerificationReceipts/);
+ assert.match(source,/persistStagingRoleCandidateManifest/);
+ assert.match(source,/persistStagingRoleVerificationReceipt/);
+ assert.match(source,/readVerifiedStagingRoleViewCandidateSource/);
+ assert.match(source,/auditStagingRoleViewCandidateSource/);
+ assert.match(source,/stagingRoleViewCandidateAuditButton/);
+ assert.match(source,/verifyRoleViewCandidateSourceBinding/);
+ assert.match(source,/mainSnapshot\.data\(\)\.db/);
+ assert.match(source,/candidateControl/);
+ assert.match(source,/identityFields\.some\(field=>saved\[field\]!==receipt\[field\]\)/);
+ assert.match(source,/receiptHash:persisted\.receipt\.receiptHash/);
+ assert.match(source,/buildVerifiedRoleViewCandidateManifest/);
+ assert.match(source,/import \{recordDataDigest,recordDataHash\}/);
+ const cryptoFlow=block('async function buildCurrentRoleViewCandidates','function currentRoleCandidateKind');
+ assert.match(cryptoFlow,/viewHash:recordDataDigest\(db\)/);
+ assert.match(cryptoFlow,/sourceHash=source\.sourceHash/);
+ assert.match(cryptoFlow,/hashDb:recordDataDigest/);
+ assert.match(cryptoFlow,/views\.some\(view=>!\/\^\[a-f0-9\]\{64\}\$\//);
+ assert.doesNotMatch(cryptoFlow,/viewHash:dataHash\(db\)|sourceHash=dataHash\(sourceDb\)|hashDb:dataHash/);
+ const candidateRun=block('async function runStagingRoleViewCandidateScenario','function currentRoleCandidateKind');
+ assert.match(candidateRun,/readVerifiedStagingRoleViewCandidateSource\(\)/);
+ assert.doesNotMatch(candidateRun,/window\.__danbridgeGetDB/);
+ const sourceAudit=block('async function auditStagingRoleViewCandidateSource','function firestoreRoleViewCandidateAdapter');
+ assert.match(sourceAudit,/firestoreFullRecordShadowAdapter\(\)\.read\(\)/);
+ assert.match(sourceAudit,/buildRoleViewCandidateSourceAudit/);
+ assert.match(sourceAudit,/writes:0|stagingRoleViewCandidateAudit/);
+ assert.doesNotMatch(sourceAudit,/setDoc|deleteDoc|runTransaction/);
+ assert.match(source,/stagingRoleViewCandidateButton/);
+ assert.match(source,/stagingOwnerRoleVerificationButton/);
+ assert.match(source,/stagingOwnRoleVerificationButton/);
+ const candidateEntry=block("const roleViewCandidateTest=new URLSearchParams(location.search).get('roleViewCandidateTest')","async function runProductionRoleViewCandidate");
+ assert.match(candidateEntry,/installStagingMigrationActionButton/);
+ assert.doesNotMatch(candidateEntry,/setInterval\(async\(\)=>[^}]+runStagingRoleViewCandidateScenario/);
+});
+
+test('啟用前 aa、老師與管理者逐筆讀回自己的 16 集合，並實際確認核心與跨角色拒絕',()=>{
+ const flow=block('function currentRoleCandidateKind','async function runProductionRoleViewCandidate');
+ assert.match(source,/import \{verifyOwnRoleViewCandidateReadback\}/);
+ assert.match(flow,/for\(const collectionId of FULL_RECORD_COLLECTIONS\)/);
+ assert.match(flow,/ownRows=query\(base,where\('email','==',cloudEmailKey\),where\('kind','==',kind\)\)/);
+ assert.match(flow,/verifyOwnRoleViewCandidateReadback/);
+ assert.match(flow,/lessonRows=query\(collection\(cloud,'stagingRoleViewCandidates'/);
+ assert.match(flow,/onSnapshot\(lessonRows/);
+ assert.match(flow,/stagingFullRecordShadows/);
+ assert.match(flow,/crossRoleDenied/);
+ assert.match(flow,/window\.__danbridgeVerifyOwnStagingRoleViewCandidate/);
+ assert.match(flow,/readTakeover:false,writeTakeover:false/);
+});
+
+test('production 永遠不啟動新的 staging 日常與角色逐筆 runtime',()=>{
+ assert.match(source,/if\(DANBRIDGE_ENVIRONMENT!=='staging'\|\|cloudRole!=='owner'\)return false/);
+ assert.match(source,/if\(DANBRIDGE_ENVIRONMENT!=='staging'\)\s*\{\s*activeRecordMode='legacy';\s*activeRoleWriteAllowed=true;\s*startLegacy\(\);\s*return;?\s*\}/);
+ assert.match(source,/if\(DANBRIDGE_ENVIRONMENT==='staging'\)\{startOwnerActiveRecordRuntime\(\);return\}activeRecordMode='legacy';subscribeOwnerLegacy\(\)/);
+});
+
+test('Owner 啟用後 upload 與 save 先走永久日誌逐筆流程，不再落入 1 MiB 主文件寫入',()=>{
+ const upload=block('async function uploadOwnerState','function queueOwnerCloudSave');
+ assert.ok(upload.indexOf("activeRecordMode!=='legacy'")<upload.indexOf('ownerMainDocumentBytes(current)'));
+ assert.match(upload,/return flushActiveOwnerState\(\)/);
+ const queue=block('function queueOwnerCloudSave','function lessonMap');
+ assert.match(queue,/activeRecordPageController\?\.queueLocalSave\(\)/);
+ assert.ok(queue.indexOf('activeRecordPageController?.queueLocalSave()')<queue.indexOf('setTimeout(()=>uploadOwnerState()'));
+});
+
+test('Owner 逐筆寫入前必須用已確認的雲端基準建立當日分片備份',()=>{
+ const controller=block('function ensureActiveOwnerPageController','async function acceptActiveOwnerSnapshot');
+ assert.match(controller,/ensureCloudBackup:confirmedDb=>createCloudSafetyBackup\(false,confirmedDb\)/);
+ const status=block('function handleActiveOwnerControllerStatus','function ensureActiveOwnerPageController');
+ assert.match(status,/['\"]backing-up['\"]/);
+ assert.match(status,/寫入前的雲端分片備份/);
+ const schedule=block('function scheduleDailyCloudBackup','function readSyncHealthBaseline');
+ assert.match(schedule,/DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy'/);
+ assert.ok(schedule.indexOf("activeRecordMode!=='legacy'")<schedule.indexOf('setTimeout(()=>createCloudSafetyBackup(false)'));
+});
+
+test('核心逐筆已完成但角色發布仍在執行時，串流快照不會誤排第二輪空同步',()=>{
+ const accept=block('async function acceptActiveOwnerSnapshot','function startOwnerActiveRecordRuntime');
+ assert.match(accept,/beforeAccept=controller\.diagnostics\(\)/);
+ assert.match(accept,/localDirtyHash&&!beforeAccept\.dirty&&!beforeAccept\.inFlight/);
+ assert.doesNotMatch(accept,/localDirtyHash&&!controller\.diagnostics\(\)\.dirty/);
+});
+
+test('Owner active save 依資料 hash 合併相同意圖，但不同 hash 仍排入下一輪',()=>{
+ const queue=block('function queueOwnerCloudSave','function lessonMap');
+ assert.match(source,/import \{decideOwnerActiveSaveIntent\} from '\.\/cloud-owner-active-save-intent\.js\?v=20\.26\.117'/);
+ assert.match(queue,/decideOwnerActiveSaveIntent\(\{nextHash,localDirtyHash,lastUploadedHash,diagnostics,applyingCloud\}\)/);
+ assert.match(queue,/intent\.action==='coalesce'.+return/s);
+ assert.match(queue,/intent\.action==='recover'.+queueLocalSave\(\)/s);
+ assert.ok(queue.indexOf("intent.action==='coalesce'")<queue.indexOf('localMutationVersion++'));
+ assert.ok(queue.indexOf('localDirtyHash=nextHash')>queue.indexOf('localMutationVersion++'));
+});
+
+test('Owner 課堂回報直接套用與 listener 套用都先排入逐筆 journal，其他角色不會排 owner core',()=>{
+ const direct=block('async function saveTeacherReport','let classFocusLessonId');
+ assert.match(direct,/const changed=applyReportToLesson\(lesson,report\)/);
+ assert.match(direct,/if\(changed&&cloudRole==='owner'\)\{persistCurrentLocalView\(\);queueOwnerCloudSave\(\)\}/);
+ assert.ok(direct.indexOf('persistCurrentLocalView()')<direct.indexOf('queueOwnerCloudSave()'));
+ assert.ok(direct.indexOf('queueOwnerCloudSave()')<direct.indexOf('window.renderAll?.()'));
+ const listener=block('function subscribeLessonReports','function subscribeCurrentRoleData');
+ assert.match(listener,/if\(cloudRole==='owner'\)\{queueOwnerCloudSave\(\);clearTimeout\(reportSyncTimer\);reportSyncTimer=setTimeout\(uploadOwnerState,500\)\}/);
+ assert.ok(listener.indexOf('queueOwnerCloudSave()')<listener.indexOf('setTimeout(uploadOwnerState,500)'));
+});
+
+test('營隊 render 不會建立或修改 backing student，只有明確 save/create 路徑可 ensure',()=>{
+ const summerRender=sourceBlock(camps,'function renderSummerCampClasses','function saveWinterCampClass');
+ const winterRender=sourceBlock(camps,'function renderWinterCampClasses','function saveTeacherGroup');
+ assert.doesNotMatch(summerRender,/ensureCampBackingStudent|db\.[A-Za-z]+\.(?:push|splice|unshift)|Object\.assign/);
+ assert.doesNotMatch(winterRender,/ensureCampBackingStudent|db\.[A-Za-z]+\.(?:push|splice|unshift)|Object\.assign/);
+ const summerSave=sourceBlock(camps,'function saveSummerCampClass','function editSummerCampClass');
+ const winterSave=sourceBlock(camps,'function saveWinterCampClass','function editWinterCampClass');
+ const create=sourceBlock(camps,'function campClassForTitle','function buildCampCandidates');
+ assert.match(summerSave,/ensureCampBackingStudent\(cls,'summer'\)/);
+ assert.match(winterSave,/ensureCampBackingStudent\(cls,'winter'\)/);
+ assert.match(create,/if\(!cls&&create\).+ensureCampBackingStudent\(cls,season\)/s);
+});
+
+test('控制不存在才回 legacy；loading、paused 或錯誤不會偷偷整份覆蓋',()=>{
+ const owner=block('function startOwnerActiveRecordRuntime','async function flushActiveOwnerState');
+ assert.match(owner,/event\.state==='legacy'.+subscribeOwnerLegacy\(\)/s);
+ assert.match(owner,/event\.state==='loading'.+unsubscribeState\?\.\(\)/s);
+ assert.match(owner,/event\.state==='blocked'.+persistOwnerSyncRecovery\(\)/s);
+ assert.doesNotMatch(owner,/event\.state==='blocked'.+subscribeOwnerLegacy\(\)/s);
+});
+
+test('角色逐筆發布重用現有 aa、老師、校區篩選且每個 scope 使用獨立 viewKey',()=>{
+ const publish=block('function activeRoleRecordIdentity','async function publishScopedViews');
+ assert.match(publish,/kind:'scheduler'/);assert.match(publish,/kind:'teacher'/);assert.match(publish,/kind:'branch_manager'/);
+ assert.match(publish,/filteredSchedulerDB\(sourceDb\)/);assert.match(publish,/filteredTeacherDB\(sourceDb,identity\.teacherId\)/);assert.match(publish,/filteredBranchDB\(sourceDb,identity\.branchIds\)/);
+ assert.match(publish,/adapter\.synchronize\(targetDb/);
+});
+
+test('原子啟用後主資料完整 ready 才自動補送角色逐筆檢視，失敗會退避重試且不影響 production',()=>{
+ const bootstrap=block('function queueInitialActiveRoleRecordViews','async function publishScopedViews');
+ assert.match(bootstrap,/DANBRIDGE_ENVIRONMENT!=='staging'/);
+ assert.match(bootstrap,/cloudRole!=='owner'/);
+ assert.match(bootstrap,/activeRecordMode!=='active'/);
+	 assert.match(bootstrap,/activeRoleBootstrapEpoch===activationEpoch/);
+	 assert.match(bootstrap,/!activeRoleBootstrapSourceDb/);
+	 assert.match(bootstrap,/deepCopy\(activeRoleBootstrapSourceDb\)/);
+	 assert.doesNotMatch(bootstrap,/__danbridgeGetDB/);
+	 assert.match(bootstrap,/getActiveRoleRecordPublishQueue\(\)\.enqueue\(\{kind:'bootstrap'/);
+	 assert.match(bootstrap,/setTimeout\(queueInitialActiveRoleRecordViews/);
+	 const ownerRuntime=block('function startOwnerActiveRecordRuntime','async function flushActiveOwnerState');
+	 assert.match(source,/(?:async )?function acceptActiveOwnerSnapshot\(snapshot\)\{\s*[^\n]*activeRoleBootstrapSourceDb=deepCopy\(snapshot\.db\)/);
+	 assert.match(ownerRuntime,/event\.state==='ready'.+queueInitialActiveRoleRecordViews\(\)/s);
+	 assert.doesNotMatch(ownerRuntime,/event\.state==='paused'\)queueInitialActiveRoleRecordViews\(\)/);
+	});
+
+	test('staging active 的 publishScopedViews 不可繞過 active role publish queue',()=>{
+	 const legacyScoped=block('async function publishScopedViews','async function publishRoleViewsWithRetry');
+	 assert.match(legacyScoped,/DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy'.*getActiveRoleRecordPublishQueue\(\)\.enqueue\(\{kind:'confirmed'/s);
+	 assert.doesNotMatch(legacyScoped,/publishActiveRoleRecordViews\(sourceDb\)/);
+	 const retryFlow=block('async function publishRoleViewsWithRetry','async function migrateLegacyLessonCloudDocuments');
+	 assert.match(retryFlow,/publishScopedViews\(roleSource\)/);
+	 assert.doesNotMatch(retryFlow,/publishActiveRoleRecordViews\(/);
+	});
+
+test('stopActiveRecordRuntimes 會 cancel pending queue 任務並保留 queue 實體，避免清空後建立新 queue',()=>{
+ const stopFlow=block('function stopActiveRecordRuntimes','function localRoleCacheKey');
+ assert.ok(stopFlow.includes('closeScope()'));
+ assert.doesNotMatch(stopFlow,/activeRoleRecordPublishQueue\\s*=\\s*null/);
+});
+
+test('bootstrap 失敗 retry 會以 activationEpoch scope 保護，不會覆寫新 owner flow',()=>{
+ const bootstrap=block('function queueInitialActiveRoleRecordViews','async function publishScopedViews');
+ assert.ok(bootstrap.includes('const currentActivationEpoch=activeRecordPageController?.diagnostics?.().activationEpoch'));
+ assert.ok(bootstrap.includes('if(currentActivationEpoch!==activationEpoch||cloudRole!==\'owner\'||activeRecordMode!==\'active\')return;'));
+});
+
+test('aa 要求只有逐筆完整讀回指定課程後才標成 applied',()=>{
+ const apply=block('async function applyActiveSchedulerRequest','async function applySchedulerRequest');
+ assert.match(apply,/flushActiveOwnerState\(\)/);assert.match(apply,/result\.readbackDb/);assert.match(apply,/confirmedApplied/);
+ assert.ok(apply.indexOf('confirmedApplied')<apply.indexOf("status:'applied'"));
+ assert.doesNotMatch(apply,/companies.*data.*main/);
+});
+
+test('老師、aa、管理者都先訂閱逐筆控制，只有無控制才回原檢視',()=>{
+ for(const signature of ["kind:'teacher'","kind:'scheduler'","kind:'branch_manager'"])assert.match(source,new RegExp(`startRoleActiveRecordRuntime\\(\\{email:cloudEmailKey,${signature}`));
+ const role=block('function startRoleActiveRecordRuntime','async function subscribeTeacherLegacy');
+ assert.match(role,/event\.state==='legacy'.+startLegacy\(\)/s);assert.match(role,/\['loading','waiting'\].+activeRoleWriteAllowed=false/s);assert.match(role,/event\.state==='blocked'.+activeRoleWriteAllowed=false/s);
+});
+
+test('只有 Daniel 主帳號免除授權監聽，Catherine 備援 Owner 停權會清空畫面並登出',()=>{
+ assert.match(source,/cloudRole==='owner'&&cloudEmailKey===OWNER_EMAIL\?'':roleAccessSignature/);
+ assert.match(source,/if\(!cloudEmailKey\|\|\(cloudRole==='owner'&&cloudEmailKey===OWNER_EMAIL\)\)return/);
+ assert.match(source,/function revokeCurrentRoleAccess\(message\)\{[\s\S]*__danbridgeSetDB\(emptyDB\(\)\)[\s\S]*signOut\(auth\)/);
+});

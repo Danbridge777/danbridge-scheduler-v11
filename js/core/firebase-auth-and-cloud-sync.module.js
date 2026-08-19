@@ -1,25 +1,43 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocFromServer, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
 import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.86';
 import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.86';
-import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.86';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore} from './cloud-record-shadow-run.js?v=20.26.86';
+import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.107';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore,canonicalLegacyRecordShadowCore,extractFullRecordShadowSyncResult,buildFullRecordShadowRunIdentity} from './cloud-record-shadow-run.js?v=20.26.86';
 import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.86';
 import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.86';
-import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.86';
-import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest,buildAtomicRecordActivation,evaluateAtomicRecordActivation} from './cloud-record-activation.js?v=20.26.86';
+import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.109';
+import {verifyOwnRoleViewCandidateReadback} from './cloud-role-view-candidate.js?v=20.26.109';
+import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest as buildLegacyRoleViewCandidateManifest,buildAtomicRecordActivation,evaluateAtomicRecordActivation} from './cloud-record-activation.js?v=20.26.86';
 import {decideRecordReadTakeover} from './cloud-record-read-takeover.js?v=20.26.88';
-import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js?v=20.26.97';
-import {recordDataHash} from './cloud-record-data-hash.js?v=20.26.97';
-import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.97';
-import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.97';
-import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.97';
-import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.97';
-import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.97';
-import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.97';
-import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.97';
-import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.97';
+import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js?v=20.26.107';
+import {recordDataDigest,recordDataHash} from './cloud-record-data-hash.js?v=20.26.106';
+import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.106';
+import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.106';
+import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.106';
+import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.106';
+import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.106';
+import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.106';
+import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.106';
+import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.106';
+import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.106';
+import {createFirebaseActiveRecordStreamAdapter} from './firebase-active-record-stream-adapter.js?v=20.26.106';
+import {createFirebaseActiveRecordOperationAdapter} from './firebase-active-record-operation-adapter.js?v=20.26.106';
+import {createFirebaseRecordSyncConflictBackupAdapter} from './firebase-record-sync-conflict-backup-adapter.js?v=20.26.106';
+import {createFirebaseRoleRecordViewAdapter} from './firebase-role-record-view-adapter.js?v=20.26.116';
+import {createFirebaseRoleRecordStreamAdapter} from './firebase-role-record-stream-adapter.js?v=20.26.106';
+import {createActiveRoleRecordPublishQueue} from './cloud-active-role-record-publish-queue.js?v=20.26.115';
+import {decideOwnerActiveSaveIntent} from './cloud-owner-active-save-intent.js?v=20.26.117';
+import {createRecordSyncActiveFailureResume} from './record-sync-active-failure-resume.js?v=20.26.114';
+import {dailyBackupChunkCore,prepareDailyShardedBackup,sealDailyShardedBackup,verifyDailyShardedBackupReadback} from './cloud-daily-sharded-backup.js?v=20.26.106';
+import {createFirebaseRecordSyncCandidateAdapter} from './firebase-record-sync-candidate-adapter.js?v=20.26.106';
+import {buildRecordSyncRoleEvidence,RECORD_SYNC_ROLE_SCENARIOS} from './cloud-record-sync-role-evidence.js?v=20.26.106';
+import {buildRecordSyncActivationManifest,buildActiveRecordSyncControl,evaluateActiveRecordSyncControl} from './cloud-record-sync-control.js?v=20.26.106';
+import {createFirebaseRecordSyncActivationAdapter} from './firebase-record-sync-activation-adapter.js?v=20.26.106';
+import {verifyRoleViewCandidateSourceBinding,buildRoleViewCandidateSourceAudit,buildRoleViewCandidateManifest as buildVerifiedRoleViewCandidateManifest,assertRoleViewCandidateManifest,buildRoleViewVerificationReceipt,assertRoleViewVerificationReceipt,verifyRoleViewReceiptSet} from './cloud-role-view-verification.js?v=20.26.106';
+import {loadProfileAfterAuthReady} from './cloud-auth-profile-bootstrap.js?v=20.26.113';
+import {RECORD_SYNC_V2_TAKEOVER_CANDIDATE_CONTROL_PATH,RECORD_SYNC_V2_TAKEOVER_CANDIDATE_HEAD_PATH,createFirebaseRecordSyncV2TakeoverCandidateAdapter} from './firebase-record-sync-v2-takeover-candidate-adapter.js?v=20.26.117';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -32,7 +50,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.97';
+const APP_RELEASE='20.26.116';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -40,9 +58,32 @@ const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
-const cloud=getFirestore(app);
+const cloud=initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})});
 const provider=new GoogleAuthProvider();
 provider.setCustomParameters({prompt:'select_account'});
+
+// Explicit-only staging migration composition. Merely importing this module never creates or activates V2.
+export function createExplicitStagingV2TakeoverCandidateBinder(){
+ if(DANBRIDGE_ENVIRONMENT!=='staging'||firebaseConfig.projectId!=='danbridge-d8877-staging'||app.options?.projectId!=='danbridge-d8877-staging'||auth.app!==app||cloud.app!==app)throw new Error('V2 takeover candidate browser binder requires the exact staging Firebase app');
+ const ownData=(value,key,label)=>{const descriptor=value&&typeof value==='object'?Object.getOwnPropertyDescriptor(value,key):null;if(!descriptor?.enumerable||!Object.prototype.hasOwnProperty.call(descriptor,'value'))throw new Error(`${label}.${key} must be an own data field`);return descriptor.value};
+ const sameUser=(user,uid,email,label)=>{const latestEmail=typeof auth.currentUser?.email==='string'?auth.currentUser.email.trim().toLowerCase():'';if(auth.currentUser!==user||auth.currentUser?.uid!==uid||latestEmail!==email)throw new Error(label)};
+ return Object.freeze({
+  scope:'inactive-explicit-only-staging-v2-candidate-not-active-runtime-or-write-takeover-authority',
+  async execute(input){
+   const plan=ownData(input,'plan','candidate execute input'),targetV2Epoch=ownData(plan,'targetV2Epoch','candidate plan'),user=auth.currentUser,uid=user?.uid,email=typeof user?.email==='string'?user.email.trim().toLowerCase():'';
+   if(typeof uid!=='string'||!/^[A-Za-z0-9_.:-]{8,128}$/.test(uid)||!/^[^@\s]+@[^@\s]+$/.test(email)||typeof user.getIdTokenResult!=='function')throw new Error('V2 takeover candidate browser binder requires a valid current Firebase user');
+   const tokenResult=await user.getIdTokenResult(true);sameUser(user,uid,email,'V2 takeover candidate browser auth changed after fresh token');
+   const claims=ownData(tokenResult,'claims','Firebase IdTokenResult'),subject=ownData(claims,'sub','Firebase token claims'),userId=ownData(claims,'user_id','Firebase token claims'),tokenEmail=ownData(claims,'email','Firebase token claims'),audience=ownData(claims,'aud','Firebase token claims'),issuer=ownData(claims,'iss','Firebase token claims'),operator=Object.getOwnPropertyDescriptor(claims,'recordSyncV2CutoverOperator');
+   if(subject!==uid||userId!==uid||typeof tokenEmail!=='string'||tokenEmail.trim().toLowerCase()!==email||audience!=='danbridge-d8877-staging'||issuer!=='https://securetoken.google.com/danbridge-d8877-staging'||!operator?.enumerable||!Object.prototype.hasOwnProperty.call(operator,'value')||operator.value!==true)throw new Error('V2 takeover candidate browser binder requires the fresh trusted operator token');
+   const allowedPaths=new Set([RECORD_SYNC_V2_TAKEOVER_CANDIDATE_CONTROL_PATH(targetV2Epoch),RECORD_SYNC_V2_TAKEOVER_CANDIDATE_HEAD_PATH(targetV2Epoch)]),reference=path=>{if(!allowedPaths.has(path))throw new Error('V2 takeover candidate browser path is outside the exact candidate pair');return doc(cloud,...path.split('/'))};
+   sameUser(user,uid,email,'V2 takeover candidate browser auth changed before transaction');
+   const adapter=createFirebaseRecordSyncV2TakeoverCandidateAdapter({environment:'staging',role:'owner',actor:{uid,email,claims:{recordSyncV2CutoverOperator:true}},serverTimestamp,getDocumentFromServer:path=>getDocFromServer(reference(path)),runTransaction:callback=>runTransaction(cloud,transaction=>callback({get:path=>transaction.get(reference(path)),set:(path,payload)=>transaction.set(reference(path),payload,{merge:false})}))});
+   let result;try{result=await adapter.execute(input)}catch(error){try{sameUser(user,uid,email,'V2 takeover candidate browser auth changed during transaction; exact replay required')}catch(race){race.cause=error;throw race}throw error}
+   sameUser(user,uid,email,'V2 takeover candidate browser auth changed after transaction; response-loss exact replay required');
+   return result;
+  }
+ });
+}
 
 // 舊版 Header 使用 onclick="authLogout()"；公開相容 API，避免 Header 重建前點擊失效。
 window.authLogout=async function authLogout(){
@@ -53,8 +94,6 @@ window.authLogout=async function authLogout(){
  }
 };
 try{await setPersistence(auth,browserLocalPersistence)}catch(e){console.warn(e)}
-try{await enableIndexedDbPersistence(cloud)}catch(e){console.warn('Firestore offline persistence:',e?.code||e)}
-
 let cloudRole='';
 let cloudTeacherId='';
 let cloudBranchIds=[];
@@ -121,6 +160,21 @@ let ownerUploadQueued=false;
 let ownerRetryTimer=null;
 let ownerRetryCount=0;
 let ownerUploadCapacityBlocked=false;
+let activeRecordSyncFailureResumeDiagnostic={state:'disabled',targetRecordId:'',pending:0,sending:0,failed:0,quarantined:0,confirmed:0};
+let activeRecordMode=DANBRIDGE_ENVIRONMENT==='staging'?'checking':'legacy';
+let activeRecordPageController=null;
+let activeRecordStreamAdapter=null;
+let activeRoleStreamAdapter=null;
+let activeRoleWriteAllowed=false;
+let activeOwnerDeviceId='';
+let activeOwnerControllerEpoch='';
+let activeOwnerResumedEpoch='';
+let activeRoleBootstrapEpoch='';
+let activeRoleBootstrapInFlight=false;
+let activeRoleBootstrapRetryCount=0;
+let activeRoleBootstrapRetryTimer=null;
+let activeRoleBootstrapSourceDb=null;
+let activeRoleRecordPublishQueue=null;
 const scheduleNotificationDeliveryJobs=new Map();
 let roleViewPublishInFlight=false;
 let roleViewPublishQueued=false;
@@ -148,11 +202,36 @@ const errorEventQueue=[];
 const errorEventFingerprints=new Map();
 let errorEventCount=0;
 let dailyBackupTimer=null;
+let dailyBackupConfirmedDay='';
 let originalSaveDB=window.saveDB;
 const originalEditLesson=window.editLesson;
 
 function emptyDB(){return {students:[],teachers:[],lessons:[],makeups:[],changes:[],teacherGroups:[],winterTeacherGroups:[],summerCampClasses:[],summerCampRegistrations:[],winterCampRegistrations:[],winterCampClasses:[],settlementRecords:[],fixedExpenses:[],oneTimeExpenses:[],collectionRecords:[],branches:[]}}
 function deepCopy(x){return JSON.parse(JSON.stringify(x||emptyDB()))}
+function activeFirestoreDocument(path){
+ const parts=String(path||'').split('/');if(!path||parts.some(part=>!part)||parts.length%2!==0)throw new Error('逐筆 Firestore 文件路徑無效');return doc(cloud,path);
+}
+function activeFirestoreCollection(path){
+ const parts=String(path||'').split('/');if(!path||parts.some(part=>!part)||parts.length%2!==1)throw new Error('逐筆 Firestore 集合路徑無效');return collection(cloud,path);
+}
+function activeFirestoreTransaction(work){
+ if(typeof work!=='function')throw new Error('逐筆 Firestore transaction work 無效');return runTransaction(cloud,native=>work({get:path=>native.get(activeFirestoreDocument(path)),set:(path,value)=>native.set(activeFirestoreDocument(path),value,{merge:false})}));
+}
+function activeFirestoreSubscribeDocument(path,next,error){
+ return onSnapshot(activeFirestoreDocument(path),{includeMetadataChanges:true},snapshot=>next({exists:snapshot.exists(),data:snapshot.exists()?snapshot.data():null,hasPendingWrites:snapshot.metadata.hasPendingWrites,fromCache:snapshot.metadata.fromCache}),error);
+}
+function activeFirestoreSubscribeCollection(path,next,error){
+ return onSnapshot(activeFirestoreCollection(path),{includeMetadataChanges:true},snapshot=>next({hasPendingWrites:snapshot.metadata.hasPendingWrites,fromCache:snapshot.metadata.fromCache,documents:snapshot.docs.map(row=>({id:row.id,data:row.data()})),changes:snapshot.docChanges({includeMetadataChanges:true}).map(change=>({type:change.type,id:change.doc.id,data:change.doc.data()}))}),error);
+}
+async function readActiveRecordDocuments(){
+ if(DANBRIDGE_ENVIRONMENT!=='staging')throw new Error('日常逐筆讀取只允許 staging');const entries=await Promise.all(FULL_RECORD_COLLECTIONS.map(async collectionName=>{const snapshot=await getDocs(activeFirestoreCollection(`stagingFullRecordShadows/${COMPANY_ID}/collections/${collectionName}/records`));return[collectionName,snapshot.docs.map(row=>({id:row.id,data:row.data()}))]}));return Object.fromEntries(entries);
+}
+function activeOwnerDeviceIdentity(){
+ if(activeOwnerDeviceId)return activeOwnerDeviceId;if(DANBRIDGE_ENVIRONMENT!=='staging'||cloudRole!=='owner'||!cloudEmailKey)throw new Error('逐筆裝置 identity 尚未建立');const key=`danbridge-active-record-device:${DANBRIDGE_ENVIRONMENT}:${cloudEmailKey}`;let value='';try{value=String(localStorage.getItem(key)||'')}catch{}if(!/^[A-Za-z0-9_.:-]{8,128}$/.test(value)){const random=globalThis.crypto?.randomUUID?.().replaceAll('-','')||`${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;value=`web_${random}`;if(!/^[A-Za-z0-9_.:-]{8,128}$/.test(value))throw new Error('無法建立安全的逐筆裝置 identity');try{localStorage.setItem(key,value)}catch{throw new Error('無法永久保存逐筆裝置 identity')}}activeOwnerDeviceId=value;return value;
+}
+function stopActiveRecordRuntimes(){
+ try{activeRecordStreamAdapter?.stop?.()}catch{}try{activeRoleStreamAdapter?.stop?.()}catch{}try{activeRecordPageController?.stop?.()}catch{}clearTimeout(activeRoleBootstrapRetryTimer);activeRecordStreamAdapter=null;activeRoleStreamAdapter=null;activeRecordPageController=null;activeRoleWriteAllowed=false;activeOwnerDeviceId='';activeOwnerControllerEpoch='';activeOwnerResumedEpoch='';activeRoleBootstrapEpoch='';activeRoleBootstrapInFlight=false;activeRoleBootstrapRetryCount=0;activeRoleBootstrapRetryTimer=null;activeRoleBootstrapSourceDb=null;if(activeRoleRecordPublishQueue){activeRoleRecordPublishQueue.closeScope();}activeRecordMode=DANBRIDGE_ENVIRONMENT==='staging'?'checking':'legacy';delete document.body.dataset.activeRecordMode;delete document.body.dataset.activeRecordState;delete document.body.dataset.activeRoleRecordState;delete document.body.dataset.activeRoleRecordBootstrap;
+}
 function localRoleCacheKey(){
  if(cloudRole==='owner')return 'danbridge_scheduler_v1';
  const identity=(cloudEmailKey||cloudUid||'unknown').replace(/[^a-z0-9@._-]/gi,'_');
@@ -432,6 +511,11 @@ async function recordSuccessfulLogin(user,profile){
  if(profile.role==='teacher'&&profile.canManageSchedule===true)payload.canManageSchedule=true;
  await setDoc(doc(cloud,'users',user.uid),payload,{merge:true});
 }
+async function loadSignedInProfile(user){
+ const load=()=>loadProfileAfterAuthReady({user,loadProfile:()=>ensureProfile(user)});
+ const lockName=`danbridge-auth-profile:${DANBRIDGE_ENVIRONMENT}:${String(user?.uid||'unknown')}`;
+ return navigator.locks?.request? navigator.locks.request(lockName,load):load();
+}
 function loginTimeValue(value){
  const date=value?.toDate?.()||new Date(value||0);
  return Number.isNaN(date.getTime())||date.getTime()<=0?'尚未登入':date.toLocaleString('zh-TW');
@@ -448,37 +532,55 @@ function resilienceStatus(message='',kind=''){
 }
 function backupDayKey(date=new Date()){return`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`}
 function backupCounts(db={}){return{students:db.students?.length||0,teachers:db.teachers?.length||0,lessons:db.lessons?.length||0,makeups:db.makeups?.length||0}}
+function dailyShardedBackupDayRef(day){return doc(cloud,'dailyShardedBackups',COMPANY_ID,'days',day)}
+function dailyShardedBackupChunksRef(day){return collection(cloud,'dailyShardedBackups',COMPANY_ID,'days',day,'chunks')}
+function legacyDailyBackupDayRef(day){return doc(cloud,'companies',COMPANY_ID,'dailyBackups',day)}
 async function listCloudSafetyBackups(){
  const list=document.getElementById('cloudBackupList');if(!list||cloudRole!=='owner')return;
  try{
-  const qs=await getDocs(collection(cloud,'companies',COMPANY_ID,'dailyBackups'));
-  const rows=qs.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(b.id).localeCompare(String(a.id))).slice(0,CLOUD_BACKUP_RETENTION_DAYS);
-  list.innerHTML=rows.length?rows.map(x=>{const verified=!!x.snapshot&&dataHash(x.snapshot)===x.hash;return`<div class="backup-item"><div class="info"><b>${escapeHTML(x.id)}</b><div class="small">學生 ${x.counts?.students||0}｜老師 ${x.counts?.teachers||0}｜課程 ${x.counts?.lessons||0}<br>${escapeHTML(formatNotificationTimestamp(x.createdAt)||'時間確認中')}</div></div><div class="row-actions"><span class="pill ${verified?'green':'red'}">${verified?'雜湊一致':'驗證失敗'}</span>${verified?`<button type="button" class="btn cloud-backup-restore" data-day="${escapeHTML(x.id)}">還原</button>`:''}</div></div>`}).join(''):'<span class="small">尚未建立雲端安全快照。</span>';
+  const [sharded,legacy]=await Promise.all([getDocs(collection(cloud,'dailyShardedBackups',COMPANY_ID,'days')),getDocs(collection(cloud,'companies',COMPANY_ID,'dailyBackups'))]),byDay=new Map(legacy.docs.map(d=>[d.id,{id:d.id,...d.data()}]));sharded.docs.forEach(d=>byDay.set(d.id,{id:d.id,...d.data()}));
+  const rows=[...byDay.values()].sort((a,b)=>String(b.id).localeCompare(String(a.id))).slice(0,CLOUD_BACKUP_RETENTION_DAYS);
+  list.innerHTML=rows.length?rows.map(x=>{const legacyVerified=!!x.snapshot&&dataHash(x.snapshot)===x.hash,shardedVerified=x.schema==='danbridge-daily-sharded-backup-v2'&&x.state==='verified'&&x.verifiedHash===x.sourceHash&&Number.isSafeInteger(x.chunkCount)&&x.chunkCount>0,verified=legacyVerified||shardedVerified,time=x.verifiedAt||x.createdAt;return`<div class="backup-item"><div class="info"><b>${escapeHTML(x.id)}</b><div class="small">學生 ${x.counts?.students||0}｜老師 ${x.counts?.teachers||0}｜課程 ${x.counts?.lessons||0}${shardedVerified?`<br>分片 ${x.chunkCount} 份｜${x.recordCount} 筆`:''}<br>${escapeHTML(formatNotificationTimestamp(time)||'時間確認中')}</div></div><div class="row-actions"><span class="pill ${verified?'green':'red'}">${shardedVerified?'分片讀回已驗證':legacyVerified?'雜湊一致':'驗證失敗'}</span>${verified?`<button type="button" class="btn cloud-backup-restore" data-day="${escapeHTML(x.id)}">還原</button>`:''}</div></div>`}).join(''):'<span class="small">尚未建立雲端安全快照。</span>';
   list.querySelectorAll('.cloud-backup-restore').forEach(button=>button.onclick=()=>restoreCloudSafetyBackup(button.dataset.day));
-  const today=rows.find(x=>x.id===backupDayKey());resilienceStatus(today?'今日雲端快照已完成':'今日尚未建立雲端快照',today?'ok':'pending');
+  const today=rows.find(x=>x.id===backupDayKey());if(today?.schema==='danbridge-daily-sharded-backup-v2'&&today.state==='verified'&&today.verifiedHash===today.sourceHash)dailyBackupConfirmedDay=today.id;resilienceStatus(today?'今日雲端快照已完成':'今日尚未建立雲端快照',today?'ok':'pending');
  }catch(e){console.error('listCloudSafetyBackups failed',e);resilienceStatus('雲端快照清單讀取失敗','error');list.innerHTML='<span class="small">讀取失敗，請稍後重試。</span>'}
+}
+async function readCloudSafetyBackup(day,backupSnapshot=null){
+ let snapshot=backupSnapshot;if(!snapshot){snapshot=await getDoc(dailyShardedBackupDayRef(day));if(!snapshot.exists())snapshot=await getDoc(legacyDailyBackupDayRef(day))}if(!snapshot.exists())throw new Error('找不到這份雲端快照');const backup=snapshot.data();if(backup.snapshot){if(dataHash(backup.snapshot)!==backup.hash)throw new Error('舊版快照雜湊驗證失敗');return{backup,db:deepCopy(backup.snapshot),kind:'legacy'}}if(backup.schema!=='danbridge-daily-sharded-backup-v2'||backup.state!=='verified'||backup.verifiedHash!==backup.sourceHash)throw new Error('每日分片備份 manifest 尚未 verified');const chunks=await getDocs(dailyShardedBackupChunksRef(day)),readback=verifyDailyShardedBackupReadback(backup,chunks.docs.map(row=>row.data()));return{backup,db:readback.db,kind:'sharded',readback};
 }
 async function restoreCloudSafetyBackup(day){
  if(cloudRole!=='owner'||!/^\d{4}-\d{2}-\d{2}$/.test(String(day||'')))return;
- try{const snap=await getDoc(doc(cloud,'companies',COMPANY_ID,'dailyBackups',day));if(!snap.exists())return alert('找不到這份雲端快照。');const backup=snap.data(),restored=backup.snapshot;if(!restored||dataHash(restored)!==backup.hash)return alert('快照雜湊驗證失敗，已阻止還原。');if(!confirm(`確定還原 ${day} 的雲端快照？\n學生 ${backup.counts?.students||0}、老師 ${backup.counts?.teachers||0}、課程 ${backup.counts?.lessons||0}\n\n目前資料會先建立本機版本，再由還原內容取代。`))return;const beforeHash=dataHash(window.__danbridgeGetDB?.());window.snapshot?.();window.createVersion?.(`還原 ${day} 雲端快照前`);applyingCloud=true;window.__danbridgeSetDB(deepCopy(restored));persistCurrentLocalView();window.renderAll?.();applyingCloud=false;await writeImmutableAudit({action:'backup-restored',category:'backup',targetType:'daily-backup',targetId:day,changedFields:['snapshot'],totalChanges:1,beforeHash,afterHash:dataHash(restored)});window.saveDB?.();cloudStatus(`已還原 ${day} 雲端快照，正在同步…`,'pending')}catch(e){console.error('restoreCloudSafetyBackup failed',e);alert('還原失敗：'+(e?.message||e))}
+ try{const {backup,db:restored}=await readCloudSafetyBackup(day);if(!confirm(`確定還原 ${day} 的雲端快照？\n學生 ${backup.counts?.students||0}、老師 ${backup.counts?.teachers||0}、課程 ${backup.counts?.lessons||0}\n\n所有分片已重新讀回並通過 hash。目前資料會先建立本機版本，再由還原內容取代。`))return;const beforeHash=dataHash(window.__danbridgeGetDB?.());window.snapshot?.();window.createVersion?.(`還原 ${day} 雲端快照前`);applyingCloud=true;try{window.__danbridgeSetDB(deepCopy(restored));persistCurrentLocalView();window.renderAll?.()}finally{applyingCloud=false}await writeImmutableAudit({action:'backup-restored',category:'backup',targetType:'daily-backup',targetId:day,changedFields:['snapshot'],totalChanges:1,beforeHash,afterHash:dataHash(restored)});window.saveDB?.();cloudStatus(`已還原 ${day} 雲端快照，正在逐筆同步…`,'pending')}catch(e){console.error('restoreCloudSafetyBackup failed',e);alert('還原失敗：'+(e?.message||e))}
 }
 async function cleanupOldCloudBackups(){
  if(cloudRole!=='owner')return;
- const qs=await getDocs(collection(cloud,'companies',COMPANY_ID,'dailyBackups')),cutoff=new Date();cutoff.setDate(cutoff.getDate()-CLOUD_BACKUP_RETENTION_DAYS);
- await Promise.allSettled(qs.docs.filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d.id)&&new Date(`${d.id}T00:00:00`)<cutoff).map(d=>deleteDoc(d.ref)));
+ const [sharded,legacy]=await Promise.all([getDocs(collection(cloud,'dailyShardedBackups',COMPANY_ID,'days')),getDocs(collection(cloud,'companies',COMPANY_ID,'dailyBackups'))]),cutoff=new Date();cutoff.setDate(cutoff.getDate()-CLOUD_BACKUP_RETENTION_DAYS);const expired=d=>/^\d{4}-\d{2}-\d{2}$/.test(d.id)&&new Date(`${d.id}T00:00:00`)<cutoff;
+ await Promise.allSettled(sharded.docs.filter(expired).map(async d=>{const chunks=await getDocs(dailyShardedBackupChunksRef(d.id));await Promise.all(chunks.docs.map(chunk=>deleteDoc(chunk.ref)));await deleteDoc(d.ref)}));await Promise.allSettled(legacy.docs.filter(expired).map(d=>deleteDoc(d.ref)));
 }
-async function createCloudSafetyBackup(force=false){
+async function createCloudSafetyBackup(force=false,sourceOverride=null){
  if(cloudRole!=='owner')return false;
- const current=deepCopy(window.__danbridgeGetDB?.()),score=window.__danbridgeDataScore?.(current)||0;if(!score){resilienceStatus('資料為空，已阻止建立快照','error');return false}
- const day=backupDayKey(),ref=doc(cloud,'companies',COMPANY_ID,'dailyBackups',day);
+ const day=backupDayKey();if(!force&&dailyBackupConfirmedDay===day)return true;const current=deepCopy(sourceOverride||window.__danbridgeGetDB?.()),score=window.__danbridgeDataScore?.(current)||0;if(!score){resilienceStatus('資料為空，已阻止建立快照','error');return false}
+ const ref=dailyShardedBackupDayRef(day);
  try{
-  if(!force&&(await getDoc(ref)).exists()){await listCloudSafetyBackups();return true}
-  resilienceStatus('正在建立今日雲端快照…','pending');
-  await setDoc(ref,{companyId:COMPANY_ID,day,snapshot:current,hash:dataHash(current),counts:backupCounts(current),schema:'danbridge-db-v1',environment:DANBRIDGE_ENVIRONMENT,createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false});
-  await cleanupOldCloudBackups();await listCloudSafetyBackups();cloudStatus('今日雲端安全快照已完成','ok');return true;
+  const existing=await getDoc(ref);if(existing.exists()){
+   const saved=existing.data()||{},sealedSharded=saved.schema==='danbridge-daily-sharded-backup-v2'&&saved.environment===DANBRIDGE_ENVIRONMENT&&saved.companyId===COMPANY_ID&&saved.day===day&&saved.state==='verified'&&typeof saved.sourceHash==='string'&&saved.verifiedHash===saved.sourceHash&&Number.isSafeInteger(saved.chunkCount)&&saved.chunkCount>0&&Number.isSafeInteger(saved.recordCount)&&saved.recordCount>=0;
+   // 自動備份每次只確認已封存且不可覆寫的 manifest；手動重驗或還原才逐片讀回，避免每筆小修改消耗整套讀取配額。
+   if(force||!sealedSharded)await readCloudSafetyBackup(day,existing);
+   dailyBackupConfirmedDay=day;await listCloudSafetyBackups();resilienceStatus(force?'今日不可覆寫雲端備份已重新讀回驗證':'今日不可覆寫雲端備份已確認','ok');return true
+  }
+  resilienceStatus('正在逐片建立今日雲端備份…','pending');const plan=prepareDailyShardedBackup(current,{day,environment:DANBRIDGE_ENVIRONMENT,maxChunkBytes:180000});
+  for(let offset=0;offset<plan.chunks.length;offset+=50){const batch=plan.chunks.slice(offset,offset+50);await runTransaction(cloud,async transaction=>{const refs=batch.map(chunk=>doc(dailyShardedBackupChunksRef(day),chunk.chunkId)),snapshots=await Promise.all(refs.map(chunkRef=>transaction.get(chunkRef)));batch.forEach((chunk,index)=>{if(snapshots[index].exists()){if(sha256Canonical(dailyBackupChunkCore(snapshots[index].data()))!==sha256Canonical(chunk))throw new Error('今日備份分片已存在但內容衝突');return}transaction.set(refs[index],{...chunk,createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false})})})}
+  const chunkReadback=await getDocs(dailyShardedBackupChunksRef(day)),verified=verifyDailyShardedBackupReadback(plan.manifest,chunkReadback.docs.map(row=>row.data())),sealed=sealDailyShardedBackup(plan.manifest,verified,{verifiedBy:cloudUid,verifiedByEmail:cloudEmailKey});await runTransaction(cloud,async transaction=>{const snapshot=await transaction.get(ref);if(snapshot.exists()){const saved=snapshot.data();if(saved.schema===sealed.schema&&saved.state==='verified'&&saved.sourceHash===sealed.sourceHash)return;throw new Error('今日備份 manifest 已存在且 identity 衝突')}transaction.set(ref,{...sealed,verifiedAt:serverTimestamp()},{merge:false})});
+  dailyBackupConfirmedDay=day;cleanupOldCloudBackups().catch(error=>console.warn('cleanupOldCloudBackups failed',error));await listCloudSafetyBackups();cloudStatus('今日雲端安全快照已完成','ok');return true;
  }catch(e){console.error('createCloudSafetyBackup failed',e);resilienceStatus('建立雲端快照失敗，系統會在下次連線重試','error');reportOperationalError(e,{category:'cloud-write',area:'owner-upload',retryable:true});return false}
 }
-function scheduleDailyCloudBackup(){clearTimeout(dailyBackupTimer);dailyBackupTimer=setTimeout(()=>createCloudSafetyBackup(false),1200)}
+function scheduleDailyCloudBackup(){
+ clearTimeout(dailyBackupTimer);
+ // staging 逐筆模式只能由 controller 以已確認的雲端 baseline 建立寫入前備份。
+ // 禁止一般計時器同時拿尚未確認的畫面資料競爭同一天的不可覆寫備份。
+ if(DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy')return;
+ dailyBackupTimer=setTimeout(()=>createCloudSafetyBackup(false),1200);
+}
 function readSyncHealthBaseline(){try{const value=JSON.parse(localStorage.getItem(SYNC_HEALTH_BASELINE_KEY)||'null');return value&&Number.isFinite(value.lessons)&&value.lessons>=0?value:null}catch{return null}}
 function updateSyncHealthBaseline(counts){
  const previous=readSyncHealthBaseline(),today=new Date().toISOString().slice(0,10),next=!previous||counts.lessons>=previous.lessons?{day:today,lessons:counts.lessons,students:counts.students,teachers:counts.teachers,observedAt:new Date().toISOString()}:previous;
@@ -1040,7 +1142,9 @@ async function saveTeacherReport(){
    const trustedDeadline=trustedMeta.editableUntil?.toDate?.()||null;
    const report={companyId:COMPANY_ID,lessonId,branchId:trustedMeta.branchId,teacherId:cloudRole==='owner'?(cloudTeacherId||lessonTeacherId):cloudTeacherId,teacherUid:cloudUid,teacherEmail:auth.currentUser?.email?.toLowerCase()||'',teacherName:reporterName,reportedByRole:cloudRole,reportedForTeacherIds:Array.isArray(trustedMeta.teacherIds)?trustedMeta.teacherIds:[],isOwnerReport:cloudRole==='owner',status,content:document.getElementById('teacherReportContent').value.trim(),homework:document.getElementById('teacherReportHomework').value.trim(),feedback:document.getElementById('teacherReportFeedback').value.trim(),note:document.getElementById('teacherReportNote').value.trim(),editableUntil:trustedMeta.editableUntil,editableUntilClient:trustedDeadline?.toISOString()||'',updatedAt:serverTimestamp(),updatedAtClient:new Date().toISOString()};
    await setDoc(doc(cloud,'companies',COMPANY_ID,'lessonReports',lessonId),report,{merge:true});
-   applyReportToLesson(lesson,report);window.renderAll?.();closeTeacherReportModal();
+   const changed=applyReportToLesson(lesson,report);
+   if(changed&&cloudRole==='owner'){persistCurrentLocalView();queueOwnerCloudSave()}
+   window.renderAll?.();closeTeacherReportModal();
    cloudStatus('課程回報已儲存','ok');
    return true;
  }catch(e){
@@ -1185,7 +1289,7 @@ function subscribeLessonReports(){
    persistCurrentLocalView();
    window.renderAll?.();
    window.renderDashboard?.();
-   if(cloudRole==='owner'){clearTimeout(reportSyncTimer);reportSyncTimer=setTimeout(uploadOwnerState,500)}
+   if(cloudRole==='owner'){queueOwnerCloudSave();clearTimeout(reportSyncTimer);reportSyncTimer=setTimeout(uploadOwnerState,500)}
  },e=>{
    console.error('lessonReports listener',e);
    if(cloudRole==='teacher'&&String(e?.code||'').includes('permission-denied')){
@@ -1232,7 +1336,7 @@ function applyRoleUI(profile,user){
  const normalizedRole=String(profile?.role||'').trim().toLowerCase();
  cloudRole=normalizedRole;cloudTeacherId=profile.teacherId==null?'':String(profile.teacherId);cloudBranchIds=Array.isArray(profile.branchIds)?profile.branchIds:[];cloudCanManageSchedule=cloudRole==='teacher'&&profile.canManageSchedule===true;cloudUid=user.uid;cloudEmailKey=(user.email||'').trim().toLowerCase();window.__danbridgeLessonIdMigrationAuthority=cloudRole==='owner';
  flushOperationalErrors();
- cloudRoleAccessSignature=cloudRole==='owner'?'':roleAccessSignature({...profile,role:cloudRole,teacherId:cloudTeacherId,branchIds:cloudBranchIds});
+ cloudRoleAccessSignature=cloudRole==='owner'&&cloudEmailKey===OWNER_EMAIL?'':roleAccessSignature({...profile,role:cloudRole,teacherId:cloudTeacherId,branchIds:cloudBranchIds});
  if(cloudRole==='owner'){const current=window.__danbridgeGetDB?.();if(current)window.__danbridgeSetDB(deepCopy(current));}
  window.DanbridgeAccess?.setContext({role:cloudRole,branchIds:cloudBranchIds,teacherId:cloudTeacherId,email:cloudEmailKey,readOnly:profile.readOnly===true||cloudRole==='branch_manager',canSubmitOwnReports:profile.canSubmitOwnReports!==false,canManageSchedule:cloudCanManageSchedule});
  const signedInName=(cloudRole==='owner'?(cloudEmailKey===OWNER_EMAIL?OWNER_DISPLAY_NAME:(profile.displayName||user.displayName)):cloudRole==='teacher'?(profile.teacherName||profile.displayName):cloudRole==='branch_manager'?(profile.managerName||profile.teacherName||profile.displayName):(profile.displayName||user.displayName))||user.displayName||user.email||'';
@@ -1341,9 +1445,9 @@ function lessonMetaSignature(value){
  const editableUntil=value?.editableUntil instanceof Date?value.editableUntil.toISOString():(value?.editableUntil?.toDate?.()?.toISOString?.()||String(value?.editableUntil||''));
  return dataHash({companyId:String(value?.companyId||COMPANY_ID),lessonId:String(value?.lessonId||''),branchId:String(value?.branchId||''),lessonDate:String(value?.lessonDate||''),lessonStart:String(value?.lessonStart||''),lessonEnd:String(value?.lessonEnd||''),studentId:String(value?.studentId||''),teacherIds,editableFrom,editableUntil,active:value?.active!==false});
 }
-async function publishLessonMeta(){
+async function publishLessonMeta(sourceOverride=null){
  if(cloudRole!=='owner')return;
- const lessons=(window.__danbridgeGetDB()?.lessons||[]).filter(l=>l?.id&&!l.isDraft);
+ const lessons=((sourceOverride||window.__danbridgeGetDB())?.lessons||[]).filter(l=>l?.id&&!l.isDraft);
  const metaRef=collection(cloud,'companies',COMPANY_ID,'lessonMeta');
  if(!lessonMetaCacheReady){
    const existing=await getDocs(metaRef);
@@ -1380,10 +1484,54 @@ async function getCompanyAccessDocs(){
  return companyAccessCache;
 }
 function invalidateCompanyAccessCache(){companyAccessCache=null;companyAccessCacheAt=0}
+function activeRoleRecordIdentity(access,email){
+ if(access?.role==='teacher'&&access?.teacherId&&SCHEDULER_ACCOUNT_EMAILS.has(email)&&access.canManageSchedule===true)return{email,kind:'scheduler',teacherId:String(access.teacherId),branchIds:[]};
+ if(access?.role==='teacher'&&access?.teacherId)return{email,kind:'teacher',teacherId:String(access.teacherId),branchIds:[]};
+ if(access?.role==='branch_manager'&&access?.teacherId&&Array.isArray(access.branchIds)&&access.branchIds.length)return{email,kind:'branch_manager',teacherId:String(access.teacherId),branchIds:[...new Set(access.branchIds.map(String))].sort()};
+ return null;
+}
+function activeRoleTargetDb(sourceDb,identity){
+ if(identity.kind==='scheduler')return filteredSchedulerDB(sourceDb);if(identity.kind==='teacher')return filteredTeacherDB(sourceDb,identity.teacherId);if(identity.kind==='branch_manager')return filteredBranchDB(sourceDb,identity.branchIds);throw new Error('角色逐筆檢視類型無效');
+}
+async function publishActiveRoleRecordViews(sourceDb){
+ if(DANBRIDGE_ENVIRONMENT!=='staging'||cloudRole!=='owner'||activeRecordMode!=='active')throw new Error('角色逐筆檢視尚未允許發布');const activationEpoch=activeRecordPageController?.diagnostics?.().activationEpoch;if(!activationEpoch)throw new Error('角色逐筆檢視缺少 activation epoch');
+ const adapter=createFirebaseRoleRecordViewAdapter({environment:'staging',role:'owner',actor:{uid:cloudUid,email:cloudEmailKey},getDocument:path=>getDoc(activeFirestoreDocument(path)),getCollectionDocuments:async path=>(await getDocs(activeFirestoreCollection(path))).docs.map(row=>({id:row.id,data:row.data()})),runBatchTransaction:activeFirestoreTransaction,runTransaction:activeFirestoreTransaction,serverTimestamp});
+ const accessDocs=await getCompanyAccessDocs(),sourceRecordHash=recordDataHash(sourceDb),publishedAt=new Date().toISOString(),results=[];let index=0;
+ for(const accessDocument of accessDocs){
+  const access=accessDocument.data()||{},email=String(access.email||accessDocument.id||'').trim().toLowerCase();if(access.active!==true||!email||access.role==='owner')continue;
+  if(access.role==='teacher'&&access.teacherId&&RETIRED_SCHEDULER_ACCOUNT_EMAILS.has(email)&&access.canManageSchedule===true){await Promise.all([setDoc(accessDocument.ref,{canManageSchedule:deleteField(),readOnly:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()},{merge:true}),getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email))).then(snapshot=>Promise.all(snapshot.docs.map(userDocument=>setDoc(userDocument.ref,{canManageSchedule:deleteField(),readOnly:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()},{merge:true}))))]);access.canManageSchedule=false}
+  const identity=activeRoleRecordIdentity(access,email);if(!identity)continue;const targetDb=activeRoleTargetDb(sourceDb,identity),publishId=`role_${Date.now().toString(36)}_${String(index++).padStart(4,'0')}`;results.push(await adapter.synchronize(targetDb,{identity,activationEpoch,sourceRecordHash,publishId,publishedAt,batchSize:100,onBatchComplete:progress=>{document.body.dataset.activeRoleRecordProgress=`${progress.completedBatches}/${progress.totalBatches}`}}));
+ }
+ document.body.dataset.activeRoleRecordProgress='complete';return results;
+}
+function getActiveRoleRecordPublishQueue(){
+ if(!activeRoleRecordPublishQueue){
+  activeRoleRecordPublishQueue=createActiveRoleRecordPublishQueue({publish:publishActiveRoleRecordViews,computeSourceHash:db=>recordDataHash(db)});
+ }
+ return activeRoleRecordPublishQueue;
+}
+function queueInitialActiveRoleRecordViews(){
+ if(DANBRIDGE_ENVIRONMENT!=='staging'||cloudRole!=='owner'||activeRecordMode!=='active'||activeRoleBootstrapInFlight)return;
+ const activationEpoch=activeRecordPageController?.diagnostics?.().activationEpoch;if(!activationEpoch||activeRoleBootstrapEpoch===activationEpoch||!activeRoleBootstrapSourceDb)return;
+ // 只能發布逐筆串流已驗證的雲端快照；畫面可能還保有待續傳本機變更，不能搶先洩漏給角色檢視。
+ const sourceDb=deepCopy(activeRoleBootstrapSourceDb);activeRoleBootstrapInFlight=true;clearTimeout(activeRoleBootstrapRetryTimer);document.body.dataset.activeRoleRecordBootstrap='publishing';
+ getActiveRoleRecordPublishQueue().enqueue({kind:'bootstrap',sourceDb}).then(result=>{
+  if(cloudRole!=='owner'||activeRecordMode!=='active'||activeRecordPageController?.diagnostics?.().activationEpoch!==activationEpoch)return;
+  activeRoleBootstrapEpoch=activationEpoch;activeRoleBootstrapRetryCount=0;
+  if(result.state==='published')document.body.dataset.activeRoleRecordBootstrap=JSON.stringify({state:'verified',activationEpoch,viewCount:Array.isArray(result.result)?result.result.length:0,kind:result.kind,sequence:result.sequence,sourceHash:result.sourceHash});
+  else document.body.dataset.activeRoleRecordBootstrap=JSON.stringify({state:result.state,activationEpoch,kind:result.kind,sequence:result.sequence,sourceHash:result.sourceHash});
+ }).catch(error=>{
+  const currentActivationEpoch=activeRecordPageController?.diagnostics?.().activationEpoch;
+  if(currentActivationEpoch!==activationEpoch||cloudRole!=='owner'||activeRecordMode!=='active')return;activeRoleBootstrapRetryCount++;document.body.dataset.activeRoleRecordBootstrap=JSON.stringify({state:'retrying',activationEpoch,retryCount:activeRoleBootstrapRetryCount,error:String(error?.message||error).slice(0,300)});reportOperationalError(error,{category:'role-view',area:'active-role-bootstrap',retryable:true});cloudStatus(activeRoleBootstrapRetryCount<3?'逐筆主資料已就緒；aa／老師逐筆檢視正在背景補送。':'逐筆主資料已就緒，但 aa／老師逐筆檢視持續補送中，請保持網路連線。',activeRoleBootstrapRetryCount<3?'pending':'error');activeRoleBootstrapRetryTimer=setTimeout(queueInitialActiveRoleRecordViews,Math.min(30000,1000*Math.pow(2,Math.min(activeRoleBootstrapRetryCount,5))));
+ }).finally(()=>{activeRoleBootstrapInFlight=false});
+}
 async function publishScopedViews(sourceOverride=null){
  if(cloudRole!=='owner')return;
  try{
    const sourceDb=sourceOverride?deepCopy(sourceOverride):window.__danbridgeGetDB();
+   if(DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy'){
+     return await getActiveRoleRecordPublishQueue().enqueue({kind:'confirmed',sourceDb});
+   }
    const accessDocs=await getCompanyAccessDocs();
    const jobs=[],scheduleTargets=[];
    for(const d of accessDocs){
@@ -1441,7 +1589,7 @@ async function publishRoleViewsWithRetry(sourceDb=null){
  if(sourceDb)roleViewPublishSourceDB=deepCopy(sourceDb);
  roleViewPublishQueued=true;if(roleViewPublishInFlight)return;
  roleViewPublishInFlight=true;roleViewPublishQueued=false;clearTimeout(roleViewRetryTimer);const publishSource=roleViewPublishSourceDB;roleViewPublishSourceDB=null;
- try{await Promise.all([publishScopedViews(publishSource),publishLessonMeta()]);roleViewRetryCount=0}
+ try{const roleSource=publishSource?deepCopy(publishSource):deepCopy(window.__danbridgeGetDB());await Promise.all([publishScopedViews(roleSource),publishLessonMeta(roleSource)]);roleViewRetryCount=0}
  catch(e){roleViewPublishQueued=true;roleViewRetryCount++;lessonMetaCacheReady=false;console.error('Role view background sync failed',e);reportOperationalError(e,{category:'role-view',area:'role-publish',retryable:true});cloudStatus(roleViewRetryCount<3?'主資料已同步；老師端資料正在背景補送。':'主資料已同步，但老師端資料持續補送中，請保持網路連線。',roleViewRetryCount<3?'pending':'error');roleViewRetryTimer=setTimeout(publishRoleViewsWithRetry,Math.min(30000,1000*Math.pow(2,Math.min(roleViewRetryCount,5))))}
  finally{roleViewPublishInFlight=false;if(roleViewPublishQueued&&!roleViewRetryCount)queueMicrotask(publishRoleViewsWithRetry)}
 }
@@ -1795,7 +1943,16 @@ async function runStagingRecordShadow(options={}){
 
 let stagingFullRecordShadowDiagnostic={state:'idle',sourceHash:'',totalWrites:0,completedWrites:0,totalBatches:0,completedBatches:0,documentCount:0,activeCount:0,tombstoneCount:0,verified:false,error:''};
 function setStagingFullRecordShadowDiagnostic(next){stagingFullRecordShadowDiagnostic={...stagingFullRecordShadowDiagnostic,...next};document.body.dataset.stagingFullRecordShadowState=stagingFullRecordShadowDiagnostic.state}
-function firestoreFullRecordShadowAdapter({failBatch=0}={}){let transactionNumber=0;return createFirebaseFullRecordShadowAdapter({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole,actor:{uid:cloudUid,email:cloudEmailKey},serverTimestamp,getCollectionDocuments:async path=>{const snapshot=await getDocs(collection(cloud,...path.split('/')));return snapshot.docs.map(row=>({id:row.id,data:row.data()}))},runBatchTransaction:async callback=>{transactionNumber++;if(failBatch===transactionNumber)throw new Error(`staging 全資料測試注入：第 ${failBatch} 批失敗`);return runTransaction(cloud,transaction=>callback({get:path=>transaction.get(doc(cloud,...path.split('/'))),set:(path,payload)=>transaction.set(doc(cloud,...path.split('/')),payload,{merge:false})}))}})}
+function firestoreFullRecordShadowAdapter({failBatch=0}={}){
+ let transactionNumber=0;
+ return createFirebaseFullRecordShadowAdapter({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole,actor:{uid:cloudUid,email:cloudEmailKey},serverTimestamp,getCollectionDocuments:async path=>{const snapshot=await getDocs(collection(cloud,...path.split('/')));return snapshot.docs.map(row=>({id:row.id,data:row.data()}))},runBatchTransaction:async callback=>{
+  transactionNumber++;if(failBatch===transactionNumber)throw new Error(`staging 全資料測試注入：第 ${failBatch} 批失敗`);
+  return runTransaction(cloud,async transaction=>{
+   let candidate=null;if(DANBRIDGE_ENVIRONMENT==='staging'){const snapshot=await transaction.get(doc(cloud,'stagingRecordSyncCandidateControls',COMPANY_ID));candidate=snapshot.exists()?snapshot.data():null;if(!candidate||candidate.schema!=='danbridge-record-sync-candidate-control-v1'||candidate.environment!=='staging'||candidate.state!=='open')throw new Error('staging 逐筆候選未開啟或已封存')}
+   return callback({get:path=>transaction.get(doc(cloud,...path.split('/'))),set:(path,payload)=>{if(candidate&&payload?.sourceHash!==candidate.legacyVersionHash)throw new Error('staging 逐筆候選來源版本不符');transaction.set(doc(cloud,...path.split('/')),payload,{merge:false})}});
+  });
+ }});
+}
 async function runStagingFullRecordShadow({failBatch=0,batchSize=400,targetDb:providedTargetDb}={}){
  stagingRecordShadowGuard();const targetDb=deepCopy(providedTargetDb??window.__danbridgeGetDB?.()),sourceHash=dataHash(targetDb);setStagingFullRecordShadowDiagnostic({state:'reading',sourceHash,totalWrites:0,completedWrites:0,totalBatches:0,completedBatches:0,documentCount:0,activeCount:0,tombstoneCount:0,verified:false,error:''});
  try{const result=await firestoreFullRecordShadowAdapter({failBatch}).synchronize(targetDb,{sourceHash,batchSize,onBatchComplete:progress=>setStagingFullRecordShadowDiagnostic({state:'writing',...progress})});setStagingFullRecordShadowDiagnostic({state:'verified',totalWrites:result.writes,completedWrites:result.writes,totalBatches:result.batches,completedBatches:result.batches,documentCount:result.documentCount,activeCount:result.activeCount,tombstoneCount:result.tombstoneCount,verified:true,error:''});return deepCopy(stagingFullRecordShadowDiagnostic)}catch(error){setStagingFullRecordShadowDiagnostic({state:'failed',completedWrites:Number(error?.completedWrites)||stagingFullRecordShadowDiagnostic.completedWrites,completedBatches:Number(error?.completedBatches)||stagingFullRecordShadowDiagnostic.completedBatches,verified:false,error:String(error?.message||error).slice(0,500)});throw error}
@@ -1849,24 +2006,59 @@ async function buildCurrentRoleViewCandidates(sourceDb){
   if(access.role==='teacher'&&access.teacherId){if(SCHEDULER_ACCOUNT_EMAILS.has(email)){kind='scheduler';db=filteredSchedulerDB(sourceDb)}else{kind='teacher';db=filteredTeacherDB(sourceDb,access.teacherId)}}
   else if(access.role==='branch_manager'&&Array.isArray(access.branchIds)&&access.branchIds.length){kind='branch_manager';db=filteredBranchDB(sourceDb,access.branchIds)}
   if(!db)continue;
-  views.push({viewId:`${kind}--${encodeURIComponent(email)}`,email,kind,db,viewHash:dataHash(db)});
+  views.push({viewId:`${kind}--${encodeURIComponent(email)}`,email,kind,db,viewHash:recordDataDigest(db)});
  }
  return views.sort((a,b)=>a.viewId.localeCompare(b.viewId));
 }
 function stagingRoleViewCandidateGuard(){if(DANBRIDGE_ENVIRONMENT!=='staging'||cloudRole!=='owner')throw new Error('staging 角色逐筆候選只允許 staging Owner')}
-function firestoreRoleViewCandidateAdapter({failBatch=0}={}){let transactionNumber=0;return createFirebaseRoleViewCandidateAdapter({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole,actor:{uid:cloudUid,email:cloudEmailKey},serverTimestamp,hashDb:dataHash,getCollectionDocuments:async path=>{const snapshot=await getDocs(collection(cloud,...path.split('/')));return snapshot.docs.map(row=>({id:row.id,data:row.data()}))},runBatchTransaction:async callback=>{transactionNumber++;if(failBatch===transactionNumber)throw new Error(`staging 角色候選測試注入：第 ${failBatch} 批失敗`);return runTransaction(cloud,transaction=>callback({get:path=>transaction.get(doc(cloud,...path.split('/'))),set:(path,payload)=>transaction.set(doc(cloud,...path.split('/')),payload,{merge:false})}))}})}
-async function runStagingRoleViewCandidateScenario({failureResume=false}={}){
- stagingRoleViewCandidateGuard();const sourceDb=deepCopy(window.__danbridgeGetDB?.()),sourceHash=dataHash(sourceDb),views=await buildCurrentRoleViewCandidates(sourceDb),runId=doc(collection(cloud,'stagingRoleViewCandidates',COMPANY_ID,'runs')).id;
- if(!views.length)throw new Error('staging 沒有可驗證的現行角色');
- const options={runId,sourceHash,views,batchSize:400};let interrupted=null;
- if(failureResume){try{await firestoreRoleViewCandidateAdapter({failBatch:2}).writeAndVerify(options)}catch(error){interrupted={blocked:true,completedBatches:Number(error?.completedBatches)||0,completedWrites:Number(error?.completedWrites)||0,error:String(error?.message||error)}}}
- const result=await firestoreRoleViewCandidateAdapter().writeAndVerify(options);
- return{state:'verified',runId,sourceHash,viewCount:result.viewCount,documentCount:result.documentCount,writes:result.writes,skippedWrites:result.skippedWrites,interrupted,permissionsSource:'existing-filter-functions',readTakeover:false};
+async function readVerifiedStagingRoleViewCandidateSource(){
+ stagingRoleViewCandidateGuard();const [mainSnapshot,candidateControl]=await Promise.all([getDoc(doc(cloud,'companies',COMPANY_ID,'data','main')),firestoreRecordSyncCandidateAdapter().read()]);if(!mainSnapshot.exists()||!mainSnapshot.data()?.db)throw new Error('staging 角色候選找不到雲端主資料');const sourceDb=deepCopy(mainSnapshot.data().db),legacyVersionHash=String(mainSnapshot.data().clientHash||'');if(!legacyVersionHash||dataHash(sourceDb)!==legacyVersionHash)throw new Error('staging 角色候選雲端主資料與 legacy 版本不一致');const fullReadback=await firestoreFullRecordShadowAdapter().verifyCandidate(sourceDb,{sourceHash:legacyVersionHash});return verifyRoleViewCandidateSourceBinding({sourceDb,legacyVersionHash,candidateControl,fullReadback});
 }
+async function auditStagingRoleViewCandidateSource(){
+ stagingRoleViewCandidateGuard();const [mainSnapshot,candidateSnapshot,documentsByCollection]=await Promise.all([getDoc(doc(cloud,'companies',COMPANY_ID,'data','main')),getDoc(doc(cloud,'stagingRecordSyncCandidateControls',COMPANY_ID)),firestoreFullRecordShadowAdapter().read()]);if(!mainSnapshot.exists()||!mainSnapshot.data()?.db)throw new Error('staging 角色候選找不到雲端主資料');const sourceDb=deepCopy(mainSnapshot.data().db),legacyVersionHash=String(mainSnapshot.data().clientHash||''),result=buildRoleViewCandidateSourceAudit({sourceDb,legacyVersionHash,legacyHashMatchesSource:!!legacyVersionHash&&dataHash(sourceDb)===legacyVersionHash,candidateControl:candidateSnapshot.exists()?candidateSnapshot.data():null,documentsByCollection});document.body.dataset.stagingRoleViewCandidateAudit=JSON.stringify(result);return result;
+}
+function firestoreRoleViewCandidateAdapter({failBatch=0}={}){let transactionNumber=0;return createFirebaseRoleViewCandidateAdapter({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole,actor:{uid:cloudUid,email:cloudEmailKey},serverTimestamp,hashDb:recordDataDigest,getCollectionDocuments:async path=>{const snapshot=await getDocs(collection(cloud,...path.split('/')));return snapshot.docs.map(row=>({id:row.id,data:row.data()}))},runBatchTransaction:async callback=>{transactionNumber++;if(failBatch===transactionNumber)throw new Error(`staging 角色候選測試注入：第 ${failBatch} 批失敗`);return runTransaction(cloud,transaction=>callback({get:path=>transaction.get(doc(cloud,...path.split('/'))),set:(path,payload)=>transaction.set(doc(cloud,...path.split('/')),payload,{merge:false})}))}})}
+const roleCandidateManifestRef=runId=>doc(cloud,'stagingRoleViewCandidateManifests',COMPANY_ID,'runs',runId);
+const roleVerificationReceiptRef=(runId,email)=>doc(cloud,'stagingRoleViewVerificationReceipts',COMPANY_ID,'runs',runId,'actors',email);
+async function persistStagingRoleCandidateManifest(manifest){assertRoleViewCandidateManifest(manifest);return runTransaction(cloud,async transaction=>{const ref=roleCandidateManifestRef(manifest.runId),snapshot=await transaction.get(ref);if(snapshot.exists()){const saved=deepCopy(snapshot.data());delete saved.persistedAt;delete saved.persistedBy;delete saved.persistedByEmail;assertRoleViewCandidateManifest(saved);if(saved.manifestHash!==manifest.manifestHash)throw new Error('角色候選 manifest 已存在但 identity 衝突');return{kind:'duplicate',manifest:saved}}transaction.set(ref,{...manifest,persistedAt:serverTimestamp(),persistedBy:cloudUid,persistedByEmail:cloudEmailKey},{merge:false});return{kind:'created',manifest}})}
+async function persistStagingRoleVerificationReceipt(receipt){assertRoleViewVerificationReceipt(receipt);return runTransaction(cloud,async transaction=>{const ref=roleVerificationReceiptRef(receipt.runId,receipt.email),snapshot=await transaction.get(ref);if(snapshot.exists()){const saved=deepCopy(snapshot.data());delete saved.persistedAt;delete saved.verifiedBy;delete saved.verifiedByEmail;assertRoleViewVerificationReceipt(saved);const identityFields=['runId','sourceHash','manifestHash','email','kind','viewId','viewHash','verifiedViewCount','collectionCount','documentCount','realtimeObserved','directCoreDenied','crossRoleDenied','readTakeover','writeTakeover'];if(identityFields.some(field=>saved[field]!==receipt[field]))throw new Error('角色候選本人憑證已存在但 identity 衝突');return{kind:'duplicate',receipt:saved}}transaction.set(ref,{...receipt,persistedAt:serverTimestamp(),verifiedBy:cloudUid,verifiedByEmail:cloudEmailKey},{merge:false});return{kind:'created',receipt}})}
+async function runStagingRoleViewCandidateScenario({failureResume=false}={}){
+ const source=await readVerifiedStagingRoleViewCandidateSource(),sourceDb=source.sourceDb,sourceHash=source.sourceHash,views=await buildCurrentRoleViewCandidates(sourceDb);
+ if(!views.length)throw new Error('staging 沒有可驗證的現行角色');
+ if(!/^[a-f0-9]{64}$/.test(sourceHash)||views.some(view=>!/^[a-f0-9]{64}$/.test(view.viewHash)))throw new Error('staging 角色候選必須在寫入前完成 SHA-256');
+ const runId=doc(collection(cloud,'stagingRoleViewCandidates',COMPANY_ID,'runs')).id;
+ const options={runId,sourceHash,views,batchSize:failureResume?1:400};let interrupted=null;
+ if(failureResume){try{await firestoreRoleViewCandidateAdapter({failBatch:2}).writeAndVerify(options)}catch(error){interrupted={blocked:true,completedBatches:Number(error?.completedBatches)||0,completedWrites:Number(error?.completedWrites)||0,error:String(error?.message||error)}}if(!interrupted?.blocked||interrupted.completedBatches!==1||interrupted.completedWrites!==1)throw new Error('staging 角色候選未實際完成第一批後中斷，禁止把本次 run 當成失敗續傳證據')}
+ const result=await firestoreRoleViewCandidateAdapter().writeAndVerify(options),viewSummaries=result.plan.views.map(view=>({viewId:view.viewId,email:view.email,kind:view.kind,viewHash:view.viewHash,documentCount:view.documentCount,counts:deepCopy(view.counts)})),manifest=buildVerifiedRoleViewCandidateManifest({environment:'staging',runId,sourceHash,views:viewSummaries,createdAt:new Date().toISOString()});await persistStagingRoleCandidateManifest(manifest);const ownerReceipt=await verifyOwnerStagingRoleViewCandidate({runId});
+ const verifiedResult={state:'verified',runId,sourceHash,manifestHash:manifest.manifestHash,viewCount:result.viewCount,documentCount:result.documentCount,writes:result.writes,skippedWrites:result.skippedWrites,interrupted,views:viewSummaries,ownerReceiptHash:ownerReceipt.receiptHash,permissionsSource:'existing-filter-functions',readTakeover:false,writeTakeover:false};document.body.dataset.stagingRoleViewCandidateResult=JSON.stringify(verifiedResult);return verifiedResult;
+}
+function currentRoleCandidateKind(){if(cloudRole==='teacher'&&cloudCanManageSchedule&&SCHEDULER_ACCOUNT_EMAILS.has(cloudEmailKey))return'scheduler';if(cloudRole==='teacher'&&!cloudCanManageSchedule)return'teacher';if(cloudRole==='branch_manager')return'branch_manager';return''}
+async function expectStagingPermissionDenied(operation,label){try{await operation();throw new Error(`${label} 未被拒絕`)}catch(error){if(String(error?.code||'')==='permission-denied'||/permission.?denied|insufficient permissions/i.test(String(error?.message||error)))return true;if(String(error?.message||error)===`${label} 未被拒絕`)throw error;throw new Error(`${label} 無法確認拒絕：${String(error?.message||error)}`)}}
+async function verifyOwnStagingRoleViewCandidate({runId,viewId,sourceHash,viewHash,manifestHash,foreignDocumentPath}={}){
+ if(DANBRIDGE_ENVIRONMENT!=='staging'||firebaseConfig.projectId!=='danbridge-d8877-staging'||!cloudEmailKey)throw new Error('角色候選本人驗證只允許已登入的 staging 帳號');const kind=currentRoleCandidateKind();if(!kind)throw new Error('目前帳號不是 aa、老師或校區管理者');
+ if(!manifestHash||!foreignDocumentPath)throw new Error('角色候選本人驗證缺少 manifest 或跨角色拒絕路徑');
+ const documentsByCollection={};for(const collectionId of FULL_RECORD_COLLECTIONS){const base=collection(cloud,'stagingRoleViewCandidates',COMPANY_ID,'runs',runId,'views',viewId,'collections',collectionId,'records'),ownRows=query(base,where('email','==',cloudEmailKey),where('kind','==',kind)),snapshot=await getDocs(ownRows);documentsByCollection[collectionId]=snapshot.docs.map(row=>({id:row.id,data:row.data()}))}
+ const verified=verifyOwnRoleViewCandidateReadback({documentsByCollection,runId,sourceHash,viewId,email:cloudEmailKey,kind,viewHash,environment:'staging'},{hashDb:recordDataDigest});
+ const realtimeObserved=await new Promise((resolve,reject)=>{let finished=false,unsubscribe=()=>{};const timer=setTimeout(()=>{if(finished)return;finished=true;unsubscribe();reject(new Error('角色候選即時訂閱逾時'))},10000),lessonRows=query(collection(cloud,'stagingRoleViewCandidates',COMPANY_ID,'runs',runId,'views',viewId,'collections','lessons','records'),where('email','==',cloudEmailKey),where('kind','==',kind));unsubscribe=onSnapshot(lessonRows,()=>{if(finished)return;finished=true;clearTimeout(timer);unsubscribe();resolve(true)},error=>{if(finished)return;finished=true;clearTimeout(timer);unsubscribe();reject(error)})});
+ const directCoreDenied=await expectStagingPermissionDenied(()=>getDoc(doc(cloud,'stagingFullRecordShadows',COMPANY_ID,'collections','lessons','records','role-test-probe')),'核心逐筆直接讀取');
+ const segments=String(foreignDocumentPath).split('/').filter(Boolean);if(segments.length!==10||segments[0]!=='stagingRoleViewCandidates'||segments[1]!==COMPANY_ID||segments[2]!=='runs'||segments[3]!==runId||segments[4]!=='views'||segments[6]!=='collections'||segments[8]!=='records')throw new Error('跨角色驗證路徑無效');const crossRoleDenied=await expectStagingPermissionDenied(()=>getDoc(doc(cloud,...segments)),'跨角色候選讀取'),testedAt=new Date().toISOString(),receipt=buildRoleViewVerificationReceipt({environment:'staging',runId,sourceHash,manifestHash,email:cloudEmailKey,kind,viewId,viewHash,verifiedViewCount:1,documentCount:verified.documentCount,realtimeObserved,directCoreDenied,crossRoleDenied,testedAt}),persisted=await persistStagingRoleVerificationReceipt(receipt);
+ const result={state:'verified',runId,viewId,sourceHash,viewHash,manifestHash,email:cloudEmailKey,kind,collectionCount:verified.collectionCount,documentCount:verified.documentCount,realtimeObserved,directCoreDenied,crossRoleDenied,receiptHash:persisted.receipt.receiptHash,receiptKind:persisted.kind,readTakeover:false,writeTakeover:false,verifiedAt:persisted.receipt.testedAt};document.body.dataset.stagingOwnRoleCandidateResult=JSON.stringify(result);return result;
+}
+async function verifyOwnerStagingRoleViewCandidate({runId}={}){
+ stagingRoleViewCandidateGuard();const manifestSnapshot=await getDoc(roleCandidateManifestRef(runId));if(!manifestSnapshot.exists())throw new Error('找不到角色候選 manifest');const manifest=deepCopy(manifestSnapshot.data());delete manifest.persistedAt;delete manifest.persistedBy;delete manifest.persistedByEmail;assertRoleViewCandidateManifest(manifest);let verifiedDocuments=0;
+ for(const view of manifest.views){const documentsByCollection={};for(const collectionId of FULL_RECORD_COLLECTIONS){const snapshot=await getDocs(collection(cloud,'stagingRoleViewCandidates',COMPANY_ID,'runs',runId,'views',view.viewId,'collections',collectionId,'records'));documentsByCollection[collectionId]=snapshot.docs.map(row=>({id:row.id,data:row.data()}))}const verified=verifyOwnRoleViewCandidateReadback({documentsByCollection,runId,sourceHash:manifest.sourceHash,viewId:view.viewId,email:view.email,kind:view.kind,viewHash:view.viewHash,environment:'staging'},{hashDb:recordDataDigest});verifiedDocuments+=verified.documentCount}
+ if(verifiedDocuments!==manifest.documentCount)throw new Error('Owner 角色候選讀回總筆數不一致');const source=await readVerifiedStagingRoleViewCandidateSource();if(source.sourceHash!==manifest.sourceHash)throw new Error('Owner 角色候選與目前 sealed 全資料版本不一致');const first=manifest.views[0],realtimeObserved=await new Promise((resolve,reject)=>{let finished=false,unsubscribe=()=>{};const timer=setTimeout(()=>{if(finished)return;finished=true;unsubscribe();reject(new Error('Owner 角色候選即時訂閱逾時'))},10000);unsubscribe=onSnapshot(collection(cloud,'stagingRoleViewCandidates',COMPANY_ID,'runs',runId,'views',first.viewId,'collections','lessons','records'),()=>{if(finished)return;finished=true;clearTimeout(timer);unsubscribe();resolve(true)},error=>{if(finished)return;finished=true;clearTimeout(timer);unsubscribe();reject(error)})}),testedAt=new Date().toISOString(),receipt=buildRoleViewVerificationReceipt({environment:'staging',runId,sourceHash:manifest.sourceHash,manifestHash:manifest.manifestHash,email:cloudEmailKey,kind:'owner',viewHash:manifest.manifestHash,verifiedViewCount:manifest.viewCount,documentCount:manifest.documentCount,realtimeObserved,directCoreDenied:false,crossRoleDenied:false,testedAt}),persisted=await persistStagingRoleVerificationReceipt(receipt);return{state:'verified',runId,manifestHash:manifest.manifestHash,email:cloudEmailKey,kind:'owner',viewCount:manifest.viewCount,documentCount:manifest.documentCount,realtimeObserved,receiptHash:persisted.receipt.receiptHash,receiptKind:persisted.kind,readTakeover:false,writeTakeover:false};
+}
+function installStagingRoleVerificationButton({id,label,run}){let installed=false;const timer=setInterval(()=>{if(installed||!cloudRole)return;installed=true;clearInterval(timer);const button=document.createElement('button');button.id=id;button.type='button';button.className='btn';button.style.cssText='position:fixed;right:18px;bottom:36px;z-index:10002;max-width:min(720px,calc(100vw - 36px));white-space:normal';button.textContent=label;button.onclick=async()=>{button.disabled=true;button.textContent='逐筆讀回、即時監聽與權限拒絕驗證中…';try{const result=await run();button.textContent=`憑證完成 ${result.receiptHash}`;button.className='btn ok'}catch(error){button.disabled=false;button.textContent=`已阻擋：${String(error?.message||error).slice(0,120)}`;button.className='btn danger';cloudStatus(String(error?.message||error),'error')}};document.body.appendChild(button)},200)}
 if(DANBRIDGE_ENVIRONMENT==='staging'){
  window.__danbridgeRunStagingRoleViewCandidate=runStagingRoleViewCandidateScenario;
+ window.__danbridgeAuditStagingRoleViewCandidateSource=auditStagingRoleViewCandidateSource;
+ window.__danbridgeVerifyOwnStagingRoleViewCandidate=verifyOwnStagingRoleViewCandidate;
+ window.__danbridgeVerifyOwnerStagingRoleViewCandidate=verifyOwnerStagingRoleViewCandidate;
  const roleViewCandidateTest=new URLSearchParams(location.search).get('roleViewCandidateTest');
- if(roleViewCandidateTest){let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);try{document.body.dataset.stagingRoleViewCandidateResult=JSON.stringify(await runStagingRoleViewCandidateScenario({failureResume:roleViewCandidateTest==='failure-resume'}))}catch(error){document.body.dataset.stagingRoleViewCandidateResult=JSON.stringify({state:'blocked',error:String(error?.message||error),readTakeover:false})}},200)}
+ if(roleViewCandidateTest)installStagingMigrationActionButton({id:'stagingRoleViewCandidateButton',label:'建立並驗證 staging 角色逐筆候選',runningLabel:'逐角色寫入、失敗續傳、完整讀回與 Owner 憑證驗證中…',run:()=>runStagingRoleViewCandidateScenario({failureResume:roleViewCandidateTest==='failure-resume'}),successLabel:result=>`角色候選已封存 ${result.viewCount} 個角色｜run ${result.runId}`});
+ const roleViewCandidateAudit=new URLSearchParams(location.search).get('roleViewCandidateAudit');if(roleViewCandidateAudit)installStagingMigrationActionButton({id:'stagingRoleViewCandidateAuditButton',label:'唯讀稽核 staging 16 集合候選',runningLabel:'唯讀核對版本、缺筆、多筆、內容與來源雜湊中…',run:auditStagingRoleViewCandidateSource,successLabel:result=>result.state==='ready'?'唯讀稽核通過｜候選可建立':`唯讀稽核已阻擋｜差異 ${result.totals.missing+result.totals.extra+result.totals.changed+result.totals.formatErrors} 筆`});
+ const verificationParams=new URLSearchParams(location.search),ownerRun=verificationParams.get('recordSyncOwnerVerify'),ownRun=verificationParams.get('recordSyncRoleVerify');if(ownerRun)installStagingRoleVerificationButton({id:'stagingOwnerRoleVerificationButton',label:'驗證 Owner 全部角色候選並建立不可變憑證',run:()=>verifyOwnerStagingRoleViewCandidate({runId:ownerRun})});if(ownRun)installStagingRoleVerificationButton({id:'stagingOwnRoleVerificationButton',label:'驗證本帳號 16 集合、即時監聽與跨角色拒絕',run:()=>verifyOwnStagingRoleViewCandidate({runId:ownRun,viewId:verificationParams.get('recordSyncRoleView'),sourceHash:verificationParams.get('recordSyncRoleSource'),viewHash:verificationParams.get('recordSyncRoleViewHash'),manifestHash:verificationParams.get('recordSyncRoleManifest'),foreignDocumentPath:verificationParams.get('recordSyncRoleForeign')})});
 }
 async function runProductionRoleViewCandidate(expectedSourceHash){
  productionFullRecordMigrationGuard();const sourceDb=deepCopy(window.__danbridgeGetDB?.()),sourceHash=dataHash(sourceDb);
@@ -1895,7 +2087,7 @@ async function runStagingAtomicRecordActivation({auditFailures=false}={}){
  const roleResult=await firestoreRoleViewCandidateAdapter().writeAndVerify({runId:roleRunId,sourceHash,views,batchSize:400});
  const fullManifestId=doc(collection(cloud,'stagingRecordCandidateManifests',COMPANY_ID,'manifests')).id,roleManifestId=doc(collection(cloud,'stagingRecordCandidateManifests',COMPANY_ID,'manifests')).id;
  const fullManifest=buildFullRecordCandidateManifest({environment:'staging',manifestId:fullManifestId,sourceHash,collectionCount:fullResult.collectionCount,documentCount:fullResult.documentCount,activeCount:fullResult.activeCount,tombstoneCount:fullResult.tombstoneCount});
- const roleManifest=buildRoleViewCandidateManifest({environment:'staging',manifestId:roleManifestId,runId:roleRunId,sourceHash,viewCount:roleResult.viewCount,documentCount:roleResult.documentCount});
+ const roleManifest=buildLegacyRoleViewCandidateManifest({environment:'staging',manifestId:roleManifestId,runId:roleRunId,sourceHash,viewCount:roleResult.viewCount,documentCount:roleResult.documentCount});
  const activation=buildAtomicRecordActivation({environment:'staging',fullManifest,roleManifest,currentSourceHash:sourceHash});
  const fullRef=doc(cloud,'stagingRecordCandidateManifests',COMPANY_ID,'manifests',fullManifestId),roleRef=doc(cloud,'stagingRecordCandidateManifests',COMPANY_ID,'manifests',roleManifestId),controlRef=doc(cloud,'stagingRecordActivationControls',COMPANY_ID);
  const audit={};
@@ -1977,23 +2169,41 @@ if(DANBRIDGE_ENVIRONMENT==='staging'){
  if(stagingFullRecordCandidateHash){let started=false;const timer=setInterval(async()=>{if(started||cloudRole!=='owner')return;started=true;clearInterval(timer);const targetDb=deepCopy(window.__danbridgeGetDB?.()),actualSourceHash=dataHash(targetDb),sourceHash=stagingFullRecordCandidateHash==='current'?actualSourceHash:stagingFullRecordCandidateHash;try{if(sourceHash!==actualSourceHash)throw new Error(`staging 候選來源不符：預期 ${sourceHash}，實際 ${actualSourceHash}`);const result=await firestoreFullRecordShadowAdapter().verifyCandidate(targetDb,{sourceHash});document.body.dataset.stagingFullRecordCandidateResult=JSON.stringify({state:'verified',sourceHash,collectionCount:result.collectionCount,documentCount:result.documentCount,activeCount:result.activeCount,tombstoneCount:result.tombstoneCount,activeSourceHashCount:result.activeSourceHashCount,matchingSourceHashCount:result.matchingSourceHashCount,distinctSourceHashCount:result.distinctSourceHashCount,candidateVerified:true,writes:0,readTakeover:false})}catch(error){document.body.dataset.stagingFullRecordCandidateResult=JSON.stringify({state:'blocked',writes:0,readTakeover:false,error:String(error?.message||error).slice(0,500)})}},200)}
 }
 
-function expectedRecordShadowRunCounts(current,targetDb){
- let documentCount=0,activeCount=0;
- for(const collectionName of ['lessons','students','teachers']){
-  const ids=new Set(Object.keys(current?.revisions?.[collectionName]||{}));
+function expectedLegacyRecordShadowRunCounts(current,targetDb){
+	let documentCount=0,activeCount=0;
+	for(const collectionName of ['lessons','students','teachers']){
+		const ids=new Set(Object.keys(current?.revisions?.[collectionName]||{}));
   for(const row of targetDb?.[collectionName]||[])ids.add(String(row.id));
   documentCount+=ids.size;activeCount+=(targetDb?.[collectionName]||[]).length;
  }
  return{documentCount,activeCount,tombstoneCount:documentCount-activeCount};
 }
+
 async function createVerifiedStagingRecordShadowRun(targetDb,{interrupt=false,readbackMutation}={}){
+	stagingRecordShadowGuard();
+	const adapter=firestoreFullRecordShadowAdapter(),current=await adapter.read(),identity=buildFullRecordShadowRunIdentity(targetDb,current,{hashTargetDb:dataHash,hashCanonicalDb:dataHash}),runRef=doc(collection(cloud,'stagingRecordShadowRuns',COMPANY_ID,'runs'));
+	const {sourceHash,coreHash,documentCount,activeCount,tombstoneCount}=identity;
+	const manifest=buildRecordShadowRunManifest({runId:runRef.id,sourceHash,coreHash,documentCount,activeCount,tombstoneCount});
+	await setDoc(runRef,{...manifest,companyId:COMPANY_ID,createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false});
+	if(interrupt)return{runId:runRef.id,manifest,interrupted:true};
+	const result=await adapter.synchronize(targetDb,{sourceHash});
+	const readbackSync=extractFullRecordShadowSyncResult(result);
+	const readbackState=canonicalRecordShadowCore(readbackSync.db);
+	let readback={runId:runRef.id,sourceHash,coreHash:dataHash(readbackState),documentCount:readbackSync.documentCount,activeCount:readbackSync.activeCount,tombstoneCount:readbackSync.tombstoneCount};
+	if(typeof readbackMutation==='function')readback=readbackMutation({...readback});
+	const verified=verifyRecordShadowRun(manifest,readback);
+	await setDoc(runRef,{state:'verified',verifiedHash:verified.verifiedHash,verifiedAt:serverTimestamp(),verifiedBy:cloudUid,verifiedByEmail:cloudEmailKey},{merge:true});
+	return{runId:runRef.id,manifest:verified,result};
+}
+
+async function createVerifiedLegacyStagingRecordShadowRun(targetDb,{interrupt=false,readbackMutation}={}){
  stagingRecordShadowGuard();
- const adapter=firestoreRecordShadowAdapter(),current=await adapter.readState(),sourceHash=dataHash(targetDb),coreHash=dataHash(canonicalRecordShadowCore(targetDb)),runRef=doc(collection(cloud,'stagingRecordShadowRuns',COMPANY_ID,'runs'));
- const manifest=buildRecordShadowRunManifest({runId:runRef.id,sourceHash,coreHash,...expectedRecordShadowRunCounts(current,targetDb)});
+ const adapter=firestoreRecordShadowAdapter(),current=await adapter.readState(),sourceHash=dataHash(targetDb),coreHash=dataHash(canonicalLegacyRecordShadowCore(targetDb)),runRef=doc(collection(cloud,'stagingRecordShadowRuns',COMPANY_ID,'runs'));
+ const manifest=buildRecordShadowRunManifest({runId:runRef.id,sourceHash,coreHash,...expectedLegacyRecordShadowRunCounts(current,targetDb)});
  await setDoc(runRef,{...manifest,companyId:COMPANY_ID,createdAt:serverTimestamp(),createdBy:cloudUid,createdByEmail:cloudEmailKey},{merge:false});
  if(interrupt)return{runId:runRef.id,manifest,interrupted:true};
  const result=await adapter.synchronize(targetDb,{sourceHash});
- let readback={runId:runRef.id,sourceHash,coreHash:dataHash(canonicalRecordShadowCore(result.state.db)),documentCount:result.activeCount+result.tombstoneCount,activeCount:result.activeCount,tombstoneCount:result.tombstoneCount};
+ let readback={runId:runRef.id,sourceHash,coreHash:dataHash(canonicalLegacyRecordShadowCore(result.state.db)),documentCount:result.activeCount+result.tombstoneCount,activeCount:result.activeCount,tombstoneCount:result.tombstoneCount};
  if(typeof readbackMutation==='function')readback=readbackMutation({...readback});
  const verified=verifyRecordShadowRun(manifest,readback);
  await setDoc(runRef,{state:'verified',verifiedHash:verified.verifiedHash,verifiedAt:serverTimestamp(),verifiedBy:cloudUid,verifiedByEmail:cloudEmailKey},{merge:true});
@@ -2014,7 +2224,7 @@ async function activateVerifiedStagingRecordShadowRun(runId,{forceRulesVersionCh
 async function runStagingRecordShadowRunScenario(){
  stagingRecordShadowGuard();
  const target=deepCopy(window.__danbridgeGetDB?.()),results={};
- const interrupted=await createVerifiedStagingRecordShadowRun(target,{interrupt:true});results.interrupted={runId:interrupted.runId,blocked:false};
+ const interrupted=await createVerifiedLegacyStagingRecordShadowRun(target,{interrupt:true});results.interrupted={runId:interrupted.runId,blocked:false};
  try{await activateVerifiedStagingRecordShadowRun(interrupted.runId,{forceRulesVersionCheck:true})}catch{results.interrupted.blocked=true}
  for(const [name,readbackMutation] of [
   ['missing',value=>({...value,documentCount:value.documentCount-1,activeCount:Math.max(0,value.activeCount-1)})],
@@ -2022,15 +2232,15 @@ async function runStagingRecordShadowRunScenario(){
   ['hashMismatch',value=>({...value,sourceHash:value.sourceHash+'-mismatch'})],
   ['coreHashMismatch',value=>({...value,coreHash:value.coreHash+'-mismatch'})]
  ]){
-  try{await createVerifiedStagingRecordShadowRun(target,{readbackMutation});results[name]={blocked:false}}
+   try{await createVerifiedLegacyStagingRecordShadowRun(target,{readbackMutation});results[name]={blocked:false}}
   catch(error){results[name]={blocked:true,error:String(error?.message||error)}}
  }
  const changed=deepCopy(target),versionLessonId='staging-record-run-version-change';changed.lessons=[...(changed.lessons||[]).filter(row=>String(row.id)!==versionLessonId),{id:versionLessonId,name:'STAGING_RECORD_RUN_VERSION_CHANGE'}];
- const stale=await createVerifiedStagingRecordShadowRun(changed);results.versionChanged={runId:stale.runId,blocked:false};
+ const stale=await createVerifiedLegacyStagingRecordShadowRun(changed);results.versionChanged={runId:stale.runId,blocked:false};
  try{await activateVerifiedStagingRecordShadowRun(stale.runId,{forceRulesVersionCheck:true})}catch(error){results.versionChanged={...results.versionChanged,blocked:true,error:String(error?.message||error)}}
- const verified=await createVerifiedStagingRecordShadowRun(target),activation=await activateVerifiedStagingRecordShadowRun(verified.runId);
+ const verified=await createVerifiedLegacyStagingRecordShadowRun(target),activation=await activateVerifiedStagingRecordShadowRun(verified.runId);
  const [controlSnap,runSnap,mainSnap,shadowReadback]=await Promise.all([getDoc(doc(cloud,'stagingRecordShadowControls',COMPANY_ID)),getDoc(doc(cloud,'stagingRecordShadowRuns',COMPANY_ID,'runs',verified.runId)),getDoc(doc(cloud,'companies',COMPANY_ID,'data','main')),firestoreRecordShadowAdapter().readState()]);
- const candidate=evaluateRecordShadowReadCandidate({activation:controlSnap.data(),run:runSnap.data(),readback:shadowReadback,currentSourceHash:String(mainSnap.data()?.clientHash||''),hashCore:value=>dataHash(canonicalRecordShadowCore(value))});
+ const candidate=evaluateRecordShadowReadCandidate({activation:controlSnap.data(),run:runSnap.data(),readback:shadowReadback,currentSourceHash:String(mainSnap.data()?.clientHash||''),hashCore:value=>dataHash(canonicalLegacyRecordShadowCore(value))});
  results.success={runId:verified.runId,verified:true,activated:true,candidateEligible:candidate.eligible,candidateReason:candidate.reason,sourceHash:activation.sourceHash,coreHash:activation.coreHash,documentCount:activation.documentCount,activeCount:activation.activeCount,tombstoneCount:activation.tombstoneCount};
  return results;
 }
@@ -2232,6 +2442,45 @@ if(DANBRIDGE_ENVIRONMENT==='staging'){
  if(migrationRestoreFailure&&migrationRestoreFailureBackup)installStagingMigrationActionButton({id:'stagingMigrationRestoreFailureButton',label:`執行失敗演練：${migrationRestoreFailure}`,runningLabel:'建立隔離沙盒並驗證 fail-closed…',run:()=>runStagingMigrationRestoreFailureScenario(migrationRestoreFailureBackup,migrationRestoreFailure),successLabel:result=>`已正確拒絕 ${result.scenario}｜主資料未變`});
 }
 
+function firestoreRecordSyncCandidateAdapter(){
+ return createFirebaseRecordSyncCandidateAdapter({environment:DANBRIDGE_ENVIRONMENT,role:cloudRole,actor:{uid:cloudUid,email:cloudEmailKey},serverTimestamp,getDocument:path=>getDoc(doc(cloud,...path.split('/'))),runTransaction:stagingFirestoreTransaction});
+}
+async function verifyStagingRecordSyncProtection(backupIdValue,restoreReceiptIdValue){
+ stagingMigrationBackupGuard();const backupId=String(backupIdValue||'').trim(),restoreReceiptId=String(restoreReceiptIdValue||'').trim();if(!/^[A-Za-z0-9_-]{8,128}$/.test(backupId)||!/^[A-Za-z0-9_-]{8,128}$/.test(restoreReceiptId))throw new Error('逐筆候選備份或復原 identity 無效');
+ const [mainSnapshot,backupSnapshot,restoreReceipt]=await Promise.all([getDoc(doc(cloud,'companies',COMPANY_ID,'data','main')),getDoc(doc(cloud,'stagingMigrationBackups',COMPANY_ID,'runs',backupId)),verifyStagingMigrationRestoreReceipt(restoreReceiptId)]);if(!mainSnapshot.exists()||!backupSnapshot.exists()||!mainSnapshot.data()?.db)throw new Error('逐筆候選主資料或 verified 備份不存在');
+ const db=deepCopy(mainSnapshot.data().db),legacyVersionHash=String(mainSnapshot.data().clientHash||''),backup=backupSnapshot.data(),rawHash=sha256Canonical(db);if(!legacyVersionHash||dataHash(db)!==legacyVersionHash)throw new Error('逐筆候選 legacy 內容與版本不符');verifyImmutableMigrationBackupManifest(backup,{currentSourceHash:rawHash});if(backup.backupId!==backupId||backup.state!=='verified'||backup.sourceVersionHash!==legacyVersionHash||backup.sourceHash!==rawHash||backup.verifiedHash!==rawHash)throw new Error('逐筆候選 verified 備份與目前主資料不一致');if(restoreReceipt.drillId!==restoreReceiptId||restoreReceipt.sourceBackupId!==backupId||restoreReceipt.mainVersionHash!==legacyVersionHash||restoreReceipt.sourceHash!==rawHash||restoreReceipt.restoredHash!==rawHash||restoreReceipt.mainUnchanged!==true||restoreReceipt.persisted!==true)throw new Error('逐筆候選復原憑證與目前主資料不一致');return{db,legacyVersionHash,recordDataHash:recordDataHash(db),backupId,restoreReceiptId,backup,restoreReceipt};
+}
+async function synchronizeAndSealStagingRecordSyncCandidate({backupId,restoreReceiptId,batchSize=400}={}){
+ stagingRecordShadowGuard();const protection=await verifyStagingRecordSyncProtection(backupId,restoreReceiptId),candidateAdapter=firestoreRecordSyncCandidateAdapter(),fullAdapter=firestoreFullRecordShadowAdapter(),existing=await candidateAdapter.read();
+ if(existing?.state==='sealed'&&existing.legacyVersionHash===protection.legacyVersionHash&&existing.recordDataHash===protection.recordDataHash){const verified=await fullAdapter.verifyCandidate(protection.db,{sourceHash:protection.legacyVersionHash});if(verified.documentCount===existing.documentCount&&verified.activeCount===existing.activeCount&&verified.tombstoneCount===existing.tombstoneCount)return{state:'sealed',kind:'duplicate',writes:0,candidateEpoch:existing.candidateEpoch,candidateRevision:existing.revision,candidateSealHash:existing.sealHash,legacyVersionHash:existing.legacyVersionHash,recordDataHash:existing.recordDataHash,documentCount:existing.documentCount,activeCount:existing.activeCount,tombstoneCount:existing.tombstoneCount,backupId,restoreReceiptId,readTakeover:false,writeTakeover:false}}
+ const createdAt=new Date().toISOString(),candidateEpoch=existing?.state==='open'&&existing.legacyVersionHash===protection.legacyVersionHash?existing.candidateEpoch:`candidate:${Date.now().toString(36)}:${crypto.randomUUID().slice(0,8)}`,openCreatedAt=existing?.state==='open'&&existing.legacyVersionHash===protection.legacyVersionHash?existing.createdAt:createdAt;await candidateAdapter.open({candidateEpoch,legacyVersionHash:protection.legacyVersionHash,createdAt:openCreatedAt});
+ const synchronized=await runStagingFullRecordShadow({batchSize:Number(batchSize),targetDb:protection.db}),beforeSeal=await fullAdapter.verifyCandidate(protection.db,{sourceHash:protection.legacyVersionHash}),beforeHash=recordDataHash(beforeSeal.db);if(beforeHash!==protection.recordDataHash||synchronized.documentCount!==beforeSeal.documentCount||synchronized.activeCount!==beforeSeal.activeCount||synchronized.tombstoneCount!==beforeSeal.tombstoneCount)throw new Error('逐筆候選封存前讀回 hash 或計數不一致');
+ const sealed=await candidateAdapter.seal({candidateEpoch,legacyVersionHash:protection.legacyVersionHash,recordDataHash:beforeHash,documentCount:beforeSeal.documentCount,activeCount:beforeSeal.activeCount,tombstoneCount:beforeSeal.tombstoneCount,sealedAt:new Date().toISOString()}),afterSeal=await fullAdapter.verifyCandidate(protection.db,{sourceHash:protection.legacyVersionHash}),saved=await candidateAdapter.read(),afterHash=recordDataHash(afterSeal.db);if(saved?.state!=='sealed'||saved.candidateEpoch!==candidateEpoch||saved.sealHash!==sealed.control.sealHash||saved.recordDataHash!==afterHash||afterHash!==protection.recordDataHash||saved.documentCount!==afterSeal.documentCount||saved.activeCount!==afterSeal.activeCount||saved.tombstoneCount!==afterSeal.tombstoneCount)throw new Error('逐筆候選封存後第二次讀回不一致');
+ return{state:'sealed',kind:sealed.kind,writes:synchronized.totalWrites,candidateEpoch:saved.candidateEpoch,candidateRevision:saved.revision,candidateSealHash:saved.sealHash,legacyVersionHash:saved.legacyVersionHash,recordDataHash:saved.recordDataHash,documentCount:saved.documentCount,activeCount:saved.activeCount,tombstoneCount:saved.tombstoneCount,backupId,restoreReceiptId,readTakeover:false,writeTakeover:false};
+}
+if(DANBRIDGE_ENVIRONMENT==='staging'){
+ window.__danbridgeVerifyStagingRecordSyncProtection=verifyStagingRecordSyncProtection;window.__danbridgeSynchronizeAndSealStagingRecordSyncCandidate=synchronizeAndSealStagingRecordSyncCandidate;
+ const params=new URLSearchParams(location.search),backupId=params.get('recordSyncCandidateSeal'),restoreReceiptId=params.get('recordSyncCandidateRestore');if(backupId&&restoreReceiptId)installStagingMigrationActionButton({id:'stagingRecordSyncCandidateSealButton',label:'同步並封存 staging 16 集合候選',runningLabel:'核對備份、逐筆續傳、封存並第二次讀回中…',run:()=>synchronizeAndSealStagingRecordSyncCandidate({backupId,restoreReceiptId}),successLabel:result=>`候選已封存 ${result.activeCount} 筆｜revision ${result.candidateRevision}`});
+}
+
+let preparedRecordSyncRoleEvidence=null,preparedRecordSyncActivation=null;
+function prepareStagingRecordSyncRoleEvidence({primaryOwnerEmail=OWNER_EMAIL,backupOwnerEmail,schedulerEmail,teacherAccounts,roleViewCount,receiptSet,results,testedAt=new Date().toISOString()}={}){
+ stagingRecordShadowGuard();if(!receiptSet||!results||RECORD_SYNC_ROLE_SCENARIOS.some(scenario=>results[scenario]!==true))throw new Error('角色本人憑證或實測情境尚未完成，禁止建立啟用證據');preparedRecordSyncRoleEvidence=buildRecordSyncRoleEvidence({environment:'staging',primaryOwnerEmail,backupOwnerEmail,schedulerEmail,teacherAccounts,roleViewCount,candidateRunId:receiptSet.manifest.runId,candidateSourceHash:receiptSet.manifest.sourceHash,candidateManifestHash:receiptSet.manifest.manifestHash,receiptCount:receiptSet.receiptCount,receiptSetHash:receiptSet.receiptSetHash,results,testedAt});return deepCopy(preparedRecordSyncRoleEvidence);
+}
+async function prepareStagingRecordSyncRoleEvidenceFromReceipts({runId,results}={}){
+ stagingRecordShadowGuard();const [manifestSnapshot,receiptSnapshot,accessDocs]=await Promise.all([getDoc(roleCandidateManifestRef(runId)),getDocs(collection(cloud,'stagingRoleViewVerificationReceipts',COMPANY_ID,'runs',runId,'actors')),getCompanyAccessDocs()]);if(!manifestSnapshot.exists())throw new Error('角色候選 manifest 不存在');const manifest=deepCopy(manifestSnapshot.data());delete manifest.persistedAt;delete manifest.persistedBy;delete manifest.persistedByEmail;const receipts=receiptSnapshot.docs.map(row=>{const value=deepCopy(row.data());delete value.persistedAt;delete value.verifiedBy;delete value.verifiedByEmail;return value}),backupOwners=accessDocs.map(row=>({...row.data(),email:String(row.data()?.email||row.id||'').trim().toLowerCase()})).filter(row=>row.active===true&&row.role==='owner'&&row.email!==OWNER_EMAIL);if(backupOwners.length!==1)throw new Error(`備援 Owner 必須且只能有一位，目前 ${backupOwners.length} 位`);const receiptSet=verifyRoleViewReceiptSet({manifest,receipts,primaryOwnerEmail:OWNER_EMAIL,backupOwnerEmail:backupOwners[0].email,schedulerEmail:[...SCHEDULER_ACCOUNT_EMAILS][0]});return prepareStagingRecordSyncRoleEvidence({primaryOwnerEmail:receiptSet.primaryOwnerEmail,backupOwnerEmail:receiptSet.backupOwnerEmail,schedulerEmail:receiptSet.schedulerEmail,teacherAccounts:receiptSet.teacherAccounts,roleViewCount:receiptSet.roleViewCount,receiptSet,results,testedAt:receiptSet.testedAt});
+}
+async function prepareStagingRecordSyncActivation({backupId,restoreReceiptId,roleEvidence=preparedRecordSyncRoleEvidence}={}){
+ stagingRecordShadowGuard();if(!roleEvidence)throw new Error('缺少 Daniel、Catherine、aa 與全部老師的實測證據');const protection=await verifyStagingRecordSyncProtection(backupId,restoreReceiptId),candidate=await firestoreRecordSyncCandidateAdapter().read();if(!candidate||candidate.state!=='sealed'||candidate.legacyVersionHash!==protection.legacyVersionHash||candidate.recordDataHash!==protection.recordDataHash)throw new Error('逐筆同步候選尚未封存或已與主資料分歧');const readback=await firestoreFullRecordShadowAdapter().verifyCandidate(protection.db,{sourceHash:protection.legacyVersionHash}),readbackHash=recordDataHash(readback.db);if(readbackHash!==candidate.recordDataHash||readback.documentCount!==candidate.documentCount||readback.activeCount!==candidate.activeCount||readback.tombstoneCount!==candidate.tombstoneCount)throw new Error('逐筆同步封存候選完整讀回不一致');const createdAt=new Date().toISOString(),activationEpoch=`active:${Date.now().toString(36)}:${crypto.randomUUID().slice(0,8)}`,manifest=buildRecordSyncActivationManifest({environment:'staging',activationEpoch,candidateControl:candidate,legacyVersionHash:protection.legacyVersionHash,recordDataHash:readbackHash,roleEvidence,backupId,restoreReceiptId,documentCount:readback.documentCount,activeCount:readback.activeCount,tombstoneCount:readback.tombstoneCount,createdAt}),control=buildActiveRecordSyncControl({manifest,currentLegacyVersionHash:protection.legacyVersionHash,currentRecordDataHash:readbackHash,currentRoleEvidenceHash:roleEvidence.evidenceHash,activatedAt:createdAt});preparedRecordSyncActivation={roleEvidence:deepCopy(roleEvidence),manifest,control,preparedAt:createdAt};document.body.dataset.recordSyncActivationPreflight=JSON.stringify({state:'ready',manifestHash:manifest.manifestHash,activationEpoch,recordDataHash:readbackHash,documentCount:readback.documentCount,activeCount:readback.activeCount,tombstoneCount:readback.tombstoneCount,roleViewCount:manifest.roleViewCount,writes:0,readTakeover:false,writeTakeover:false});return deepCopy(preparedRecordSyncActivation);
+}
+async function executePreparedStagingRecordSyncActivation(){
+ stagingRecordShadowGuard();if(!preparedRecordSyncActivation)throw new Error('請先在同一頁完成逐筆啟用唯讀預檢');const adapter=createFirebaseRecordSyncActivationAdapter({runTransaction:stagingFirestoreTransaction,serverTimestamp,actor:{uid:cloudUid,email:cloudEmailKey},environment:'staging',role:cloudRole}),result=await adapter.activate(preparedRecordSyncActivation),{manifest,control,roleEvidence}=preparedRecordSyncActivation,[savedControl,savedManifest]=await Promise.all([getDoc(doc(cloud,'stagingRecordSyncControls',COMPANY_ID)),getDoc(doc(cloud,'stagingRecordSyncActivationManifests',COMPANY_ID,'manifests',manifest.manifestHash))]);if(!savedControl.exists()||!savedManifest.exists())throw new Error('逐筆同步原子啟用讀回缺失');const eligibility=evaluateActiveRecordSyncControl({control:savedControl.data(),manifest:savedManifest.data(),environment:'staging',currentRecordDataHash:manifest.recordDataHash,currentRoleEvidenceHash:roleEvidence.evidenceHash});if(!eligibility.eligible||savedControl.data().candidateSealHash!==control.candidateSealHash)throw new Error(`逐筆同步原子啟用讀回失敗：${eligibility.reason}`);document.body.dataset.recordSyncActivationResult=JSON.stringify({state:'active',kind:result.kind,manifestHash:manifest.manifestHash,activationEpoch:manifest.activationEpoch,recordDataHash:manifest.recordDataHash,documentCount:manifest.documentCount,activeCount:manifest.activeCount,tombstoneCount:manifest.tombstoneCount,roleViewCount:manifest.roleViewCount,readTakeover:true,writeTakeover:true});return{...result,eligible:true,manifestHash:manifest.manifestHash,activationEpoch:manifest.activationEpoch,recordDataHash:manifest.recordDataHash,documentCount:manifest.documentCount,activeCount:manifest.activeCount,tombstoneCount:manifest.tombstoneCount,roleViewCount:manifest.roleViewCount};
+}
+if(DANBRIDGE_ENVIRONMENT==='staging'){
+ window.__danbridgePrepareStagingRecordSyncRoleEvidence=prepareStagingRecordSyncRoleEvidence;window.__danbridgePrepareStagingRecordSyncRoleEvidenceFromReceipts=prepareStagingRecordSyncRoleEvidenceFromReceipts;window.__danbridgePrepareStagingRecordSyncActivation=prepareStagingRecordSyncActivation;window.__danbridgeExecutePreparedStagingRecordSyncActivation=executePreparedStagingRecordSyncActivation;window.__danbridgeGetPreparedStagingRecordSyncActivation=()=>preparedRecordSyncActivation?deepCopy(preparedRecordSyncActivation):null;
+ const activationParams=new URLSearchParams(location.search),activationRunId=activationParams.get('recordSyncActivationRun'),activationBackupId=activationParams.get('recordSyncActivationBackup'),activationRestoreId=activationParams.get('recordSyncActivationRestore');if(activationRunId&&activationBackupId&&activationRestoreId){let installed=false;const timer=setInterval(()=>{if(installed||cloudRole!=='owner')return;installed=true;clearInterval(timer);const panel=document.createElement('section');panel.id='stagingRecordSyncActivationPanel';panel.style.cssText='position:fixed;right:18px;bottom:24px;z-index:10003;width:min(760px,calc(100vw - 36px));max-height:70vh;overflow:auto;padding:18px;background:#fff;border:2px solid #b99032;border-radius:16px;box-shadow:0 18px 50px #0004';panel.innerHTML=`<strong>staging 逐筆原子啟用最終閘門</strong><p class="small">只有全部角色不可變憑證到齊，且下列實測逐項確認後才能建立唯讀預檢。此步尚不接管。</p><div id="stagingRecordSyncScenarioChecks">${RECORD_SYNC_ROLE_SCENARIOS.map(scenario=>`<label style="display:flex;gap:8px;margin:6px 0"><input type="checkbox" data-scenario="${scenario}"> ${scenario}</label>`).join('')}</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="btn" id="stagingRecordSyncPrepareButton">收齊憑證並建立唯讀預檢</button><button type="button" class="btn danger" id="stagingRecordSyncActivateButton" disabled>原子啟用 staging 逐筆讀寫</button></div><p class="small" id="stagingRecordSyncActivationMessage"></p>`;document.body.appendChild(panel);const prepareButton=panel.querySelector('#stagingRecordSyncPrepareButton'),activateButton=panel.querySelector('#stagingRecordSyncActivateButton'),message=panel.querySelector('#stagingRecordSyncActivationMessage');prepareButton.onclick=async()=>{prepareButton.disabled=true;try{const results=Object.fromEntries([...panel.querySelectorAll('[data-scenario]')].map(input=>[input.dataset.scenario,input.checked]));if(RECORD_SYNC_ROLE_SCENARIOS.some(scenario=>results[scenario]!==true))throw new Error('仍有實測情境未勾選');const evidence=await prepareStagingRecordSyncRoleEvidenceFromReceipts({runId:activationRunId,results}),prepared=await prepareStagingRecordSyncActivation({backupId:activationBackupId,restoreReceiptId:activationRestoreId,roleEvidence:evidence});message.textContent=`唯讀預檢通過｜manifest ${prepared.manifest.manifestHash}`;activateButton.disabled=false;prepareButton.textContent='唯讀預檢已通過'}catch(error){prepareButton.disabled=false;message.textContent=`已阻擋：${String(error?.message||error)}`;cloudStatus(message.textContent,'error')}};activateButton.onclick=async()=>{activateButton.disabled=true;try{const result=await executePreparedStagingRecordSyncActivation();message.textContent=`已原子啟用｜epoch ${result.activationEpoch}`;activateButton.textContent='staging 逐筆已啟用';location.reload()}catch(error){activateButton.disabled=false;message.textContent=`啟用已阻擋：${String(error?.message||error)}`;cloudStatus(message.textContent,'error')}}},200)}
+}
+
 let stagingLivePreflightDiagnostic={state:'idle',manifestHash:'',operationCount:0,sourceRecordCount:0,targetRecordCount:0,estimatedReads:0,estimatedWrites:0,readBudget:0,writeBudget:0,liveControlExists:false,writes:0,featureFlagOnly:true,uploadOwnerStateAttached:false,readTakeover:false,productionAllowed:false,error:''},stagingLivePreflightEvidence=null;
 function stagingLivePreflightGuard(){
  if(DANBRIDGE_ENVIRONMENT!=='staging'||cloudRole!=='owner'||firebaseConfig.projectId!=='danbridge-d8877-staging')throw new Error('live 逐筆預檢只允許 staging Owner');
@@ -2292,8 +2541,121 @@ if(DANBRIDGE_ENVIRONMENT==='staging'){
  const liveResumeManifestHash=livePreflightParams.get('stagingLiveResume');if(liveResumeManifestHash){let installed=false;const timer=setInterval(()=>{if(installed||cloudRole!=='owner')return;installed=true;clearInterval(timer);const button=document.createElement('button');button.id='stagingLiveOperationResumeButton';button.type='button';button.className='btn';button.style.cssText='position:fixed;right:18px;bottom:92px;z-index:10002;background:#7f1d1d;color:#fff;max-width:min(760px,calc(100vw - 36px));white-space:normal';button.textContent=`續傳 staging 永久操作日誌｜manifest ${liveResumeManifestHash}`;button.onclick=async()=>{button.disabled=true;button.textContent='核對 manifest 與日誌後續傳中…';try{const result=await resumeStagingLiveOperationPlan(liveResumeManifestHash);document.body.dataset.stagingLiveExecutionResult=JSON.stringify({state:result.state,manifestHash:result.manifestHash,finalized:result.finalized,processed:result.processed,counts:result.counts,documentCount:result.documentCount,activeCount:result.activeCount,tombstoneCount:result.tombstoneCount,readTakeover:false,uploadOwnerStateAttached:false,productionAllowed:false});button.disabled=result.state==='complete';button.textContent=`${result.state==='complete'?`續傳完成並讀回：${result.activeCount} 筆`:`已安全暫停：${result.counts.confirmed}/${result.counts.total}，按此續傳`}｜manifest ${result.manifestHash}`}catch(error){button.disabled=false;button.textContent='續傳已阻擋，按此重試';cloudStatus(String(error?.message||error),'error')}};document.body.appendChild(button)},200)}
 }
 
+async function applyActiveOwnerCloudDb(nextDb){
+ applyingCloud=true;try{window.__danbridgeSetDB(deepCopy(nextDb));applyCachedLessonReportsToCurrentDB();persistCurrentLocalView();window.renderAll?.();requestAnimationFrame(()=>window.renderDashboard?.());setTimeout(()=>window.renderDashboard?.(),150)}finally{applyingCloud=false}
+}
+function handleActiveOwnerControllerStatus(status){
+ setActiveRecordSyncFailureResumeDiagnostic(status);
+  document.body.dataset.activeRecordState=String(status?.state||'unknown');ownerUploadQueued=Boolean(status?.dirty||status?.queued||status?.inFlight);if(status?.state==='complete'&&!status.dirty){localDirtyHash='';ownerUploadQueued=false;clearOwnerSyncRecovery();lastPublishedOwnerDB=deepCopy(window.__danbridgeGetDB());ownerBaselineReady=true;approvedLessonShrinkHash='';ownerRetryCount=0;scheduleDailyCloudBackup();renderSyncRecoveryCenter();cloudStatus('逐筆雲端已確認，待處理 0 筆','ok');return}if(status?.state==='paused'){persistOwnerSyncRecovery();cloudStatus('逐筆同步已中央暫停；畫面與本機修改均已保留。','pending');return}if(status?.state==='blocked'){persistOwnerSyncRecovery();cloudStatus('逐筆同步已阻擋，未覆蓋任何雲端資料：'+String(status.error||'請檢查同步中心'),'error');return}if(['queued','backing-up','syncing','planned','replanned','sent','confirmed','remote-buffered','waiting-for-stream','waiting'].includes(status?.state))cloudStatus(status?.state==='backing-up'?'正在建立並驗證寫入前的雲端分片備份…':'逐筆變更已保存，正在安全同步與讀回確認…','pending');
+}
+function setActiveRecordSyncFailureResumeDiagnostic(next={}){
+ activeRecordSyncFailureResumeDiagnostic={...activeRecordSyncFailureResumeDiagnostic,...next};
+ if(DANBRIDGE_ENVIRONMENT!=='staging')return;
+ document.body.dataset.recordSyncActiveFailureResume=JSON.stringify(activeRecordSyncFailureResumeDiagnostic);
+}
+function ensureActiveOwnerPageController(activationEpoch){
+ if(
+  DANBRIDGE_ENVIRONMENT!=='staging'||cloudRole!=='owner'||!cloudUid||!cloudEmailKey||!/^[A-Za-z0-9_.:-]{8,128}$/.test(String(activationEpoch||''))
+ )throw new Error('無法建立 staging Owner 逐筆控制器');
+ if(activeRecordPageController&&activeOwnerControllerEpoch===activationEpoch)return activeRecordPageController;
+ if(activeRecordPageController){activeRecordPageController.stop();activeRecordPageController=null}
+ const deviceId=activeOwnerDeviceIdentity(),journalKey=`staging:${cloudEmailKey}:${deviceId}:${activationEpoch}`,journalStorage=createBrowserOperationJournalStorage({indexedDB:window.indexedDB,locks:navigator.locks,key:journalKey}),journal=createOperationJournal({storage:journalStorage}),operationAdapter=createFirebaseActiveRecordOperationAdapter({runTransaction:activeFirestoreTransaction,serverTimestamp,actor:{uid:cloudUid,email:cloudEmailKey},environment:'staging',role:'owner'}),conflictAdapter=createFirebaseRecordSyncConflictBackupAdapter({runTransaction:activeFirestoreTransaction,serverTimestamp,actor:{uid:cloudUid,email:cloudEmailKey},environment:'staging',role:'owner'}),failureResume=createRecordSyncActiveFailureResume({environment:'staging',role:cloudRole,recordId:new URLSearchParams(location.search).get('recordSyncActiveFailureResume'),storage:sessionStorage,onDiagnostic:setActiveRecordSyncFailureResumeDiagnostic});
+ activeOwnerControllerEpoch=activationEpoch;
+ activeOwnerResumedEpoch='';
+ activeRecordPageController=createActiveRecordPageController({
+  environment:'staging',
+  role:'owner',
+  deviceId,
+  journal,
+  readDocuments:readActiveRecordDocuments,
+  send:operation=>failureResume.wrapSend(operation,()=>operationAdapter.apply(operation)),
+  persistConflicts:(conflicts,context)=>conflictAdapter.persist(conflicts,context),
+  getLocalDb:()=>deepCopy(window.__danbridgeGetDB()),
+  applyCloudDb:applyActiveOwnerCloudDb,
+  ensureCloudBackup:confirmedDb=>createCloudSafetyBackup(false,confirmedDb),
+  publishRoleViews:async confirmedDb=>{
+   const before=lastPublishedOwnerDB?deepCopy(lastPublishedOwnerDB):null;
+   await Promise.all([
+    getActiveRoleRecordPublishQueue().enqueue({kind:'confirmed',sourceDb:deepCopy(confirmedDb)}),
+    publishLessonMeta(confirmedDb)
+   ]);
+   if(before)queueScheduleChangeNotifications(before,confirmedDb,recordDataHash(confirmedDb));
+   lastPublishedOwnerDB=deepCopy(confirmedDb);
+   ownerBaselineReady=true;
+  },
+  onStatus:status=>{setActiveRecordSyncFailureResumeDiagnostic({state:status?.state||'waiting',counts:status?.counts||{}});handleActiveOwnerControllerStatus(failureResume.wrapOnStatus(status));},
+  saveDelay:120,
+  maxOperations:1000,
+  maxRebases:5
+ });
+ return activeRecordPageController;
+}
+async function acceptActiveOwnerSnapshot(snapshot){
+ const controller=ensureActiveOwnerPageController(snapshot?.activationEpoch),beforeAccept=controller.diagnostics();activeRoleBootstrapSourceDb=deepCopy(snapshot.db);if(localDirtyHash&&!beforeAccept.dirty&&!beforeAccept.inFlight)controller.queueLocalSave();const result=await controller.acceptCloudSnapshot(snapshot),diagnostics=controller.diagnostics();if(!diagnostics.dirty&&!diagnostics.inFlight){lastPublishedOwnerDB=deepCopy(snapshot.db);ownerBaselineReady=true;lastCloudSnapshotHash=snapshot.hash;lastUploadedHash=snapshot.hash}if(activeOwnerResumedEpoch!==snapshot.activationEpoch){activeOwnerResumedEpoch=snapshot.activationEpoch;await controller.resume()}return result;
+}
+function startOwnerActiveRecordRuntime(){
+ if(DANBRIDGE_ENVIRONMENT!=='staging'||cloudRole!=='owner')return false;
+ try{
+  activeRecordStreamAdapter?.stop?.();
+  activeRecordMode='checking';
+  document.body.dataset.activeRecordMode=activeRecordMode;
+  activeRecordStreamAdapter=createFirebaseActiveRecordStreamAdapter({
+   environment:'staging',
+   subscribeDocument:activeFirestoreSubscribeDocument,
+   subscribeCollection:activeFirestoreSubscribeCollection,
+   onApply:acceptActiveOwnerSnapshot,
+   onState:event=>{
+    document.body.dataset.activeRecordState=event.state;
+    if(event.state==='legacy'){
+     activeRecordMode='legacy';
+     document.body.dataset.activeRecordMode=activeRecordMode;
+     subscribeOwnerLegacy();
+     return;
+    }
+    if(event.state==='loading'){
+     activeRecordMode='active-loading';
+     document.body.dataset.activeRecordMode=activeRecordMode;
+     unsubscribeState?.();
+     unsubscribeState=null;
+     return;
+    }
+    if(event.state==='ready'||event.state==='paused'){
+     activeRecordMode='active';
+     document.body.dataset.activeRecordMode=activeRecordMode;
+     activeRecordPageController?.setWriteAllowed(event.state==='ready');
+     unsubscribeState?.();
+     unsubscribeState=null;
+     if(event.state==='ready')queueInitialActiveRoleRecordViews();
+     return;
+    }
+    if(event.state==='blocked'){
+     activeRecordMode='active-blocked';
+     document.body.dataset.activeRecordMode=activeRecordMode;
+     unsubscribeState?.();
+     unsubscribeState=null;
+     persistOwnerSyncRecovery();
+     cloudStatus('逐筆讀取驗證失敗，已封鎖寫入且保留畫面：'+String(event.error||''),'error');
+    }
+   }
+  });
+  activeRecordStreamAdapter.start();
+  return true;
+ }catch(error){
+  activeRecordMode='active-blocked';
+  document.body.dataset.activeRecordMode=activeRecordMode;
+  document.body.dataset.activeRecordState='blocked';
+  persistOwnerSyncRecovery();
+  cloudStatus('無法建立安全逐筆同步，已阻擋寫入：'+String(error?.message||error),'error');
+  return false;
+ }
+}
+async function flushActiveOwnerState(){
+ if(DANBRIDGE_ENVIRONMENT!=='staging'||activeRecordMode==='legacy')return null;if(!activeRecordPageController){cloudStatus('正在等待完整逐筆串流，本機資料已保留。','pending');return{state:'waiting-for-stream'}}const result=await activeRecordPageController.flush();if(result?.state==='complete'&&!activeRecordPageController.diagnostics().dirty){localDirtyHash='';ownerUploadQueued=false;clearOwnerSyncRecovery()}return result;
+}
+
 async function uploadOwnerState(force=false){
  if(cloudRole!=='owner'||applyingCloud)return;
+ if(DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy')return flushActiveOwnerState();
  ownerUploadQueued=true;
  if(ownerUploadInFlight)return;
  if(!navigator.onLine){setOfflineStatus();return}
@@ -2372,17 +2734,30 @@ async function uploadOwnerState(force=false){
 }
 function queueOwnerCloudSave(){
  if(cloudRole!=='owner')return;
+ const nextHash=dataHash(window.__danbridgeGetDB());
+ if(DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy'){
+  const diagnostics=activeRecordPageController?.diagnostics?.()||null,intent=decideOwnerActiveSaveIntent({nextHash,localDirtyHash,lastUploadedHash,diagnostics,applyingCloud});
+  if(intent.action==='ignore-cloud-apply'||intent.action==='noop-confirmed')return;
+  if(intent.action==='coalesce'){ownerUploadQueued=true;persistOwnerSyncRecovery();return}
+  if(intent.action==='recover'){
+   ownerUploadQueued=true;persistOwnerSyncRecovery();activeRecordPageController?.queueLocalSave();cloudStatus(navigator.onLine?'逐筆待同步資料已重新接回永久日誌。':'逐筆待同步資料仍保存在本機；恢復網路後續傳。',navigator.onLine?'pending':'offline');return;
+  }
+ }
  if(!localDirtyHash)ownerRecoveryBaseDB=lastPublishedOwnerDB?deepCopy(lastPublishedOwnerDB):null;
  localMutationVersion++;
- localDirtyHash=dataHash(window.__danbridgeGetDB());
+ localDirtyHash=nextHash;
  persistOwnerSyncRecovery();
  ownerUploadQueued=true;
+ if(DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy'){
+  activeRecordPageController?.queueLocalSave();cloudStatus(navigator.onLine?'逐筆變更與待同步標記已永久保存在本機，正在建立操作日誌…':'逐筆變更與待同步標記已永久保存在本機；恢復網路後建立日誌並續傳。',navigator.onLine?'pending':'offline');return;
+ }
  cloudStatus(navigator.onLine?'變更已儲存，準備同步…':'變更已保存在本機；恢復網路後自動同步。',navigator.onLine?'pending':'offline');
  clearTimeout(syncTimer);syncTimer=setTimeout(()=>uploadOwnerState(),120);
 }
 function lessonMap(rows=[]){return new Map(rows.map(row=>[String(row.id),row]))}
 async function queueSchedulerChanges(){
  if(!cloudCanManageSchedule||applyingCloud)return;
+ if(DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy'&&!activeRoleWriteAllowed){cloudStatus('aa 逐筆寫入尚未安全開放；本機修改已保留，不會送出。','pending');return}
  if(schedulerRecoveryHold){cloudStatus('已進入 aa 救援唯讀鎖定；確認恢復來源前不會上傳或覆蓋資料','pending');return}
  const current=(window.__danbridgeGetDB?.().lessons||[]).map(schedulerSafeLesson),before=lessonMap(schedulerBaselineLessons),after=lessonMap(current),jobs=[];
  for(const id of new Set([...before.keys(),...after.keys()])){
@@ -2407,8 +2782,24 @@ function scheduleSchedulerChanges(){
  schedulerSaveChain=schedulerSaveChain.catch(()=>{}).then(queueSchedulerChanges);
  return schedulerSaveChain;
 }
+function buildSchedulerRequestTarget(beforeDb,data,{viewDb=emptyDB()}={}){
+ const before=deepCopy(beforeDb),after=deepCopy(before),id=String(data?.lessonId||''),operation=String(data?.operation||''),index=(after.lessons||[]).findIndex(lesson=>String(lesson.id)===id),lesson=schedulerSafeLesson(data?.lesson||{});if(!['create','update','delete'].includes(operation)||!id||String(lesson.id||'')!==id)throw new Error('排課異動 identity 不一致');const alreadyApplied=operation==='delete'?index<0:index>=0&&JSON.stringify(schedulerSafeLesson(after.lessons[index]))===JSON.stringify(lesson);if(alreadyApplied)return{before,after,id,lesson,operation,changed:false};if(operation==='delete'){if(index>=0)after.lessons.splice(index,1);return{before,after,id,lesson,operation,changed:true}}if(!(after.students||[]).some(student=>String(student.id)===String(lesson.studentId))){const requestStudent=schedulerSafeStudent(data.student||{}),viewStudent=schedulerSafeStudent((viewDb.students||[]).find(student=>String(student.id)===String(lesson.studentId))||{}),student=requestStudent.id?requestStudent:viewStudent,unchangedOrphanStudent=operation==='update'&&index>=0&&String(after.lessons[index]?.studentId||'')===String(lesson.studentId||''),approvedLegacyCreate=operation==='create'&&SCHEDULER_ACCOUNT_EMAILS.has(String(data.actorEmail||'').trim().toLowerCase())&&String(lesson.studentId||'');if(student.id===String(lesson.studentId)&&String(student.name||'').trim())after.students.push({...student,billing:'hour',rate:0,note:''});else if(approvedLegacyCreate)after.students.push({id:String(lesson.studentId),name:'待補學生資料',status:'在讀',courseType:'1對1',branchIds:lesson.branchId?[String(lesson.branchId)]:[],billing:'hour',rate:0,note:'由舊版 aa 待同步課程保留，請 Owner 補正學生姓名與資料'});else if(!unchangedOrphanStudent)throw new Error('排課異動包含不存在的學生')}if(!lessonTeacherIds(lesson).every(teacherId=>(after.teachers||[]).some(teacher=>String(teacher.id)===teacherId)))throw new Error('排課異動包含不存在的老師');if(index>=0)after.lessons[index]={...after.lessons[index],...lesson};else after.lessons.push({...lesson,paymentStatus:'unpaid',chargeStudent:'yes',payTeacher:'yes',note:''});return{before,after,id,lesson,operation,changed:true};
+}
+async function applyActiveSchedulerRequest(requestRef,data){
+ if(DANBRIDGE_ENVIRONMENT!=='staging'||cloudRole!=='owner'||activeRecordMode!=='active'||!activeRecordPageController)throw Object.assign(new Error('逐筆同步尚未可處理 aa 要求'),{code:'unavailable'});
+ const requestSnapshot=await getDoc(requestRef);if(!requestSnapshot.exists()||requestSnapshot.data()?.status!=='pending')return;
+ const currentData=requestSnapshot.data(),target=buildSchedulerRequestTarget(window.__danbridgeGetDB(),currentData);let confirmed;
+ if(target.changed){
+  applyingCloud=true;try{window.__danbridgeSetDB(deepCopy(target.after));persistCurrentLocalView();window.renderAll?.()}finally{applyingCloud=false}
+  queueOwnerCloudSave();const result=await flushActiveOwnerState();if(!['complete','pending'].includes(result?.state)||!result.readbackDb)throw Object.assign(new Error('排課異動逐筆同步尚未完成'),{code:'unavailable'});confirmed=result.readbackDb;
+ }else{const documents=await readActiveRecordDocuments();confirmed=rebuildFullRecordShadowDb(documents,{environment:'staging'}).db}
+ const confirmedLesson=(confirmed.lessons||[]).find(lesson=>String(lesson.id)===target.id),confirmedApplied=target.operation==='delete'?!confirmedLesson:!!confirmedLesson&&JSON.stringify(schedulerSafeLesson(confirmedLesson))===JSON.stringify(target.lesson);if(!confirmedApplied)throw Object.assign(new Error('排課異動完整讀回尚未確認'),{code:'aborted'});
+ const audit=buildImmutableDataAudit(target.before,target.after),auditRecord=audit?(()=>{audit.eventId=`scheduler-${requestSnapshot.id}`;return immutableAuditRecord(audit)})():null,marked=await runTransaction(cloud,async transaction=>{const snapshots=await Promise.all([transaction.get(requestRef),...(auditRecord?[transaction.get(auditRecord.ref)]:[])]),latest=snapshots[0];if(!latest.exists()||latest.data()?.status!=='pending')return false;if(auditRecord&&!snapshots[1].exists())transaction.set(auditRecord.ref,{...auditRecord.payload,action:`scheduler-schedule-${target.operation}`,targetType:'lesson',targetId:target.id,entityChanges:[...auditRecord.payload.entityChanges,`requested-by:${currentData.actorEmail}`].slice(0,80)});transaction.set(requestRef,{status:'applied',appliedAt:serverTimestamp(),appliedBy:cloudUid},{merge:true});return true});
+ if(marked&&target.changed)queueScheduleChangeNotifications(target.before,target.after,`scheduler-${requestSnapshot.id}`,{uid:currentData.actorUid,name:SCHEDULER_ACCOUNT_EMAILS.has(String(currentData.actorEmail||'').toLowerCase())?'aa':'排課專員'});
+}
 async function applySchedulerRequest(requestRef,data){
  if(cloudRole!=='owner'||data?.status!=='pending')return;
+ if(DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy')return applyActiveSchedulerRequest(requestRef,data);
  const mainRef=doc(cloud,'companies',COMPANY_ID,'data','main'),schedulerViewRef=doc(cloud,'companies',COMPANY_ID,'schedulerViews',String(data.actorEmail||'').trim().toLowerCase());
  let notificationBefore=null,notificationAfter=null;
  await runTransaction(cloud,async transaction=>{
@@ -2449,10 +2840,12 @@ function installCloudSave(){
    return originalSaveDB?.(options);
  };
 }
-function subscribeOwner(){
+function subscribeOwnerLegacy(){
+ if(DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy')return;
  const ref=doc(cloud,'companies',COMPANY_ID,'data','main');
  unsubscribeState?.();
  unsubscribeState=onSnapshot(ref,{includeMetadataChanges:true},async snap=>{
+   if(DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy')return;
    if(snap.metadata.fromCache&&!navigator.onLine)setOfflineStatus();
    const localBest=window.__danbridgeRecoverBestLocalDB?.();
    if(!snap.exists()){
@@ -2504,7 +2897,79 @@ function subscribeOwner(){
    cloudStatus(`雲端資料已更新：學生 ${incoming.students?.length||0}、老師 ${incoming.teachers?.length||0}、課程 ${incoming.lessons?.length||0}`,'ok');
  },err=>{console.error('owner snapshot',err);reportOperationalError(err,{category:'cloud-read',area:'owner-snapshot',retryable:true});cloudStatus('讀取雲端主資料失敗：'+(err.message||err),'error')});
 }
-async function subscribeTeacher(){
+function subscribeOwner(){
+ unsubscribeState?.();unsubscribeState=null;if(DANBRIDGE_ENVIRONMENT==='staging'){startOwnerActiveRecordRuntime();return}activeRecordMode='legacy';subscribeOwnerLegacy();
+}
+function applyTeacherRecordView(raw,{verified=false}={}){
+ if(!verified&&(window.__danbridgeDataScore?.(raw)||0)===0){cloudStatus('老師課表檢視為空；已保留最後可用資料。','error');return}const incoming=filteredTeacherDB(raw,cloudTeacherId);applyingCloud=true;try{window.__danbridgeSetDB(deepCopy(incoming));applyCachedLessonReportsToCurrentDB();persistCurrentLocalView();window.renderAll?.();requestAnimationFrame(()=>window.renderDashboard?.());setTimeout(()=>window.renderDashboard?.(),150)}finally{applyingCloud=false}cloudStatus('老師課表已逐筆同步','ok');
+}
+function applySchedulerRecordView(raw){
+ showSchedulerRecoveryInspector();const incoming=filteredSchedulerDB(raw),serverLessons=lessonMap(incoming.lessons),serverStudents=lessonMap(incoming.students),serverBaselineLessons=deepCopy(incoming.lessons),serverBaselineStudents=deepCopy(incoming.students);let recoveredAtStartup=false;if(!schedulerStartupRecoveryChecked){schedulerStartupRecoveryChecked=true;const local=filteredSchedulerDB(window.__danbridgeGetDB?.()||emptyDB()),localLessons=lessonMap(local.lessons),localStudents=lessonMap(local.students);for(const [id,row] of localLessons)if(JSON.stringify(serverLessons.get(id))!==JSON.stringify(row)){schedulerOptimisticLessons.set(id,deepCopy(row));recoveredAtStartup=true}for(const [id,row] of localStudents)if(JSON.stringify(serverStudents.get(id))!==JSON.stringify(row)){schedulerOptimisticStudents.set(id,deepCopy(row));recoveredAtStartup=true}if(recoveredAtStartup)schedulerRecoveryHold=true}for(const [id,desired] of [...schedulerOptimisticLessons]){const server=serverLessons.get(id);if((desired===null&&!server)||(desired&&JSON.stringify(server)===JSON.stringify(desired))){schedulerOptimisticLessons.delete(id);continue}if(desired===null)serverLessons.delete(id);else serverLessons.set(id,deepCopy(desired))}for(const [id,desired] of [...schedulerOptimisticStudents]){const server=serverStudents.get(id);if((desired===null&&!server)||(desired&&JSON.stringify(server)===JSON.stringify(desired))){schedulerOptimisticStudents.delete(id);continue}if(desired===null)serverStudents.delete(id);else serverStudents.set(id,deepCopy(desired))}incoming.lessons=[...serverLessons.values()];incoming.students=[...serverStudents.values()];schedulerBaselineLessons=recoveredAtStartup?serverBaselineLessons:deepCopy(incoming.lessons);schedulerBaselineStudents=recoveredAtStartup?serverBaselineStudents:deepCopy(incoming.students);applyingCloud=true;try{window.__danbridgeSetDB(deepCopy(incoming));applyCachedLessonReportsToCurrentDB();persistCurrentLocalView();window.renderAll?.()}finally{applyingCloud=false}cloudStatus(schedulerRecoveryHold?'發現 aa 本機與雲端不一致，已唯讀鎖定；請先檢查本機救援資料':'aa 全老師課表已逐筆同步',schedulerRecoveryHold?'pending':'ok');
+}
+function applyBranchManagerRecordView(raw){
+ const incoming=filteredBranchDB(raw,cloudBranchIds);applyingCloud=true;try{window.__danbridgeSetDB(deepCopy(incoming));applyCachedLessonReportsToCurrentDB();persistCurrentLocalView();window.renderAll?.();requestAnimationFrame(()=>window.renderDashboard?.());setTimeout(()=>window.renderDashboard?.(),150)}finally{applyingCloud=false}cloudStatus(`校區資料已逐筆同步：學生 ${incoming.students?.length||0}、老師 ${incoming.teachers?.length||0}、課程 ${incoming.lessons?.length||0}`,'ok');
+}
+function startRoleActiveRecordRuntime(identity,applyView,startLegacy){
+ unsubscribeState?.();
+ unsubscribeState=null;
+ activeRoleStreamAdapter?.stop?.();
+ if(DANBRIDGE_ENVIRONMENT!=='staging'){
+  activeRecordMode='legacy';
+  activeRoleWriteAllowed=true;
+  startLegacy();
+  return;
+ }
+ activeRecordMode='checking';
+ activeRoleWriteAllowed=false;
+ document.body.dataset.activeRecordMode=activeRecordMode;
+ activeRoleStreamAdapter=createFirebaseRoleRecordStreamAdapter({
+  environment:'staging',
+  identity,
+  subscribeDocument:activeFirestoreSubscribeDocument,
+  subscribeCollection:activeFirestoreSubscribeCollection,
+  onApply:async snapshot=>{
+   activeRoleWriteAllowed=snapshot.writeAllowed===true;
+   applyView(snapshot.db,{verified:true,snapshot});
+  },
+  onState:event=>{
+   document.body.dataset.activeRoleRecordState=event.state;
+   if(event.state==='legacy'){
+    activeRecordMode='legacy';
+    activeRoleWriteAllowed=true;
+    document.body.dataset.activeRecordMode=activeRecordMode;
+    startLegacy();
+    return;
+   }
+   if(['loading','waiting'].includes(event.state)){
+    activeRecordMode='active-loading';
+    activeRoleWriteAllowed=false;
+    document.body.dataset.activeRecordMode=activeRecordMode;
+    unsubscribeState?.();
+    unsubscribeState=null;
+    return;
+   }
+   if(event.state==='ready'||event.state==='paused'){
+    activeRecordMode='active';
+    activeRoleWriteAllowed=event.state==='ready';
+    document.body.dataset.activeRecordMode=activeRecordMode;
+    unsubscribeState?.();
+    unsubscribeState=null;
+    if(activeRoleWriteAllowed&&cloudCanManageSchedule&&(schedulerOptimisticLessons.size||schedulerOptimisticStudents.size))scheduleSchedulerChanges();
+    return;
+   }
+   if(event.state==='blocked'){
+    activeRecordMode='active-blocked';
+    activeRoleWriteAllowed=false;
+    document.body.dataset.activeRecordMode=activeRecordMode;
+    unsubscribeState?.();
+    unsubscribeState=null;
+    cloudStatus('角色逐筆資料驗證失敗，已保留畫面並封鎖寫入：'+String(event.error||''),'error');
+   }
+  }
+ });
+ activeRoleStreamAdapter.start();
+}
+async function subscribeTeacherLegacy(){
  if(!cloudTeacherId)throw new Error('老師帳號尚未綁定 teacherId。');
  if(!cloudEmailKey)throw new Error('無法取得老師 Gmail。');
  // 老師檢視以 Gmail 作為文件 ID：老闆可在老師首次登入前就建立與更新。
@@ -2539,7 +3004,11 @@ async function subscribeTeacher(){
  });
 }
 
-async function subscribeSchedulerTeacher(){
+async function subscribeTeacher(){
+ if(!cloudTeacherId||!cloudEmailKey)throw new Error('老師帳號尚未完成綁定。');startRoleActiveRecordRuntime({email:cloudEmailKey,kind:'teacher',teacherId:cloudTeacherId,branchIds:[]},applyTeacherRecordView,subscribeTeacherLegacy);
+}
+
+async function subscribeSchedulerTeacherLegacy(){
  if(!cloudTeacherId||!cloudEmailKey)throw new Error('aa 排課帳號尚未完成綁定。');
  const ref=doc(cloud,'companies',COMPANY_ID,'schedulerViews',cloudEmailKey);unsubscribeState?.();
  unsubscribeState=onSnapshot(ref,{includeMetadataChanges:true},snap=>{
@@ -2561,13 +3030,17 @@ async function subscribeSchedulerTeacher(){
  },e=>{console.error('Scheduler view failed',e);cloudStatus('aa 課表同步失敗：'+(e.message||e),'error')});
 }
 
+async function subscribeSchedulerTeacher(){
+ if(!cloudTeacherId||!cloudEmailKey)throw new Error('aa 排課帳號尚未完成綁定。');startRoleActiveRecordRuntime({email:cloudEmailKey,kind:'scheduler',teacherId:cloudTeacherId,branchIds:[]},applySchedulerRecordView,subscribeSchedulerTeacherLegacy);
+}
+
 function revokeCurrentRoleAccess(message){
  applyingCloud=true;window.__danbridgeSetDB(emptyDB());window.renderAll?.();applyingCloud=false;
  cloudStatus(message,'error');setTimeout(()=>signOut(auth).catch(e=>console.error('forced role sign-out failed',e)),0);
 }
 function subscribeRoleAccessGuard(){
  unsubscribeAccessGuard?.();unsubscribeAccessGuard=null;
- if(cloudRole==='owner'||!cloudEmailKey)return;
+ if(!cloudEmailKey||(cloudRole==='owner'&&cloudEmailKey===OWNER_EMAIL))return;
  const accessRef=doc(cloud,'companyAccess',cloudEmailKey);
  unsubscribeAccessGuard=onSnapshot(accessRef,snap=>{
    const access=snap.exists()?snap.data()||{}:null;
@@ -2576,7 +3049,7 @@ function subscribeRoleAccessGuard(){
  },e=>{console.error('role access guard failed',e);reportOperationalError(e,{category:'cloud-read',area:'access-guard',retryable:true});cloudStatus('權限狀態暫時無法確認，系統正在重新連線。','pending')});
 }
 
-async function subscribeBranchManager(){
+async function subscribeBranchManagerLegacy(){
  if(!cloudEmailKey||!cloudBranchIds.length)throw new Error('校區管理者尚未綁定校區。');
  unsubscribeState?.();
  // 直接監聽自己的 companyAccess 文件。此路徑同時保存角色與 scopedDb，
@@ -2617,6 +3090,10 @@ async function subscribeBranchManager(){
  });
 }
 
+async function subscribeBranchManager(){
+ if(!cloudEmailKey||!cloudTeacherId||!cloudBranchIds.length)throw new Error('校區管理者尚未完成老師與校區綁定。');startRoleActiveRecordRuntime({email:cloudEmailKey,kind:'branch_manager',teacherId:cloudTeacherId,branchIds:[...new Set(cloudBranchIds.map(String))].sort()},applyBranchManagerRecordView,subscribeBranchManagerLegacy);
+}
+
 
 
 window.addEventListener('offline',()=>setOfflineStatus());
@@ -2630,11 +3107,11 @@ installClassFocusMode();
 installBranchManagerAccessEvents();
 installRoleInteractionGuards();
 onAuthStateChanged(auth,async user=>{
- unsubscribeState?.();unsubscribeState=null;unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;scheduleNotificationDocuments=[];lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();roleViewPublishSourceDB=null;
+ unsubscribeState?.();unsubscribeState=null;stopActiveRecordRuntimes();unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;scheduleNotificationDocuments=[];lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();roleViewPublishSourceDB=null;
  unsubscribeAccessGuard?.();unsubscribeAccessGuard=null;
  if(!user){lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);clearTimeout(dailyBackupTimer);clearTimeout(schedulerRequestRetryTimer);clearTimeout(schedulerUploadRetryTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudCanManageSchedule=false;schedulerBaselineLessons=[];schedulerBaselineStudents=[];schedulerSaveChain=Promise.resolve();schedulerOptimisticLessons=new Map();schedulerOptimisticStudents=new Map();schedulerUploadRetryCount=0;schedulerStartupRecoveryChecked=false;schedulerRecoveryHold=false;schedulerRequestQueue=[];schedulerRequestQueueIds=new Set();schedulerQuarantinedRequestIds=new Set();schedulerAppliedRequestCount=0;schedulerRequestWorkerActive=false;cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';document.body.classList.remove('wendy-teacher-role');window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true,canManageSchedule:false});showCloudLogin();cloudStatus('尚未登入');return}
  try{
-   cloudStatus('正在載入權限…');const profile=await ensureProfile(user);try{await recordSuccessfulLogin(user,profile)}catch(e){console.warn('最後登入時間更新失敗：',e);reportOperationalError(e,{category:'cloud-write',area:'access-guard',retryable:true})}applyRoleUI(profile,user);showCloudApp();
+   cloudStatus('正在載入權限…');const profile=await loadSignedInProfile(user);try{await recordSuccessfulLogin(user,profile)}catch(e){console.warn('最後登入時間更新失敗：',e);reportOperationalError(e,{category:'cloud-write',area:'access-guard',retryable:true})}applyRoleUI(profile,user);showCloudApp();
    if(profile.role==='owner'){subscribeOwner();subscribeSchedulerRequests();setTimeout(()=>{renderCloudUserManager();renderBranchManagerAccess()},0)}else if(profile.role==='teacher'&&profile.canManageSchedule===true)subscribeSchedulerTeacher();else if(profile.role==='teacher')subscribeTeacher();else if(profile.role==='branch_manager')subscribeBranchManager();else throw new Error('不支援的角色：'+profile.role);subscribeRoleAccessGuard();subscribeLessonReports();subscribeScheduleNotifications();
  }catch(e){console.error(e);await signOut(auth);showCloudLogin();showCloudLoginError(e.message);cloudStatus(e.message,'error')}
 });

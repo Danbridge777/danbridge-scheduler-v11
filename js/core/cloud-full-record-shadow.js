@@ -1,4 +1,5 @@
 import {SHARDED_DB_COLLECTION_KEYS} from './cloud-sharded-store.js';
+import {assertChangeRecordIdentity,buildChangeRecordId} from './cloud-change-record-identity.js';
 
 export const FULL_RECORD_COLLECTIONS=Object.freeze([...SHARDED_DB_COLLECTION_KEYS]);
 export const FULL_RECORD_SHADOW_SCHEMA='danbridge-full-record-shadow-v1';
@@ -7,7 +8,6 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const stable=value=>Array.isArray(value)?value.map(stable):(value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value);
 const fingerprint=value=>JSON.stringify(stable(value));
 const validId=value=>{const id=String(value??'');return id&&id.trim()===id&&!id.includes('/')&&id!=='.'&&id!=='..'&&!/^__.*__$/.test(id)&&new TextEncoder().encode(id).length<=1500};
-function shortHash(value){let hash=2166136261;for(const byte of new TextEncoder().encode(fingerprint(value))){hash^=byte;hash=Math.imul(hash,16777619)}return(hash>>>0).toString(16).padStart(8,'0')}
 function materialize(collection,rows){
  if(!Array.isArray(rows))throw new Error(`${collection} 必須是陣列`);
  // Legacy changes are displayed newest-first. Store them oldest-first so a new
@@ -15,7 +15,7 @@ function materialize(collection,rows){
  const orderedRows=collection==='changes'?[...rows].reverse():rows;
  const seen=new Set();return orderedRows.map((record,index)=>{
   if(!record||typeof record!=='object'||Array.isArray(record))throw new Error(`${collection} 第 ${index+1} 筆格式無效`);
-  const recordId=collection==='changes'?`seq_${String(index).padStart(8,'0')}_${shortHash(record)}`:String(record.id??'');
+  const recordId=collection==='changes'?buildChangeRecordId(index,record):String(record.id??'');
   if(!validId(recordId)||seen.has(recordId))throw new Error(`${collection} 包含無效或重複 ID：${recordId}`);seen.add(recordId);
   return{recordId,record:clone(record),recordIndex:collection==='changes'?index:null};
  });
@@ -26,7 +26,7 @@ function readCurrent(documentsByCollection,environment='staging'){
  if(!['staging','production'].includes(environment))throw new Error('全資料影子環境無效');
  const active={},revisions={},tombstones={};
  for(const collection of FULL_RECORD_COLLECTIONS){active[collection]=new Map();revisions[collection]={};tombstones[collection]=new Map();const seen=new Set();
-  for(const row of documentsByCollection?.[collection]??[]){const id=String(row?.id??''),data=row?.data,changeValid=collection!=='changes'||(Number.isSafeInteger(data?.recordIndex)&&data.recordIndex>=0&&id===`seq_${String(data.recordIndex).padStart(8,'0')}_${shortHash(data.record)}`),identified=collection==='changes'||String(data?.record?.id??'')===id;if(!(validId(id)&&!seen.has(id)&&data&&data.schema===FULL_RECORD_SHADOW_SCHEMA&&data.companyId==='danbridge'&&data.collection===collection&&data.recordId===id&&data.environment===environment&&Number.isSafeInteger(data.revision)&&data.revision>=1&&typeof data.deleted==='boolean'&&changeValid&&identified))throw new Error(`${collection}/${id} 全資料影子格式無效`);seen.add(id);revisions[collection][id]=data.revision;(data.deleted?tombstones[collection]:active[collection]).set(id,data)}
+  for(const row of documentsByCollection?.[collection]??[]){const id=String(row?.id??''),data=row?.data;let changeValid=true;if(collection==='changes'){try{assertChangeRecordIdentity({recordIndex:data?.recordIndex,recordId:id,record:data?.record})}catch{changeValid=false}}const identified=collection==='changes'||String(data?.record?.id??'')===id;if(!(validId(id)&&!seen.has(id)&&data&&data.schema===FULL_RECORD_SHADOW_SCHEMA&&data.companyId==='danbridge'&&data.collection===collection&&data.recordId===id&&data.environment===environment&&Number.isSafeInteger(data.revision)&&data.revision>=1&&typeof data.deleted==='boolean'&&changeValid&&identified))throw new Error(`${collection}/${id} 全資料影子格式無效`);seen.add(id);revisions[collection][id]=data.revision;(data.deleted?tombstones[collection]:active[collection]).set(id,data)}
  }
  return{active,revisions,tombstones};
 }
@@ -57,5 +57,6 @@ export function verifyFullRecordShadowCandidate(documentsByCollection,targetDb,{
  for(const collection of FULL_RECORD_COLLECTIONS)for(const row of documentsByCollection?.[collection]??[]){
   if(row?.data?.deleted===true)continue;const sourceHash=String(row?.data?.sourceHash||'');if(!sourceHash)throw new Error(`${collection}/${String(row?.id??'')} 缺少 sourceHash`);activeSourceHashCount++;sourceHashes.add(sourceHash);if(sourceHash===expectedSourceHash)matchingSourceHashCount++;
  }
- return{...verified,sourceHash:expectedSourceHash,collectionCount:FULL_RECORD_COLLECTIONS.length,activeSourceHashCount,matchingSourceHashCount,distinctSourceHashCount:sourceHashes.size,candidateVerified:true};
+ if(activeSourceHashCount!==verified.activeCount)throw new Error('逐筆候選有效文件 sourceHash 計數不一致');
+ return{...verified,sourceHash:expectedSourceHash,collectionCount:FULL_RECORD_COLLECTIONS.length,activeSourceHashCount,matchingSourceHashCount,historicalSourceHashCount:activeSourceHashCount-matchingSourceHashCount,distinctSourceHashCount:sourceHashes.size,candidateVerified:true};
 }

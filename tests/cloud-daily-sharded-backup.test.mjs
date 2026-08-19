@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {FULL_RECORD_COLLECTIONS} from '../js/core/cloud-full-record-shadow.js';
+import {dailyBackupChunkCore,prepareDailyShardedBackup,sealDailyShardedBackup,verifyDailyShardedBackupReadback} from '../js/core/cloud-daily-sharded-backup.js';
+
+const db=()=>{const value=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]));value.students=[{id:'s1',name:'A'}];value.teachers=[{id:'t1',name:'T'}];value.lessons=Array.from({length:1000},(_,index)=>({id:`l${index}`,studentId:'s1',teacherId:'t1',note:'x'.repeat(200)}));return value};
+const prepare=()=>prepareDailyShardedBackup(db(),{day:'2026-08-15',environment:'staging',maxChunkBytes:50000});
+
+test('超過單一文件容量的每日資料會拆片、完整重組並最後才封成 verified',()=>{const plan=prepare();assert.ok(plan.chunks.length>1);assert.ok(plan.chunks.every(row=>JSON.stringify(row).length<60000));const readback=verifyDailyShardedBackupReadback(plan.manifest,plan.chunks),sealed=sealDailyShardedBackup(plan.manifest,readback,{verifiedBy:'owner-1',verifiedByEmail:'owner@gmail.com'});assert.deepEqual(readback.db,db());assert.equal(sealed.state,'verified');assert.equal(sealed.verifiedHash,sealed.sourceHash)});
+test('缺片、多片、重複、內容變造與 manifest 摘要偏差全部拒絕',()=>{const plan=prepare();assert.throws(()=>verifyDailyShardedBackupReadback(plan.manifest,plan.chunks.slice(1)),/分片數/);assert.throws(()=>verifyDailyShardedBackupReadback(plan.manifest,[...plan.chunks,plan.chunks[0]]),/分片數|重複/);const changed=structuredClone(plan.chunks);changed[0].items[0]={...changed[0].items[0],forged:true};assert.throws(()=>verifyDailyShardedBackupReadback(plan.manifest,changed),/雜湊|hash/);assert.throws(()=>verifyDailyShardedBackupReadback({...plan.manifest,counts:{...plan.manifest.counts,lessons:999}},plan.chunks),/摘要/)});
+test('分片與 manifest 多餘欄位、稽核欄位只出現一部分及未讀回都 fail closed',()=>{const plan=prepare();assert.throws(()=>dailyBackupChunkCore({...plan.chunks[0],extra:true}),/欄位/);assert.throws(()=>dailyBackupChunkCore({...plan.chunks[0],createdAt:'x'}),/稽核/);assert.throws(()=>verifyDailyShardedBackupReadback({...plan.manifest,extra:true},plan.chunks),/欄位/);assert.throws(()=>sealDailyShardedBackup(plan.manifest,null,{verifiedBy:'owner',verifiedByEmail:'owner@gmail.com'}),/禁止封存/)});

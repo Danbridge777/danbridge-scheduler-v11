@@ -1,0 +1,19 @@
+import {buildOpenRecordSyncCandidateControl,reopenRecordSyncCandidateControl,sealRecordSyncCandidateControl,assertRecordSyncCandidateControl} from './cloud-record-sync-candidate-control.js';
+
+const valueOf=snapshot=>typeof snapshot?.exists==='function'?(snapshot.exists()?snapshot.data():null):(snapshot?.exists?snapshot.data:null);
+
+export function createFirebaseRecordSyncCandidateAdapter({getDocument,runTransaction,serverTimestamp,actor,environment='staging',role}={}){
+ if(typeof getDocument!=='function'||typeof runTransaction!=='function'||typeof serverTimestamp!=='function')throw new Error('逐筆候選封存 adapter 注入介面不完整');
+ const email=String(actor?.email||'').trim().toLowerCase(),guard=()=>{if(environment!=='staging'||role!=='owner'||!String(actor?.uid||'').trim()||!email)throw new Error('逐筆候選封存只允許 staging Owner')},candidatePath='stagingRecordSyncCandidateControls/danbridge',controlPath='stagingRecordSyncControls/danbridge',mainPath='companies/danbridge/data/main';
+ const persisted=core=>({...core,persistedAt:serverTimestamp(),updatedBy:actor.uid,updatedByEmail:email});
+ return{enabled:environment==='staging'&&role==='owner',async read(){guard();const snapshot=await getDocument(candidatePath),value=valueOf(snapshot);return value?assertRecordSyncCandidateControl(value):null},async open({candidateEpoch,legacyVersionHash,createdAt}={}){
+  guard();return runTransaction(async transaction=>{const [candidateSnapshot,controlSnapshot,mainSnapshot]=await Promise.all([transaction.get(candidatePath),transaction.get(controlPath),transaction.get(mainPath)]),existing=valueOf(candidateSnapshot),active=valueOf(controlSnapshot),main=valueOf(mainSnapshot);if(active)throw new Error('逐筆同步已啟用，禁止重新開啟候選');if(main?.clientHash!==legacyVersionHash)throw new Error('逐筆候選開啟時 legacy 版本已改變');let next;
+   if(existing){const current=assertRecordSyncCandidateControl(existing);if(current.state==='open'){if(current.candidateEpoch!==candidateEpoch||current.legacyVersionHash!==legacyVersionHash||current.createdAt!==createdAt)throw new Error('逐筆候選已有不同 open identity');return{kind:'duplicate',write:false,control:current,path:candidatePath}}next=reopenRecordSyncCandidateControl({control:current,candidateEpoch,legacyVersionHash,createdAt});
+   }else next=buildOpenRecordSyncCandidateControl({candidateEpoch,legacyVersionHash,createdAt});
+   transaction.set(candidatePath,persisted(next));return{kind:existing?'reopened':'opened',write:true,control:next,path:candidatePath};
+  })
+ },async seal({candidateEpoch,legacyVersionHash,recordDataHash,documentCount,activeCount,tombstoneCount,sealedAt}={}){
+  guard();return runTransaction(async transaction=>{const [candidateSnapshot,controlSnapshot,mainSnapshot]=await Promise.all([transaction.get(candidatePath),transaction.get(controlPath),transaction.get(mainPath)]),existing=valueOf(candidateSnapshot),active=valueOf(controlSnapshot),main=valueOf(mainSnapshot);if(active)throw new Error('逐筆同步已啟用，禁止再次封存候選');if(main?.clientHash!==legacyVersionHash)throw new Error('逐筆候選封存時 legacy 版本已改變');const current=assertRecordSyncCandidateControl(existing);if(current.state==='sealed'){if(current.candidateEpoch!==candidateEpoch||current.legacyVersionHash!==legacyVersionHash||current.recordDataHash!==recordDataHash||current.documentCount!==documentCount||current.activeCount!==activeCount||current.tombstoneCount!==tombstoneCount)throw new Error('逐筆候選已有不同 sealed identity');return{kind:'duplicate',write:false,control:current,path:candidatePath}}if(current.candidateEpoch!==candidateEpoch||current.legacyVersionHash!==legacyVersionHash)throw new Error('逐筆候選 open identity 已改變');const next=sealRecordSyncCandidateControl({control:current,currentLegacyVersionHash:legacyVersionHash,recordDataHash,documentCount,activeCount,tombstoneCount,sealedAt});transaction.set(candidatePath,persisted(next));return{kind:'sealed',write:true,control:next,path:candidatePath};
+  })
+ }};
+}

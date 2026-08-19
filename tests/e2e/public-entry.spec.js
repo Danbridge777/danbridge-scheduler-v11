@@ -1,20 +1,23 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.97';
+const CLOUD_RELEASE = '20.26.116';
 const APP_SHELL_RELEASE = '20.26.27';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
 const ROLE_UX_RELEASE = '20.26.4';
 const ROLE_UX_STYLE_RELEASE = '20.25.10';
-const PWA_RELEASE = '20.26.97';
+const PWA_RELEASE = '20.26.113';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
 const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.5';
 const SCHEDULER_UI_RELEASE = '20.26.8';
 const PREMIUM_CONTROLS_RELEASE = '20.25.10';
+const PERMANENT_HISTORY_RELEASE = '20.26.98';
+const APPLICATION_FEATURES_RELEASE = '20.26.98';
+const SCHEDULING_EFFICIENCY_RELEASE = '20.26.98';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
   await page.route('https://www.gstatic.com/**', route => route.abort());
@@ -30,9 +33,9 @@ test('signed-out entry keeps private application content isolated', async ({ pag
 test('永久操作日誌在重新整理後仍可從 IndexedDB 完整讀回',async({page},testInfo)=>{
   await page.goto('/index.html',{waitUntil:'domcontentloaded'});
   const key=`staging:e2e@example.com:${testInfo.project.name}-${Date.now()}`,rows=[{schema:'danbridge-operation-journal-v1',operationId:'device:1',status:'pending',attempts:0,operation:{operationId:'device:1',recordId:'lesson-1'}}];
-  await page.evaluate(async({key,rows})=>{const{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.97'),storage=createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key});await storage.save(rows);sessionStorage.setItem('e2eJournalKey',key)},{key,rows});
+  await page.evaluate(async({key,rows})=>{const{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.106'),storage=createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key});await storage.save(rows);sessionStorage.setItem('e2eJournalKey',key)},{key,rows});
   await page.reload({waitUntil:'domcontentloaded'});
-  const readback=await page.evaluate(async()=>{const key=sessionStorage.getItem('e2eJournalKey'),{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.97');return createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key}).load()});
+  const readback=await page.evaluate(async()=>{const key=sessionStorage.getItem('e2eJournalKey'),{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.106');return createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key}).load()});
   expect(readback).toEqual(rows);
 });
 
@@ -68,6 +71,9 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/core/pwa-installation.js?v=${PWA_RELEASE}`);
   expect(sources).toContain(`./js/core/ui-language.js?v=${LANGUAGE_RELEASE}`);
   expect(sources).toContain(`./js/modules/calendar/scheduler-ui.js?v=${SCHEDULER_UI_RELEASE}`);
+  expect(sources).toContain(`./js/core/permanent-operation-history.js?v=${PERMANENT_HISTORY_RELEASE}`);
+  expect(sources).toContain(`./js/modules/application-and-business-features.js?v=${APPLICATION_FEATURES_RELEASE}`);
+  expect(sources).toContain(`./js/app/v20-scheduling-efficiency.js?v=${SCHEDULING_EFFICIENCY_RELEASE}`);
   const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(elements => elements.map(element => element.getAttribute('href')));
   expect(styles).toContain(`./css/core/73-v20014-role-responsive-ux.css?v=${ROLE_UX_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/77-pwa-install-and-update.css?v=${PWA_STYLE_RELEASE}`);
@@ -77,6 +83,35 @@ test('critical teacher and finance resources load the current release', async ({
   expect(manifest).toBe('./manifest.webmanifest');
   const appleIcon = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
   expect(appleIcon).toBe('./icon-192.png?v=20.18.1');
+});
+
+test('刪除課程可沿用同一 ID 重建且永久日誌只追加不覆寫',async({page})=>{
+  await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+  const result=await page.evaluate(()=>{
+    document.body.classList.remove('auth-locked','teacher-cloud-role','branch-manager-cloud-role','scheduler-cloud-role');
+    window.DanbridgeAccess.setContext({role:'owner',email:'owner@example.com',canManageSchedule:false});
+    window.currentCloudRole=()=> 'owner';
+    const lesson={id:'stable-lesson-id',date:'2026-08-16',start:'09:15',end:'10:15',studentId:'student-1',teacherId:'teacher-1',teacherIds:['teacher-1'],title:'PERMANENT_HISTORY_TEST',status:'未上課'};
+    const deletion={id:'delete-change-id',at:'2026-08-15T09:00:00.000Z',type:'刪除課程',lessonId:lesson.id,studentId:lesson.studentId,actorName:'Daniel',actorEmail:'owner@example.com',before:structuredClone(lesson),after:null};
+    db={...db,students:[{id:'student-1',name:'Student'}],teachers:[{id:'teacher-1',name:'Teacher'}],lessons:[],changes:[structuredClone(deletion)]};
+    const originalSave=window.saveDB;window.saveDB=()=>{};
+    undoRecentChange(deletion.id);
+    const revived=structuredClone(db.lessons),afterRevive=structuredClone(db.changes),inverseId=afterRevive[0].id;
+    undoRecentChange(inverseId);
+    const afterSecond=structuredClone(db.changes),activeAfterSecond=window.DanbridgePermanentOperationHistory.reversedChangeIds(afterSecond);
+    window.saveDB=originalSave;
+    return{revived,afterRevive,afterSecond,activeAfterSecond:[...activeAfterSecond],original:deletion};
+  });
+  expect(result.revived).toHaveLength(1);
+  expect(result.revived[0].id).toBe('stable-lesson-id');
+  expect(result.afterRevive).toHaveLength(2);
+  expect(result.afterRevive[1]).toEqual(result.original);
+  expect(result.afterRevive[0].undoOfChangeId).toBe('delete-change-id');
+  expect(result.afterRevive[0].before).toBeNull();
+  expect(result.afterRevive[0].after.id).toBe('stable-lesson-id');
+  expect(result.afterSecond).toHaveLength(3);
+  expect(result.afterSecond[2]).toEqual(result.original);
+  expect(result.activeAfterSecond).not.toContain('delete-change-id');
 });
 
 test('large schedule notification table stays on one aligned row', async ({ page }) => {
@@ -105,13 +140,16 @@ test('owner lesson navigation paints before the heavy table render', async ({ pa
     window.currentCloudRole=()=> 'owner';
     const original=window.renderLessons;let rendered=false;
     window.renderLessons=()=>{const start=performance.now();while(performance.now()-start<80){}rendered=true};
-    const start=performance.now();window.switchTab('lessons');const elapsed=performance.now()-start;
+    window.switchTab('lessons');
     const immediate=document.getElementById('lessons').classList.contains('active')&&document.querySelector('nav button[data-tab="lessons"]').classList.contains('active');
-    await new Promise(resolve=>setTimeout(resolve,140));window.renderLessons=original;
-    return{elapsed,immediate,rendered};
+    const renderedDuringSwitch=rendered;
+    const deadline=Date.now()+1000;
+    while(!rendered&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,25));
+    window.renderLessons=original;
+    return{immediate,renderedDuringSwitch,rendered};
   });
   expect(result.immediate).toBe(true);
-  expect(result.elapsed).toBeLessThan(30);
+  expect(result.renderedDuringSwitch).toBe(false);
   expect(result.rendered).toBe(true);
 });
 
