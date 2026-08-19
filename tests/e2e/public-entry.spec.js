@@ -138,18 +138,24 @@ test('owner lesson navigation paints before the heavy table render', async ({ pa
   const result=await page.evaluate(async()=>{
     document.body.classList.remove('auth-locked','teacher-cloud-role','branch-manager-cloud-role','scheduler-cloud-role');
     window.currentCloudRole=()=> 'owner';
-    const original=window.renderLessons;let rendered=false;
-    window.renderLessons=()=>{const start=performance.now();while(performance.now()-start<80){}rendered=true};
-    window.switchTab('lessons');
-    const immediate=document.getElementById('lessons').classList.contains('active')&&document.querySelector('nav button[data-tab="lessons"]').classList.contains('active');
-    const renderedDuringSwitch=rendered;
-    const deadline=Date.now()+1000;
-    while(!rendered&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,25));
-    window.renderLessons=original;
-    return{immediate,renderedDuringSwitch,rendered};
+    const originalRender=window.renderLessons,originalFrame=window.requestAnimationFrame,frames=[];let rendered=false;
+    window.renderLessons=()=>{rendered=true};
+    window.requestAnimationFrame=callback=>{frames.push(callback);return frames.length};
+    try{
+      window.switchTab('lessons');
+      const immediate=document.getElementById('lessons').classList.contains('active')&&document.querySelector('nav button[data-tab="lessons"]').classList.contains('active');
+      const renderedDuringSwitch=rendered,queuedFrames=frames.length;
+      await new Promise(resolve=>setTimeout(resolve,0));
+      const renderedBeforeFrame=rendered;
+      frames.splice(0).forEach(callback=>callback(performance.now()));
+      await new Promise(resolve=>setTimeout(resolve,0));
+      return{immediate,renderedDuringSwitch,renderedBeforeFrame,queuedFrames,rendered};
+    }finally{window.renderLessons=originalRender;window.requestAnimationFrame=originalFrame}
   });
   expect(result.immediate).toBe(true);
   expect(result.renderedDuringSwitch).toBe(false);
+  expect(result.renderedBeforeFrame).toBe(false);
+  expect(result.queuedFrames).toBeGreaterThan(0);
   expect(result.rendered).toBe(true);
 });
 
@@ -158,15 +164,24 @@ test('every owner navigation and dashboard shortcut responds before heavy render
   const result=await page.evaluate(async()=>{
     document.body.classList.remove('auth-locked','teacher-cloud-role','branch-manager-cloud-role','scheduler-cloud-role');
     window.DanbridgeAccess.setContext({role:'owner',canManageSchedule:false});window.currentCloudRole=()=> 'owner';
-    const renderNames=['renderDashboard','renderStudents','renderCalendar','renderLessons','renderFinance'],originals={};
-    renderNames.forEach(name=>{originals[name]=window[name];window[name]=()=>{const start=performance.now();while(performance.now()-start<80){}}});
-    const tabs=['dashboard','students','teachers','calendar','lessons','makeups','camps','finance','data','security'],checks=[];
-    for(const tab of tabs){const start=performance.now();window.switchTab(tab);checks.push({tab,elapsed:performance.now()-start,section:document.getElementById(tab).classList.contains('active'),button:document.querySelector(`nav button[data-tab="${tab}"]`).classList.contains('active')})}
-    const shortcutTargets=[...document.querySelectorAll('#dashboard button[onclick*="switchTab"]')].map(button=>button.getAttribute('onclick').match(/switchTab\('([^']+)'\)/)?.[1]).filter(Boolean);
-    renderNames.forEach(name=>window[name]=originals[name]);await new Promise(resolve=>setTimeout(resolve,120));
-    return{checks,shortcutTargets};
+    const renderNames=['renderDashboard','renderStudents','renderCalendar','renderLessons','renderFinance'],rendererByTab={dashboard:'renderDashboard',students:'renderStudents',calendar:'renderCalendar',lessons:'renderLessons',finance:'renderFinance'},originals={},originalFrame=window.requestAnimationFrame,frames=[],renderCalls=[];
+    renderNames.forEach(name=>{originals[name]=window[name];window[name]=()=>{renderCalls.push(name)}});
+    window.requestAnimationFrame=callback=>{frames.push(callback);return frames.length};
+    try{
+      const tabs=['dashboard','students','teachers','calendar','lessons','makeups','camps','finance','data','security'],checks=[];
+      for(const tab of tabs){
+        const before=renderCalls.length,expectedRenderer=rendererByTab[tab]??null;window.switchTab(tab);
+        const section=document.getElementById(tab).classList.contains('active'),button=document.querySelector(`nav button[data-tab="${tab}"]`).classList.contains('active'),renderedDuringSwitch=renderCalls.length!==before,queuedFrames=frames.length;
+        frames.splice(0).forEach(callback=>callback(performance.now()));await new Promise(resolve=>setTimeout(resolve,0));
+        const callsAfterFrame=renderCalls.slice(before);
+        checks.push({tab,section,button,renderedDuringSwitch,frameScheduled:!expectedRenderer||queuedFrames>0,rendererCorrect:expectedRenderer?callsAfterFrame.length>0&&callsAfterFrame.every(name=>name===expectedRenderer):callsAfterFrame.length===0,callsAfterFrame});
+      }
+      const shortcutTargets=[...document.querySelectorAll('#dashboard button[onclick*="switchTab"]')].map(button=>button.getAttribute('onclick').match(/switchTab\('([^']+)'\)/)?.[1]).filter(Boolean);
+      return{checks,shortcutTargets};
+    }finally{renderNames.forEach(name=>window[name]=originals[name]);window.requestAnimationFrame=originalFrame}
   });
-  expect(result.checks.every(item=>item.section&&item.button&&item.elapsed<30)).toBe(true);
+  const failedChecks=result.checks.filter(item=>!item.section||!item.button||item.renderedDuringSwitch||!item.frameScheduled||!item.rendererCorrect);
+  expect(failedChecks,JSON.stringify(result.checks)).toEqual([]);
   expect(result.shortcutTargets.sort()).toEqual(['calendar','calendar','calendar','lessons','makeups'].sort());
 });
 
