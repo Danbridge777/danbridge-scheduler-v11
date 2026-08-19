@@ -8,7 +8,7 @@
 - 執行 `git diff --check`。
 - 執行 `npm test`。
 - 執行 `npm run test:rules`；只允許使用 `danbridge-rules-test` Emulator。
-- 執行 `npm audit --audit-level=low`。
+- 執行 `npm run test:dependency-audit`；production 相依套件必須為 0 漏洞，dev-only 例外只接受工具內逐欄鎖定的既審 advisory。
 - 涉及畫面或同步時，先部署 staging 並完成主要操作煙霧測試。
 
 ## 建立版本

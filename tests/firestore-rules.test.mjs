@@ -14,24 +14,39 @@ import {
   getDoc,
   getDocs,
   onSnapshot,
+  query,
   runTransaction,
   serverTimestamp,
   setDoc,
-  updateDoc
+  updateDoc,
+  where
 } from 'firebase/firestore';
 import {buildRecordShadowRunManifest,verifyRecordShadowRun} from '../js/core/cloud-record-shadow-run.js';
 import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback} from '../js/core/cloud-immutable-migration-backup.js';
-import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest,buildAtomicRecordActivation} from '../js/core/cloud-record-activation.js';
+import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest as buildLegacyRoleViewCandidateManifest,buildAtomicRecordActivation} from '../js/core/cloud-record-activation.js';
 import {FULL_RECORD_COLLECTIONS} from '../js/core/cloud-full-record-shadow.js';
 import {sha256Canonical} from '../js/core/cloud-immutable-migration-backup.js';
 import {buildStagingLivePreflight} from '../js/core/cloud-staging-live-preflight.js';
 import {buildStagingLiveActivationControl} from '../js/core/cloud-staging-live-activation.js';
+import {createFirebaseLiveRecordOperationAdapter} from '../js/core/firebase-live-record-operation-adapter.js';
+import {buildRecordSyncActivationManifest,buildActiveRecordSyncControl} from '../js/core/cloud-record-sync-control.js';
+import {buildRecordSyncRoleEvidence,RECORD_SYNC_ROLE_SCENARIOS} from '../js/core/cloud-record-sync-role-evidence.js';
+import {buildOpenRecordSyncCandidateControl,sealRecordSyncCandidateControl} from '../js/core/cloud-record-sync-candidate-control.js';
+import {buildInitialRecordSyncSafetyControl,buildRecordSyncSafetyPause,buildRecordSyncRecoveryReceipt,buildRecordSyncSafetyResume} from '../js/core/cloud-record-sync-safety-control.js';
+import {buildHardPausedRecordSyncV1WriterCurrent,buildOpenRecordSyncV1WriterCurrent} from '../js/core/cloud-record-sync-v1-writer-current.js';
+import {createFirebaseActiveRecordOperationAdapter} from '../js/core/firebase-active-record-operation-adapter.js';
+import {createFirebaseRecordSyncSafetyAdapter} from '../js/core/firebase-record-sync-safety-adapter.js';
+import {recordDataHash} from '../js/core/cloud-record-data-hash.js';
+import {createFirebaseRoleRecordViewAdapter} from '../js/core/firebase-role-record-view-adapter.js';
+import {buildRoleRecordViewPlan,roleRecordViewKey} from '../js/core/cloud-role-record-view.js';
+import {prepareDailyShardedBackup,verifyDailyShardedBackupReadback,sealDailyShardedBackup} from '../js/core/cloud-daily-sharded-backup.js';
+import {buildRoleViewCandidateManifest as buildVerifiedRoleViewCandidateManifest,buildRoleViewVerificationReceipt} from '../js/core/cloud-role-view-verification.js';
 
 const PROJECT_ID = 'danbridge-rules-test';
 const COMPANY_ID = 'danbridge';
 const OWNER_EMAIL = 'a0965487920@gmail.com';
-const BACKUP_OWNER_EMAIL = 'backup-owner@gmail.com';
-const TEACHER_EMAIL = 'teacher@example.com';
+const BACKUP_OWNER_EMAIL = 'catherine890202@gmail.com';
+const TEACHER_EMAIL = 'yamiiii8549@gmail.com';
 const WENDY_EMAIL = 'wendylee0820520@gmail.com';
 const SECOND_SCHEDULER_EMAIL = 'aa0966626336@gmail.com';
 const OTHER_TEACHER_EMAIL = 'other@example.com';
@@ -42,6 +57,7 @@ const INVITED_EMAIL = 'invited@example.com';
 let testEnv;
 
 const auth = (uid, email) => testEnv.authenticatedContext(uid, { email }).firestore();
+const authClaims = (uid, email, claims = {}) => testEnv.authenticatedContext(uid, { email, ...claims }).firestore();
 const unauthenticated = () => testEnv.unauthenticatedContext().firestore();
 
 async function seed() {
@@ -57,6 +73,19 @@ async function seed() {
       [`companyAccess/${INACTIVE_EMAIL}`, { active: false, companyId: COMPANY_ID, role: 'teacher', teacherId: 'inactive-teacher' }],
       [`companyAccess/${INVITED_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1', invitedBy: OWNER_EMAIL, invitedAt: Timestamp.now() }],
       [`companyAccess/${BACKUP_OWNER_EMAIL}`, { active: true, companyId: COMPANY_ID, role: 'owner', displayName: 'Backup Owner', invitedBy: OWNER_EMAIL, invitedAt: Timestamp.now() }],
+      [`stagingRecordSyncSafetyControls/${COMPANY_ID}`, {
+        schema: 'danbridge-record-sync-safety-control-v1',
+        environment: 'staging',
+        companyId: COMPANY_ID,
+        activationEpoch: 'rules-seed-active-epoch-1',
+        state: 'active',
+        revision: 1,
+        lastEventId: 'activation:rules-seed-active',
+        lastEventHash: 'a'.repeat(64),
+        readAllowed: true,
+        writeAllowed: true,
+        updatedAt: '2026-08-15T00:00:00+08:00'
+      }],
       ['users/teacher-uid', { email: TEACHER_EMAIL, active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1' }],
       ['users/manager-uid', { email: MANAGER_EMAIL, active: true, companyId: COMPANY_ID, role: 'branch_manager', teacherId: 'manager-teacher', branchIds: ['branch-a'] }],
       [`companies/${COMPANY_ID}/data/main`, { privateValue: 'owner-only' }],
@@ -91,7 +120,7 @@ describe('staging 全資料與角色候選原子控制',()=>{
   const withAudit=(payload,uid='owner-uid',email=OWNER_EMAIL)=>({...payload,createdAt:serverTimestamp(),createdBy:uid,createdByEmail:email});
   const evidence=(suffix='ok')=>{
     const fullManifest=buildFullRecordCandidateManifest({environment:'staging',manifestId:`full-${suffix}`,sourceHash:'source-hash-1',collectionCount:16,documentCount:1709,activeCount:1709,tombstoneCount:0});
-    const roleManifest=buildRoleViewCandidateManifest({environment:'staging',manifestId:`role-${suffix}`,runId:`role-run-${suffix}`,sourceHash:'source-hash-1',viewCount:7,documentCount:2353});
+    const roleManifest=buildLegacyRoleViewCandidateManifest({environment:'staging',manifestId:`role-${suffix}`,runId:`role-run-${suffix}`,sourceHash:'source-hash-1',viewCount:7,documentCount:2353});
     return{fullManifest,roleManifest,activation:buildAtomicRecordActivation({environment:'staging',fullManifest,roleManifest,currentSourceHash:'source-hash-1'})};
   };
   const controlPayload=(activation,uid='owner-uid',email=OWNER_EMAIL)=>({...activation,activatedAt:serverTimestamp(),activatedBy:uid,activatedByEmail:email});
@@ -170,6 +199,37 @@ describe('staging 全資料與角色候選原子控制',()=>{
     await assertFails(updateDoc(manifestRef,{operationCount:2}));await assertFails(deleteDoc(manifestRef));await assertFails(deleteDoc(latestManifestRef));await assertFails(deleteDoc(recordRef));await assertFails(deleteDoc(liveControlRef));
   });
 
+  test('Daniel 與 Catherine 雙分頁競爭只落地一次，失敗頁重試成 duplicate',async()=>{
+    const sourceDb=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]])),targetDb=structuredClone(sourceDb),revisions=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,{}]));targetDb.lessons=[{id:'two-owner-lesson',name:'safe'}];
+    const legacyVersionHash='legacy-two-owner-v1',backupId='backup-two-owner',drillId='restore-two-owner',backupSha=sha256Canonical(targetDb),collections=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,{count:key==='lessons'?1:0,chunks:key==='lessons'?1:0}])),backup={schema:'danbridge-immutable-migration-backup-v2',environment:'staging',state:'verified',backupId,sourceHash:backupSha,verifiedHash:backupSha,sourceVersionHash:legacyVersionHash,collectionOrder:[...FULL_RECORD_COLLECTIONS],collections,chunkCount:1,recordCount:1},restoreReceipt={schema:'danbridge-migration-restore-drill-v1',environment:'staging',state:'verified',persisted:true,drillId,sourceBackupId:backupId,sourceHash:backupSha,restoredHash:backupSha,recordCount:1,mainVersionHash:legacyVersionHash,mainUnchanged:true};
+    const preflight=buildStagingLivePreflight({environment:'staging',role:'owner',projectId:'danbridge-d8877-staging',sourceState:{db:sourceDb,revisions},targetDb,backup,restoreReceipt,legacyVersionHash,deviceId:'two-owner-device',readBudget:500,writeBudget:100,createdAt:'2026-08-15T10:00:00+08:00'}),manifest=preflight.manifest,operation=preflight.plan.operations[0],manifestPath=`stagingLiveExecutionManifests/${COMPANY_ID}/runs/${manifest.manifestHash}`,controlPath=`stagingLiveRecordControls/${COMPANY_ID}`;
+    await testEnv.withSecurityRulesDisabled(async context=>{const db=context.firestore(),stamp=Timestamp.now();await setDoc(doc(db,manifestPath),{...manifest,persistedAt:stamp,persistedBy:'owner-uid',persistedByEmail:OWNER_EMAIL});await setDoc(doc(db,controlPath),{...buildStagingLiveActivationControl(manifest),updatedAt:stamp,updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL})});
+    const daniel=auth('owner-uid',OWNER_EMAIL),catherine=auth('backup-owner-uid',BACKUP_OWNER_EMAIL),transactionRunner=db=>callback=>runTransaction(db,transaction=>callback({get:path=>transaction.get(doc(db,path)),set:(path,value)=>transaction.set(doc(db,path),value,{merge:false})})),adapter=(db,uid,email)=>createFirebaseLiveRecordOperationAdapter({manifestHash:manifest.manifestHash,actor:{uid,email},serverTimestamp,runTransaction:transactionRunner(db)}),danielAdapter=adapter(daniel,'owner-uid',OWNER_EMAIL),catherineAdapter=adapter(catherine,'backup-owner-uid',BACKUP_OWNER_EMAIL);
+    const firstPass=await Promise.allSettled([danielAdapter.apply(operation),catherineAdapter.apply(operation)]),firstKinds=firstPass.filter(row=>row.status==='fulfilled').map(row=>row.value.kind);assert.equal(firstKinds.filter(kind=>kind==='create').length,1);assert.ok(firstPass.every(row=>row.status==='fulfilled'||row.reason?.code==='permission-denied'));
+    const retries=await Promise.all([danielAdapter.apply(operation),catherineAdapter.apply(operation)]);assert.deepEqual(retries.map(row=>row.kind),['duplicate','duplicate']);
+    const record=(await getDoc(doc(daniel,`stagingLiveRecords/${COMPANY_ID}/collections/lessons/records/two-owner-lesson`))).data(),receipt=(await getDoc(doc(daniel,`stagingLiveOperationReceipts/${COMPANY_ID}/runs/${manifest.manifestHash}/operations/${operation.operationId}`))).data(),control=(await getDoc(doc(daniel,controlPath))).data();
+    assert.equal(record.revision,1);assert.equal(record.deleted,false);assert.ok([OWNER_EMAIL,BACKUP_OWNER_EMAIL].includes(record.updatedByEmail));assert.equal(receipt.operationId,operation.operationId);assert.equal(control.rootRevision,1);assert.equal(control.confirmedOperationCount,1);assert.equal(control.state,'verifying');
+  });
+
+  test('日常逐筆啟用、完成憑證、雙 Owner 與權限在 Emulator 全部 fail-closed',async()=>{
+    const owner=auth('owner-uid',OWNER_EMAIL),backupOwner=auth('backup-owner-uid',BACKUP_OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),legacyVersionHash='active-legacy-v1',backupId='active-backup-1',restoreId='active-restore-1',sha='a'.repeat(64),collections=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,{count:key==='lessons'?1:0,chunks:key==='lessons'?1:0}]));
+    const backup={schema:'danbridge-immutable-migration-backup-v2',environment:'staging',state:'verified',backupId,sourceHash:sha,sourceVersionHash:legacyVersionHash,collectionOrder:[...FULL_RECORD_COLLECTIONS],collections,chunkCount:1,recordCount:1,maxChunkBytes:180000,verifiedHash:sha,verifiedBy:'owner-uid',verifiedByEmail:OWNER_EMAIL,verifiedAt:serverTimestamp()},restore={schema:'danbridge-migration-restore-drill-v1',environment:'staging',state:'verified',drillId:restoreId,sourceBackupId:backupId,sourceHash:sha,restoredHash:sha,sourceChunkCount:1,restoredChunkCount:1,recordCount:1,collections,mainVersionHash:legacyVersionHash,mainUnchanged:true,verifiedAt:serverTimestamp(),verifiedBy:'owner-uid',verifiedByEmail:OWNER_EMAIL};
+    await setDoc(doc(owner,`companies/${COMPANY_ID}/data/main`),{db:{lessons:[{id:'active-lesson-1',room:'A'}]},clientHash:legacyVersionHash});await assertSucceeds(setDoc(doc(owner,`stagingMigrationBackups/${COMPANY_ID}/runs/${backupId}`),backup));await assertSucceeds(setDoc(doc(owner,`stagingMigrationRestoreDrills/${COMPANY_ID}/runs/${restoreId}`),restore));
+    const candidatePath=`stagingRecordSyncCandidateControls/${COMPANY_ID}`,candidateOpen=buildOpenRecordSyncCandidateControl({candidateEpoch:'candidate-active-1',legacyVersionHash,createdAt:'2026-08-15T13:45:00+08:00'});await assertSucceeds(setDoc(doc(owner,candidatePath),{...candidateOpen,persistedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL}));
+    const recordPath=`stagingFullRecordShadows/${COMPANY_ID}/collections/lessons/records/active-lesson-1`,seedRecord={schema:'danbridge-full-record-shadow-v1',companyId:COMPANY_ID,collection:'lessons',recordId:'active-lesson-1',record:{id:'active-lesson-1',room:'A'},recordIndex:null,sourceHash:legacyVersionHash,revision:1,deleted:false,environment:'staging',updatedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL};await assertSucceeds(setDoc(doc(owner,recordPath),seedRecord));
+    const candidateControl=sealRecordSyncCandidateControl({control:candidateOpen,currentLegacyVersionHash:legacyVersionHash,recordDataHash:'record-v1:'+'b'.repeat(64),documentCount:1,activeCount:1,tombstoneCount:0,sealedAt:'2026-08-15T13:58:00+08:00'});await assertSucceeds(setDoc(doc(owner,candidatePath),{...candidateControl,persistedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL}));await assertFails(updateDoc(doc(owner,recordPath),{revision:2}));
+    const candidateSourceHash='3'.repeat(64),zeroRoleCounts=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,0])),candidateEvidenceManifest=buildVerifiedRoleViewCandidateManifest({runId:'role-run-active-1',sourceHash:candidateSourceHash,views:[{viewId:'scheduler-view',email:SECOND_SCHEDULER_EMAIL,kind:'scheduler',viewHash:'6'.repeat(64),documentCount:0,counts:zeroRoleCounts},{viewId:'teacher-one-view',email:TEACHER_EMAIL,kind:'teacher',viewHash:'7'.repeat(64),documentCount:0,counts:zeroRoleCounts},{viewId:'teacher-two-view',email:OTHER_TEACHER_EMAIL,kind:'teacher',viewHash:'8'.repeat(64),documentCount:0,counts:zeroRoleCounts},{viewId:'manager-view',email:MANAGER_EMAIL,kind:'branch_manager',viewHash:'9'.repeat(64),documentCount:0,counts:zeroRoleCounts}],createdAt:'2026-08-15T13:54:00+08:00'});await assertSucceeds(setDoc(doc(owner,`stagingRoleViewCandidateManifests/${COMPANY_ID}/runs/${candidateEvidenceManifest.runId}`),{...candidateEvidenceManifest,persistedAt:serverTimestamp(),persistedBy:'owner-uid',persistedByEmail:OWNER_EMAIL}));
+    const roleEvidence=buildRecordSyncRoleEvidence({environment:'staging',primaryOwnerEmail:OWNER_EMAIL,backupOwnerEmail:BACKUP_OWNER_EMAIL,schedulerEmail:SECOND_SCHEDULER_EMAIL,teacherAccounts:[TEACHER_EMAIL,OTHER_TEACHER_EMAIL],roleViewCount:4,candidateRunId:candidateEvidenceManifest.runId,candidateSourceHash,candidateManifestHash:candidateEvidenceManifest.manifestHash,receiptCount:6,receiptSetHash:'5'.repeat(64),results:Object.fromEntries(RECORD_SYNC_ROLE_SCENARIOS.map(key=>[key,true])),testedAt:'2026-08-15T13:55:00+08:00'}),roleEvidencePath=`stagingRecordSyncRoleEvidence/${COMPANY_ID}/runs/${roleEvidence.evidenceHash}`,manifest=buildRecordSyncActivationManifest({environment:'staging',activationEpoch:'epoch-active-1',candidateControl,legacyVersionHash,recordDataHash:'record-v1:'+'b'.repeat(64),roleEvidence,backupId,restoreReceiptId:restoreId,documentCount:1,activeCount:1,tombstoneCount:0,createdAt:'2026-08-15T14:00:00+08:00'}),controlCore=buildActiveRecordSyncControl({manifest,currentLegacyVersionHash:legacyVersionHash,currentRecordDataHash:manifest.recordDataHash,currentRoleEvidenceHash:manifest.roleEvidenceHash,activatedAt:'2026-08-15T14:01:00+08:00'}),control={...controlCore,persistedAt:serverTimestamp(),activatedBy:'owner-uid',activatedByEmail:OWNER_EMAIL},safetyCore=buildInitialRecordSyncSafetyControl({manifest,createdAt:controlCore.activatedAt}),safety={...safetyCore,persistedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL},manifestPath=`stagingRecordSyncActivationManifests/${COMPANY_ID}/manifests/${manifest.manifestHash}`,controlPath=`stagingRecordSyncControls/${COMPANY_ID}`,safetyPath=`stagingRecordSyncSafetyControls/${COMPANY_ID}`;
+    await testEnv.withSecurityRulesDisabled(async context=>deleteDoc(doc(context.firestore(),safetyPath)));
+    await assertFails(setDoc(doc(owner,controlPath),control));await assertFails(runTransaction(owner,async transaction=>{transaction.set(doc(owner,manifestPath),{...manifest,persistedAt:serverTimestamp(),persistedBy:'owner-uid',persistedByEmail:OWNER_EMAIL});transaction.set(doc(owner,controlPath),control)}));await assertSucceeds(runTransaction(owner,async transaction=>{transaction.set(doc(owner,roleEvidencePath),{...roleEvidence,persistedAt:serverTimestamp(),persistedBy:'owner-uid',persistedByEmail:OWNER_EMAIL});transaction.set(doc(owner,manifestPath),{...manifest,persistedAt:serverTimestamp(),persistedBy:'owner-uid',persistedByEmail:OWNER_EMAIL});transaction.set(doc(owner,controlPath),control);transaction.set(doc(owner,safetyPath),safety)}));await assertFails(updateDoc(doc(owner,roleEvidencePath),{roleViewCount:5}));await assertFails(deleteDoc(doc(owner,roleEvidencePath)));await assertFails(getDoc(doc(teacher,roleEvidencePath)));await assertFails(updateDoc(doc(owner,manifestPath),{roleViewCount:5}));await assertFails(updateDoc(doc(owner,controlPath),{writeTakeover:false}));
+    const makeOperation=(recordId,revision,room,deviceId='daniel')=>({schema:'danbridge-active-record-operation-v1',environment:'staging',companyId:COMPANY_ID,activationEpoch:manifest.activationEpoch,operationId:`${deviceId}:${revision}`,deviceId,collection:'lessons',recordId,type:revision===1?'create':'update',baseRevision:revision-1,nextRevision:revision,payload:{schema:'danbridge-full-record-shadow-v1',companyId:COMPANY_ID,collection:'lessons',recordId,record:{id:recordId,room},recordIndex:null,sourceHash:`active-${revision}`,revision,deleted:false,environment:'staging'},path:`stagingFullRecordShadows/${COMPANY_ID}/collections/lessons/records/${recordId}`}),runner=db=>callback=>runTransaction(db,transaction=>callback({get:path=>transaction.get(doc(db,path)),set:(path,value)=>transaction.set(doc(db,path),value,{merge:false})})),adapter=(db,uid,email)=>createFirebaseActiveRecordOperationAdapter({environment:'staging',role:'owner',actor:{uid,email},serverTimestamp,runTransaction:runner(db)}),safetyAdapter=createFirebaseRecordSyncSafetyAdapter({environment:'staging',role:'owner',actor:{uid:'owner-uid',email:OWNER_EMAIL},serverTimestamp,runTransaction:runner(owner)});
+    const daniel=adapter(owner,'owner-uid',OWNER_EMAIL),catherine=adapter(backupOwner,'backup-owner-uid',BACKUP_OWNER_EMAIL),updated=await daniel.apply(makeOperation('active-lesson-1',2,'Daniel'));assert.equal(updated.kind,'update');assert.equal((await getDoc(doc(owner,recordPath))).data().record.room,'Daniel');assert.equal((await daniel.apply(makeOperation('active-lesson-1',2,'Daniel'))).kind,'duplicate');
+    const created=await catherine.apply(makeOperation('active-lesson-2',1,'Catherine','catherine'));assert.equal(created.kind,'create');assert.equal((await getDoc(doc(owner,created.path))).data().updatedByEmail,BACKUP_OWNER_EMAIL);await assertFails(updateDoc(doc(owner,recordPath),{revision:99}));await assertFails(deleteDoc(doc(owner,recordPath)));await assertFails(getDoc(doc(teacher,recordPath)));await assertFails(getDoc(doc(teacher,created.receiptPath)));await assertFails(setDoc(doc(teacher,`stagingRecordSyncControls/${COMPANY_ID}`),control));
+    const conflictBackupId='conflict-'+sha.slice(0,24),conflictPartId=`${conflictBackupId}-0`,conflictPartPath=`stagingRecordSyncConflictBackups/${COMPANY_ID}/epochs/${manifest.activationEpoch}/parts/${conflictPartId}`,conflictPart={schema:'danbridge-record-sync-conflict-backup-v1',environment:'staging',companyId:COMPANY_ID,activationEpoch:manifest.activationEpoch,backupId:conflictBackupId,partId:conflictPartId,conflictHash:sha,baseHash:'record-v1:'+'d'.repeat(64),targetHash:'record-v1:'+'e'.repeat(64),deviceId:'daniel',partIndex:0,partCount:1,encoding:'json-fragment',payload:'[{"path":"lessons.active-lesson-1.room"}]',createdAt:serverTimestamp(),createdBy:'owner-uid',createdByEmail:OWNER_EMAIL};await assertSucceeds(setDoc(doc(owner,conflictPartPath),conflictPart));await assertFails(updateDoc(doc(owner,conflictPartPath),{payload:'tampered'}));await assertFails(deleteDoc(doc(owner,conflictPartPath)));await assertFails(getDoc(doc(teacher,conflictPartPath)));await assertFails(setDoc(doc(owner,`stagingRecordSyncConflictBackups/${COMPANY_ID}/epochs/wrong-epoch/parts/${conflictPartId}`),{...conflictPart,activationEpoch:'wrong-epoch'}));
+    const pause=buildRecordSyncSafetyPause({control:safetyCore,eventId:'pause-active-1',reason:'Emulator 串流異常演練',safeRecordDataHash:'record-v1:'+'f'.repeat(64),cloudBackupId:backupId,createdAt:'2026-08-15T14:10:00+08:00'}),pauseEventPath=`stagingRecordSyncSafetyEvents/${COMPANY_ID}/epochs/${manifest.activationEpoch}/events/${pause.event.eventId}`;await safetyAdapter.pause(pause);assert.equal((await getDoc(doc(owner,pauseEventPath))).data().createdAt,pause.event.createdAt);assert.equal((await getDoc(doc(owner,safetyPath))).data().updatedAt,pause.nextControl.updatedAt);await assert.rejects(catherine.apply(makeOperation('active-lesson-2',2,'Blocked while paused','catherine')),/安全暫停/);await assertFails(setDoc(doc(owner,conflictPartPath+'-paused'),{...conflictPart,partId:conflictPartId+'-paused'}));await assertFails(updateDoc(doc(owner,safetyPath),{state:'active',writeAllowed:true,revision:3}));
+    const recovery=buildRecordSyncRecoveryReceipt({environment:'staging',activationEpoch:manifest.activationEpoch,pauseEventId:pause.event.eventId,sourceBackupId:backupId,restoredRecordDataHash:'record-v1:'+'1'.repeat(64),operationLogHash:'2'.repeat(64),confirmedOperationCount:2,createdAt:'2026-08-15T14:15:00+08:00'}),recoveryPath=`stagingRecordSyncRecoveryReceipts/${COMPANY_ID}/epochs/${manifest.activationEpoch}/receipts/${recovery.receiptHash}`;await safetyAdapter.persistRecovery(recovery);await assertFails(updateDoc(doc(owner,recoveryPath),{confirmedOperationCount:99}));await assertFails(deleteDoc(doc(owner,recoveryPath)));const resume=buildRecordSyncSafetyResume({control:pause.nextControl,eventId:'resume-active-1',recoveryReceipt:recovery,readbackRecordDataHash:recovery.restoredRecordDataHash,createdAt:'2026-08-15T14:20:00+08:00'}),resumeEventPath=`stagingRecordSyncSafetyEvents/${COMPANY_ID}/epochs/${manifest.activationEpoch}/events/${resume.event.eventId}`;await safetyAdapter.resume({...resume,recoveryReceipt:recovery,readbackRecordDataHash:recovery.restoredRecordDataHash});assert.equal((await getDoc(doc(owner,resumeEventPath))).data().createdAt,resume.event.createdAt);assert.equal((await getDoc(doc(owner,safetyPath))).data().updatedAt,resume.nextControl.updatedAt);assert.equal((await catherine.apply(makeOperation('active-lesson-2',2,'Resumed','catherine'))).kind,'update');await assertSucceeds(getDoc(doc(teacher,safetyPath)));await assertFails(getDoc(doc(teacher,pauseEventPath)));await assertFails(getDoc(doc(teacher,recoveryPath)));
+  });
+
   test('manifest 不可覆寫刪除，非 Owner 不可讀寫或建立控制',async()=>{
     const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),scheduler=auth('scheduler-2-uid',SECOND_SCHEDULER_EMAIL),{fullManifest,roleManifest,activation}=evidence('permission');
     await setDoc(doc(owner,`companies/${COMPANY_ID}/data/main`),{db:{},clientHash:'source-hash-1'});
@@ -228,8 +288,335 @@ beforeEach(async () => {
   await testEnv.clearFirestore();
   await seed();
 });
+
+describe('V1 hard-pause 與永久 fence 不可旁路', () => {
+  const safetyPath = `stagingRecordSyncSafetyControls/${COMPANY_ID}`;
+  const fencePath = `stagingRecordSyncV1PermanentFences/${COMPANY_ID}`;
+  const safetyCore = ({ paused = false, epoch = 'rules-fence-epoch-1' } = {}) => ({
+    schema: 'danbridge-record-sync-safety-control-v1',
+    environment: 'staging',
+    companyId: COMPANY_ID,
+    activationEpoch: epoch,
+    state: paused ? 'paused' : 'active',
+    revision: paused ? 2 : 1,
+    lastEventId: paused ? 'pause:rules-fence-1' : 'activation:rules-fence-1',
+    lastEventHash: 'a'.repeat(64),
+    readAllowed: true,
+    writeAllowed: !paused,
+    updatedAt: paused ? '2026-08-15T01:01:00+08:00' : '2026-08-15T01:00:00+08:00'
+  });
+  const setGate = ({ paused = false, fenced = false } = {}) => testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await setDoc(doc(db, safetyPath), safetyCore({ paused }), { merge: false });
+    if (fenced) await setDoc(doc(db, fencePath), { schema: 'danbridge-record-sync-v1-permanent-fence-v1', companyId: COMPANY_ID, state: 'fenced' });
+    else await deleteDoc(doc(db, fencePath));
+  });
+  const scheduleRequest = (uid = 'scheduler-2-uid', email = SECOND_SCHEDULER_EMAIL) => ({
+    companyId: COMPANY_ID,
+    operation: 'create',
+    lessonId: 'rules-fence-lesson',
+    lesson: { id: 'rules-fence-lesson', date: '2026-08-16', start: '10:00', end: '11:00', studentId: 'student-1', teacherId: 'teacher-2', teacherIds: ['teacher-2'], title: 'Fence', status: '未上課' },
+    actorUid: uid,
+    actorEmail: email,
+    createdAt: serverTimestamp(),
+    status: 'pending'
+  });
+  const recordShadow = (uid, email, environment = 'staging') => ({
+    companyId: COMPANY_ID,
+    collection: 'lessons',
+    recordId: `rules-${environment}-record`,
+    record: { id: `rules-${environment}-record`, title: 'Allowed only while active' },
+    sourceHash: `rules-${environment}-source`,
+    revision: 1,
+    deleted: false,
+    environment,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid,
+    updatedByEmail: email
+  });
+
+  test('active 且尚未 fence 時保留既有 Owner 與排課寫入', async () => {
+    await setGate();
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    const backup = auth('backup-owner-uid', BACKUP_OWNER_EMAIL);
+    const scheduler = auth('scheduler-2-uid', SECOND_SCHEDULER_EMAIL);
+    await assertSucceeds(setDoc(doc(owner, `companies/${COMPANY_ID}/data/main`), { active: true }));
+    await assertSucceeds(setDoc(doc(backup, `companies/${COMPANY_ID}/customSurface/owner-write`), { active: true }));
+    await assertSucceeds(setDoc(doc(scheduler, `companies/${COMPANY_ID}/scheduleRequests/rules-active`), scheduleRequest()));
+    await assertSucceeds(setDoc(doc(owner, `stagingRecordShadows/${COMPANY_ID}/collections/lessons/records/rules-staging-record`), recordShadow('owner-uid', OWNER_EMAIL)));
+    const production = recordShadow('backup-owner-uid', BACKUP_OWNER_EMAIL, 'production');
+    await assertSucceeds(setDoc(doc(backup, `productionFullRecordShadows/${COMPANY_ID}/collections/lessons/records/${production.recordId}`), { schema: 'danbridge-full-record-shadow-v1', ...production, recordIndex: null }));
+  });
+
+  test('paused 時 broad OR、specific actor 與 top-level V1 source 全部拒絕', async () => {
+    await setGate({ paused: true });
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    const backup = auth('backup-owner-uid', BACKUP_OWNER_EMAIL);
+    const scheduler = auth('scheduler-2-uid', SECOND_SCHEDULER_EMAIL);
+    const teacher = auth('teacher-uid', TEACHER_EMAIL);
+    for (const [db, suffix] of [[owner, 'owner'], [backup, 'backup']]) {
+      await assertFails(setDoc(doc(db, `companies/${COMPANY_ID}/data/${suffix}`), { blocked: true }));
+      await assertFails(setDoc(doc(db, `companies/${COMPANY_ID}/shardedGenerations/g-${suffix}/chunks/c-1`), { blocked: true }));
+      await assertFails(setDoc(doc(db, `companies/${COMPANY_ID}/unknownNested/${suffix}`), { blocked: true }));
+    }
+    await assertFails(setDoc(doc(scheduler, `companies/${COMPANY_ID}/scheduleRequests/rules-paused`), scheduleRequest()));
+    await assertFails(setDoc(doc(teacher, `companies/${COMPANY_ID}/lessonReports/lesson-own`), { companyId: COMPANY_ID, lessonId: 'lesson-own', reportedForTeacherIds: ['teacher-1'], branchId: 'branch-a', content: 'blocked' }));
+    await assertFails(setDoc(doc(owner, `stagingRecordShadows/${COMPANY_ID}/collections/lessons/records/rules-staging-record`), recordShadow('owner-uid', OWNER_EMAIL)));
+    const production = recordShadow('owner-uid', OWNER_EMAIL, 'production');
+    await assertFails(setDoc(doc(owner, `productionFullRecordShadows/${COMPANY_ID}/collections/lessons/records/${production.recordId}`), { schema: 'danbridge-full-record-shadow-v1', ...production, recordIndex: null }));
+    await assertFails(setDoc(doc(owner, `stagingRecordSyncOperationReceipts/${COMPANY_ID}/epochs/rules-fence-epoch-1/operations/blocked-operation`), {}));
+    await assertFails(setDoc(doc(owner, `stagingRoleRecordViewControls/${COMPANY_ID}/views/${TEACHER_EMAIL}`), {}));
+  });
+
+  test('fence path 對所有 client 不可建立覆寫刪除，fence 後 active safety 仍無法寫 V1', async () => {
+    await setGate();
+    const actors = [
+      auth('owner-uid', OWNER_EMAIL),
+      auth('backup-owner-uid', BACKUP_OWNER_EMAIL),
+      auth('scheduler-2-uid', SECOND_SCHEDULER_EMAIL),
+      auth('teacher-uid', TEACHER_EMAIL),
+      auth('manager-uid', MANAGER_EMAIL),
+      unauthenticated()
+    ];
+    for (const db of actors) await assertFails(setDoc(doc(db, fencePath), { forged: true }));
+    await setGate({ fenced: true });
+    for (const db of actors) {
+      await assertFails(setDoc(doc(db, fencePath), { forged: true }));
+      await assertFails(deleteDoc(doc(db, fencePath)));
+      await assertFails(setDoc(doc(db, `companies/${COMPANY_ID}/all-actors/blocked`), { forged: true }));
+    }
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    await assertFails(updateDoc(doc(owner, safetyPath), { updatedAt: '2026-08-15T01:02:00+08:00' }));
+  });
+
+  test('fence 後 recovery receipt 與 resume event/control 原子交易都拒絕', async () => {
+    const epoch = 'rules-fence-epoch-1';
+    const backupId = 'rules-fence-backup-1';
+    const active = safetyCore({ epoch });
+    const pause = buildRecordSyncSafetyPause({ control: active, eventId: 'pause-rules-fence-1', reason: '永久 fence 測試', safeRecordDataHash: `record-v1:${'b'.repeat(64)}`, cloudBackupId: backupId, createdAt: '2026-08-15T01:01:00+08:00' });
+    const recovery = buildRecordSyncRecoveryReceipt({ environment: 'staging', activationEpoch: epoch, pauseEventId: pause.event.eventId, sourceBackupId: backupId, restoredRecordDataHash: `record-v1:${'c'.repeat(64)}`, operationLogHash: 'd'.repeat(64), confirmedOperationCount: 0, createdAt: '2026-08-15T01:02:00+08:00' });
+    const owner = auth('owner-uid', OWNER_EMAIL);
+    await testEnv.withSecurityRulesDisabled(async context => {
+      const db = context.firestore();
+      await setDoc(doc(db, safetyPath), pause.nextControl, { merge: false });
+      await setDoc(doc(db, `stagingMigrationBackups/${COMPANY_ID}/runs/${backupId}`), { state: 'verified' });
+      await setDoc(doc(db, fencePath), { schema: 'danbridge-record-sync-v1-permanent-fence-v1', companyId: COMPANY_ID, state: 'fenced' });
+    });
+    const recoveryPath = `stagingRecordSyncRecoveryReceipts/${COMPANY_ID}/epochs/${epoch}/receipts/${recovery.receiptHash}`;
+    await assertFails(setDoc(doc(owner, recoveryPath), { ...recovery, persistedAt: serverTimestamp(), persistedBy: 'owner-uid', persistedByEmail: OWNER_EMAIL }));
+    await testEnv.withSecurityRulesDisabled(async context => setDoc(doc(context.firestore(), recoveryPath), recovery));
+    const resume = buildRecordSyncSafetyResume({ control: pause.nextControl, eventId: 'resume-rules-fence-1', recoveryReceipt: recovery, readbackRecordDataHash: recovery.restoredRecordDataHash, createdAt: '2026-08-15T01:03:00+08:00' });
+    await assertFails(runTransaction(owner, async transaction => {
+      transaction.set(doc(owner, `stagingRecordSyncSafetyEvents/${COMPANY_ID}/epochs/${epoch}/events/${resume.event.eventId}`), { ...resume.event, persistedAt: serverTimestamp(), createdBy: 'owner-uid', createdByEmail: OWNER_EMAIL });
+      transaction.set(doc(owner, safetyPath), { ...resume.nextControl, persistedAt: serverTimestamp(), updatedBy: 'owner-uid', updatedByEmail: OWNER_EMAIL }, { merge: false });
+    }));
+  });
+});
+
+describe('V1 fence 全寫入面合法 fixture hardening', () => {
+  const safetyPath=`stagingRecordSyncSafetyControls/${COMPANY_ID}`,fencePath=`stagingRecordSyncV1PermanentFences/${COMPANY_ID}`,writerPath=`stagingRecordSyncV1WriterCurrents/${COMPANY_ID}`,rootPath=`stagingRecordSyncControls/${COMPANY_ID}`;
+  const gateCore=(mode='active',epoch='hardening-active-epoch-1')=>({schema:'danbridge-record-sync-safety-control-v1',environment:'staging',companyId:COMPANY_ID,activationEpoch:epoch,state:mode==='paused'?'paused':'active',revision:mode==='paused'?2:1,lastEventId:mode==='paused'?'pause:hardening-1':'activation:hardening-1',lastEventHash:'a'.repeat(64),readAllowed:true,writeAllowed:mode!=='paused',updatedAt:'2026-08-15T02:00:00+08:00'});
+  const setGate=mode=>testEnv.withSecurityRulesDisabled(async context=>{const db=context.firestore();await setDoc(doc(db,safetyPath),gateCore(mode),{merge:false});await deleteDoc(doc(db,writerPath));if(mode==='fenced')await setDoc(doc(db,fencePath),{schema:'danbridge-record-sync-v1-permanent-fence-v1',companyId:COMPANY_ID,state:'fenced'});else await deleteDoc(doc(db,fencePath))});
+  const disabled=callback=>testEnv.withSecurityRulesDisabled(async context=>callback(context.firestore()));
+  const audit=(value,uid='owner-uid',email=OWNER_EMAIL)=>({...value,updatedAt:serverTimestamp(),updatedBy:uid,updatedByEmail:email});
+  const record=(id,environment='staging')=>({schema:'danbridge-full-record-shadow-v1',companyId:COMPANY_ID,collection:'lessons',recordId:id,record:{id,title:'hardening'},recordIndex:null,sourceHash:`hardening-${environment}-source`,revision:1,deleted:false,environment});
+  const installWriter=mode=>disabled(async db=>{
+    const safety=(await getDoc(doc(db,safetyPath))).data(),snapshot=await getDoc(doc(db,rootPath)),existing=snapshot.exists()?snapshot.data():{},source={schema:'danbridge-record-sync-control-v1',environment:'staging',companyId:COMPANY_ID,state:'active',activationEpoch:safety.activationEpoch,manifestHash:typeof existing.manifestHash==='string'&&/^[a-f0-9]{64}$/.test(existing.manifestHash)?existing.manifestHash:'6'.repeat(64),candidateEpoch:'hardening-writer-candidate',candidateRevision:2,candidateSealHash:'7'.repeat(64),legacyVersionHash:'hardening-writer-legacy',recordDataHash:'record-v1:'+'8'.repeat(64),roleEvidenceHash:'9'.repeat(64),backupId:'hardening-writer-backup',restoreReceiptId:'hardening-writer-restore',collectionCount:16,documentCount:0,activeCount:0,tombstoneCount:0,roleViewCount:4,readTakeover:true,writeTakeover:true,activatedAt:'2026-08-15T01:59:59.999999999+08:00',...existing};
+    source.schema='danbridge-record-sync-control-v1';source.environment='staging';source.companyId=COMPANY_ID;source.state='active';source.activationEpoch=safety.activationEpoch;source.readTakeover=true;source.writeTakeover=true;if(typeof source.manifestHash!=='string'||!/^[a-f0-9]{64}$/.test(source.manifestHash))source.manifestHash='6'.repeat(64);
+    await setDoc(doc(db,rootPath),source,{merge:false});
+    const open=buildOpenRecordSyncV1WriterCurrent({recordSyncControl:source,safetyControl:safety,writerGeneration:1,minClientProtocolVersion:4,minClientReleaseId:'20.26.114',createdAt:safety.updatedAt});
+    if(mode==='writer-open'){await setDoc(doc(db,writerPath),open,{merge:false});return}
+    const pausedSafety={...safety,revision:safety.revision+1,lastEventId:'pause-hardening-writer',lastEventHash:'b'.repeat(64)},paused=buildHardPausedRecordSyncV1WriterCurrent({current:open,freezeId:'freeze-hardening-writer',freezeRequestHash:'c'.repeat(64),freezeControlHash:'d'.repeat(64),safetyRevision:pausedSafety.revision,safetyLastEventHash:pausedSafety.lastEventHash,transitionReceiptHash:'e'.repeat(64)});
+    await setDoc(doc(db,safetyPath),pausedSafety,{merge:false});await setDoc(doc(db,writerPath),paused,{merge:false});
+  });
+
+  const surfaces=async label=>{
+    const owner=auth('owner-uid',OWNER_EMAIL),scheduler=auth('scheduler-2-uid',SECOND_SCHEDULER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL);
+    const candidateSource=`hardening-candidate-${label}`,candidate=buildOpenRecordSyncCandidateControl({candidateEpoch:`hardening-candidate-${label}`,legacyVersionHash:candidateSource,createdAt:'2026-08-15T02:00:00+08:00'}),candidateRecordId=`candidate-${label}`,candidatePayload=audit({...record(candidateRecordId),sourceHash:candidateSource});
+    const writerSurface=label==='writer-open'||label==='writer-hard-paused',writerRecordEpoch=`hardening-writer-record-${label}`,writerRecordId=`writer-record-${label}`,writerOperationId=`writer-operation-${label}`,writerRecordPayload=audit({...record(writerRecordId),sourceHash:`hardening-writer-source-${label}`,lastOperationId:writerOperationId,deviceId:'hardening-writer-device',activationEpoch:writerRecordEpoch}),writerRecordReceipt={schema:'danbridge-active-record-operation-receipt-v1',environment:'staging',companyId:COMPANY_ID,activationEpoch:writerRecordEpoch,operationId:writerOperationId,operationHash:'5'.repeat(64),collection:'lessons',recordId:writerRecordId,revision:1,deleted:false,deviceId:'hardening-writer-device',updatedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL};
+    const operationEpoch=`hardening-operation-${label}`,operationId=`hardening-operation-${label}`,operationRecordId=`operation-${label}`,operationReceipt={schema:'danbridge-active-record-operation-receipt-v1',environment:'staging',companyId:COMPANY_ID,activationEpoch:operationEpoch,operationId,operationHash:'b'.repeat(64),collection:'lessons',recordId:operationRecordId,revision:1,deleted:false,deviceId:'hardening-device',updatedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL};
+    const conflictPartId=`hardening-conflict-${label}`,conflict={schema:'danbridge-record-sync-conflict-backup-v1',environment:'staging',companyId:COMPANY_ID,activationEpoch:operationEpoch,backupId:`hardening-backup-${label}`,partId:conflictPartId,conflictHash:'c'.repeat(64),baseHash:`record-v1:${'d'.repeat(64)}`,targetHash:`record-v1:${'e'.repeat(64)}`,deviceId:'hardening-device',partIndex:0,partCount:1,encoding:'json-fragment',payload:'[]',createdAt:serverTimestamp(),createdBy:'owner-uid',createdByEmail:OWNER_EMAIL};
+    const liveManifestHash='f'.repeat(64),liveOperationId=`hardening-live-${label}`,liveRecordId=`live-${label}`,liveHash=`record-v1:${'1'.repeat(64)}`,liveRecord=audit({...record(liveRecordId),sourceHash:liveHash,lastOperationId:liveOperationId,executionManifestHash:liveManifestHash}),liveReceipt={schema:'danbridge-live-operation-receipt-v1',environment:'staging',companyId:COMPANY_ID,executionManifestHash:liveManifestHash,operationId:liveOperationId,operationHash:'2'.repeat(64),collection:'lessons',recordId:liveRecordId,nextHash:liveHash,revision:1,deleted:false,rootRevision:1,updatedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL};
+    const emptyDb=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]])),liveLegacy=`hardening-live-legacy-${label}`,liveBackupId=`hardening-live-backup-${label}`,liveDrillId=`hardening-live-drill-${label}`,liveSha=sha256Canonical(emptyDb),liveCollections=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,{count:0,chunks:0}])),liveBackup={schema:'danbridge-immutable-migration-backup-v2',environment:'staging',state:'verified',backupId:liveBackupId,sourceHash:liveSha,sourceVersionHash:liveLegacy,collectionOrder:[...FULL_RECORD_COLLECTIONS],collections:liveCollections,chunkCount:0,recordCount:0,maxChunkBytes:180000,verifiedHash:liveSha,verifiedBy:'owner-uid',verifiedByEmail:OWNER_EMAIL},liveRestore={schema:'danbridge-migration-restore-drill-v1',environment:'staging',state:'verified',drillId:liveDrillId,sourceBackupId:liveBackupId,sourceHash:liveSha,restoredHash:liveSha,sourceChunkCount:0,restoredChunkCount:0,recordCount:0,collections:liveCollections,mainVersionHash:liveLegacy,mainUnchanged:true,verifiedBy:'owner-uid',verifiedByEmail:OWNER_EMAIL},livePreflight=buildStagingLivePreflight({environment:'staging',role:'owner',projectId:'danbridge-d8877-staging',sourceState:{db:emptyDb,revisions:Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,{}]))},targetDb:emptyDb,backup:liveBackup,restoreReceipt:{...liveRestore,persisted:true},legacyVersionHash:liveLegacy,deviceId:'hardening-live-device',readBudget:500,writeBudget:100,createdAt:'2026-08-15T02:00:00+08:00'}),liveManifest=livePreflight.manifest,liveControl={...buildStagingLiveActivationControl(liveManifest),updatedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL};
+    const roleEpoch=`hardening-role-${label}`,roleIdentity={email:TEACHER_EMAIL,kind:'teacher',teacherId:'teacher-1',branchIds:[]},roleDb=structuredClone(emptyDb);roleDb.lessons=[{id:`role-${label}`,title:'hardening'}];const rolePlan=buildRoleRecordViewPlan({},roleDb,{environment:'staging',identity:roleIdentity,activationEpoch:roleEpoch,sourceRecordHash:`record-v1:${'3'.repeat(64)}`,publishId:`publish-hardening-${label}`,publishedAt:'2026-08-15T02:00:00+08:00'}),roleOperation=rolePlan.operations[0],roleRecordPayload=audit(roleOperation.payload),roleControlPayload={...rolePlan.control,persistedAt:serverTimestamp(),persistedBy:'owner-uid',persistedByEmail:OWNER_EMAIL};
+    const scheduleRequest={companyId:COMPANY_ID,operation:'create',lessonId:`schedule-${label}`,lesson:{id:`schedule-${label}`,date:'2026-08-16',start:'10:00',end:'11:00',studentId:'student-1',teacherId:'teacher-2',teacherIds:['teacher-2'],title:'Hardening',status:'未上課'},actorUid:'scheduler-2-uid',actorEmail:SECOND_SCHEDULER_EMAIL,createdAt:serverTimestamp(),status:'pending'};
+    const prepareActiveRoot=epoch=>disabled(async db=>{const current=(await getDoc(doc(db,safetyPath))).data();await setDoc(doc(db,safetyPath),{...current,activationEpoch:epoch},{merge:false});await setDoc(doc(db,`stagingRecordSyncControls/${COMPANY_ID}`),{schema:'danbridge-record-sync-control-v1',environment:'staging',companyId:COMPANY_ID,state:'active',activationEpoch:epoch,readTakeover:true,writeTakeover:true},{merge:false})});
+    return [
+      {name:'stagingRecordShadows',run:()=>setDoc(doc(owner,`stagingRecordShadows/${COMPANY_ID}/collections/lessons/records/shadow-${label}`),{companyId:COMPANY_ID,collection:'lessons',recordId:`shadow-${label}`,record:{id:`shadow-${label}`},sourceHash:'hardening-source',revision:1,deleted:false,environment:'staging',updatedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL})},
+      {name:'stagingFullRecordShadows',prepare:()=>writerSurface?disabled(async db=>{await prepareActiveRoot(writerRecordEpoch);await setDoc(doc(db,`stagingRecordSyncOperationReceipts/${COMPANY_ID}/epochs/${writerRecordEpoch}/operations/${writerOperationId}`),{...writerRecordReceipt,updatedAt:Timestamp.now()})}):disabled(async db=>{await deleteDoc(doc(db,`stagingRecordSyncControls/${COMPANY_ID}`));await setDoc(doc(db,`stagingRecordSyncCandidateControls/${COMPANY_ID}`),candidate)}),run:()=>writerSurface?setDoc(doc(owner,`stagingFullRecordShadows/${COMPANY_ID}/collections/lessons/records/${writerRecordId}`),writerRecordPayload):setDoc(doc(owner,`stagingFullRecordShadows/${COMPANY_ID}/collections/lessons/records/${candidateRecordId}`),candidatePayload)},
+      {name:'operationReceipts',prepare:async()=>{await prepareActiveRoot(operationEpoch);await disabled(db=>setDoc(doc(db,`stagingFullRecordShadows/${COMPANY_ID}/collections/lessons/records/${operationRecordId}`),{...record(operationRecordId),sourceHash:'hardening-operation-source',lastOperationId:operationId,deviceId:'hardening-device',activationEpoch:operationEpoch,updatedAt:Timestamp.now(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL}))},run:()=>setDoc(doc(owner,`stagingRecordSyncOperationReceipts/${COMPANY_ID}/epochs/${operationEpoch}/operations/${operationId}`),operationReceipt)},
+      {name:'conflictBackups',prepare:()=>prepareActiveRoot(operationEpoch),run:()=>setDoc(doc(owner,`stagingRecordSyncConflictBackups/${COMPANY_ID}/epochs/${operationEpoch}/parts/${conflictPartId}`),conflict)},
+      {name:'stagingLiveRecordControls',prepare:()=>disabled(async db=>{await deleteDoc(doc(db,`stagingLiveRecordControls/${COMPANY_ID}`));await setDoc(doc(db,`companies/${COMPANY_ID}/data/main`),{clientHash:liveLegacy});await setDoc(doc(db,`stagingMigrationBackups/${COMPANY_ID}/runs/${liveBackupId}`),liveBackup);await setDoc(doc(db,`stagingMigrationRestoreDrills/${COMPANY_ID}/runs/${liveDrillId}`),liveRestore);await setDoc(doc(db,`stagingLiveExecutionManifests/${COMPANY_ID}/runs/${liveManifest.manifestHash}`),liveManifest)}),run:()=>setDoc(doc(owner,`stagingLiveRecordControls/${COMPANY_ID}`),liveControl)},
+      {name:'stagingLiveRecords',prepare:()=>disabled(db=>setDoc(doc(db,`stagingLiveRecordControls/${COMPANY_ID}`),{executionManifestHash:liveManifestHash,lastOperationId:liveOperationId,lastCollection:'lessons',lastRecordId:liveRecordId,dataHash:liveHash,rootRevision:1})),run:()=>setDoc(doc(owner,`stagingLiveRecords/${COMPANY_ID}/collections/lessons/records/${liveRecordId}`),liveRecord)},
+      {name:'stagingLiveOperationReceipts',prepare:()=>disabled(async db=>{await setDoc(doc(db,`stagingLiveRecordControls/${COMPANY_ID}`),{executionManifestHash:liveManifestHash,lastOperationId:liveOperationId,lastCollection:'lessons',lastRecordId:liveRecordId,dataHash:liveHash,rootRevision:1});await setDoc(doc(db,`stagingLiveRecords/${COMPANY_ID}/collections/lessons/records/${liveRecordId}`),{...liveRecord,updatedAt:Timestamp.now()})}),run:()=>setDoc(doc(owner,`stagingLiveOperationReceipts/${COMPANY_ID}/runs/${liveManifestHash}/operations/${liveOperationId}`),liveReceipt)},
+      {name:'productionFullRecordShadows',run:()=>setDoc(doc(owner,`productionFullRecordShadows/${COMPANY_ID}/collections/lessons/records/production-${label}`),audit(record(`production-${label}`,'production')))},
+      {name:'roleViewControl',prepare:()=>prepareActiveRoot(roleEpoch),run:()=>setDoc(doc(owner,`stagingRoleRecordViewControls/${COMPANY_ID}/views/${TEACHER_EMAIL}`),roleControlPayload)},
+      {name:'roleViewRecord',prepare:()=>prepareActiveRoot(roleEpoch),run:()=>setDoc(doc(owner,roleOperation.path),roleRecordPayload)},
+      {name:'companiesBroad',run:()=>setDoc(doc(owner,`companies/${COMPANY_ID}/hardeningBroad/${label}`),{ok:true})},
+      {name:'companiesData',run:()=>setDoc(doc(owner,`companies/${COMPANY_ID}/data/hardening-${label}`),{ok:true})},
+      {name:'companiesShardGeneration',run:()=>setDoc(doc(owner,`companies/${COMPANY_ID}/shardedGenerations/g-${label}`),{ok:true})},
+      {name:'companiesShardChunk',run:()=>setDoc(doc(owner,`companies/${COMPANY_ID}/shardedGenerations/g-${label}/chunks/c-1`),{ok:true})},
+      {name:'companiesShardControl',run:()=>setDoc(doc(owner,`companies/${COMPANY_ID}/shardedControl/hardening-${label}`),{ok:true})},
+      {name:'companiesSyncConflict',run:()=>setDoc(doc(owner,`companies/${COMPANY_ID}/syncConflictBackups/hardening-${label}`),{ok:true})},
+      {name:'companiesTeacherView',run:()=>setDoc(doc(owner,`companies/${COMPANY_ID}/teacherViews/hardening-${label}@example.com`),{teacherId:'hardening'})},
+      {name:'companiesSchedulerView',run:()=>setDoc(doc(owner,`companies/${COMPANY_ID}/schedulerViews/hardening-${label}@example.com`),{email:`hardening-${label}@example.com`})},
+      {name:'companiesBranchView',run:()=>setDoc(doc(owner,`companies/${COMPANY_ID}/branchViews/hardening-${label}@example.com`),{branchIds:['branch-a']})},
+      {name:'companiesScheduleRequest',run:()=>setDoc(doc(scheduler,`companies/${COMPANY_ID}/scheduleRequests/schedule-${label}`),scheduleRequest)},
+      {name:'companiesLessonMeta',run:()=>setDoc(doc(owner,`companies/${COMPANY_ID}/lessonMeta/hardening-${label}`),{active:true,teacherIds:['teacher-1'],branchId:'branch-a'})},
+      {name:'companiesNotification',run:()=>setDoc(doc(owner,`companies/${COMPANY_ID}/scheduleNotifications/hardening-${label}`),{recipientEmail:TEACHER_EMAIL,read:false})},
+      {name:'companiesError',run:()=>setDoc(doc(owner,`companies/${COMPANY_ID}/errorEvents/hardening-${label}`),{release:'20.26.113',environment:'staging',category:'cloud-write',area:'access-guard',code:'hardening',role:'owner',retryable:false,occurredAt:serverTimestamp()})},
+      {name:'companiesReport',run:()=>setDoc(doc(owner,`companies/${COMPANY_ID}/lessonReports/hardening-${label}`),{companyId:COMPANY_ID,lessonId:`hardening-${label}`,reportedForTeacherIds:['teacher-1'],branchId:'branch-a',content:'hardening'})},
+      {name:'teacherReportSpecific',run:()=>setDoc(doc(teacher,`companies/${COMPANY_ID}/lessonReports/lesson-own`),{companyId:COMPANY_ID,lessonId:'lesson-own',reportedForTeacherIds:['teacher-1'],branchId:'branch-a',content:'teacher hardening'})}
+    ];
+  };
+
+  for(const mode of ['active','writer-open','paused','fenced','writer-hard-paused'])test(`${mode} 使用同一批合法 fixture ${mode==='active'||mode==='writer-open'?'全部允許':'逐項拒絕'}`,async()=>{await setGate(mode==='writer-open'||mode==='writer-hard-paused'?'active':mode);const rows=await surfaces(mode);for(const row of rows){await row.prepare?.();if(mode==='writer-open'||mode==='writer-hard-paused')await installWriter(mode);const result=row.run();if(mode==='active'||mode==='writer-open')await assertSucceeds(result);else await assertFails(result)}});
+
+  test('active 外觀但 safety identity 任一欄不符仍 fail-closed',async()=>{const owner=auth('owner-uid',OWNER_EMAIL);for(const changed of [{schema:'wrong-schema'},{environment:'production'},{companyId:'other-company'}]){await disabled(db=>setDoc(doc(db,safetyPath),{...gateCore(),...changed},{merge:false}));await assertFails(setDoc(doc(owner,`companies/${COMPANY_ID}/hardeningIdentity/${Object.keys(changed)[0]}`),{blocked:true}))}});
+});
+
+describe('trusted V1 writer-current W0 seed',()=>{
+  const writerPath=`stagingRecordSyncV1WriterCurrents/${COMPANY_ID}`,controlPath=`stagingRecordSyncControls/${COMPANY_ID}`,safetyPath=`stagingRecordSyncSafetyControls/${COMPANY_ID}`;
+  const source=()=>({schema:'danbridge-record-sync-control-v1',environment:'staging',companyId:COMPANY_ID,state:'active',activationEpoch:'writer-seed-epoch-1',manifestHash:'1'.repeat(64),candidateEpoch:'candidate-writer-1',candidateRevision:2,candidateSealHash:'2'.repeat(64),legacyVersionHash:'legacy-writer-1',recordDataHash:'record-v1:'+'3'.repeat(64),roleEvidenceHash:'4'.repeat(64),backupId:'backup-writer-1',restoreReceiptId:'restore-writer-1',collectionCount:16,documentCount:2,activeCount:1,tombstoneCount:1,roleViewCount:4,readTakeover:true,writeTakeover:true,activatedAt:'2026-08-17T10:00:00.123456789+08:00'});
+  const safety=()=>({schema:'danbridge-record-sync-safety-control-v1',environment:'staging',companyId:COMPANY_ID,activationEpoch:'writer-seed-epoch-1',state:'active',revision:3,lastEventId:'resume-writer-123',lastEventHash:'5'.repeat(64),readAllowed:true,writeAllowed:true,updatedAt:'2026-08-17T10:01:00.123456789+08:00'});
+  const writer=(extra={})=>buildOpenRecordSyncV1WriterCurrent({recordSyncControl:source(),safetyControl:safety(),writerGeneration:1,minClientProtocolVersion:4,minClientReleaseId:'20.26.114',createdAt:safety().updatedAt,...extra});
+  const seedSources=()=>testEnv.withSecurityRulesDisabled(async context=>{const db=context.firestore(),at=Timestamp.now();await setDoc(doc(db,controlPath),{...source(),persistedAt:at,activatedBy:'seed-admin',activatedByEmail:OWNER_EMAIL});await setDoc(doc(db,safetyPath),{...safety(),persistedAt:at,updatedBy:'seed-admin',updatedByEmail:OWNER_EMAIL})});
+  const payload=(uid='trusted-writer-uid',mail=OWNER_EMAIL)=>({...writer(),persistedAt:serverTimestamp(),persistedBy:uid,persistedByEmail:mail});
+
+  test('W absent保持legacy active；trusted operator可create W0，W open後日常write仍允許',async()=>{await seedSources();const trusted=authClaims('trusted-writer-uid',OWNER_EMAIL,{recordSyncV2CutoverOperator:true}),ordinary=auth('owner-uid',OWNER_EMAIL);await assertSucceeds(setDoc(doc(ordinary,`companies/${COMPANY_ID}/writerCompatibility/before`),{ok:true}));await assertFails(setDoc(doc(ordinary,writerPath),payload('owner-uid',OWNER_EMAIL)));await assertSucceeds(setDoc(doc(trusted,writerPath),payload()));await assertSucceeds(setDoc(doc(ordinary,`companies/${COMPANY_ID}/writerCompatibility/after`),{ok:true}));const saved=(await getDoc(doc(trusted,writerPath))).data();assert.equal(saved.state,'open');assert.equal(saved.sourceRecordSyncManifestHash,source().manifestHash)});
+
+  test('W create exact mirror/audit/clock/client floor，且update/delete/recreate全部拒',async()=>{await seedSources();const trusted=authClaims('trusted-writer-uid',OWNER_EMAIL,{recordSyncV2CutoverOperator:true});for(const [index,changed] of [{sourceRecordSyncManifestHash:'6'.repeat(64)},{safetyRevision:99},{state:'hard-paused'},{admissionPolicyToken:'forged-open-policy-token'},{persistedBy:'other-uid'},{persistedByEmail:'other@example.com'}].entries())await assertFails(setDoc(doc(trusted,writerPath),{...payload(),...changed}));for(const poisoned of [writer({createdAt:'2026-08-17T10:01:00.123456790+08:00'}),writer({minClientProtocolVersion:5}),writer({minClientReleaseId:'20.26.115'})])await assertFails(setDoc(doc(trusted,writerPath),{...poisoned,persistedAt:serverTimestamp(),persistedBy:'trusted-writer-uid',persistedByEmail:OWNER_EMAIL}));await assertSucceeds(setDoc(doc(trusted,writerPath),payload()));await assertFails(updateDoc(doc(trusted,writerPath),{minClientReleaseId:'20.26.999'}));await assertFails(deleteDoc(doc(trusted,writerPath)));await assertFails(setDoc(doc(trusted,writerPath),payload(),{merge:false}))});
+
+  test('同tx W0 create遇到S0 pause after-state必全批拒且不留下W',async()=>{await seedSources();const trusted=authClaims('trusted-writer-uid',OWNER_EMAIL,{recordSyncV2CutoverOperator:true}),pause=buildRecordSyncSafetyPause({control:safety(),eventId:'pause-writer-seed-1',reason:'W0 after-state race',safeRecordDataHash:'record-v1:'+'6'.repeat(64),cloudBackupId:'writer-pause-backup-1',createdAt:'2026-08-17T10:02:00.123456789+08:00'});await assertFails(runTransaction(trusted,async transaction=>{transaction.set(doc(trusted,writerPath),payload());transaction.set(doc(trusted,`stagingRecordSyncSafetyEvents/${COMPANY_ID}/epochs/${safety().activationEpoch}/events/${pause.event.eventId}`),{...pause.event,persistedAt:serverTimestamp(),createdBy:'trusted-writer-uid',createdByEmail:OWNER_EMAIL});transaction.set(doc(trusted,safetyPath),{...pause.nextControl,persistedAt:serverTimestamp(),updatedBy:'trusted-writer-uid',updatedByEmail:OWNER_EMAIL},{merge:false})}));assert.equal((await getDoc(doc(trusted,writerPath))).exists(),false);assert.equal((await getDoc(doc(trusted,safetyPath))).data().state,'active')});
+
+  test('W若被Admin篡改root/safety/state，legacy寫入fail closed；hard-paused會阻止generic resume',async()=>{await seedSources();const trusted=authClaims('trusted-writer-uid',OWNER_EMAIL,{recordSyncV2CutoverOperator:true}),owner=auth('owner-uid',OWNER_EMAIL);await assertSucceeds(setDoc(doc(trusted,writerPath),payload()));for(const changed of [{sourceRecordSyncManifestHash:'f'.repeat(64)},{safetyRevision:99},{state:'hard-paused'},{admissionPolicyToken:'v1-admission:'+'0'.repeat(64)},{admissionOpen:false},{acceptNewSessions:false},{acceptNewMutations:false}]){await testEnv.withSecurityRulesDisabled(context=>setDoc(doc(context.firestore(),writerPath),{...writer(),...changed,persistedAt:Timestamp.now(),persistedBy:'admin',persistedByEmail:OWNER_EMAIL},{merge:false}));await assertFails(setDoc(doc(owner,`companies/${COMPANY_ID}/writerBlocked/${Object.keys(changed)[0]}`),{blocked:true}))}await testEnv.withSecurityRulesDisabled(async context=>{const db=context.firestore();await setDoc(doc(db,writerPath),{...writer(),persistedAt:Timestamp.now(),persistedBy:'admin',persistedByEmail:OWNER_EMAIL},{merge:false});await setDoc(doc(db,safetyPath),{...safety(),activationEpoch:'writer-seed-other-epoch'},{merge:false})});await assertFails(setDoc(doc(owner,`companies/${COMPANY_ID}/writerBlocked/safetyActivationEpoch`),{blocked:true}))});
+
+  test('W exists即使open也逐項拒recovery receipt、resume event與S paused→active',async()=>{await seedSources();const owner=auth('owner-uid',OWNER_EMAIL),pause=buildRecordSyncSafetyPause({control:safety(),eventId:'pause-writer-resume-1',reason:'writer safety mutation fence',safeRecordDataHash:'record-v1:'+'7'.repeat(64),cloudBackupId:'writer-resume-backup-1',createdAt:'2026-08-17T10:02:00.123456789+08:00'}),recovery=buildRecordSyncRecoveryReceipt({environment:'staging',activationEpoch:safety().activationEpoch,pauseEventId:pause.event.eventId,sourceBackupId:'writer-resume-backup-1',restoredRecordDataHash:'record-v1:'+'8'.repeat(64),operationLogHash:'9'.repeat(64),confirmedOperationCount:0,createdAt:'2026-08-17T10:03:00.123456789+08:00'}),recoveryPath=`stagingRecordSyncRecoveryReceipts/${COMPANY_ID}/epochs/${safety().activationEpoch}/receipts/${recovery.receiptHash}`;await testEnv.withSecurityRulesDisabled(async context=>{const db=context.firestore();await setDoc(doc(db,writerPath),{...writer(),persistedAt:Timestamp.now(),persistedBy:'admin',persistedByEmail:OWNER_EMAIL});await setDoc(doc(db,safetyPath),pause.nextControl,{merge:false});await setDoc(doc(db,'stagingMigrationBackups/danbridge/runs/writer-resume-backup-1'),{state:'verified'})});await assertFails(setDoc(doc(owner,recoveryPath),{...recovery,persistedAt:serverTimestamp(),persistedBy:'owner-uid',persistedByEmail:OWNER_EMAIL}));await testEnv.withSecurityRulesDisabled(context=>setDoc(doc(context.firestore(),recoveryPath),recovery));const resume=buildRecordSyncSafetyResume({control:pause.nextControl,eventId:'resume-writer-hardpaused-1',recoveryReceipt:recovery,readbackRecordDataHash:recovery.restoredRecordDataHash,createdAt:'2026-08-17T10:04:00.123456789+08:00'}),eventPath=`stagingRecordSyncSafetyEvents/${COMPANY_ID}/epochs/${safety().activationEpoch}/events/${resume.event.eventId}`;await testEnv.withSecurityRulesDisabled(context=>setDoc(doc(context.firestore(),safetyPath),resume.nextControl,{merge:false}));await assertFails(setDoc(doc(owner,eventPath),{...resume.event,persistedAt:serverTimestamp(),createdBy:'owner-uid',createdByEmail:OWNER_EMAIL}));await testEnv.withSecurityRulesDisabled(async context=>{const db=context.firestore();await setDoc(doc(db,safetyPath),pause.nextControl,{merge:false});await setDoc(doc(db,eventPath),resume.event)});await assertFails(setDoc(doc(owner,safetyPath),{...resume.nextControl,persistedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL},{merge:false}))});
+});
+
+describe('V2 takeover candidate trusted atomic pair',()=>{
+  const controlPath=epoch=>`stagingRecordSyncV2TakeoverCandidateControls/${COMPANY_ID}/epochs/${epoch}`,headPath=epoch=>`stagingActiveRecordV2Heads/${COMPANY_ID}/epochs/${epoch}`,zero='0'.repeat(64),hash=value=>String(value).repeat(64);
+  const pair=(epoch='v2-candidate-rules-epoch-1')=>{const head={schema:'danbridge-active-record-v2-authority-bound-head-v1',state:'root-installed-candidate',scope:'revision-zero-genesis-binding-not-daily-commit-control-or-write-takeover-authority',environment:'staging',companyId:COMPANY_ID,sourceV1ActivationEpoch:'v1-source-rules-epoch-1',targetV2Epoch:epoch,authorityRootHash:hash('1'),genesisAuthorityHash:hash('2'),genesisAuthorityAuditHash:hash('3'),changesAuthorityHash:hash('4'),changesAuthorityAuditHash:hash('5'),seedId:`v2-genesis:${hash('6')}`,revision:0,headSaveId:'',previousCommitHash:zero,commitHash:zero,operationCount:0,updatedAt:'',lastActorUid:'',lastActorEmail:'',previousHeadHash:zero,headHash:hash('7')},control={schema:'danbridge-record-sync-v2-takeover-candidate-control-v1',state:'root-installed-candidate',scope:'root-installed-candidate-not-active-rules-runtime-session-mutation-audit-append-or-write-takeover-authority',environment:'staging',companyId:COMPANY_ID,sourceV1ActivationEpoch:head.sourceV1ActivationEpoch,targetV2Epoch:epoch,authorityRootHash:head.authorityRootHash,authorityBoundHeadHash:head.headHash,genesisAuthorityHash:head.genesisAuthorityHash,genesisAuthorityAuditHash:head.genesisAuthorityAuditHash,changesAuthorityHash:head.changesAuthorityHash,changesAuthorityAuditHash:head.changesAuthorityAuditHash,seedId:head.seedId,sourceRawDocumentRootHash:hash('8'),activeLogicalHashSchema:'danbridge-record-sync-v1-raw-active-logical-hash-v1',activeLogicalDataHash:`raw-active-v1:${hash('9')}`,documentCount:0,activeCount:0,tombstoneCount:0,auditedCount:0,unauditedCount:0,reservationPlanManifestHash:hash('a'),durableReservationManifestHash:hash('b'),durableCursorHash:hash('c'),strictReservationReadbackReceiptHash:hash('d'),changesDocumentCount:0,distinctReservationCount:0,unreservableCount:0,candidateNextIndex:0,cursorRevision:0,writerProtocol:'v2',writerGeneration:2,rulesetHash:hash('e'),minClientProtocolVersion:4,minClientReleaseId:'20.26.114',createdAt:'2026-08-17T11:29:00.123456789+08:00',readAllowed:false,writeAllowed:false,readTakeoverEnabled:false,writeTakeoverEnabled:false,acceptNewSessions:false,acceptNewMutations:false,allowAuditAppends:false,controlHash:hash('f')};return{control,head}};
+  const trusted=(uid='trusted-cutover-uid',email=OWNER_EMAIL)=>authClaims(uid,email,{recordSyncV2CutoverOperator:true});
+  const writePair=(db,epoch,patch={})=>{const artifacts=pair(epoch),uid=patch.uid??'trusted-cutover-uid',email=patch.email??OWNER_EMAIL,at=patch.literalTime??serverTimestamp(),control={...artifacts.control,...patch.control,persistedAt:at,persistedBy:patch.persistedBy??uid,persistedByEmail:patch.persistedByEmail??email},head={...artifacts.head,...patch.head,persistedAt:at,persistedBy:patch.headPersistedBy??uid,persistedByEmail:patch.headPersistedByEmail??email};return runTransaction(db,async transaction=>{transaction.set(doc(db,controlPath(epoch)),control);transaction.set(doc(db,headPath(epoch)),head)})};
+
+  test('Candidate C/H僅Admin/CI可建立；operatorOwner只讀，其他client讀寫皆拒',async()=>{
+    const epoch='v2-candidate-admin-only-1',artifacts=pair(epoch),at=Timestamp.now();
+    const allowedReaders=[trusted(),trusted('backup-owner-uid',BACKUP_OWNER_EMAIL)];
+    const deniedReaders=[auth('owner-uid',OWNER_EMAIL),auth('backup-owner-uid',BACKUP_OWNER_EMAIL),authClaims('teacher-uid',TEACHER_EMAIL,{recordSyncV2CutoverOperator:true}),unauthenticated()];
+    for(const actor of [...allowedReaders,...deniedReaders])await assertFails(writePair(actor,epoch));
+    await testEnv.withSecurityRulesDisabled(async context=>{
+      const db=context.firestore(),audit={persistedAt:at,persistedBy:'record-sync-v2-ci-emulator',persistedByEmail:'record-sync-v2-ci-emulator@danbridge.invalid'};
+      await setDoc(doc(db,controlPath(epoch)),{...artifacts.control,...audit});
+      await setDoc(doc(db,headPath(epoch)),{...artifacts.head,...audit});
+    });
+    for(const actor of allowedReaders){
+      assert.equal((await assertSucceeds(getDoc(doc(actor,controlPath(epoch))))).exists(),true);
+      assert.equal((await assertSucceeds(getDoc(doc(actor,headPath(epoch))))).exists(),true);
+    }
+    for(const actor of deniedReaders){
+      await assertFails(getDoc(doc(actor,controlPath(epoch))));
+      await assertFails(getDoc(doc(actor,headPath(epoch))));
+    }
+  });
+
+  test('單寫與Admin遺留partial都不能由client補齊',async()=>{const db=trusted(),epoch='v2-candidate-single-1',artifacts=pair(epoch),audit={persistedAt:serverTimestamp(),persistedBy:'trusted-cutover-uid',persistedByEmail:OWNER_EMAIL};await assertFails(setDoc(doc(db,controlPath(epoch)),{...artifacts.control,...audit}));await assertFails(setDoc(doc(db,headPath(epoch)),{...artifacts.head,...audit}));await testEnv.withSecurityRulesDisabled(async context=>setDoc(doc(context.firestore(),controlPath(epoch)),{...artifacts.control,persistedAt:Timestamp.now(),persistedBy:'trusted-cutover-uid',persistedByEmail:OWNER_EMAIL}));await assertFails(setDoc(doc(db,headPath(epoch)),{...artifacts.head,...audit}))});
+
+  test('mirror/hash/audit/actor/任一enable flag與舊V1 schema全部拒',async()=>{const cases=[{control:{authorityBoundHeadHash:hash('0')}},{head:{authorityRootHash:hash('0')}},{control:{controlHash:zero}},{persistedBy:'forged-uid'},{persistedByEmail:'other@example.com'},{headPersistedBy:'other-uid'},{literalTime:Timestamp.fromMillis(Date.now()-60000)},{control:{writeAllowed:true}},{control:{readTakeoverEnabled:true}},{control:{schema:'danbridge-record-sync-control-v1'}}];for(let index=0;index<cases.length;index++)await assertFails(writePair(trusted(),`v2-candidate-invalid-${index}`,cases[index]))});
+
+  test('Admin建立後candidate pair對所有client immutable；不同company path亦全部拒',async()=>{const db=trusted(),epoch='v2-candidate-immutable-1',artifacts=pair(epoch);await testEnv.withSecurityRulesDisabled(async context=>{const adminDb=context.firestore(),at=Timestamp.now(),audit={persistedAt:at,persistedBy:'record-sync-v2-ci-emulator',persistedByEmail:'record-sync-v2-ci-emulator@danbridge.invalid'};await setDoc(doc(adminDb,controlPath(epoch)),{...artifacts.control,...audit});await setDoc(doc(adminDb,headPath(epoch)),{...artifacts.head,...audit})});await assertFails(updateDoc(doc(db,controlPath(epoch)),{minClientReleaseId:'20.26.999'}));await assertFails(deleteDoc(doc(db,headPath(epoch))));const at=serverTimestamp();await assertFails(runTransaction(db,async transaction=>{transaction.set(doc(db,`stagingRecordSyncV2TakeoverCandidateControls/other/epochs/${epoch}`),{...artifacts.control,companyId:'other',persistedAt:at,persistedBy:'trusted-cutover-uid',persistedByEmail:OWNER_EMAIL});transaction.set(doc(db,`stagingActiveRecordV2Heads/other/epochs/${epoch}`),{...artifacts.head,companyId:'other',persistedAt:at,persistedBy:'trusted-cutover-uid',persistedByEmail:OWNER_EMAIL})}))});
+
+  test('I2 intent僅operatorOwner可讀且所有client CUD永久拒',async()=>{const path='stagingRecordSyncV2ActivationCutoverIntents/danbridge/epochs/i2-admin-only',operator=trusted(),ordinary=auth('owner-uid',OWNER_EMAIL),teacher=authClaims('teacher-uid',TEACHER_EMAIL,{recordSyncV2CutoverOperator:true}),foreign=authClaims('foreign-owner','foreign@example.com',{recordSyncV2CutoverOperator:true}),at=Timestamp.now();await testEnv.withSecurityRulesDisabled(context=>setDoc(doc(context.firestore(),path),{schema:'fixture-i2',persistedAt:at}));assert.equal((await assertSucceeds(getDoc(doc(operator,path)))).exists(),true);for(const db of [ordinary,teacher,foreign,unauthenticated()])await assertFails(getDoc(doc(db,path)));for(const db of [operator,ordinary,teacher]){await assertFails(setDoc(doc(db,path),{forged:true}));await assertFails(updateDoc(doc(db,path),{forged:true}));await assertFails(deleteDoc(doc(db,path)))}});
+
+  test('D1 fixed receipt僅operatorOwner可讀且所有client CUD永久拒',async()=>{const path='stagingRecordSyncV2DeploymentReceipts/danbridge/epochs/d1-admin-only/receipts/trusted-deployment-evidence-v2',operator=trusted(),backupOperator=trusted('backup-owner-uid',BACKUP_OWNER_EMAIL),ordinary=auth('owner-uid',OWNER_EMAIL),teacher=authClaims('teacher-uid',TEACHER_EMAIL,{recordSyncV2CutoverOperator:true}),foreign=authClaims('foreign-owner','foreign@example.com',{recordSyncV2CutoverOperator:true}),at=Timestamp.now();await testEnv.withSecurityRulesDisabled(context=>setDoc(doc(context.firestore(),path),{schema:'fixture-d1',persistedAt:at}));for(const db of [operator,backupOperator])assert.equal((await assertSucceeds(getDoc(doc(db,path)))).exists(),true);for(const db of [ordinary,teacher,foreign,unauthenticated()])await assertFails(getDoc(doc(db,path)));for(const db of [operator,backupOperator,ordinary,teacher]){await assertFails(setDoc(doc(db,path),{forged:true}));await assertFails(updateDoc(doc(db,path),{forged:true}));await assertFails(deleteDoc(doc(db,path)))}});
+
+  test('R0 registration僅operatorOwner可讀且所有client CUD永久拒',async()=>{const seed='v2-genesis:'+hash('3'),path=`stagingRecordSyncV2Reservations/danbridge/epochs/r0-admin-only/seeds/${seed}`,operator=trusted(),backupOperator=trusted('backup-owner-uid',BACKUP_OWNER_EMAIL),ordinary=auth('owner-uid',OWNER_EMAIL),teacher=authClaims('teacher-uid',TEACHER_EMAIL,{recordSyncV2CutoverOperator:true}),foreign=authClaims('foreign-owner','foreign@example.com',{recordSyncV2CutoverOperator:true}),anonymous=unauthenticated();await testEnv.withSecurityRulesDisabled(context=>setDoc(doc(context.firestore(),path),{schema:'danbridge-record-sync-v2-change-reservation-registration-v1',persistedAt:Timestamp.now(),persistedBy:'legacy-owner',persistedByEmail:OWNER_EMAIL}));for(const db of [operator,backupOperator])assert.equal((await assertSucceeds(getDoc(doc(db,path)))).exists(),true);for(const db of [ordinary,teacher,foreign,anonymous])await assertFails(getDoc(doc(db,path)));for(const db of [operator,backupOperator,ordinary,teacher,foreign]){await assertFails(setDoc(doc(db,path),{schema:'danbridge-record-sync-v2-change-reservation-registration-v1',persistedAt:serverTimestamp()}));await assertFails(updateDoc(doc(db,path),{forged:true}));await assertFails(deleteDoc(doc(db,path)))}});
+
+  test('G1.5 identity index root/bucket/seal對所有client read與CUD永久拒',async()=>{const base='stagingRecordSyncV2GenesisIdentityIndexes/danbridge/epochs/g15-admin-only/seeds/v2-genesis:'+hash('1'),paths=[`${base}/buckets/000`,`${base}/bucketSeals/000`,`${base}/artifacts/root`],actors=[trusted(),trusted('backup-owner-uid',BACKUP_OWNER_EMAIL),auth('owner-uid',OWNER_EMAIL),authClaims('teacher-uid',TEACHER_EMAIL,{recordSyncV2CutoverOperator:true}),authClaims('foreign-owner','foreign@example.com',{recordSyncV2CutoverOperator:true}),unauthenticated()];await testEnv.withSecurityRulesDisabled(async context=>{for(const path of paths)await setDoc(doc(context.firestore(),path),{schema:'fixture-g15'})});for(const db of actors)for(const path of paths){await assertFails(getDoc(doc(db,path)));await assertFails(setDoc(doc(db,path),{forged:true}));await assertFails(updateDoc(doc(db,path),{forged:true}));await assertFails(deleteDoc(doc(db,path)))}});
+
+  test('G2 manifest/readback與G3 authority僅operatorOwner可讀，所有client含舊schema CUD永久拒',async()=>{const seed='v2-genesis:'+hash('2'),base=`stagingRecordSyncV2Genesis/danbridge/epochs/g23-admin-only/seeds/${seed}`,paths=[`${base}/artifacts/manifest`,`${base}/artifacts/readback`,`stagingRecordSyncV2GenesisAuthorities/danbridge/epochs/g23-admin-only/seeds/${seed}`],operator=trusted(),backup=trusted('backup-owner-uid',BACKUP_OWNER_EMAIL),ordinary=auth('owner-uid',OWNER_EMAIL),teacher=authClaims('teacher-uid',TEACHER_EMAIL,{recordSyncV2CutoverOperator:true}),foreign=authClaims('foreign-owner','foreign@example.com',{recordSyncV2CutoverOperator:true}),anonymous=unauthenticated();await testEnv.withSecurityRulesDisabled(async context=>{for(const path of paths)await setDoc(doc(context.firestore(),path),{schema:'fixture-admin-ci',persistedAt:Timestamp.now()})});for(const db of [operator,backup])for(const path of paths)assert.equal((await assertSucceeds(getDoc(doc(db,path)))).exists(),true);for(const db of [ordinary,teacher,foreign,anonymous])for(const path of paths)await assertFails(getDoc(doc(db,path)));for(const db of [operator,backup,ordinary,teacher])for(const path of paths){await assertFails(setDoc(doc(db,path),{schema:'danbridge-record-sync-v2-legacy-v1'}));await assertFails(updateDoc(doc(db,path),{forged:true}));await assertFails(deleteDoc(doc(db,path)))}for(const db of [operator,backup]){const suffix=db===operator?'primary':'backup';await assertFails(setDoc(doc(db,`${base}/artifacts/legacy-${suffix}`),{schema:'danbridge-record-sync-v2-genesis-durable-manifest-v1'}));await assertFails(setDoc(doc(db,`stagingRecordSyncV2GenesisAuthorities/danbridge/epochs/g23-admin-only-${suffix}/seeds/${seed}`),{schema:'danbridge-record-sync-v2-genesis-authority-v1'}))}});
+
+  test('future deployment/active/safety/session/daily/ledger/genesis/reservation仍deny-only',async()=>{const db=trusted(),paths=['stagingRecordSyncV2DeploymentReceipts/danbridge/epochs/blocked/receipts/r1','stagingRecordSyncV2ActiveControls/danbridge/epochs/blocked','stagingRecordSyncV2SafetyControls/danbridge/epochs/blocked','stagingRecordSyncV2Sessions/danbridge/epochs/blocked/sessions/s1','stagingRecordSyncV2PermanentFences/danbridge/epochs/blocked','stagingActiveRecordV2Records/danbridge/epochs/blocked/collections/lessons/records/l1','stagingActiveRecordV2OperationReceipts/danbridge/epochs/blocked/operations/o1','stagingActiveRecordV2SaveCommits/danbridge/epochs/blocked/saves/s1','stagingRecordSyncV2Genesis/danbridge/epochs/blocked','stagingRecordSyncV2Reservations/danbridge/epochs/blocked'];for(const path of paths){await assertFails(setDoc(doc(db,path),{forged:true}));await assertFails(getDoc(doc(db,path)))}});
+});
 after(async () => {
   await testEnv?.cleanup();
+});
+
+  describe('角色逐筆即時檢視權限、墓碑與中斷發布',()=>{
+  const epoch='role-view-epoch-1';
+  const emptyDb=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]));
+  const roleCollections=[...FULL_RECORD_COLLECTIONS];
+  const setupRoot=async({paused=false,state='active',readTakeover=true,writeTakeover=true,activationEpoch=epoch}={})=>testEnv.withSecurityRulesDisabled(async context=>{const db=context.firestore(),stamp=Timestamp.now();await setDoc(doc(db,`stagingRecordSyncControls/${COMPANY_ID}`),{schema:'danbridge-record-sync-control-v1',environment:'staging',companyId:COMPANY_ID,state,activationEpoch,readTakeover,writeTakeover});await setDoc(doc(db,`stagingRecordSyncSafetyControls/${COMPANY_ID}`),{schema:'danbridge-record-sync-safety-control-v1',environment:'staging',companyId:COMPANY_ID,activationEpoch,state:paused?'paused':'active',revision:paused?2:1,lastEventId:paused?'pause-role-view-1':'activation:role-view-1',lastEventHash:'a'.repeat(64),readAllowed:true,writeAllowed:!paused,updatedAt:'2026-08-15T04:00:00+08:00',persistedAt:stamp,updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL})});
+  const roleAdapter=(db,uid,email,{failBatch=0}={})=>{let batchNumber=0;return createFirebaseRoleRecordViewAdapter({environment:'staging',role:'owner',actor:{uid,email},serverTimestamp,getDocument:path=>getDoc(doc(db,path)),getCollectionDocuments:async path=>(await getDocs(collection(db,path))).docs.map(row=>({id:row.id,data:row.data()})),runBatchTransaction:callback=>{batchNumber++;if(failBatch===batchNumber)throw new Error('Emulator injected interruption');return runTransaction(db,transaction=>callback({get:path=>transaction.get(doc(db,path)),set:(path,value)=>transaction.set(doc(db,path),value,{merge:false})}))},runTransaction:callback=>runTransaction(db,transaction=>callback({get:path=>transaction.get(doc(db,path)),set:(path,value)=>transaction.set(doc(db,path),value,{merge:false})}))})};
+  const publish=(adapter,db,identity,label='first',extra={})=>adapter.synchronize(db,{identity,activationEpoch:epoch,sourceRecordHash:recordDataHash(db),publishId:`publish-${label}-12345`,publishedAt:`2026-08-15T04:${label==='first'?'01':'02'}:00+08:00`,batchSize:2,...extra});
+  const teacherIdentity={email:TEACHER_EMAIL,kind:'teacher',teacherId:'teacher-1',branchIds:[]},schedulerIdentity={email:SECOND_SCHEDULER_EMAIL,kind:'scheduler',teacherId:'teacher-2',branchIds:[]},managerIdentity={email:MANAGER_EMAIL,kind:'branch_manager',teacherId:'manager-teacher',branchIds:['branch-a']};
+
+  test('尚未啟用時本人可把缺少的角色控制讀成不存在並維持 legacy；跨角色與停權仍拒絕',async()=>{
+    const teacher=auth('teacher-uid',TEACHER_EMAIL),scheduler=auth('scheduler-2-uid',SECOND_SCHEDULER_EMAIL),manager=auth('manager-uid',MANAGER_EMAIL),inactive=auth('inactive-uid',INACTIVE_EMAIL),controlPath=email=>`stagingRoleRecordViewControls/${COMPANY_ID}/views/${email}`;
+    await testEnv.withSecurityRulesDisabled(async context=>deleteDoc(doc(context.firestore(),`stagingRecordSyncSafetyControls/${COMPANY_ID}`)));
+    for(const [db,email] of [[teacher,TEACHER_EMAIL],[scheduler,SECOND_SCHEDULER_EMAIL],[manager,MANAGER_EMAIL]]){
+      const snapshot=await assertSucceeds(getDoc(doc(db,controlPath(email))));
+      assert.equal(snapshot.exists(),false);
+      const safety=await assertSucceeds(getDoc(doc(db,`stagingRecordSyncSafetyControls/${COMPANY_ID}`)));
+      assert.equal(safety.exists(),false);
+    }
+    await assertFails(getDoc(doc(teacher,controlPath(SECOND_SCHEDULER_EMAIL))));
+    await assertFails(getDoc(doc(scheduler,controlPath(TEACHER_EMAIL))));
+    await assertFails(getDoc(doc(inactive,controlPath(INACTIVE_EMAIL))));
+  });
+
+  test('Daniel 發布後，aa／一般老師／主管只能讀自己的 scope；Catherine 可接手 Owner 讀寫',async()=>{
+    await setupRoot();const owner=auth('owner-uid',OWNER_EMAIL),backup=auth('backup-owner-uid',BACKUP_OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),scheduler=auth('scheduler-2-uid',SECOND_SCHEDULER_EMAIL),manager=auth('manager-uid',MANAGER_EMAIL),inactive=auth('inactive-uid',INACTIVE_EMAIL);
+    const teacherDb=emptyDb();teacherDb.lessons=[{id:'teacher-lesson',teacherId:'teacher-1'}];const schedulerDb=emptyDb();schedulerDb.lessons=[{id:'scheduler-lesson',teacherId:'teacher-2'}];const managerDb=emptyDb();managerDb.lessons=[{id:'manager-lesson',teacherId:'manager-teacher',branchId:'branch-a'}];managerDb.fixedExpenses=[{id:'manager-expense',branchId:'branch-a'}];
+    const teacherView=await publish(roleAdapter(owner,'owner-uid',OWNER_EMAIL),teacherDb,teacherIdentity,'teacher'),schedulerView=await publish(roleAdapter(owner,'owner-uid',OWNER_EMAIL),schedulerDb,schedulerIdentity,'scheduler'),managerView=await publish(roleAdapter(owner,'owner-uid',OWNER_EMAIL),managerDb,managerIdentity,'manager');
+    const controlPath=email=>`stagingRoleRecordViewControls/${COMPANY_ID}/views/${email}`,recordPath=(view,collectionName,id)=>`stagingRoleRecordViews/${COMPANY_ID}/views/${view.viewKey}/collections/${collectionName}/records/${id}`;
+    await assertSucceeds(getDoc(doc(teacher,controlPath(TEACHER_EMAIL))));await assertSucceeds(getDoc(doc(teacher,recordPath(teacherView,'lessons','teacher-lesson'))));await assertFails(getDoc(doc(teacher,controlPath(SECOND_SCHEDULER_EMAIL))));await assertFails(getDoc(doc(teacher,recordPath(schedulerView,'lessons','scheduler-lesson'))));
+    await assertSucceeds(getDoc(doc(scheduler,controlPath(SECOND_SCHEDULER_EMAIL))));await assertSucceeds(getDoc(doc(scheduler,recordPath(schedulerView,'lessons','scheduler-lesson'))));await assertFails(getDoc(doc(scheduler,recordPath(teacherView,'lessons','teacher-lesson'))));
+    await assertSucceeds(getDoc(doc(manager,controlPath(MANAGER_EMAIL))));await assertSucceeds(getDoc(doc(manager,recordPath(managerView,'lessons','manager-lesson'))));await assertSucceeds(getDoc(doc(manager,recordPath(managerView,'fixedExpenses','manager-expense'))));await assertFails(getDoc(doc(manager,recordPath(schedulerView,'lessons','scheduler-lesson'))));
+    for(const db of [teacher,scheduler,manager])await assertSucceeds(getDoc(doc(db,`stagingRecordSyncSafetyControls/${COMPANY_ID}`)));await assertFails(getDoc(doc(inactive,`stagingRecordSyncSafetyControls/${COMPANY_ID}`)));await assertFails(getDoc(doc(inactive,controlPath(TEACHER_EMAIL))));
+    await assertSucceeds(getDoc(doc(backup,recordPath(teacherView,'lessons','teacher-lesson'))));teacherDb.lessons[0].room='Catherine';const byCatherine=await publish(roleAdapter(backup,'backup-owner-uid',BACKUP_OWNER_EMAIL),teacherDb,teacherIdentity,'backup');assert.equal(byCatherine.control.persistedByEmail,BACKUP_OWNER_EMAIL);assert.equal((await getDoc(doc(teacher,recordPath(teacherView,'lessons','teacher-lesson')))).data().record.room,'Catherine');
+    const forged=(await getDoc(doc(owner,recordPath(teacherView,'lessons','teacher-lesson')))).data();await assertFails(setDoc(doc(teacher,recordPath(teacherView,'lessons','teacher-write')),{...forged,recordId:'teacher-write',record:{id:'teacher-write'},revision:1,updatedAt:serverTimestamp(),updatedBy:'teacher-uid',updatedByEmail:TEACHER_EMAIL}));
+  });
+
+  test('aa 與一般老師 16 集合 list 驗證：本人通過，外他 view 擋掉；停權與未登入拒絕',async()=>{
+    await setupRoot();const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),scheduler=auth('scheduler-2-uid',SECOND_SCHEDULER_EMAIL),inactive=auth('inactive-uid',INACTIVE_EMAIL),anon=unauthenticated();
+    const teacherDb=emptyDb();teacherDb.lessons=[{id:'teacher-lesson',teacherId:'teacher-1'}];const schedulerDb=emptyDb();schedulerDb.lessons=[{id:'scheduler-lesson',teacherId:'teacher-2'}];
+    const teacherView=await publish(roleAdapter(owner,'owner-uid',OWNER_EMAIL),teacherDb,teacherIdentity,'teacher-list-pass'),schedulerView=await publish(roleAdapter(owner,'owner-uid',OWNER_EMAIL),schedulerDb,schedulerIdentity,'scheduler-list-pass');
+    const collectionPath=(viewKey,collectionId)=>`stagingRoleRecordViews/${COMPANY_ID}/views/${viewKey}/collections/${collectionId}/records`;
+    for(const collectionId of roleCollections){
+      await assertSucceeds(getDocs(collection(scheduler,collectionPath(schedulerView.viewKey,collectionId))));
+      await assertFails(getDocs(collection(teacher,collectionPath(schedulerView.viewKey,collectionId))));
+      await assertSucceeds(getDocs(collection(teacher,collectionPath(teacherView.viewKey,collectionId))));
+      await assertFails(getDocs(collection(scheduler,collectionPath(teacherView.viewKey,collectionId))));
+    }
+    await testEnv.withSecurityRulesDisabled(async context=>{const db=context.firestore();await setDoc(doc(db,`stagingRecordSyncControls/${COMPANY_ID}`),{schema:'danbridge-record-sync-control-v1',environment:'staging',companyId:COMPANY_ID,state:'sealed',activationEpoch:epoch,readTakeover:true,writeTakeover:true},{merge:false});});
+    await assertFails(getDocs(collection(teacher,collectionPath(teacherView.viewKey,roleCollections[0]))));
+    await testEnv.withSecurityRulesDisabled(async context=>{const db=context.firestore();await setDoc(doc(db,`stagingRecordSyncControls/${COMPANY_ID}`),{schema:'danbridge-record-sync-control-v1',environment:'staging',companyId:COMPANY_ID,state:'active',activationEpoch:epoch,readTakeover:false,writeTakeover:true},{merge:false});});
+    await assertFails(getDocs(collection(teacher,collectionPath(teacherView.viewKey,roleCollections[0]))));
+    await testEnv.withSecurityRulesDisabled(async context=>{const db=context.firestore();await setDoc(doc(db,`stagingRecordSyncControls/${COMPANY_ID}`),{schema:'danbridge-record-sync-control-v1',environment:'staging',companyId:COMPANY_ID,state:'active',activationEpoch:'mismatch-epoch',readTakeover:true,writeTakeover:true},{merge:false});});
+    await assertFails(getDocs(collection(teacher,collectionPath(teacherView.viewKey,roleCollections[0]))));
+    await testEnv.withSecurityRulesDisabled(async context=>{const db=context.firestore();await setDoc(doc(db,`stagingRecordSyncControls/${COMPANY_ID}`),{schema:'danbridge-record-sync-control-v1',environment:'staging',companyId:COMPANY_ID,state:'active',activationEpoch:epoch,readTakeover:true,writeTakeover:true},{merge:false});});
+    await assertSucceeds(getDocs(collection(teacher,collectionPath(teacherView.viewKey,roleCollections[0]))));
+    for(const db of [inactive,anon]){
+      await assertFails(getDocs(collection(db,collectionPath(schedulerView.viewKey,roleCollections[0]))));
+      await assertFails(getDocs(collection(db,collectionPath(teacherView.viewKey,roleCollections[0]))));
+    }
+  });
+
+  test('墓碑、同 ID 重建與 revision 在真實 Rules 下連續；實體刪除、跳版及錯 scope 全拒絕',async()=>{
+    await setupRoot();const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),adapter=roleAdapter(owner,'owner-uid',OWNER_EMAIL);let db=emptyDb();db.lessons=[{id:'tombstone-lesson',room:'A'}];const first=await publish(adapter,db,teacherIdentity,'first'),path=`stagingRoleRecordViews/${COMPANY_ID}/views/${first.viewKey}/collections/lessons/records/tombstone-lesson`;db=emptyDb();const removed=await publish(adapter,db,teacherIdentity,'remove');assert.equal((await getDoc(doc(owner,path))).data().revision,2);assert.equal((await getDoc(doc(owner,path))).data().deleted,true);assert.equal(removed.tombstoneCount,1);await assertSucceeds(getDoc(doc(teacher,path)));
+    db.lessons=[{id:'tombstone-lesson',room:'revived'}];await publish(adapter,db,teacherIdentity,'revive');assert.equal((await getDoc(doc(owner,path))).data().revision,3);assert.equal((await getDoc(doc(owner,path))).data().deleted,false);await assertFails(deleteDoc(doc(owner,path)));await assertFails(updateDoc(doc(owner,path),{revision:9}));
+    const controlPath=`stagingRoleRecordViewControls/${COMPANY_ID}/views/${TEACHER_EMAIL}`,control=(await getDoc(doc(owner,controlPath))).data();await assertFails(setDoc(doc(owner,controlPath),{...control,teacherId:'teacher-2',revision:control.revision+1,persistedAt:serverTimestamp(),persistedBy:'owner-uid',persistedByEmail:OWNER_EMAIL}));await assertFails(setDoc(doc(owner,controlPath),{...control,collectionActiveCounts:{...control.collectionActiveCounts,unknown:0},revision:control.revision+1,persistedAt:serverTimestamp(),persistedBy:'owner-uid',persistedByEmail:OWNER_EMAIL}));
+  });
+
+  test('分批中斷不發布控制且角色不可讀半套；續傳完成後才一次開放',async()=>{
+    await setupRoot();const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),db=emptyDb();db.lessons=Array.from({length:5},(_,index)=>({id:`resume-lesson-${index}`,teacherId:'teacher-1'}));const interrupted=roleAdapter(owner,'owner-uid',OWNER_EMAIL,{failBatch:2});await assert.rejects(()=>publish(interrupted,db,teacherIdentity,'interrupt'),/第 2 批失敗/);const viewKey=roleRecordViewKey(teacherIdentity,epoch),controlPath=`stagingRoleRecordViewControls/${COMPANY_ID}/views/${TEACHER_EMAIL}`,partialPath=`stagingRoleRecordViews/${COMPANY_ID}/views/${viewKey}/collections/lessons/records/resume-lesson-0`;assert.equal((await getDoc(doc(owner,controlPath))).exists(),false);await assertSucceeds(getDoc(doc(owner,partialPath)));await assertFails(getDoc(doc(teacher,partialPath)));
+    const resumed=await publish(roleAdapter(owner,'owner-uid',OWNER_EMAIL),db,teacherIdentity,'resume');await assertSucceeds(getDoc(doc(teacher,`stagingRoleRecordViewControls/${COMPANY_ID}/views/${TEACHER_EMAIL}`)));await assertSucceeds(getDoc(doc(teacher,`stagingRoleRecordViews/${COMPANY_ID}/views/${resumed.viewKey}/collections/lessons/records/resume-lesson-0`)));assert.equal(resumed.activeCount,5);
+  });
+
+  test('中央暫停時舊畫面仍可讀，但 Daniel／Catherine 都不能發布任何新角色資料',async()=>{
+    await setupRoot();const owner=auth('owner-uid',OWNER_EMAIL),backup=auth('backup-owner-uid',BACKUP_OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),db=emptyDb();db.lessons=[{id:'paused-lesson',teacherId:'teacher-1'}];const active=await publish(roleAdapter(owner,'owner-uid',OWNER_EMAIL),db,teacherIdentity,'first');await testEnv.withSecurityRulesDisabled(async context=>{const raw=context.firestore(),ref=doc(raw,`stagingRecordSyncSafetyControls/${COMPANY_ID}`),current=(await getDoc(ref)).data();await setDoc(ref,{...current,state:'paused',revision:2,lastEventId:'pause-role-view-1',writeAllowed:false})});await assertSucceeds(getDoc(doc(teacher,`stagingRoleRecordViews/${COMPANY_ID}/views/${active.viewKey}/collections/lessons/records/paused-lesson`)));await assertSucceeds(getDoc(doc(teacher,`stagingRecordSyncSafetyControls/${COMPANY_ID}`)));db.lessons[0].room='blocked';await assert.rejects(()=>publish(roleAdapter(owner,'owner-uid',OWNER_EMAIL),db,teacherIdentity,'paused-owner'),/第 1 批失敗/);await assert.rejects(()=>publish(roleAdapter(backup,'backup-owner-uid',BACKUP_OWNER_EMAIL),db,teacherIdentity,'paused-backup'),/第 1 批失敗/);
+  });
 });
 
 describe('未登入與停權帳號', () => {
@@ -251,6 +638,59 @@ describe('帳號邀請', () => {
     const uninvited = auth('uninvited-uid', 'uninvited@example.com');
     await assertFails(setDoc(doc(uninvited, 'users/uninvited-uid'), { email: 'uninvited@example.com', active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-1' }));
     await assertFails(getDoc(doc(uninvited, `companies/${COMPANY_ID}/teacherViews/${INVITED_EMAIL}`)));
+  });
+});
+
+describe('每日分片雲端備份權限與不可覆寫保護',()=>{
+  const keys=['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches'];
+  const build=(day,uid,email)=>{
+    const db=Object.fromEntries(keys.map(key=>[key,[]]));db.lessons=[{id:`lesson-${day}`,date:day,start:'10:00',end:'11:00'}];
+    const plan=prepareDailyShardedBackup(db,{day,environment:'staging',maxChunkBytes:180000}),readback=verifyDailyShardedBackupReadback(plan.manifest,plan.chunks),manifest={...sealDailyShardedBackup(plan.manifest,readback,{verifiedBy:uid,verifiedByEmail:email}),verifiedAt:serverTimestamp()},chunks=plan.chunks.map(chunk=>({...chunk,createdAt:serverTimestamp(),createdBy:uid,createdByEmail:email}));
+    return{manifest,chunks};
+  };
+  const dayRef=(db,day)=>doc(db,`dailyShardedBackups/${COMPANY_ID}/days/${day}`);
+  const chunkRef=(db,day,id)=>doc(db,`dailyShardedBackups/${COMPANY_ID}/days/${day}/chunks/${id}`);
+
+  test('Daniel 建立全部分片後才能建立 verified manifest，Catherine 可完整讀取',async()=>{
+    const owner=auth('owner-uid',OWNER_EMAIL),backupOwner=auth('backup-owner-uid',BACKUP_OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),day='2026-08-15',{manifest,chunks}=build(day,'owner-uid',OWNER_EMAIL);
+    for(const chunk of chunks)await assertSucceeds(setDoc(chunkRef(owner,day,chunk.chunkId),chunk));
+    await assertSucceeds(setDoc(dayRef(owner,day),manifest));
+    assert.equal((await assertSucceeds(getDocs(collection(backupOwner,`dailyShardedBackups/${COMPANY_ID}/days/${day}/chunks`)))).size,chunks.length);
+    await assertSucceeds(getDoc(dayRef(backupOwner,day)));
+    await assertFails(getDoc(dayRef(teacher,day)));
+    await assertFails(setDoc(chunkRef(teacher,day,'lessons-9999'),{...chunks[0],chunkId:'lessons-9999',index:9999,createdBy:'teacher-uid',createdByEmail:TEACHER_EMAIL}));
+  });
+
+  test('分片與 manifest 建立後不可修改或提早刪除，未驗證及多餘欄位均拒絕',async()=>{
+    const owner=auth('owner-uid',OWNER_EMAIL),day='2026-08-16',{manifest,chunks}=build(day,'owner-uid',OWNER_EMAIL),first=chunks[0],record=dayRef(owner,day),chunk=chunkRef(owner,day,first.chunkId);
+    await assertSucceeds(setDoc(chunk,first));await assertSucceeds(setDoc(record,manifest));
+    await assertFails(updateDoc(chunk,{index:first.index}));await assertFails(deleteDoc(chunk));await assertFails(updateDoc(record,{recordCount:manifest.recordCount}));await assertFails(deleteDoc(record));
+    const invalidDay='2026-08-17',invalid=build(invalidDay,'owner-uid',OWNER_EMAIL);for(const row of invalid.chunks)await assertSucceeds(setDoc(chunkRef(owner,invalidDay,row.chunkId),row));
+    await assertFails(setDoc(dayRef(owner,invalidDay),{...invalid.manifest,state:'uploading'}));
+    await assertFails(setDoc(dayRef(owner,invalidDay),{...invalid.manifest,unexpected:true}));
+  });
+
+  test('Catherine 具有相同建立能力；只有滿三十天後才可依保留政策刪除',async()=>{
+    const backupOwner=auth('backup-owner-uid',BACKUP_OWNER_EMAIL),day='2026-08-18',{manifest,chunks}=build(day,'backup-owner-uid',BACKUP_OWNER_EMAIL);for(const chunk of chunks)await assertSucceeds(setDoc(chunkRef(backupOwner,day,chunk.chunkId),chunk));await assertSucceeds(setDoc(dayRef(backupOwner,day),manifest));
+    const youngManifestDay='2026-06-02',expiredDay='2026-06-01',expired=Timestamp.fromMillis(Date.now()-31*24*60*60*1000),recent=Timestamp.now();await testEnv.withSecurityRulesDisabled(async context=>{const admin=context.firestore();await setDoc(chunkRef(admin,youngManifestDay,'lessons-0000'),{createdAt:expired});await setDoc(dayRef(admin,youngManifestDay),{verifiedAt:recent});await setDoc(chunkRef(admin,expiredDay,'lessons-0000'),{createdAt:expired});await setDoc(dayRef(admin,expiredDay),{verifiedAt:expired})});
+    await assertFails(deleteDoc(chunkRef(backupOwner,youngManifestDay,'lessons-0000')));
+    await assertSucceeds(deleteDoc(chunkRef(backupOwner,expiredDay,'lessons-0000')));await assertSucceeds(deleteDoc(dayRef(backupOwner,expiredDay)));
+  });
+
+  test('永久 fence 對 v2-shaped、舊版及畸形文件皆 fail closed，備份建立與保留期刪除全部停止',async()=>{
+    const owner=auth('owner-uid',OWNER_EMAIL),fencePath=`stagingRecordSyncV1PermanentFences/${COMPANY_ID}`,expired=Timestamp.fromMillis(Date.now()-31*24*60*60*1000),fences=[
+      {schema:'danbridge-record-sync-v1-permanent-fence-v2',state:'permanently-fenced-after-atomic-v2-structural-activation',companyId:COMPANY_ID,projectId:'danbridge-rules-test',sourceV1ActivationEpoch:'rules-backup-source-v1',sourceFreezeId:'rules-backup-freeze-v1',targetV2Epoch:'rules-backup-fence-v2',deploymentAttestationHash:'a'.repeat(64)},
+      {schema:'danbridge-record-sync-v1-permanent-fence-v1',state:'fenced',companyId:COMPANY_ID},
+      {malformed:true}
+    ];
+    for(let index=0;index<fences.length;index++){
+      const day=`2026-05-0${index+1}`,attemptDay=`2026-05-1${index+1}`,attempt=build(attemptDay,'owner-uid',OWNER_EMAIL),first=attempt.chunks[0];
+      await testEnv.withSecurityRulesDisabled(async context=>{const admin=context.firestore();await setDoc(dayRef(admin,day),{verifiedAt:expired});await setDoc(chunkRef(admin,day,'lessons-0000'),{createdAt:expired});await setDoc(doc(admin,fencePath),fences[index],{merge:false})});
+      await assertFails(setDoc(chunkRef(owner,attemptDay,first.chunkId),first));
+      await assertFails(setDoc(dayRef(owner,attemptDay),attempt.manifest));
+      await assertFails(deleteDoc(chunkRef(owner,day,'lessons-0000')));
+      await assertFails(deleteDoc(dayRef(owner,day)));
+    }
   });
 });
 
@@ -963,27 +1403,57 @@ describe('staging record-shadow verified run 與原子啟用', () => {
 
   test('全 16 集合影子規則允許 Owner 逐筆 revision，拒絕錯誤 changes 與其他角色',async()=>{
     const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),base={schema:'danbridge-full-record-shadow-v1',companyId:COMPANY_ID,sourceHash:'main-hash',revision:1,deleted:false,environment:'staging',updatedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL};
+    await setDoc(doc(owner,`companies/${COMPANY_ID}/data/main`),{db:{lessons:[]},clientHash:'main-hash'});const candidatePath=`stagingRecordSyncCandidateControls/${COMPANY_ID}`,candidateOpen=buildOpenRecordSyncCandidateControl({candidateEpoch:'candidate-rules-1',legacyVersionHash:'main-hash',createdAt:'2026-08-15T12:00:00+08:00'});await assertSucceeds(setDoc(doc(owner,candidatePath),{...candidateOpen,persistedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL}));
     const lessonRef=doc(owner,`stagingFullRecordShadows/${COMPANY_ID}/collections/lessons/records/lesson-1`),lesson={...base,collection:'lessons',recordId:'lesson-1',record:{id:'lesson-1'},recordIndex:null};
     await assertSucceeds(setDoc(lessonRef,lesson));await assertSucceeds(setDoc(lessonRef,{...lesson,revision:2,deleted:true}));await assertFails(deleteDoc(lessonRef));
     const changeId='seq_00000000_1234abcd',change={...base,collection:'changes',recordId:changeId,record:{type:'新增'},recordIndex:0};
     await assertSucceeds(setDoc(doc(owner,`stagingFullRecordShadows/${COMPANY_ID}/collections/changes/records/${changeId}`),change));
     await assertFails(setDoc(doc(owner,`stagingFullRecordShadows/${COMPANY_ID}/collections/changes/records/bad-change`),{...change,recordId:'bad-change'}));
     await assertFails(setDoc(doc(teacher,`stagingFullRecordShadows/${COMPANY_ID}/collections/teachers/records/teacher-1`),{...base,collection:'teachers',recordId:'teacher-1',record:{id:'teacher-1'},recordIndex:null,updatedBy:'teacher-uid',updatedByEmail:TEACHER_EMAIL}));
+    const candidateSealed=sealRecordSyncCandidateControl({control:candidateOpen,currentLegacyVersionHash:'main-hash',recordDataHash:'record-v1:'+'c'.repeat(64),documentCount:2,activeCount:1,tombstoneCount:1,sealedAt:'2026-08-15T12:05:00+08:00'});await assertSucceeds(setDoc(doc(owner,candidatePath),{...candidateSealed,persistedAt:serverTimestamp(),updatedBy:'owner-uid',updatedByEmail:OWNER_EMAIL}));await assertFails(setDoc(lessonRef,{...lesson,revision:3,deleted:false}));await assertFails(deleteDoc(doc(owner,candidatePath)));
     const productionBase={...base,environment:'production'},productionRef=doc(owner,`productionFullRecordShadows/${COMPANY_ID}/collections/lessons/records/lesson-1`),productionLesson={...productionBase,collection:'lessons',recordId:'lesson-1',record:{id:'lesson-1'},recordIndex:null};
     await assertSucceeds(setDoc(productionRef,productionLesson));await assertSucceeds(setDoc(productionRef,{...productionLesson,revision:2,deleted:true}));await assertFails(deleteDoc(productionRef));
     await assertFails(setDoc(doc(owner,`productionFullRecordShadows/${COMPANY_ID}/collections/teachers/records/staging-env`),{...base,collection:'teachers',recordId:'staging-env',record:{id:'staging-env'},recordIndex:null}));
     await assertFails(setDoc(doc(teacher,`productionFullRecordShadows/${COMPANY_ID}/collections/teachers/records/teacher-1`),{...productionBase,collection:'teachers',recordId:'teacher-1',record:{id:'teacher-1'},recordIndex:null,updatedBy:'teacher-uid',updatedByEmail:TEACHER_EMAIL}));
   });
 
-  test('隔離角色逐筆候選只允許 Daniel／Catherine Owner，其他現行角色完全不可讀寫',async()=>{
-    const owner=auth('owner-uid',OWNER_EMAIL),backupOwner=auth('backup-owner-uid',BACKUP_OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),scheduler=auth('scheduler-2-uid',SECOND_SCHEDULER_EMAIL),manager=auth('manager-uid',MANAGER_EMAIL),runId='role-run-12345678';
-    const payload=(environment,email=SECOND_SCHEDULER_EMAIL)=>({schema:'danbridge-role-view-candidate-v1',environment,companyId:COMPANY_ID,runId,sourceHash:'source-hash-123',viewId:'aa-view',email,kind:'scheduler',viewHash:'view-hash-123',collection:'lessons',recordId:'lesson-1',record:{id:'lesson-1'},recordIndex:0,createdAt:serverTimestamp(),createdBy:'owner-uid',createdByEmail:OWNER_EMAIL});
-    const stagingPath=`stagingRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/aa-view/collections/lessons/records/lesson-1`,stagingRef=doc(owner,stagingPath);
-    await assertSucceeds(setDoc(stagingRef,payload('staging')));await assertSucceeds(getDoc(stagingRef));await assertFails(updateDoc(stagingRef,{viewHash:'changed-hash'}));await assertFails(deleteDoc(stagingRef));
-    for(const db of [teacher,scheduler,manager]){await assertFails(getDoc(doc(db,stagingPath)));await assertFails(setDoc(doc(db,`stagingRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/aa-view/collections/lessons/records/${db===teacher?'teacher-write':db===scheduler?'scheduler-write':'manager-write'}`),{...payload('staging'),recordId:db===teacher?'teacher-write':db===scheduler?'scheduler-write':'manager-write',record:{id:db===teacher?'teacher-write':db===scheduler?'scheduler-write':'manager-write'},createdBy:'forged',createdByEmail:TEACHER_EMAIL}))}
-    const backupPath=`stagingRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/backup-view/collections/lessons/records/lesson-backup`;
-    await assertSucceeds(setDoc(doc(backupOwner,backupPath),{...payload('staging',BACKUP_OWNER_EMAIL),viewId:'backup-view',recordId:'lesson-backup',record:{id:'lesson-backup'},createdBy:'backup-owner-uid',createdByEmail:BACKUP_OWNER_EMAIL}));
-    const productionPath=`productionRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/aa-view/collections/lessons/records/lesson-1`;
-    await assertSucceeds(setDoc(doc(owner,productionPath),payload('production')));await assertFails(getDoc(doc(scheduler,productionPath)));await assertFails(setDoc(doc(owner,`productionRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/aa-view/collections/lessons/records/wrong-env`),{...payload('staging'),recordId:'wrong-env',record:{id:'wrong-env'}}));
+  test('隔離角色逐筆候選只讓 Daniel／Catherine 或本人讀取，跨角色、停權與所有角色寫入均拒絕',async()=>{
+    const owner=auth('owner-uid',OWNER_EMAIL),backupOwner=auth('backup-owner-uid',BACKUP_OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),scheduler=auth('scheduler-2-uid',SECOND_SCHEDULER_EMAIL),manager=auth('manager-uid',MANAGER_EMAIL),inactive=auth('inactive-uid',INACTIVE_EMAIL),runId='role-run-12345678',sourceHash='a'.repeat(64);
+    const payload=({environment='staging',candidateRunId=runId,candidateSourceHash=sourceHash,viewId='aa-view',email=SECOND_SCHEDULER_EMAIL,kind='scheduler',viewHash='b'.repeat(64),recordId='lesson-aa',uid='owner-uid',actorEmail=OWNER_EMAIL}={})=>({schema:'danbridge-role-view-candidate-v1',environment,companyId:COMPANY_ID,runId:candidateRunId,sourceHash:candidateSourceHash,viewId,email,kind,viewHash,collection:'lessons',recordId,record:{id:recordId},recordIndex:0,createdAt:serverTimestamp(),createdBy:uid,createdByEmail:actorEmail});
+    const candidates=[
+      {db:scheduler,receiptUid:'scheduler-2-uid',email:SECOND_SCHEDULER_EMAIL,kind:'scheduler',viewId:'aa-view',viewHash:'b'.repeat(64),recordId:'lesson-aa'},
+      {db:teacher,receiptUid:'teacher-uid',email:TEACHER_EMAIL,kind:'teacher',viewId:'teacher-view',viewHash:'c'.repeat(64),recordId:'lesson-teacher'},
+      {db:manager,receiptUid:'manager-uid',email:MANAGER_EMAIL,kind:'branch_manager',viewId:'manager-view',viewHash:'d'.repeat(64),recordId:'lesson-manager'}
+    ];
+    const pathFor=row=>`stagingRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/${row.viewId}/collections/lessons/records/${row.recordId}`;
+    for(const candidate of candidates){const path=pathFor(candidate),ref=doc(owner,path);await assertSucceeds(setDoc(ref,payload(candidate)));await assertSucceeds(getDoc(ref));await assertSucceeds(getDoc(doc(backupOwner,path)));await assertFails(updateDoc(ref,{viewHash:'changed-hash'}));await assertFails(deleteDoc(ref))}
+    for(const viewer of candidates)for(const candidate of candidates){const read=getDoc(doc(viewer.db,pathFor(candidate)));if(viewer.email===candidate.email)await assertSucceeds(read);else await assertFails(read)}
+    for(const viewer of candidates){const ownCollectionPath=pathFor(viewer).split('/').slice(0,-1).join('/'),ownRows=query(collection(viewer.db,ownCollectionPath),where('email','==',viewer.email),where('kind','==',viewer.kind));assert.equal((await assertSucceeds(getDocs(ownRows))).size,1);const foreign=candidates.find(candidate=>candidate.email!==viewer.email),foreignCollectionPath=pathFor(foreign).split('/').slice(0,-1).join('/'),foreignRows=query(collection(viewer.db,foreignCollectionPath),where('email','==',foreign.email),where('kind','==',foreign.kind));await assertFails(getDocs(foreignRows))}
+    for(const viewer of candidates){const recordId=`${viewer.kind}-write`,path=`stagingRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/${viewer.viewId}/collections/lessons/records/${recordId}`;await assertFails(setDoc(doc(viewer.db,path),payload({...viewer,recordId,uid:'forged',actorEmail:viewer.email})))}
+    await assertFails(setDoc(doc(owner,`stagingRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/weak-source/collections/lessons/records/weak-source`),payload({viewId:'weak-source',email:TEACHER_EMAIL,kind:'teacher',recordId:'weak-source',candidateSourceHash:'legacy:123'})));
+    await assertFails(setDoc(doc(owner,`stagingRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/weak-view/collections/lessons/records/weak-view`),payload({viewId:'weak-view',email:TEACHER_EMAIL,kind:'teacher',recordId:'weak-view',viewHash:'legacy:123'})));
+    await assertSucceeds(updateDoc(doc(owner,`companyAccess/${TEACHER_EMAIL}`),{active:false}));await assertFails(getDoc(doc(teacher,pathFor(candidates[1]))));await assertSucceeds(updateDoc(doc(owner,`companyAccess/${TEACHER_EMAIL}`),{active:true}));
+    const backupRunId='role-run-backup-write',backupCandidate={email:TEACHER_EMAIL,kind:'teacher',viewId:'backup-view',viewHash:'e'.repeat(64),recordId:'lesson-backup'},backupPath=`stagingRoleViewCandidates/${COMPANY_ID}/runs/${backupRunId}/views/${backupCandidate.viewId}/collections/lessons/records/${backupCandidate.recordId}`;await assertSucceeds(setDoc(doc(backupOwner,backupPath),payload({...backupCandidate,candidateRunId:backupRunId,uid:'backup-owner-uid',actorEmail:BACKUP_OWNER_EMAIL})));
+    await assertFails(setDoc(doc(owner,`stagingRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/inactive-view/collections/lessons/records/inactive-lesson`),payload({viewId:'inactive-view',email:INACTIVE_EMAIL,kind:'teacher',recordId:'inactive-lesson'})));
+
+    const counts=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,key==='lessons'?1:0])),manifest=buildVerifiedRoleViewCandidateManifest({runId,sourceHash,views:candidates.map(({viewId,email,kind,viewHash})=>({viewId,email,kind,viewHash,documentCount:1,counts})),createdAt:'2026-08-15T15:00:00+08:00'}),manifestPath=`stagingRoleViewCandidateManifests/${COMPANY_ID}/runs/${runId}`,persistedManifest={...manifest,persistedAt:serverTimestamp(),persistedBy:'owner-uid',persistedByEmail:OWNER_EMAIL};
+    await assertSucceeds(setDoc(doc(owner,manifestPath),persistedManifest));
+    await assertSucceeds(getDoc(doc(owner,manifestPath)));await assertSucceeds(getDoc(doc(backupOwner,manifestPath)));
+    for(const viewer of candidates)await assertFails(getDoc(doc(viewer.db,manifestPath)));
+    await assertFails(updateDoc(doc(owner,manifestPath),{documentCount:99}));await assertFails(deleteDoc(doc(owner,manifestPath)));
+    await assertFails(setDoc(doc(owner,`stagingRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/late-view/collections/lessons/records/late-lesson`),payload({viewId:'late-view',email:TEACHER_EMAIL,kind:'teacher',viewHash:'f'.repeat(64),recordId:'late-lesson'})));
+
+    const testedAt='2026-08-15T15:05:00+08:00',ownerReceipt=email=>buildRoleViewVerificationReceipt({runId,sourceHash,manifestHash:manifest.manifestHash,email,kind:'owner',viewHash:manifest.manifestHash,verifiedViewCount:manifest.viewCount,documentCount:manifest.documentCount,realtimeObserved:true,directCoreDenied:false,crossRoleDenied:false,testedAt}),roleReceipt=row=>buildRoleViewVerificationReceipt({runId,sourceHash,manifestHash:manifest.manifestHash,email:row.email,kind:row.kind,viewId:row.viewId,viewHash:row.viewHash,verifiedViewCount:1,documentCount:1,realtimeObserved:true,directCoreDenied:true,crossRoleDenied:true,testedAt}),receipts=[
+      {db:owner,uid:'owner-uid',email:OWNER_EMAIL,receipt:ownerReceipt(OWNER_EMAIL)},
+      {db:backupOwner,uid:'backup-owner-uid',email:BACKUP_OWNER_EMAIL,receipt:ownerReceipt(BACKUP_OWNER_EMAIL)},
+      ...candidates.map(row=>({...row,uid:row.receiptUid,receipt:roleReceipt(row)}))
+    ],receiptPath=email=>`stagingRoleViewVerificationReceipts/${COMPANY_ID}/runs/${runId}/actors/${email}`;
+    for(const row of receipts){const path=receiptPath(row.email),ref=doc(row.db,path),saved={...row.receipt,persistedAt:serverTimestamp(),verifiedBy:row.uid,verifiedByEmail:row.email};await assertSucceeds(runTransaction(row.db,async transaction=>{const existing=await transaction.get(ref);assert.equal(existing.exists(),false);transaction.set(ref,saved,{merge:false})}));await assertSucceeds(getDoc(doc(owner,path)));await assertSucceeds(getDoc(ref));await assertFails(updateDoc(ref,{documentCount:99}));await assertFails(deleteDoc(ref));await assertFails(setDoc(ref,saved))}
+    await assertFails(getDoc(doc(scheduler,receiptPath(TEACHER_EMAIL))));await assertFails(getDoc(doc(teacher,receiptPath(SECOND_SCHEDULER_EMAIL))));await assertFails(getDoc(doc(manager,receiptPath(TEACHER_EMAIL))));
+    const forgedOwner=ownerReceipt(SECOND_SCHEDULER_EMAIL);await assertFails(setDoc(doc(scheduler,receiptPath('scheduler-forged-owner@example.com')),{...forgedOwner,email:'scheduler-forged-owner@example.com',persistedAt:serverTimestamp(),verifiedBy:'scheduler-2-uid',verifiedByEmail:SECOND_SCHEDULER_EMAIL}));
+    const inactiveReceipt=buildRoleViewVerificationReceipt({runId,sourceHash,manifestHash:manifest.manifestHash,email:INACTIVE_EMAIL,kind:'teacher',viewId:'inactive-view',viewHash:'f'.repeat(64),verifiedViewCount:1,documentCount:0,realtimeObserved:true,directCoreDenied:true,crossRoleDenied:true,testedAt});await assertFails(setDoc(doc(inactive,receiptPath(INACTIVE_EMAIL)),{...inactiveReceipt,persistedAt:serverTimestamp(),verifiedBy:'inactive-uid',verifiedByEmail:INACTIVE_EMAIL}));
+    await assertSucceeds(updateDoc(doc(owner,`companyAccess/${TEACHER_EMAIL}`),{active:false}));await assertFails(getDoc(doc(teacher,receiptPath(TEACHER_EMAIL))));await assertSucceeds(updateDoc(doc(owner,`companyAccess/${TEACHER_EMAIL}`),{active:true}));
+    const productionPath=`productionRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/aa-view/collections/lessons/records/lesson-aa`;
+    await assertSucceeds(setDoc(doc(owner,productionPath),payload({environment:'production'})));await assertFails(getDoc(doc(scheduler,productionPath)));await assertFails(setDoc(doc(owner,`productionRoleViewCandidates/${COMPANY_ID}/runs/${runId}/views/aa-view/collections/lessons/records/wrong-env`),payload({recordId:'wrong-env'})));
   });
 });

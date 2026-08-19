@@ -5,6 +5,8 @@ import {SHARDED_DB_COLLECTION_KEYS,createShardedSnapshot,assembleShardedSnapshot
 
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const db=()=>Object.fromEntries(SHARDED_DB_COLLECTION_KEYS.map(key=>[key,[]]));
+const CAPACITY_COUNT=process.env.DANBRIDGE_V2_CAPACITY_COUNT===undefined?0:Number(process.env.DANBRIDGE_V2_CAPACITY_COUNT);
+if(CAPACITY_COUNT!==0&&![22_000,30_000].includes(CAPACITY_COUNT))throw new Error('DANBRIDGE_V2_CAPACITY_COUNT must be 22000 or 30000 for sharded stress');
 const lesson=(owner,index)=>({id:`${owner}-${index}`,date:'2026-09-01',start:'10:00',end:'11:00',studentId:`student-${owner}-${index}`,teacherId:'teacher-1',teacherIds:['teacher-1']});
 const verify=value=>{const snapshot=createShardedSnapshot(value,{hash,maxChunkBytes:4096,generationId:`generation-${hash(value).slice(0,8)}`});snapshot.manifest.status='verified';snapshot.manifest.verifiedHash=snapshot.manifest.sourceHash;return{snapshot,rebuilt:assembleShardedSnapshot(snapshot.manifest,snapshot.chunks,{hash})}};
 
@@ -44,4 +46,16 @@ test('大量資料的啟用世代中斷時完整保留 legacy 300 堂',()=>{
 test('無 ID changes 大量重複仍逐筆保留',()=>{
  const source=db();source.changes=Array.from({length:250},(_,index)=>({at:'same-time',type:'修改',sequence:index%5,payload:{lesson:'shared'}}));
  const {rebuilt}=verify(source);assert.equal(rebuilt.changes.length,250);assert.deepEqual(rebuilt.changes,source.changes);
+});
+
+test(`${CAPACITY_COUNT||'capacity'} 筆跨 16 集合分片可完整roundtrip，缺任一片即fail closed`,{skip:CAPACITY_COUNT===0},()=>{
+ const source=db(),expectedCounts=Object.fromEntries(SHARDED_DB_COLLECTION_KEYS.map(key=>[key,0]));
+ for(let index=0;index<CAPACITY_COUNT;index++){
+  const collection=SHARDED_DB_COLLECTION_KEYS[index%SHARDED_DB_COLLECTION_KEYS.length],localIndex=expectedCounts[collection]++,id=`${collection}-${String(localIndex).padStart(6,'0')}`;
+  source[collection].push({id,value:index,nested:{a:index%7,z:'資料'}});
+ }
+ const snapshot=createShardedSnapshot(source,{hash,maxChunkBytes:32*1024,generationId:`capacity-${CAPACITY_COUNT}`}),rebuilt=assembleShardedSnapshot(snapshot.manifest,snapshot.chunks,{hash});
+ assert.equal(snapshot.manifest.totalRecords,CAPACITY_COUNT);assert.equal(snapshot.manifest.collectionOrder.length,16);assert.equal(snapshot.manifest.sourceHash,hash(source));assert.equal(hash(rebuilt),snapshot.manifest.sourceHash);assert.deepEqual(rebuilt,source);
+ for(const collection of SHARDED_DB_COLLECTION_KEYS){assert.equal(snapshot.manifest.collections[collection].count,expectedCounts[collection]);assert.ok(snapshot.manifest.collections[collection].chunks>0)}
+ assert.throws(()=>assembleShardedSnapshot(snapshot.manifest,snapshot.chunks.slice(0,-1),{hash}),/分片遺失|總分片數/);
 });

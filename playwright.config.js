@@ -23,7 +23,8 @@ module.exports = defineConfig({
     { name: 'ipad-chromium', use: { ...devices['iPad Pro 11'], browserName: 'chromium' } },
     { name: 'mobile-chromium', use: { ...devices['iPhone 13'], browserName: 'chromium' } },
     { name: 'desktop-webkit', use: { ...devices['Desktop Safari'], browserName: 'webkit' } },
-    { name: 'ipad-webkit', use: { ...devices['iPad Pro 11'], browserName: 'webkit' } }
+    { name: 'ipad-webkit', use: { ...devices['iPad Pro 11'], browserName: 'webkit' } },
+    { name: 'mobile-webkit', use: { ...devices['iPhone 13'], browserName: 'webkit' } }
   ],
   webServer: process.env.E2E_BASE_URL ? undefined : {
     command: 'node tools/e2e_static_server.js',

@@ -1,4 +1,4 @@
-import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.97';
+import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.106';
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
@@ -15,6 +15,10 @@ export function normalizeRecordDb(db){
  return normalized;
 }
 
+export function recordDataDigest(db){
+ return sha256Canonical(canonical(normalizeRecordDb(db)));
+}
+
 export function recordDataHash(db){
- return`record-v1:${sha256Canonical(canonical(normalizeRecordDb(db)))}`;
+ return`record-v1:${recordDataDigest(db)}`;
 }

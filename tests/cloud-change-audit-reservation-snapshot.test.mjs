@@ -1,0 +1,71 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {CHANGE_AUDIT_RESERVATION_MAX_CANONICAL_BYTES,buildChangeAuditReservationSnapshot,verifyChangeAuditReservationSnapshotReadback} from '../js/core/cloud-change-audit-reservation-snapshot.js';
+import {buildChangeRecordId,isSafeCloudRecordId} from '../js/core/cloud-change-record-identity.js';
+import {sha256Canonical} from '../js/core/cloud-immutable-migration-backup.js';
+
+const SOURCE_HASH=`record-v1:${'a'.repeat(64)}`;
+const MANIFEST_HASH='b'.repeat(64);
+const CAPACITY_COUNT=Number(process.env.DANBRIDGE_V2_CAPACITY_COUNT??15_000);
+if(![15_000,22_000,30_000].includes(CAPACITY_COUNT))throw new Error('DANBRIDGE_V2_CAPACITY_COUNT must be 15000, 22000, or 30000');
+const input=(changes,extra={})=>({environment:'staging',companyId:'danbridge',activationEpoch:'epoch-audit-12345',sourceRecordDataHash:SOURCE_HASH,parentActivationCoreManifestHash:MANIFEST_HASH,changes,batchSize:400,...extra});
+const stable=value=>Array.isArray(value)?value.map(stable):(value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value);
+const canonicalBytes=value=>new TextEncoder().encode(JSON.stringify(stable(value))).length;
+const batchCore=batch=>{const core=structuredClone(batch);delete core.batchHash;return core};
+const readbackFor=snapshot=>structuredClone({reservations:snapshot.reservations,cursor:snapshot.cursor,manifest:snapshot.manifest,batchReceipts:snapshot.batchReceipts});
+
+test('unique auditId 由 UI newest-first materialize 成 oldest-first reservation、cursor tail proof 與 deterministic manifest',()=>{
+ const changes=[{id:'audit-z-new',type:'更新',nested:{z:2,a:[null,'中文',3.5]}},{id:'audit-a-old',type:'新增'}],before=structuredClone(changes),snapshot=buildChangeAuditReservationSnapshot(input(changes,{batchSize:1}));
+ assert.deepEqual(changes,before);assert.equal(snapshot.manifest.changesDocumentCount,2);assert.equal(snapshot.manifest.validAuditIdOccurrenceCount,2);assert.equal(snapshot.manifest.distinctReservedAuditIdCount,2);assert.equal(snapshot.manifest.duplicateOccurrenceCount,0);assert.equal(snapshot.manifest.legacyUnreservableCount,0);
+ assert.deepEqual(snapshot.reservations.map(row=>row.auditId),['audit-a-old','audit-z-new']);const old=snapshot.reservations[0],newer=snapshot.reservations[1],oldOccurrence={recordIndex:0,recordId:buildChangeRecordId(0,changes[1]),recordHash:sha256Canonical(changes[1])},newOccurrence={recordIndex:1,recordId:buildChangeRecordId(1,changes[0]),recordHash:sha256Canonical(changes[0])};assert.deepEqual([old.firstIndex,old.lastIndex,old.occurrenceCount],[0,0,1]);assert.deepEqual([newer.firstIndex,newer.lastIndex,newer.occurrenceCount],[1,1,1]);assert.equal(old.occurrencesHash,sha256Canonical([oldOccurrence]));assert.equal(newer.occurrencesHash,sha256Canonical([newOccurrence]));assert.equal('occurrences'in old,false);
+ assert.deepEqual({state:snapshot.cursor.state,nextIndex:snapshot.cursor.nextIndex,tailRecordIndex:snapshot.cursor.tailRecordIndex,tailRecordId:snapshot.cursor.tailRecordId},{state:'ready',nextIndex:2,tailRecordIndex:1,tailRecordId:buildChangeRecordId(1,changes[0])});assert.equal(snapshot.manifest.cursorHash,sha256Canonical(snapshot.cursor));assert.equal(snapshot.manifest.reservationSetHash,sha256Canonical(snapshot.reservations));assert.equal(snapshot.manifest.unreservableRecordSetHash,sha256Canonical([]));assert.equal(snapshot.manifest.batchCount,2);assert.deepEqual(snapshot.batches.map(row=>row.reservationCount),[1,1]);assert.ok(Object.isFrozen(snapshot)&&Object.isFrozen(snapshot.reservations)&&Object.isFrozen(snapshot.batchReceipts));assert.equal(snapshot.artifactKind,'execution-plan-only');assert.ok(snapshot.batches.every(batch=>batch.artifactKind==='execution-plan-only'));assert.ok(snapshot.batchReceipts.every(receipt=>!('reservations'in receipt)));assert.throws(()=>{snapshot.cursor.nextIndex=99},TypeError);
+});
+
+test('duplicate legacy valid auditId 聚合成永久 reservation；missing/invalid 不合成 ID 並列入 unreservable proof set',()=>{
+ const changes=[{id:'audit-dup',type:'newest'},{type:'missing'},{id:'bad/id',type:'invalid'},{id:'audit-dup',type:'oldest'}],snapshot=buildChangeAuditReservationSnapshot(input(changes));
+ assert.equal(snapshot.reservations.length,1);const reservation=snapshot.reservations[0],expectedOccurrences=[{recordIndex:0,recordId:buildChangeRecordId(0,changes[3]),recordHash:sha256Canonical(changes[3])},{recordIndex:3,recordId:buildChangeRecordId(3,changes[0]),recordHash:sha256Canonical(changes[0])}];assert.equal(reservation.auditId,'audit-dup');assert.equal(reservation.occurrenceCount,2);assert.equal(reservation.firstIndex,0);assert.equal(reservation.lastIndex,3);assert.equal(reservation.occurrencesHash,sha256Canonical(expectedOccurrences));assert.equal('occurrences'in reservation,false);assert.equal(snapshot.manifest.validAuditIdOccurrenceCount,2);assert.equal(snapshot.manifest.distinctReservedAuditIdCount,1);assert.equal(snapshot.manifest.duplicateOccurrenceCount,1);assert.equal(snapshot.manifest.legacyUnreservableCount,2);
+ assert.deepEqual(snapshot.unreservable.map(row=>({index:row.recordIndex,reason:row.reason})),[{index:1,reason:'invalid-audit-id'},{index:2,reason:'missing-audit-id'}]);assert.equal(snapshot.unreservable[0].recordId,buildChangeRecordId(1,changes[2]));assert.equal(snapshot.unreservable[1].recordId,buildChangeRecordId(2,changes[1]));assert.equal(snapshot.manifest.unreservableRecordSetHash,sha256Canonical(snapshot.unreservable));
+});
+
+test('空 changes 有明確 empty cursor genesis，沒有 reservation batch',()=>{
+ const snapshot=buildChangeAuditReservationSnapshot(input([]));assert.equal(snapshot.cursor.state,'empty');assert.equal(snapshot.cursor.nextIndex,0);assert.equal(snapshot.cursor.tailRecordIndex,null);assert.equal(snapshot.cursor.tailRecordId,null);assert.equal(snapshot.cursor.tailRecordHash,'0'.repeat(64));assert.deepEqual(snapshot.reservations,[]);assert.deepEqual(snapshot.unreservable,[]);assert.deepEqual(snapshot.batches,[]);assert.equal(snapshot.manifest.batchCount,0);assert.equal(snapshot.manifest.changesDocumentCount,0);
+});
+
+test('Firestore map key order、input field order 與 Unicode 不影響 snapshot；array 順序仍保留',()=>{
+ const first=[{id:'稽核-甲',z:3,nested:{z:'後',a:['前',null,2]}},{id:'audit-b',value:true}],second=[{nested:{a:['前',null,2],z:'後'},z:3,id:'稽核-甲'},{value:true,id:'audit-b'}],a=input(first),b={batchSize:400,changes:second,parentActivationCoreManifestHash:MANIFEST_HASH,sourceRecordDataHash:SOURCE_HASH,activationEpoch:'epoch-audit-12345',companyId:'danbridge',environment:'staging'};
+ assert.deepEqual(buildChangeAuditReservationSnapshot(a),buildChangeAuditReservationSnapshot(b));assert.notDeepEqual(buildChangeAuditReservationSnapshot(input([...first].reverse())).cursor,buildChangeAuditReservationSnapshot(a).cursor);
+});
+
+test(`${CAPACITY_COUNT} distinct reservations deterministic，batch 同時遵守 400 筆與 256KiB canonical byte 硬上限`,()=>{
+ const changes=Array.from({length:CAPACITY_COUNT},(_,index)=>({id:`audit-${String(index).padStart(5,'0')}`,type:'legacy',index,note:index%2?'中文':'plain'}));let first=buildChangeAuditReservationSnapshot(input(changes));const proof={manifestHash:first.manifest.reservationManifestHash,setHash:first.manifest.reservationSetHash,cursorHash:first.manifest.cursorHash,receiptHash:first.manifest.batchReceiptSummariesHash};
+ assert.equal(first.manifest.changesDocumentCount,CAPACITY_COUNT);assert.equal(first.manifest.distinctReservedAuditIdCount,CAPACITY_COUNT);assert.equal(first.cursor.nextIndex,CAPACITY_COUNT);assert.ok(first.batches.length>=Math.ceil(CAPACITY_COUNT/400));assert.ok(first.batches.every(batch=>batch.reservationCount<=400&&canonicalBytes(batch)<CHANGE_AUDIT_RESERVATION_MAX_CANONICAL_BYTES));assert.equal(first.manifest.batchReceiptSummariesHash,sha256Canonical(first.batchReceipts));first=null;const second=buildChangeAuditReservationSnapshot(input(changes.map(record=>({note:record.note,index:record.index,type:record.type,id:record.id}))));assert.equal(proof.manifestHash,second.manifest.reservationManifestHash);assert.equal(proof.setHash,second.manifest.reservationSetHash);assert.equal(proof.cursorHash,second.manifest.cursorHash);assert.equal(proof.receiptHash,second.manifest.batchReceiptSummariesHash);
+});
+
+test(`${CAPACITY_COUNT} 同 auditId reservation 不輸出無界 occurrences，單 reservation 與 batch 均遠低於 64KiB`,()=>{
+ const changes=Array.from({length:CAPACITY_COUNT},(_,index)=>({id:'audit-same',type:'legacy',index})),first=buildChangeAuditReservationSnapshot(input(changes)),second=buildChangeAuditReservationSnapshot(input(changes.map(record=>({index:record.index,type:record.type,id:record.id}))));assert.equal(first.reservations.length,1);const reservation=first.reservations[0];assert.equal(reservation.occurrenceCount,CAPACITY_COUNT);assert.equal(reservation.firstIndex,0);assert.equal(reservation.lastIndex,CAPACITY_COUNT-1);assert.equal('occurrences'in reservation,false);assert.ok(canonicalBytes(reservation)<64*1024);assert.equal(first.batches.length,1);assert.ok(canonicalBytes(first.batches[0])<64*1024);assert.equal(first.manifest.reservationManifestHash,second.manifest.reservationManifestHash);assert.equal(reservation.occurrencesHash,second.reservations[0].occurrencesHash);
+});
+
+test('batchHash 綁定完整 batch core；index、epoch 或 reservation order 變造都會改 hash',()=>{
+ const snapshot=buildChangeAuditReservationSnapshot(input([{id:'audit-c'},{id:'audit-b'},{id:'audit-a'}])),batch=snapshot.batches[0];assert.equal(batch.batchHash,sha256Canonical(batchCore(batch)));for(const mutate of [core=>core.index++,core=>core.activationEpoch='epoch-audit-other',core=>core.reservations.reverse()]){const changed=batchCore(batch);mutate(changed);assert.notEqual(sha256Canonical(changed),batch.batchHash)}
+});
+
+test('pure readback verifier 從 immutable source changes 重建，接受雲端 array/map order 並核對 reservation/cursor/manifest/receipt roots',()=>{
+ const changes=[{id:'audit-c',type:'new'},{type:'missing'},{id:'audit-a',type:'old'}],request=input(changes,{batchSize:1}),snapshot=buildChangeAuditReservationSnapshot(request),readback=readbackFor(snapshot);readback.reservations.reverse();readback.batchReceipts.reverse();const verified=verifyChangeAuditReservationSnapshotReadback(request,readback);assert.equal(verified.verified,true);assert.equal(verified.reservationCount,2);assert.equal(verified.batchReceiptCount,2);assert.equal(verified.reservationManifestHash,snapshot.manifest.reservationManifestHash);
+});
+
+test('pure readback verifier 對 source/reservation/cursor/manifest/batch missing、duplicate、swap、tamper 全部 fail closed',()=>{
+ const request=input([{id:'audit-c'},{id:'audit-b'},{id:'audit-a'}],{batchSize:1}),snapshot=buildChangeAuditReservationSnapshot(request),good=()=>readbackFor(snapshot),cases=[];
+ cases.push(()=>{const value=good();value.reservations.pop();return[request,value]});cases.push(()=>{const value=good();value.reservations[0].occurrenceCount++;return[request,value]});cases.push(()=>{const value=good();value.reservations[1]=structuredClone(value.reservations[0]);return[request,value]});cases.push(()=>{const value=good();value.cursor.nextIndex++;return[request,value]});cases.push(()=>{const value=good();value.manifest.changesDocumentCount++;return[request,value]});cases.push(()=>{const value=good();value.batchReceipts.pop();return[request,value]});cases.push(()=>{const value=good();value.batchReceipts[1]=structuredClone(value.batchReceipts[0]);return[request,value]});cases.push(()=>{const value=good();value.batchReceipts[1].index=9;return[request,value]});cases.push(()=>{const other=buildChangeAuditReservationSnapshot(input([{id:'audit-c'},{id:'audit-b'},{id:'audit-a'}],{batchSize:1,activationEpoch:'epoch-audit-other'})),value=good();value.batchReceipts[0]=structuredClone(other.batchReceipts[0]);return[request,value]});cases.push(()=>[{...request,sourceRecordDataHash:`record-v1:${'c'.repeat(64)}`},good()]);
+ for(const make of cases){const [source,readback]=make();assert.throws(()=>verifyChangeAuditReservationSnapshotReadback(source,readback),/count|duplicate|root|proof|manifest|hash|core|index|連續/)}
+});
+
+test('auditId 使用單一 Firestore record ID 安全規則：1500 UTF-8 bytes 可用，超長、控制字元與保留值不可用',()=>{
+ assert.equal(isSafeCloudRecordId('中'.repeat(500)),true);for(const value of ['中'.repeat(501),'bad/id','bad\nline','bad\u0000id','bad\u007fid','.','..','__reserved__',' bad','bad ','\ud800'])assert.equal(isSafeCloudRecordId(value),false);
+ const snapshot=buildChangeAuditReservationSnapshot(input([{id:'中'.repeat(501),type:'invalid'},{id:'中'.repeat(500),type:'valid'}]));assert.equal(snapshot.reservations.length,1);assert.equal(snapshot.unreservable.length,1);
+});
+
+test('input exact contract、dense array 與 strict record 異常全部 fail closed，accessor 不會執行',()=>{
+ const valid=input([{id:'audit-safe',type:'safe'}]);for(const changed of [{...valid,extra:true},{...valid,environment:'production'},{...valid,companyId:'other'},{...valid,activationEpoch:'short'},{...valid,sourceRecordDataHash:'bad'},{...valid,parentActivationCoreManifestHash:'bad'},{...valid,batchSize:0},{...valid,batchSize:401},{...valid,changes:null}])assert.throws(()=>buildChangeAuditReservationSnapshot(changed),/input|identity|hash|batchSize|changes/);
+ const sparse=[];sparse[1]={id:'audit-safe'};assert.throws(()=>buildChangeAuditReservationSnapshot(input(sparse)),/sparse/);const extra=[{id:'audit-safe'}];extra.extra=true;assert.throws(()=>buildChangeAuditReservationSnapshot(input(extra)),/extra/);for(const record of [{id:'audit-safe',bad:undefined},{id:'audit-safe',bad:BigInt(1)},{id:'audit-safe',bad:-0},{id:'audit-safe',bad:new Date()}])assert.throws(()=>buildChangeAuditReservationSnapshot(input([record])),/lossless|plain/);
+ let getterReads=0;const accessor={id:'audit-safe'};Object.defineProperty(accessor,'danger',{enumerable:true,get(){getterReads++;return'never'}});assert.throws(()=>buildChangeAuditReservationSnapshot(input([accessor])),/accessor/);assert.equal(getterReads,0);let inputGetterReads=0;const withInputGetter={...valid};Object.defineProperty(withInputGetter,'changes',{enumerable:true,get(){inputGetterReads++;return[]}});assert.throws(()=>buildChangeAuditReservationSnapshot(withInputGetter),/data field/);assert.equal(inputGetterReads,0);
+});

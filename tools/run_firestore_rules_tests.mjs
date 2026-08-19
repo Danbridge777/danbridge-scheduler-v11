@@ -23,9 +23,9 @@ if (!javaHome) {
 const firebaseBin = process.platform === 'win32' ? 'firebase.cmd' : 'firebase';
 const command = [
   'emulators:exec',
-  '--only', 'firestore',
+  '--only', 'firestore,auth',
   '--project', 'danbridge-rules-test',
-  'node --test tests/firestore-rules.test.mjs'
+  'node tools/run_firestore_rules_and_v2_binder_tests.mjs'
 ];
 const result = spawnSync(firebaseBin, command, {
   cwd: process.cwd(),

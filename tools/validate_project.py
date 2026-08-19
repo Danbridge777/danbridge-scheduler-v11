@@ -3,10 +3,11 @@ from pathlib import Path
 import re, subprocess, sys, hashlib, json
 ROOT = Path(__file__).resolve().parents[1]
 EXCLUDED_DIRS={'.git','.firebase','.npm-cache','node_modules','playwright-report','test-results'}
-EXCLUDED_FILES={'firebase-debug.log','firestore-debug.log'}
+EXCLUDED_LOG_PREFIXES=('firebase-debug','firestore-debug')
 def included(p):
     rel=p.relative_to(ROOT)
-    return not any(part in EXCLUDED_DIRS for part in rel.parts) and rel.name not in EXCLUDED_FILES
+    is_debug_log=rel.suffix=='.log' and any(rel.name.startswith(prefix) for prefix in EXCLUDED_LOG_PREFIXES)
+    return not any(part in EXCLUDED_DIRS for part in rel.parts) and not is_debug_log
 errors=[]
 index=(ROOT/'index.html').read_text(encoding='utf-8')
 refs=[]

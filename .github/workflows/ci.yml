@@ -60,4 +60,4 @@ jobs:
         run: npm run test:e2e
 
       - name: Audit dependencies
-        run: npm audit --audit-level=low
+        run: npm run test:dependency-audit
