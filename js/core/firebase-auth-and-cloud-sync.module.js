@@ -1,6 +1,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocFromServer, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
+import {bootstrapDanbridgeFirebase} from './firebase-environment-bootstrap.js?v=20.26.118';
 import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.86';
 import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.86';
 import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.107';
@@ -43,8 +44,7 @@ const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
  staging:{apiKey:"AIzaSyDD1zt1Zc8n8Rzk6Vf1hYhanRWHzfrmGeI",authDomain:"danbridge-d8877-staging.firebaseapp.com",projectId:"danbridge-d8877-staging",storageBucket:"danbridge-d8877-staging.firebasestorage.app",messagingSenderId:"883029466360",appId:"1:883029466360:web:c45a0a2164d4c897aaef0d"}
 };
-const DANBRIDGE_ENVIRONMENT=['danbridge-d8877-staging.web.app','danbridge-d8877-staging.firebaseapp.com'].includes(location.hostname)?'staging':'production';
-const firebaseConfig=firebaseConfigs[DANBRIDGE_ENVIRONMENT];
+const {environment:DANBRIDGE_ENVIRONMENT,firebaseConfig,app,auth,cloud}=bootstrapDanbridgeFirebase({hostname:location.hostname,configs:firebaseConfigs,initializeApp,getAuth,initializeFirestore,firestoreOptions:{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})}});
 document.body.dataset.environment=DANBRIDGE_ENVIRONMENT;
 window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
@@ -56,9 +56,6 @@ const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
 const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
-const app=initializeApp(firebaseConfig);
-const auth=getAuth(app);
-const cloud=initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})});
 const provider=new GoogleAuthProvider();
 provider.setCustomParameters({prompt:'select_account'});
 

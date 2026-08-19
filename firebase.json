@@ -18,6 +18,8 @@
     "public": ".",
     "ignore": [
       "firebase.json",
+      "firebase-debug*.log",
+      "firestore-debug*.log",
       "**/.*",
       ".firebase/**",
       ".git/**",
@@ -27,7 +29,6 @@
       "README.md",
       "docs/**",
       "firebase/**",
-      "firestore-debug.log",
       "tests/**",
       "tools/**",
       "package.json",
