@@ -17,7 +17,7 @@ function validateReceipt(operation,receipt){
 
 export async function enqueueOperationPlan(journal,plan){
  if(!journal||typeof journal.appendMany!=='function')throw new Error('操作日誌不支援原子批次加入');
- if(plan?.schema!=='danbridge-live-operation-plan-v1'||!Array.isArray(plan.operations)||plan.operationCount!==plan.operations.length)throw new Error('待加入的逐筆操作計畫無效');
+ if(!['danbridge-live-operation-plan-v1','danbridge-active-record-plan-v1'].includes(plan?.schema)||!Array.isArray(plan.operations)||plan.operationCount!==plan.operations.length)throw new Error('待加入的逐筆操作計畫無效');
  const entries=await journal.appendMany(plan.operations),counts=await journal.counts();return{enqueued:entries.length,counts};
 }
 
@@ -32,7 +32,7 @@ export async function runOperationWorker({journal,send,recoverInterrupted=true,m
   try{const receipt=validateReceipt(entry.operation,await send(entry.operation));await journal.confirm(entry.operationId,receipt);processed++;await notify({kind:'confirmed',entry,receipt,processed})}
   catch(error){const policy=classifyError(error);await journal.fail(entry.operationId,error,policy);await notify({kind:policy.retryable?'failed':'quarantined',entry,error,processed});break}
  }
- const counts=await journal.counts(),rows=await journal.list(),head=rows.find(row=>row.status!=='confirmed')??null;
+ const counts=await journal.counts(),rows=await journal.list(),head=rows.find(row=>!['confirmed','superseded'].includes(row.status))??null;
  const state=counts.quarantined?'blocked':counts.failed?'waiting':counts.sending?'sending':counts.pending?(processed>=maxOperations?'paused':'pending'):'complete';
  return{state,processed,recovered:recovery.recovered||0,counts,head};
 }

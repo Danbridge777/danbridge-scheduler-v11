@@ -320,7 +320,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.97'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.116'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -392,7 +392,7 @@ assert.match(roleResponsiveSource, /function branchManagerConvenience\(\)[\s\S]*
 assert.match(roleResponsiveSource, /if\(current==='owner'\)restoreRoleResponsiveControls\(\)/, 'owner role restores controls hidden by the responsive role layer');
 assert.match(cloudSource, /if\(cloudRole==='owner'\)\{[\s\S]*restoreRoleIsolated\(\);[\s\S]*DanbridgeRoleResponsive\?\.restoreRoleResponsiveControls\?\.\(\)/, 'owner login immediately restores both role-isolation layers');
 assert.match(courseOperationsSource, /if\(ownerCanEdit\)\{editBtn\.style\.removeProperty\('display'\);delete editBtn\.dataset\.roleResponsiveHidden\}/, 'opening a lesson as owner defensively restores its edit button');
-assert.match(cloudSource, /await ensureProfile\(user\);try\{await recordSuccessfulLogin\(user,profile\)\}/, 'last login is written only after authorization succeeds');
+assert.match(cloudSource, /await loadSignedInProfile\(user\);try\{await recordSuccessfulLogin\(user,profile\)\}/, 'last login is written only after token-ready authorization succeeds');
 assert.match(cloudSource, /最後登入時間更新失敗[\s\S]*applyRoleUI\(profile,user\)/, 'a login timestamp failure does not block an authorized account');
 assert.match(cloudSource, /最後登入：\$\{escapeHTML\(last\)\}/, 'account management displays the last successful login');
 assert.match(cloudSource, /filter\(d=>d\.data\(\)\?\.role==='teacher'\)/, 'teacher access list excludes branch managers');
@@ -427,8 +427,10 @@ assert.match(cloudSource, /function setSignedOutIsolation\(locked\)[\s\S]*el\.in
 assert.match(cloudSource, /function notifyNewLessonReports\(reports\)[\s\S]*\['owner','branch_manager'\][\s\S]*teacherEmail[\s\S]*canViewLessonReport/, 'new report popups are limited to owner or the authorized branch manager and exclude the submitting account');
 assert.match(cloudSource, /function reportNotificationSeenKey\(\)[\s\S]*cloudEmailKey/, 'report popup acknowledgement is isolated per signed-in account');
 assert.match(cloudSource, /unsubscribeReports=onSnapshot[\s\S]*notifyNewLessonReports\(lessonReportDocuments\)[\s\S]*applyCachedLessonReportsToCurrentDB/, 'report notifications and local data updates share the same realtime Firestore stream');
-assert.match(cloudSource, /function createCloudSafetyBackup\(force=false\)[\s\S]*dailyBackups[\s\S]*snapshot:current[\s\S]*hash:dataHash\(current\)/, 'owner daily cloud backups preserve the full database with an integrity hash');
-assert.match(cloudSource, /function restoreCloudSafetyBackup\(day\)[\s\S]*dataHash\(restored\)!==backup\.hash[\s\S]*createVersion[\s\S]*__danbridgeSetDB/, 'cloud backup restoration verifies integrity and creates a local rollback version first');
+assert.match(cloudSource, /function createCloudSafetyBackup\(force=false,sourceOverride=null\)[\s\S]*sourceOverride\|\|window\.__danbridgeGetDB[\s\S]*prepareDailyShardedBackup\(current[\s\S]*dailyShardedBackupChunksRef\(day\)[\s\S]*verifyDailyShardedBackupReadback[\s\S]*sealDailyShardedBackup[\s\S]*transaction\.set\(ref/, 'owner daily cloud backups use the confirmed cloud baseline, split the full database, read every chunk back, and create the verified manifest last');
+assert.doesNotMatch(cloudSource, /function createCloudSafetyBackup\(force=false,sourceOverride=null\)[\s\S]{0,5000}snapshot:current/, 'new daily backups never store the full database in one Firestore document');
+assert.match(cloudSource, /dailyShardedBackups',COMPANY_ID,'days'/, 'new daily sharded backups stay outside the broad company wildcard so Rules can make them immutable');
+assert.match(cloudSource, /function restoreCloudSafetyBackup\(day\)[\s\S]*readCloudSafetyBackup\(day\)[\s\S]*createVersion[\s\S]*__danbridgeSetDB/, 'cloud backup restoration reads and verifies all chunks and creates a local rollback version first');
 assert.match(cloudSource, /CLOUD_BACKUP_RETENTION_DAYS=30[\s\S]*function cleanupOldCloudBackups/, 'daily cloud backup retention is capped at thirty days');
 assert.match(cloudSource, /function persistOwnerSyncRecovery\(\)[\s\S]*OWNER_SYNC_RECOVERY_KEY[\s\S]*function restoreOwnerSyncRecovery/, 'an unconfirmed owner mutation survives reload and can resume synchronization');
 assert.match(cloudSource, /function retryAllOperationalSync\(\)[\s\S]*uploadOwnerState\(true\)[\s\S]*publishRoleViewsWithRetry/, 'the recovery center retries main data and role-scoped views together');
@@ -695,6 +697,11 @@ const marqueeSource=fs.readFileSync(path.join(root,'js/modules/calendar/marquee-
 const schedulerCourseOperationsSource=fs.readFileSync(path.join(root,'js/modules/calendar/course-operations.js'),'utf8');
 const lessonListSource=fs.readFileSync(path.join(root,'js/modules/lessons/lesson-list-and-search.js'),'utf8');
 const schedulingEfficiencySource=fs.readFileSync(path.join(root,'js/app/v20-scheduling-efficiency.js'),'utf8');
+assert.match(applicationSource,/function applyHistoryState\(serialized,action\)[\s\S]*lessonTransitions\(current\.lessons\|\|\[\],target\.lessons\|\|\[\]\)[\s\S]*db\.changes=history[\s\S]*logChange/, 'global undo and redo preserve permanent history and append exact lesson transitions');
+assert.match(applicationSource,/function logChange\(type,lesson,before=null,metadata=\{\}\)[\s\S]*db\.changes\.unshift\([\s\S]*\.\.\.extra/, 'schedule changes accept immutable relationship metadata and append without replacing prior rows');
+assert.doesNotMatch(applicationSource,/db\.changes=db\.changes\.slice\(0,500\)/, 'permanent schedule history is no longer truncated at 500 operations');
+assert.match(schedulingEfficiencySource,/function undoRecentChange\(id\)[\s\S]*undoOfChangeId:String\(c\.id\)[\s\S]*saveDB/, 'single-change restore appends a linked inverse operation');
+assert.doesNotMatch(schedulingEfficiencySource,/c\.undone\s*=|c\.undoneAt\s*=/, 'single-change restore never mutates the original permanent operation');
 assert.match(schedulerUiSource,/canMove=calendarOwnerCanEdit\(\)/,'Wendy and Owner use the same card drag permission');
 assert.match(marqueeSource,/canEdit=\(\)=>window\.calendarOwnerCanEdit/,'Wendy and Owner use the same marquee, click and context-menu controller');
 assert.match(schedulerCourseOperationsSource,/ownerCanEdit=window\.calendarOwnerCanEdit/,'Wendy and Owner use the same course drawer edit action');
