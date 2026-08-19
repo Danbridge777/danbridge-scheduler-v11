@@ -1,0 +1,9 @@
+# Staging Admin D0 factory contract
+
+The staging Admin D0 execution path is currently unavailable and fail-closed. Its internal allowlist is empty. Local execution supports only the existing `danbridge-rules-test` emulator path; this contract performs no authentication, network request, IAM mutation, Firebase initialization, D0 operation, deployment, or production operation.
+
+The future runner may only be a dedicated GitHub Actions job protected by the `staging` environment. A separately reviewed adapter must pin the GitHub issuer, provider and audience, repository and owner numeric IDs, workflow path and ref, environment, subject, project `danbridge-d8877-staging`, project number `883029466360`, dedicated service account email and unique ID, immutable IAM receipt, empty delegates, and a token lifetime no greater than 900 seconds. It may narrowly read only `ACTIONS_ID_TOKEN_REQUEST_URL` and `ACTIONS_ID_TOKEN_REQUEST_TOKEN`, and must keep the subject token private while Google STS and the fixed WIF provider verify it.
+
+The request's `iamReceipt` is an untrusted immutable receipt candidate and can authorize nothing unless its verified hash is present in the internal frozen allowlist. `expectedD0` is an opaque native D0 completion; manual or cloned completions are prohibited. While the allowlist is empty, the contract must not read any nested field of either value.
+
+ADC, user or CLI refresh tokens, service-account keys, private keys, arbitrary credential JSON, arbitrary environment or file configuration, caller-provided tokens, source clients, Apps, Firestore handles, credentials, providers, or audiences are prohibited. The actual OIDC adapter, SDK factory, D0 binder wiring, IAM resources, receipt allowlist, and any staging execution require separate read-only review and authorization. This document does not activate them.

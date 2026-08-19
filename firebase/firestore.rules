@@ -325,7 +325,6 @@ service cloud.firestore {
     function validFrozenSourceProof(data, companyId, activationEpoch, freezeId) {
       let manifest = get(/databases/$(database)/documents/stagingRecordSyncActivationManifests/$(companyId)/manifests/$(data.activationManifestHash)).data;
       let control = get(/databases/$(database)/documents/stagingRecordSyncControls/$(companyId)).data;
-      let hardPause = get(/databases/$(database)/documents/stagingRecordSyncV1V2HardPauseReceipts/$(companyId)/epochs/$(activationEpoch)/freezes/$(freezeId)).data;
       let writer = get(/databases/$(database)/documents/stagingRecordSyncV1WriterCurrents/$(companyId)).data;
       let safety = get(/databases/$(database)/documents/stagingRecordSyncSafetyControls/$(companyId)).data;
       let pair = get(/databases/$(database)/documents/stagingRecordSyncV1PostPauseScanPairs/$(companyId)/epochs/$(activationEpoch)/freezes/$(freezeId)).data;
@@ -336,9 +335,9 @@ service cloud.firestore {
         && data.state == 'verified-observation' && data.scope == 'verified-source-observation-not-v2-seed-or-final-cutover-authority'
         && data.trustBoundary == 'immutable-authoritative-artifact-paths-required-payload-not-reverified-by-proof'
         && data.countPolicy == 'v1-delete-tombstone-no-physical-gc-document-count-monotonic'
-        && data.activationEpoch == activationEpoch && data.freezeId == freezeId && data.targetV2Epoch == hardPause.targetV2Epoch
-        && data.proofId == 'v1-frozen-source:' + hardPause.receiptHash && data.hardPauseReceiptHash == hardPause.receiptHash
-        && data.rawBackupId == 'v1-cutover-raw:' + hardPause.receiptHash
+        && data.activationEpoch == activationEpoch && data.freezeId == freezeId && data.targetV2Epoch == pair.targetV2Epoch
+        && data.proofId == 'v1-frozen-source:' + pair.hardPauseReceiptHash && data.hardPauseReceiptHash == pair.hardPauseReceiptHash
+        && data.rawBackupId == 'v1-cutover-raw:' + pair.hardPauseReceiptHash
         // 其餘 hash 與資料形狀皆逐字鏡射 immutable、create-validated sources；只有這兩個沒有 durable source mirror，必須在 proof 本身保留格式門。
         && nonzeroSha256(data.activationControlCoreHash) && nonzeroSha256(data.proofHash)
         && manifest.manifestHash == data.activationManifestHash && manifest.activationEpoch == activationEpoch && control.manifestHash == data.activationManifestHash && control.activationEpoch == activationEpoch

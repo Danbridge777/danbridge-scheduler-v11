@@ -31,7 +31,7 @@ test('browser Firebase SDK鎖定12.17.1，V2 candidate factory只允許staging�
 
 test('Firestore 使用多分頁持久快取，不因第二分頁退回記憶體',()=>{
  assert.match(source,/import \{ initializeFirestore, persistentLocalCache, persistentMultipleTabManager,/);
- assert.match(source,/initializeFirestore\(app,\{localCache:persistentLocalCache\(\{tabManager:persistentMultipleTabManager\(\)\}\)\}\)/);
+ assert.match(source,/bootstrapDanbridgeFirebase\(\{hostname:location\.hostname,configs:firebaseConfigs,initializeApp,getAuth,initializeFirestore,firestoreOptions:\{localCache:persistentLocalCache\(\{tabManager:persistentMultipleTabManager\(\)\}\)\}\}\)/);
  assert.doesNotMatch(source,/enableIndexedDbPersistence|getFirestore\(app\)/);
 });
 

@@ -1,0 +1,6 @@
+export const STAGING_ADMIN_FACTORY_PROJECT_ID='danbridge-d8877-staging';
+export const STAGING_ADMIN_FACTORY_SERVICE_ACCOUNT_EMAIL='danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com';
+export const STAGING_ADMIN_FACTORY_ALLOWLIST=Object.freeze([]);
+const fields=['environment','projectId','iamReceipt','expectedD0'];
+function exact(raw){if(!raw||typeof raw!=='object'||Array.isArray(raw)||Object.getPrototypeOf(raw)!==Object.prototype)throw new Error('staging Admin factory input blocked');const keys=Reflect.ownKeys(raw);if(keys.length!==fields.length||keys.some(key=>typeof key!=='string'||!fields.includes(key)))throw new Error('staging Admin factory fields blocked');const out={};for(const key of fields){const descriptor=Object.getOwnPropertyDescriptor(raw,key);if(!descriptor?.enumerable||!Object.prototype.hasOwnProperty.call(descriptor,'value'))throw new Error('staging Admin factory accessor blocked');out[key]=descriptor.value}return out}
+export function executeTrustedStagingD0(raw){const input=exact(raw);if(input.environment!=='staging'||input.projectId!==STAGING_ADMIN_FACTORY_PROJECT_ID)throw new Error('staging Admin D0 factory request blocked');if(STAGING_ADMIN_FACTORY_ALLOWLIST.length===0)throw new Error('staging Admin D0 factory allowlist blocked before I/O');throw new Error('staging Admin D0 factory implementation unavailable')}
