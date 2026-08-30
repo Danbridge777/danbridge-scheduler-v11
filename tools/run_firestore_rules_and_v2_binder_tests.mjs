@@ -4,24 +4,23 @@ if(!process.env.FIRESTORE_EMULATOR_HOST||!process.env.FIREBASE_AUTH_EMULATOR_HOS
  console.error('Firestore Rules + V2 binder integration requires both Firestore and Auth Emulator hosts.');
  process.exit(1);
 }
-const result=spawnSync(process.execPath,[
- '--test','--test-concurrency=1',
- 'tests/firestore-rules.test.mjs',
- 'tests/cloud-record-sync-v2-genesis-seed.test.mjs',
- 'tests/firebase-record-sync-v2-neutral-cutover-helpers.test.mjs',
- 'tests/firebase-record-sync-v2-deployment-gate-source-attestation-adapter.test.mjs',
- 'tests/firebase-record-sync-v2-genesis-seed-plan-adapter.test.mjs',
- 'tests/firebase-record-sync-v2-genesis-seed-batch-adapter.test.mjs',
- 'tests/firebase-record-sync-v2-genesis-seed-readback-adapter.test.mjs',
- 'tests/firebase-record-sync-v2-change-reservation-authority-v2-adapter.test.mjs',
- 'tests/firebase-record-sync-v2-change-reservation-authority-audit-receipt-adapter.test.mjs',
- 'tests/firebase-record-sync-v1-v2-hard-pause-adapter.test.mjs',
- 'tests/firebase-record-sync-v1-post-pause-scan-adapter.test.mjs'
+// The deployed maintenance artifacts are deliberately phase-scoped. Running
+// the legacy application-wide Rules suite after pause would assert that normal
+// writes remain open and therefore manufacture false failures. Exercise pause
+// first, then let the end-to-end binder test load proof/genesis/reservation in
+// the exact cumulative order used by the one-shot supervisor.
+const pause=spawnSync(process.execPath,[
+ '--test','--test-concurrency=1','tests/firebase-record-sync-v1-v2-hard-pause-adapter.test.mjs'
 ],{
  cwd:process.cwd(),
  env:{...process.env,DANBRIDGE_REQUIRE_V2_BINDER_EMULATOR:'1'},
  encoding:'utf8',
  stdio:'inherit'
+});
+if(pause.error){console.error(pause.error.message);process.exit(1)}
+if((pause.status??1)!==0)process.exit(pause.status??1);
+const result=spawnSync(process.execPath,['--test','--test-concurrency=1','tests/firebase-record-sync-v1-post-pause-scan-adapter.test.mjs'],{
+ cwd:process.cwd(),env:{...process.env,DANBRIDGE_REQUIRE_V2_BINDER_EMULATOR:'1'},encoding:'utf8',stdio:'inherit'
 });
 if(result.error){console.error(result.error.message);process.exit(1)}
 if((result.status??1)!==0)process.exit(result.status??1);
@@ -38,4 +37,9 @@ const reservations=spawnSync(process.execPath,['--test','--test-concurrency=1','
  cwd:process.cwd(),env:{...process.env,DANBRIDGE_REQUIRE_V2_BINDER_EMULATOR:'1',DANBRIDGE_G1_PROBE_COUNT:'0',DANBRIDGE_R1_PROBE_COUNT:'3'},encoding:'utf8',stdio:'inherit'
 });
 if(reservations.error){console.error(reservations.error.message);process.exit(1)}
-process.exit(reservations.status??1);
+if((reservations.status??1)!==0)process.exit(reservations.status??1);
+const reset=spawnSync(process.execPath,['tools/build_firestore_rules_deploy.mjs','--phase=pause'],{
+ cwd:process.cwd(),env:process.env,encoding:'utf8',stdio:'inherit'
+});
+if(reset.error){console.error(reset.error.message);process.exit(1)}
+process.exit(reset.status??1);

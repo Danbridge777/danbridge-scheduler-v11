@@ -1,0 +1,67 @@
+name: Staging V2 pre-atomic gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: danbridge-staging-v2-pre-atomic
+  cancel-in-progress: false
+
+jobs:
+  pre-atomic:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    steps:
+      - name: Check out exact main revision
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Verify application and supervisor tests
+        run: npm test
+
+      - name: Verify Firestore Rules
+        run: DANBRIDGE_JAVA_HOME="$JAVA_HOME" npm run test:rules
+
+      - name: Authenticate short-lived staging service account
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/883029466360/locations/global/workloadIdentityPools/danbridge-github-staging/providers/github
+          service_account: danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Run only through the pre-atomic gate
+        env:
+          STAGING_V2_MODE: pre-atomic
+          STAGING_V2_RESULT_PATH: staging-v2-pre-atomic-result.json
+          GOOGLE_CLOUD_PROJECT: danbridge-d8877-staging
+        run: node tools/run_staging_v2_pre_atomic.mjs
+
+      - name: Preserve the exact pre-atomic receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-v2-pre-atomic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: staging-v2-pre-atomic-result.json
+          if-no-files-found: warn
+          retention-days: 30

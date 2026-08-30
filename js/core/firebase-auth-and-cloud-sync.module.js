@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocFromServer, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, serverTimestamp, Timestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocFromServer, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, getDocsFromServer, serverTimestamp, Timestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
 import {bootstrapDanbridgeFirebase} from './firebase-environment-bootstrap.js?v=20.26.118';
 import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.86';
 import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.86';
@@ -39,6 +39,7 @@ import {createFirebaseRecordSyncActivationAdapter} from './firebase-record-sync-
 import {verifyRoleViewCandidateSourceBinding,buildRoleViewCandidateSourceAudit,buildRoleViewCandidateManifest as buildVerifiedRoleViewCandidateManifest,assertRoleViewCandidateManifest,buildRoleViewVerificationReceipt,assertRoleViewVerificationReceipt,verifyRoleViewReceiptSet} from './cloud-role-view-verification.js?v=20.26.106';
 import {loadProfileAfterAuthReady} from './cloud-auth-profile-bootstrap.js?v=20.26.113';
 import {RECORD_SYNC_V2_TAKEOVER_CANDIDATE_CONTROL_PATH,RECORD_SYNC_V2_TAKEOVER_CANDIDATE_HEAD_PATH,createFirebaseRecordSyncV2TakeoverCandidateAdapter} from './firebase-record-sync-v2-takeover-candidate-adapter.js?v=20.26.117';
+import {createStagingV2AuthorityReadLoader} from './staging-v2-authority-read-loader.js?v=20.26.119';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -80,6 +81,28 @@ export function createExplicitStagingV2TakeoverCandidateBinder(){
    return result;
   }
  });
+}
+
+// End explicit staging V2 takeover candidate binder.
+
+// Explicit-only owner read path. Constructing this object does not switch the
+// page runtime, subscribe to data, or perform any read. The caller must pass the
+// atomically activated epoch after the separate activation gate has completed.
+export function createExplicitStagingV2AuthorityReadLoader(){
+ if(DANBRIDGE_ENVIRONMENT!=='staging'||firebaseConfig.projectId!=='danbridge-d8877-staging'||app.options?.projectId!=='danbridge-d8877-staging'||auth.app!==app||cloud.app!==app)throw new Error('V2 authority reader requires the exact staging Firebase app');
+ const sameUser=(user,uid,email,label)=>{const current=auth.currentUser,currentEmail=typeof current?.email==='string'?current.email.trim().toLowerCase():'';if(current!==user||current?.uid!==uid||currentEmail!==email)throw new Error(label)};
+ const loader=createStagingV2AuthorityReadLoader({
+  expectedProjectId:'danbridge-d8877-staging',
+  getDocumentFromServer:async path=>{const snapshot=await getDocFromServer(doc(cloud,...path.split('/')));return snapshot.exists()?snapshot.data():null},
+  getCollectionFromServer:async path=>{const snapshot=await getDocsFromServer(collection(cloud,...path.split('/')));return snapshot.docs.map(row=>({id:row.id,data:row.data()}))},
+ });
+ return Object.freeze({scope:loader.scope,async load(request){
+  const user=auth.currentUser,uid=user?.uid,email=typeof user?.email==='string'?user.email.trim().toLowerCase():'';
+  if(typeof uid!=='string'||!/^[A-Za-z0-9_.:-]{8,128}$/.test(uid)||email!==OWNER_EMAIL||cloudRole!=='owner'||typeof user.getIdTokenResult!=='function')throw new Error('V2 authority reader requires the signed-in primary Owner');
+  await user.getIdTokenResult(true);sameUser(user,uid,email,'V2 authority reader auth changed after fresh token');
+  const model=await loader.load(request);sameUser(user,uid,email,'V2 authority reader auth changed during server inventory');
+  return model;
+ }})
 }
 
 // 舊版 Header 使用 onclick="authLogout()"；公開相容 API，避免 Header 重建前點擊失效。

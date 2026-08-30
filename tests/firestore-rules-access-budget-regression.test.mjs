@@ -3,7 +3,33 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
 const rules=await readFile(new URL('../firebase/firestore.rules',import.meta.url),'utf8');
+const deployRules=await readFile(new URL('../firebase/firestore.rules.deploy',import.meta.url),'utf8');
 const functionBody=(name,next)=>rules.slice(rules.indexOf(`function ${name}(`),rules.indexOf(`function ${next}(`));
+function quotedLiterals(text){
+ const out=[];let quote='',escaped=false,lineComment=false,blockComment=false,start=-1;
+ for(let index=0;index<text.length;index++){
+  const char=text[index],next=text[index+1];
+  if(lineComment){if(char==='\n')lineComment=false;continue}
+  if(blockComment){if(char==='*'&&next==='/'){blockComment=false;index++}continue}
+  if(quote){if(escaped)escaped=false;else if(char==='\\')escaped=true;else if(char===quote){out.push(text.slice(start,index+1));quote='';start=-1}continue}
+  if(char==='/'&&next==='/'){lineComment=true;index++;continue}
+  if(char==='/'&&next==='*'){blockComment=true;index++;continue}
+  if(char==='"'||char==="'"){quote=char;start=index}
+ }
+ assert.equal(quote,'');assert.equal(blockComment,false);return out;
+}
+
+test('rules deployment minifier preserves every single-quoted policy/schema literal byte-for-byte',()=>{
+ const sourceLiterals=new Set(quotedLiterals(rules));
+ const deployedLiterals=quotedLiterals(deployRules);
+ assert.ok(deployedLiterals.length>100);
+ for(const literal of deployedLiterals)assert.ok(sourceLiterals.has(literal),`mutated Rules literal: ${literal}`);
+ for(const literal of [
+  "'danbridge-record-sync-v1-permanent-fence-v2'",
+ "'danbridge-record-sync-v2-structural-active-control-v2'",
+  "'danbridge-active-record-authority-head-v2'"
+ ])assert.ok(deployedLiterals.includes(literal),literal);
+});
 
 test('frozen-source proof stays at the exact ten-call backup-Owner budget without a direct H read',()=>{
  const body=functionBody('validFrozenSourceProof','legacyV1CandidateWriteOpen');
@@ -32,5 +58,25 @@ test('hard-pause and U/V/Pair lineage artifacts remain create-only immutable',()
   assert.notEqual(start,-1,collection);
   const block=rules.slice(start,rules.indexOf('\n    match /',start+1));
   assert.match(block,/allow update, delete: if false;/,collection);
+ }
+});
+
+test('V2 Owner runtime read gate requires fence+active control+H1 and keeps every client write denied',()=>{
+ const body=functionBody('v2OwnerRuntimeReadOpen','v1PermanentFenceExists');
+ assert.equal((body.match(/\bget\(/g)??[]).length,3);
+ assert.equal((body.match(/\bexists\(/g)??[]).length,3);
+ for(const clause of [
+  "fence.projectId == 'danbridge-d8877-staging'",
+  "fence.fencePolicy == 'v1-all-mutation-surfaces-permanently-denied-no-resume-or-unfence'",
+  "control.writerProtocol == 'v2' && control.writerGeneration == 2",
+  'control.readAllowed == true && control.writeAllowed == true',
+  'control.allowAuditAppends == true',
+  "head.schema == 'danbridge-active-record-authority-head-v2'",
+  'head.revision is int && head.revision >= 1',
+  'head.sourceActiveControlHash == control.controlHash',
+  'head.sourceStructuralHeadHash == fence.activeHeadHash'
+ ])assert.ok(body.includes(clause),clause);
+ for(const collection of ['stagingRecordSyncV2ActiveControls','stagingActiveRecordV2Baselines','stagingActiveRecordV2Records','stagingActiveRecordV2OperationReceipts','stagingActiveRecordV2SaveCommits']){
+  const start=rules.indexOf(`match /${collection}/`);assert.notEqual(start,-1,collection);const block=rules.slice(start,rules.indexOf('\n    match /',start+1));assert.match(block,/v2OwnerRuntimeReadOpen/);assert.match(block,/allow create, update, delete: if false;/);
  }
 });

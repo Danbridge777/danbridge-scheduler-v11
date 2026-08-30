@@ -28,7 +28,7 @@ test('I2 generic config descriptor-safe、無cache alias且local adapter不公�
 });
 
 test('I2 Admin binder固定rules-test Emulator，production allowlist仍fail closed',()=>{
- assert.match(RECORD_SYNC_V2_ACTIVATION_CUTOVER_INTENT_V2_PRODUCTION_BLOCKER,/allowlist-not-yet-wired/);
+ assert.match(RECORD_SYNC_V2_ACTIVATION_CUTOVER_INTENT_V2_PRODUCTION_BLOCKER,/production-forbidden/);
  const app={options:{projectId:'danbridge-rules-test'}},firestore={};
  assert.throws(()=>createFirebaseRecordSyncV2ActivationCutoverIntentV2AdminBinder({app,firestore,expectedProjectId:'danbridge-rules-test'}),/Admin App\/Firestore identity/);
  let calls=0,hostile={app,firestore,expectedProjectId:'danbridge-rules-test'};Object.defineProperty(hostile,'firestore',{enumerable:true,get(){calls++;return firestore}});

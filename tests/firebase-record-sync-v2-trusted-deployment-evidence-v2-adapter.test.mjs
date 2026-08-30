@@ -28,11 +28,11 @@ test('D1 adapter固定singleton path、scope與import graph不接Candidate/舊ev
 });
 
 test('D1 snapshot只讀descriptor-safe data method並精確正規化Firestore nanos',()=>{
- const semantic={seconds:1787011200,nanoseconds:123456789},row=normalizeFirebaseRecordSyncV2TrustedDeploymentEvidenceV2Snapshot({persistedAt:semantic,persistedBy:'record-sync-v2-deploy-ci-emulator',persistedByEmail:'record-sync-v2-deploy-ci-emulator@danbridge.invalid'});
+ const semantic={seconds:1787011200,nanoseconds:123456789},row=normalizeFirebaseRecordSyncV2TrustedDeploymentEvidenceV2Snapshot({persistedAt:semantic,persistedBy:'service-account:danbridge-staging-v2',persistedByEmail:'danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com'});
  assert.equal(row.persistedAt,'2026-08-18T00:00:00.123456789Z');
  assert.equal(Object.isFrozen(semantic),false);
  let dataGetter=0,persistedGetter=0;const hostile=Object.create({});Object.defineProperty(hostile,'data',{get(){dataGetter++;return()=>({})}});assert.throws(()=>normalizeFirebaseRecordSyncV2TrustedDeploymentEvidenceV2Snapshot(hostile),/data method unsafe/);assert.equal(dataGetter,0);
- const body={persistedBy:'record-sync-v2-deploy-ci-emulator',persistedByEmail:'record-sync-v2-deploy-ci-emulator@danbridge.invalid'};Object.defineProperty(body,'persistedAt',{enumerable:true,get(){persistedGetter++;return semantic}});assert.throws(()=>normalizeFirebaseRecordSyncV2TrustedDeploymentEvidenceV2Snapshot(body),/accessor invalid/);assert.equal(persistedGetter,0);
+ const body={persistedBy:'service-account:danbridge-staging-v2',persistedByEmail:'danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com'};Object.defineProperty(body,'persistedAt',{enumerable:true,get(){persistedGetter++;return semantic}});assert.throws(()=>normalizeFirebaseRecordSyncV2TrustedDeploymentEvidenceV2Snapshot(body),/accessor invalid/);assert.equal(persistedGetter,0);
  for(const value of [{seconds:1787011200,nanoseconds:1000000000},{_seconds:1787011200,_nanoseconds:-1},{seconds:1787011200,nanoseconds:1,extra:true}])assert.throws(()=>normalizeFirebaseRecordSyncV2TrustedDeploymentEvidenceV2Snapshot({persistedAt:value}),/Timestamp/);
 });
 
@@ -40,11 +40,11 @@ test('D1 Admin binder固定App/Firestore/project與Emulator host，production fa
  const name='d1-focused-'+Date.now(),app=initializeApp({projectId:'danbridge-rules-test'},name),other=initializeApp({projectId:'wrong-project-12345'},name+'-other'),firestore=getFirestore(app),otherFirestore=getFirestore(other),saved=process.env.FIRESTORE_EMULATOR_HOST;
  try{
   delete process.env.FIRESTORE_EMULATOR_HOST;
-  assert.throws(()=>createFirebaseRecordSyncV2TrustedDeploymentEvidenceV2AdminBinder({app,firestore,expectedProjectId:'danbridge-rules-test'}),/service-account-email-and-project-allowlist/);
+  assert.throws(()=>createFirebaseRecordSyncV2TrustedDeploymentEvidenceV2AdminBinder({app,firestore,expectedProjectId:'danbridge-rules-test'}),/staging-service-account/);
   process.env.FIRESTORE_EMULATOR_HOST='127.0.0.1:1';
-  assert.throws(()=>createFirebaseRecordSyncV2TrustedDeploymentEvidenceV2AdminBinder({app,firestore,expectedProjectId:'wrong-project-12345'}),/service-account-email-and-project-allowlist/);
+  assert.throws(()=>createFirebaseRecordSyncV2TrustedDeploymentEvidenceV2AdminBinder({app,firestore,expectedProjectId:'wrong-project-12345'}),/staging-service-account/);
   assert.throws(()=>createFirebaseRecordSyncV2TrustedDeploymentEvidenceV2AdminBinder({app,firestore:otherFirestore,expectedProjectId:'danbridge-rules-test'}),/App\/Firestore identity/);
-  assert.throws(()=>createFirebaseRecordSyncV2TrustedDeploymentEvidenceV2AdminBinder({app:other,firestore:otherFirestore,expectedProjectId:'wrong-project-12345'}),/service-account-email-and-project-allowlist/);
+  assert.throws(()=>createFirebaseRecordSyncV2TrustedDeploymentEvidenceV2AdminBinder({app:other,firestore:otherFirestore,expectedProjectId:'wrong-project-12345'}),/staging-service-account/);
   let getter=0;const hostile={app,firestore,expectedProjectId:'danbridge-rules-test'};Object.defineProperty(hostile,'extra',{enumerable:true,get(){getter++;return true}});assert.throws(()=>createFirebaseRecordSyncV2TrustedDeploymentEvidenceV2AdminBinder(hostile),/fields invalid/);assert.equal(getter,0);
  }finally{if(saved===undefined)delete process.env.FIRESTORE_EMULATOR_HOST;else process.env.FIRESTORE_EMULATOR_HOST=saved;await Promise.all([deleteApp(app),deleteApp(other)])}
 });

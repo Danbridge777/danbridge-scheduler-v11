@@ -15,7 +15,7 @@ test('browser Firebase SDK鎖定12.17.1，V2 candidate factory只允許staging�
  assert.match(source,/getDocFromServer/);
  assert.match(source,/createFirebaseRecordSyncV2TakeoverCandidateAdapter/);
  assert.equal((source.match(/createExplicitStagingV2TakeoverCandidateBinder/g)||[]).length,1);
- const factory=block('export function createExplicitStagingV2TakeoverCandidateBinder','// 舊版 Header');
+ const factory=block('export function createExplicitStagingV2TakeoverCandidateBinder','// End explicit staging V2 takeover candidate binder.');
  assert.match(factory,/DANBRIDGE_ENVIRONMENT!=='staging'/);
  assert.match(factory,/danbridge-d8877-staging/);
  assert.match(factory,/auth\.app!==app\|\|cloud\.app!==app/);
@@ -27,6 +27,20 @@ test('browser Firebase SDK鎖定12.17.1，V2 candidate factory只允許staging�
  assert.match(factory,/getDocFromServer\(reference\(path\)\)/);
  assert.match(factory,/merge:false/);
  assert.doesNotMatch(factory,/cloudRole|cloudUid|cloudEmailKey|onAuthStateChanged|activeRecordMode|window\.|readTakeoverEnabled:true|writeTakeoverEnabled:true/);
+});
+
+test('V2 authority reader factory保持明確呼叫、只做fresh server inventory且不自動切換runtime',()=>{
+ assert.match(source,/getDocsFromServer/);
+ assert.match(source,/createStagingV2AuthorityReadLoader/);
+ assert.equal((source.match(/createExplicitStagingV2AuthorityReadLoader/g)||[]).length,1);
+ const factory=block('export function createExplicitStagingV2AuthorityReadLoader','// 舊版 Header');
+ assert.match(factory,/DANBRIDGE_ENVIRONMENT!=='staging'/);
+ assert.match(factory,/app\.options\?\.projectId!=='danbridge-d8877-staging'/);
+ assert.match(factory,/getIdTokenResult\(true\)/);
+ assert.match(factory,/getDocFromServer\(doc\(cloud/);
+ assert.match(factory,/getDocsFromServer\(collection\(cloud/);
+ assert.match(factory,/cloudRole!=='owner'/);
+ assert.doesNotMatch(factory,/onSnapshot|activeRecordMode\s*=|window\.|readTakeoverEnabled:true|writeTakeoverEnabled:true/);
 });
 
 test('Firestore 使用多分頁持久快取，不因第二分頁退回記憶體',()=>{

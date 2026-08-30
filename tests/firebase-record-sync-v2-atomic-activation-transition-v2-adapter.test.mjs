@@ -7,12 +7,15 @@ import {
  createFirebaseRecordSyncV2AtomicActivationV2Adapter,
  createFirebaseRecordSyncV2AtomicActivationV2AdminBinder,
  consumeFirebaseRecordSyncV2AtomicActivationV2Completion,
+ consumeFirebaseRecordSyncV2AtomicPreflightV2Completion,
  consumeFirebaseRecordSyncV2PostCutoverRecoveryV2Completion,
  normalizeFirebaseRecordSyncV2AtomicActivationV2Snapshot,
  RECORD_SYNC_V1_PERMANENT_FENCE_V2_PATH,
  RECORD_SYNC_V2_ATOMIC_ACTIVATION_V2_ADAPTER_SCOPE,
  RECORD_SYNC_V2_ATOMIC_ACTIVATION_V2_COMPLETION_SCOPE,
  RECORD_SYNC_V2_ATOMIC_ACTIVATION_V2_LOCAL_SCOPE,
+ RECORD_SYNC_V2_ATOMIC_PREFLIGHT_V2_COMPLETION_SCOPE,
+ RECORD_SYNC_V2_ATOMIC_PREFLIGHT_V2_LOCAL_SCOPE,
  RECORD_SYNC_V2_ATOMIC_ACTIVATION_V2_PRODUCTION_BLOCKER,
  RECORD_SYNC_V2_POST_CUTOVER_RECOVERY_V2_COMPLETION_SCOPE,
  RECORD_SYNC_V2_STRUCTURAL_ACTIVE_CONTROL_PATH,
@@ -29,6 +32,8 @@ test('native atomic-v2固定active/fence paths、四寫scope與recovery scope不
  assert.match(RECORD_SYNC_V2_ATOMIC_ACTIVATION_V2_ADAPTER_SCOPE,/fixed-twelve-document-four-write/);
  assert.match(RECORD_SYNC_V2_ATOMIC_ACTIVATION_V2_COMPLETION_SCOPE,/atomic-v2-poststate.*first-daily-only/);assert.doesNotMatch(RECORD_SYNC_V2_ATOMIC_ACTIVATION_V2_COMPLETION_SCOPE,/recovery/);
  assert.match(RECORD_SYNC_V2_ATOMIC_ACTIVATION_V2_LOCAL_SCOPE,/injectable-local/);
+ assert.match(RECORD_SYNC_V2_ATOMIC_PREFLIGHT_V2_COMPLETION_SCOPE,/read-only-pre-atomic.*separate-authorization-only/);
+ assert.match(RECORD_SYNC_V2_ATOMIC_PREFLIGHT_V2_LOCAL_SCOPE,/read-only-pre-atomic.*not-write-authority/);
  assert.match(RECORD_SYNC_V2_POST_CUTOVER_RECOVERY_V2_COMPLETION_SCOPE,/read-only-post-cutover-recovery/);
  assert.match(RECORD_SYNC_V2_ATOMIC_ACTIVATION_V2_PRODUCTION_BLOCKER,/service-account.*iam-allowlist/);
  const source=await readFile(new URL('../js/core/firebase-record-sync-v2-atomic-activation-transition-v2-adapter.js',import.meta.url),'utf8');
@@ -39,10 +44,10 @@ test('native atomic-v2固定active/fence paths、四寫scope與recovery scope不
 });
 
 test('atomic-v2 snapshot descriptor-safe且保留nanos，getter與hostile Timestamp零執行',()=>{
- const timestamp={seconds:1787011200,nanoseconds:123456789},row=normalizeFirebaseRecordSyncV2AtomicActivationV2Snapshot({persistedAt:timestamp,persistedBy:'record-sync-v2-deploy-ci-emulator',persistedByEmail:'record-sync-v2-deploy-ci-emulator@danbridge.invalid'});
+ const timestamp={seconds:1787011200,nanoseconds:123456789},row=normalizeFirebaseRecordSyncV2AtomicActivationV2Snapshot({persistedAt:timestamp,persistedBy:'service-account:danbridge-staging-v2',persistedByEmail:'danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com'});
  assert.equal(row.persistedAt,'2026-08-18T00:00:00.123456789Z');assert.equal(Object.isFrozen(timestamp),false);
  let dataGetter=0,timeGetter=0;const hostile=Object.create({});Object.defineProperty(hostile,'data',{get(){dataGetter++;return()=>({})}});assert.throws(()=>normalizeFirebaseRecordSyncV2AtomicActivationV2Snapshot(hostile),/data method unsafe/);assert.equal(dataGetter,0);
- const body={persistedBy:'record-sync-v2-deploy-ci-emulator',persistedByEmail:'record-sync-v2-deploy-ci-emulator@danbridge.invalid'};Object.defineProperty(body,'persistedAt',{enumerable:true,get(){timeGetter++;return timestamp}});assert.throws(()=>normalizeFirebaseRecordSyncV2AtomicActivationV2Snapshot(body),/accessor invalid/);assert.equal(timeGetter,0);
+ const body={persistedBy:'service-account:danbridge-staging-v2',persistedByEmail:'danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com'};Object.defineProperty(body,'persistedAt',{enumerable:true,get(){timeGetter++;return timestamp}});assert.throws(()=>normalizeFirebaseRecordSyncV2AtomicActivationV2Snapshot(body),/accessor invalid/);assert.equal(timeGetter,0);
  for(const value of [{seconds:1787011200,nanoseconds:1000000000},{_seconds:1787011200,_nanoseconds:-1},{seconds:1787011200,nanoseconds:1,extra:true}])assert.throws(()=>normalizeFirebaseRecordSyncV2AtomicActivationV2Snapshot({persistedAt:value}),/Timestamp/);
 });
 
@@ -54,6 +59,7 @@ test('generic atomic-v2 config exact，plain/local/clone在任何I/O前拒且不
  assert.equal(adapter.scope,RECORD_SYNC_V2_ATOMIC_ACTIVATION_V2_ADAPTER_SCOPE);
  await assert.rejects(adapter.execute(fakeD1()),/native D1 completion invalid/);assert.equal(reads,0);assert.equal(transactions,0);
  assert.throws(()=>consumeFirebaseRecordSyncV2AtomicActivationV2Completion(Object.freeze({}),{}),/native atomic-v2 completion invalid/);
+ assert.throws(()=>consumeFirebaseRecordSyncV2AtomicPreflightV2Completion(Object.freeze({})),/preflight/);
  assert.throws(()=>consumeFirebaseRecordSyncV2PostCutoverRecoveryV2Completion(Object.freeze({}),{}),/native post-cutover recovery completion invalid/);
 });
 
@@ -67,6 +73,6 @@ test('Admin binder config固定App/Firestore/project且production fail closed；
   assert.throws(()=>createFirebaseRecordSyncV2AtomicActivationV2AdminBinder({app,firestore:otherFirestore,expectedProjectId:'danbridge-rules-test'}),/App\/Firestore identity/);
   assert.throws(()=>createFirebaseRecordSyncV2AtomicActivationV2AdminBinder({app:other,firestore:otherFirestore,expectedProjectId:'wrong-project-12345'}),/service-account.*iam-allowlist/);
   let getter=0;const extra={app,firestore,expectedProjectId:'danbridge-rules-test'};Object.defineProperty(extra,'targetV2Epoch',{enumerable:true,get(){getter++;return'target-epoch-v2'}});assert.throws(()=>createFirebaseRecordSyncV2AtomicActivationV2AdminBinder(extra),/fields invalid/);assert.equal(getter,0);
-  const binder=createFirebaseRecordSyncV2AtomicActivationV2AdminBinder({app,firestore,expectedProjectId:'danbridge-rules-test'});assert.equal(binder.recover.length,0);assert.equal(binder.execute.length,1);
+  const binder=createFirebaseRecordSyncV2AtomicActivationV2AdminBinder({app,firestore,expectedProjectId:'danbridge-rules-test'});assert.equal(binder.recover.length,0);assert.equal(binder.preflight.length,1);assert.equal(binder.execute.length,1);
  }finally{if(saved===undefined)delete process.env.FIRESTORE_EMULATOR_HOST;else process.env.FIRESTORE_EMULATOR_HOST=saved;await Promise.all([deleteApp(app),deleteApp(other)])}
 });

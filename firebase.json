@@ -1,6 +1,6 @@
 {
   "firestore": {
-    "rules": "firebase/firestore.rules"
+    "rules": "firebase/firestore.rules.deploy"
   },
   "emulators": {
     "auth": {
@@ -13,6 +13,29 @@
       "enabled": false
     },
     "singleProjectMode": true
+  },
+  "functions": {
+    "source": ".",
+    "runtime": "nodejs22",
+    "ignore": [
+      ".git/**",
+      ".firebase/**",
+      "node_modules/**",
+      "tests/**",
+      "tools/**",
+      "docs/**",
+      "outputs/**",
+      "firebase/**",
+      "playwright-report/**",
+      "test-results/**",
+      "firebase-debug*.log",
+      "firestore-debug*.log",
+      "*.html",
+      "*.png",
+      "*.webmanifest",
+      "sw.js",
+      "js/ui/**"
+    ]
   },
   "hosting": {
     "public": ".",
@@ -31,11 +54,21 @@
       "firebase/**",
       "tests/**",
       "tools/**",
+      "functions/**",
       "package.json",
       "package-lock.json",
       "playwright.config.js",
       "playwright-report/**",
       "test-results/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/api/staging-v2/authority-save",
+        "function": {
+          "functionId": "stagingV2AuthoritySave",
+          "region": "asia-east1"
+        }
+      }
     ]
   }
 }
