@@ -1,5 +1,5 @@
-import { accessSync, constants } from 'node:fs';
-import { homedir } from 'node:os';
+import { accessSync, constants, mkdtempSync, rmSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -27,17 +27,24 @@ const command = [
   '--project', 'danbridge-rules-test',
   'node tools/run_firestore_rules_and_v2_binder_tests.mjs'
 ];
-const result = spawnSync(firebaseBin, command, {
-  cwd: process.cwd(),
-  env: {
-    ...process.env,
-    JAVA_HOME: javaHome,
-    PATH: `${join(javaHome, 'bin')}:${process.env.PATH || ''}`,
-    FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
-  },
-  encoding: 'utf8',
-  stdio: 'inherit'
-});
+const firebaseConfigHome = mkdtempSync(join(tmpdir(), 'danbridge-firebase-config-'));
+let result;
+try {
+  result = spawnSync(firebaseBin, command, {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      JAVA_HOME: javaHome,
+      PATH: `${join(javaHome, 'bin')}:${process.env.PATH || ''}`,
+      FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true',
+      XDG_CONFIG_HOME: firebaseConfigHome
+    },
+    encoding: 'utf8',
+    stdio: 'inherit'
+  });
+} finally {
+  rmSync(firebaseConfigHome, { recursive: true, force: true });
+}
 
 if (result.error) {
   console.error(`無法啟動 Firestore Emulator：${result.error.message}`);

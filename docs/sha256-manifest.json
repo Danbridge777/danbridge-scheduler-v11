@@ -324,8 +324,8 @@
   "js/ui/select-options.js": "52f301becc7a7d32e80d35ba55a2d353f844765b66a9ecea27c17f206705f0f5",
   "js/ui/windows-performance-profile.js": "045eb68ff1046109b5de05e2c6d0e22d74ce38ca2df4c0e96191feff1c827870",
   "manifest.webmanifest": "0f236be47792fccf1d3e4c8a96458c002bace4a358d723819671e1a2b36c0e66",
-  "package-lock.json": "00ccc5bf5d5a0860371415e056bcfa28e9e996773ea4f03a3ae7c496cfad48fd",
-  "package.json": "57262a5f1331ccb60898697d1b97ef98487455215d79a957439b1ec8c5e79d8c",
+  "package-lock.json": "7e0ec8e515e830b33f0b5046699baf69dba34a6276f78f9d37968ee9614ef770",
+  "package.json": "0eab6ca4e27e9c5bb51ca7d23f8fd75ff6a9f4babd33241c4bb305b2eb815b31",
   "playwright.config.js": "b49b92c4d3ef6de8f68446774feedf2333e5db30284d65675be47d64476f5c62",
   "sw.js": "17b1a3d616fed2b673ac485e2e91efe063bca137f54150a1920a243559317ed8",
   "tests/browser-staging-live-execution-storage.test.mjs": "b63e60c0d7fc2db97ea95dc1d4eee3f700ae0dae0ae4f2f6cce1e5227174bee1",
@@ -380,7 +380,7 @@
   "tests/cloud-staging-execution-manifest.test.mjs": "55209185725e745faf79271cfce4b495a6639bc9896bec9051942b16e5aef622",
   "tests/cloud-staging-live-activation.test.mjs": "fdf5c09f286f87ca8054997e2362130e3a6ac0fb84984d22f0f917415fcb5347",
   "tests/cloud-staging-live-preflight.test.mjs": "6461438e91e48db6f0c9112cb773fd90e05d11fbe8e21d52f8b88c197df25bda",
-  "tests/dependency-audit-policy.test.mjs": "25dbd15afe0ce8cb1cdcbca9c47ff4d21b6ae5dcb82da77eb85672b2c421a00d",
+  "tests/dependency-audit-policy.test.mjs": "900b36eb6a4f3e668f749c715f235fbbb345a77a7f3626dc6077396567bf90a5",
   "tests/e2e/browser-module-parse-regression.spec.js": "3cfb2ab9614312db23b2c2918b97756860b87775640c7ba9896912436cefdae5",
   "tests/e2e/public-entry.spec.js": "0403441312668c31f3b400f58bb97e9a7e5b911f2a10b66481a9051cb8716de5",
   "tests/firebase-active-record-authority-save-v2-adapter.test.mjs": "9ba23217a1b821e48622e5ce7b2a13e4c370ace3277dfecc7310b1a5a66de951",
@@ -450,10 +450,10 @@
   "tools/build_firestore_rules_deploy.mjs": "f655a5b24c20589f8d093c16b5361449aeac02c15c54cab3d8f56f489347b7ce",
   "tools/e2e_static_server.js": "835f20e57610aa6609dbbba1cef67f85f77e9670d32a3edfcdb4d1176de55667",
   "tools/run_firestore_rules_and_v2_binder_tests.mjs": "950e7ba2ea19e714b8e278de3fc4043ce143d05a3c068907070dcb9475c84467",
-  "tools/run_firestore_rules_tests.mjs": "e6d9aa7f2a2352e307b9a6dbf3c6668a4992e416cf430920376ea629106200d9",
+  "tools/run_firestore_rules_tests.mjs": "e1965aa273ac60218e6ad5d4110dfb05a14122c4737f26f2508b7df228e1b407",
   "tools/run_staging_v2_pre_atomic.mjs": "36ee1b281ed10b025bebe14ae0f3f52730732b97fbf638bc24e86f199c48163e",
   "tools/run_v2_capacity_tests.mjs": "6e6dae51c9870272fbf85d279d01fb9509195095d2fdae638701bb082529a836",
   "tools/validate_project.py": "f912fa1c3066bd9019b3352d990e2f235efc0c474b94567df89d6a2904007c2d",
   "tools/validate_staging_deploy_target.mjs": "c1e3c829836b47881527f6778ef1b0bee51f23d66bf96b66bb0a987ad8bf68c8",
-  "tools/verify_dependency_audit.mjs": "d8ea7b395aef74773d588f82fd355ee8d03f07cce206ee0daf56b90f8a5451c0"
+  "tools/verify_dependency_audit.mjs": "8eae7655bdec86ad8587a177434cd07c6d23e197268a1b67e09277bab9d74aae"
 }
