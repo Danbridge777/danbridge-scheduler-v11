@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {buildStagingV2PreAtomicArtifacts} from '../js/core/staging-v2-pre-atomic-artifacts.js';
@@ -49,4 +50,11 @@ test('atomic Rules gate requires three read-only observations and two final cons
   [row(hash),row(hash),{...row(hash),writeCount:1}],
   [row(hash),row(hash),{...row(hash),matches:false}],
  ])assert.throws(()=>confirmStagingV2AtomicRulesReadbacks({readbacks}),/blocked/);
+});
+
+test('atomic workflow builds the same paused Rules source before authorization readback',()=>{
+ const workflow=readFileSync(resolve(root,'.github/workflows/staging-v2-atomic.yml'),'utf8'),build='node tools/build_firestore_rules_deploy.mjs --phase=pause',execute='node tools/run_staging_v2_atomic.mjs';
+ assert.equal(workflow.split(build).length-1,1);
+ assert.ok(workflow.indexOf(build)>workflow.indexOf('npm ci'));
+ assert.ok(workflow.indexOf(build)<workflow.indexOf(execute));
 });
