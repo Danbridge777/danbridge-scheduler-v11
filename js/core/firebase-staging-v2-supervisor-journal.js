@@ -15,7 +15,6 @@ export function createFirebaseStagingV2SupervisorJournal({app,firestore,expected
  if(projectId!==expectedProjectId||nativeFirestore!==firestore)throw new Error('staging V2 supervisor App/Firestore identity blocked');
  const collectionPath=`stagingRecordSyncV2SupervisorJournals/danbridge/runs/${runId}/entries`,boundary=createStagingV2AdminBoundary(expectedProjectId);
  return Object.freeze({
-  collectionPath,
   async append(row){
    await boundary.attest();
    if(!plain(row)||!Number.isSafeInteger(row.sequence)||row.sequence<0||row.runId!==runId)throw new Error('staging V2 supervisor journal append blocked');
