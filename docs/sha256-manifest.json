@@ -230,7 +230,7 @@
   "js/core/firebase-admin-staging-binder-inventory.js": "8715602255f86cacec98b58778885bb7056119e0272651fd4f1c040e39e74d6a",
   "js/core/firebase-admin-staging-credential-factory-contract.js": "36dc732e6404be8e78b92888cc6ab4ff04f9c3d8daa5d5ac2db196fdee3935df",
   "js/core/firebase-admin-staging-identity-boundary.js": "9bd4ad727eaf98e91d232fa41b6d7b77bed8f606cca3e06d1b3e721789633526",
-  "js/core/firebase-auth-and-cloud-sync.module.js": "0105818738bbbb485decc2a09d7b39e5d1d8c323b7a22982e75ede167fc3d93d",
+  "js/core/firebase-auth-and-cloud-sync.module.js": "f7b6653dae383c45156d8ade34731b61ce6c150395fd6c386f70a2fefbaf5c58",
   "js/core/firebase-environment-bootstrap.js": "c7aae4b12d561370574a89b6a90548a8f9b4d67f5c7d59d043d9910262c1db7b",
   "js/core/firebase-full-record-shadow-adapter.js": "0923b3ed1187a0883e3c6c2d61a78a25aacc9a65a83a939be932fcaaefcb076d",
   "js/core/firebase-live-record-operation-adapter.js": "2681fca5b94a53644e09db9cff5932cccd8116396d03b28f390e916d6443dda6",
