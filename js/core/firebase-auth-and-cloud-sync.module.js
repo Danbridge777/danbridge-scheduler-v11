@@ -63,7 +63,7 @@ const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
 const provider=new GoogleAuthProvider();
 provider.setCustomParameters({prompt:'select_account'});
-const STAGING_V2_APP_CHECK_SITE_KEY='6LeW8aEtAAAAALlBdQWdhFZf3yntBChCxCDTW8K6';
+const STAGING_V2_APP_CHECK_SITE_KEY='6LfvKqItAAAAALRIut991852bJzOP3Aekm8WeXB9';
 const stagingV2AppCheck=DANBRIDGE_ENVIRONMENT==='staging'?initializeAppCheck(app,{provider:new ReCaptchaEnterpriseProvider(STAGING_V2_APP_CHECK_SITE_KEY),isTokenAutoRefreshEnabled:true}):null;
 
 // Explicit-only staging migration composition. Merely importing this module never creates or activates V2.

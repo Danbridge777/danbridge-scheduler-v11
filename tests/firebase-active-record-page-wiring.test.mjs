@@ -241,6 +241,8 @@ test('V2 Hn 權威主資料完整 ready 才自動補送角色逐筆檢視，H0 �
 test('App Check 與 H1 入口只存在 staging，limited-use token 送入固定 same-origin Function',()=>{
  assert.match(source,/firebase-app-check\.js/);
  assert.match(source,/DANBRIDGE_ENVIRONMENT==='staging'\?initializeAppCheck/);
+ assert.match(source,/const STAGING_V2_APP_CHECK_SITE_KEY='6LfvKqItAAAAALRIut991852bJzOP3Aekm8WeXB9'/);
+ assert.doesNotMatch(source,/6LeW8aEtAAAAALlBdQWdhFZf3yntBChCxCDTW8K6/);
  assert.match(source,/new ReCaptchaEnterpriseProvider\(STAGING_V2_APP_CHECK_SITE_KEY\)/);
  assert.match(source,/getLimitedUseToken\(stagingV2AppCheck\)/);
  const h1=block('window.__danbridgeCommitStagingV2H1','async function flushActiveOwnerState');
