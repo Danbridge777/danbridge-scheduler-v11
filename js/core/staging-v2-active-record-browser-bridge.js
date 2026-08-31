@@ -2,6 +2,7 @@ import {FULL_RECORD_COLLECTIONS,FULL_RECORD_SHADOW_SCHEMA} from './cloud-full-re
 import {assertChangeRecordIdentity} from './cloud-change-record-identity.js';
 import {isStrictActiveRecordSaveTimestamp,preflightActiveRecordSaveLocalEnvelopes,strictCloneActiveRecordSaveValue} from './cloud-active-record-save-plan.js';
 import {activeRecordAuthoritySaveV2DailyRecordEnvelope,assertActiveRecordAuthoritySaveCurrentV2Integrity} from './cloud-active-record-authority-save-chain-v2.js';
+import {normalizeRecordSyncV2ServerTimestamp} from './firebase-record-sync-v2-server-timestamp.js';
 
 export const STAGING_V2_ACTIVE_RECORD_BROWSER_BRIDGE_SCOPE='staging-only-verified-current-authority-bundle-to-owner-read-model-and-persisted-one-operation-save-replay';
 const collectionSet=new Set(FULL_RECORD_COLLECTIONS);
@@ -16,9 +17,7 @@ export function normalizeStagingV2FirestoreValue(value,seen=new Set(),path='valu
  if(value===null||['string','boolean'].includes(typeof value))return value;
  if(typeof value==='number'){if(!Number.isFinite(value)||Object.is(value,-0))throw new Error(path+' invalid number');return value}
  if(typeof value!=='object'||seen.has(value))throw new Error(path+' invalid Firestore value');
- if(typeof value.toDate==='function'){
-  const date=value.toDate();if(!(date instanceof Date)||!Number.isFinite(date.getTime()))throw new Error(path+' invalid Firestore timestamp');return date.toISOString();
- }
+ if(typeof value.toDate==='function')return normalizeRecordSyncV2ServerTimestamp(value);
  seen.add(value);
  try{
   if(Array.isArray(value)){if(Object.getPrototypeOf(value)!==Array.prototype||Reflect.ownKeys(value).length!==value.length+1)throw new Error(path+' invalid array');return value.map((_,index)=>{const descriptor=Object.getOwnPropertyDescriptor(value,String(index));if(!descriptor?.enumerable||!Object.prototype.hasOwnProperty.call(descriptor,'value'))throw new Error(path+' invalid array item');return normalizeStagingV2FirestoreValue(descriptor.value,seen,`${path}[${index}]`)})}
