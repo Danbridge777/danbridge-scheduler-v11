@@ -1,7 +1,7 @@
 {
   ".firebaserc": "4bdc28543826edd638db8df62f91b6b4f43d4cc58619b103d8f6b01c96710070",
   ".github/workflows/ci.yml": "cf05c29e94b6951d71870ebd38df03d4614c2bdeb5d18bea76de9d2ad077aa35",
-  ".github/workflows/staging-v2-atomic.yml": "c321d6b9c85fd18dc01f996a51b32b6afea19a588a59332a069ddfc2fdeecdf3",
+  ".github/workflows/staging-v2-atomic.yml": "135ce8f0e82ef249543eda4c9a50dfdc6c0cc01d56e8bfd8699e9a2767f4ca12",
   ".github/workflows/staging-v2-pre-atomic.yml": "951692faead146c7b36f572fbbf1f8edcce249725791b10c23f0c39951e966be",
   ".gitignore": "99437f76cde881f723a2b2c3211a3fb28f7a67bdcdde43f5cbc20d2aeac31a3e",
   ".nojekyll": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
@@ -438,7 +438,7 @@
   "tests/staging-v2-admin-binder-registry.test.mjs": "3375cb6527894b0370131cd40e5234bbd299e5d44614c7dc5374f61ee241b2d0",
   "tests/staging-v2-admin-supervisor-primitives.test.mjs": "4304f0942cc1600e73b637b00db66f7d18e3433ea8607892245d1d4e50287891",
   "tests/staging-v2-admin-supervisor-steps.test.mjs": "0bb67ab35e9266752649e832187905eca4be9aaf315d373fbdcf32cbaaf95ccf",
-  "tests/staging-v2-atomic-artifacts.test.mjs": "3987c8a234ddfa04cbe0ba3fd07b5870c076bfb16f3eeb4cc44f52c630386c1d",
+  "tests/staging-v2-atomic-artifacts.test.mjs": "660be67d754c607ccbe495f8e1e70518d86e665e979826f7c9591416984a99de",
   "tests/staging-v2-authority-read-loader.test.mjs": "ca8a72ff990e4dc78005124c18e1311151ae207f15e751728961d38c4a4d0bc5",
   "tests/staging-v2-authority-save-browser-client.test.mjs": "cbeac1ed9396b40b96111ba3ddf8f8ffe37a46a9bdf11f15ed53b7da2b8132b8",
   "tests/staging-v2-authority-save-cloud-runtime.test.mjs": "16506cbf4e5aca03d4224114280d10e93048b658c55737a99d8f7e7071428c2f",

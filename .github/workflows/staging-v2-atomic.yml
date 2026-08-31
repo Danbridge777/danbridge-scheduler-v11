@@ -48,6 +48,9 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
+      - name: Build the exact paused Firestore Rules source
+        run: node tools/build_firestore_rules_deploy.mjs --phase=pause
+
       - name: Download exact successful pre-atomic receipt
         uses: actions/download-artifact@v4
         with:
