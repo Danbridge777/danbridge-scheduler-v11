@@ -78,17 +78,17 @@ test('active/tombstone/audit/source history counts涵蓋所有raw documents，�
  assert.equal(snapshot.manifest.auditScope,'audit-presence-observation-not-cutover-authorization');
 });
 
-test('changes允許tombstone gap，raw identity不重編；active oldest轉UI newest-first',()=>{
- const documents=emptyDocuments(),oldest={type:'oldest'},deleted={type:'deleted'},newest={type:'newest'};
- documents.changes=[changeDocument(3,newest),changeDocument(1,deleted,{deleted:true,revision:2}),changeDocument(0,oldest)];
+test('changes允許tombstone gap與同index歷史，raw identity不重編；active oldest轉UI newest-first',()=>{
+ const documents=emptyDocuments(),oldest={type:'oldest'},deleted={type:'deleted'},deletedHistory={type:'deleted-history'},newest={type:'newest'};
+ documents.changes=[changeDocument(3,newest),changeDocument(1,deleted,{deleted:true,revision:2}),changeDocument(0,deletedHistory,{deleted:true,revision:3,sourceHash:SOURCE_B}),changeDocument(0,oldest)];
  const snapshot=buildRecordSyncV1RawDocumentRoot({documentsByCollection:documents}),summary=snapshot.collectionSummaries[FULL_RECORD_COLLECTIONS.indexOf('changes')];
  assert.deepEqual(snapshot.logicalDb.changes,[newest,oldest]);
- assert.equal(summary.documentCount,3);
+ assert.equal(summary.documentCount,4);
  assert.equal(summary.activeCount,2);
- assert.equal(summary.tombstoneCount,1);
+ assert.equal(summary.tombstoneCount,2);
  assert.match(snapshot.manifest.activeLogicalDataHash,/^raw-active-v1:[a-f0-9]{64}$/);
  const indexes=snapshot.batches.flatMap(batch=>batch.leaves).filter(leaf=>leaf.collection==='changes').map(leaf=>leaf.recordIndex);
- assert.deepEqual(indexes,[0,1,3]);
+ assert.deepEqual(indexes,[0,0,1,3]);
  const duplicateIndex=emptyDocuments();duplicateIndex.changes=[changeDocument(2,{type:'a'}),changeDocument(2,{type:'b'})];assert.throws(()=>buildRecordSyncV1RawDocumentRoot({documentsByCollection:duplicateIndex}),/recordIndex 重複/);
  const duplicateId=emptyDocuments(),same=changeDocument(2,{type:'same'});duplicateId.changes=[same,structuredClone(same)];assert.throws(()=>buildRecordSyncV1RawDocumentRoot({documentsByCollection:duplicateId}),/recordId 重複/);
 });

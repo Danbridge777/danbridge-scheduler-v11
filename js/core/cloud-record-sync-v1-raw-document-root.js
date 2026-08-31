@@ -81,12 +81,12 @@ function addCounts(target,source){for(const key of ['documentCount','activeCount
 function countsFor(rows){const result={documentCount:rows.length,activeCount:0,tombstoneCount:0,auditedCount:0,unauditedCount:0};for(const row of rows){result[row.leaf.deleted?'tombstoneCount':'activeCount']++;result[row.leaf.auditState==='present'?'auditedCount':'unauditedCount']++}return result}
 
 function normalizeCollection(collection,rawRows){
- const rows=[],recordIds=new Set(),recordIndexes=new Set();
+ const rows=[],recordIds=new Set(),activeRecordIndexes=new Set();
  for(const raw of rawRows){
   const {normalizedDocument,leaf}=normalizeAndBuildRecordSyncV1RawDocumentLeaf(raw);
   if(normalizedDocument.collection!==collection||recordIds.has(leaf.recordId))throw new Error('V1 raw '+collection+' document collection 或 recordId 重複');
   recordIds.add(leaf.recordId);
-  if(collection==='changes'){if(recordIndexes.has(leaf.recordIndex))throw new Error('V1 raw changes recordIndex 重複');recordIndexes.add(leaf.recordIndex)}
+  if(collection==='changes'&&!leaf.deleted){if(activeRecordIndexes.has(leaf.recordIndex))throw new Error('V1 raw active changes recordIndex 重複');activeRecordIndexes.add(leaf.recordIndex)}
   rows.push({normalizedDocument,leaf});
  }
  rows.sort(collection==='changes'?((left,right)=>left.leaf.recordIndex-right.leaf.recordIndex||compareUtf8(left.leaf.recordId,right.leaf.recordId)):((left,right)=>compareUtf8(left.leaf.recordId,right.leaf.recordId)));
