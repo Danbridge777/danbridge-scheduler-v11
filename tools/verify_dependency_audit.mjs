@@ -7,6 +7,7 @@ import {dirname,resolve} from 'node:path';
 
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const PRODUCTION_VERSIONS=Object.freeze({
+ 'firebase':'12.17.1',
  'firebase-admin':'14.2.0',
  'firebase-functions':'7.3.2',
  'google-auth-library':'11.0.2'
