@@ -4,7 +4,7 @@ import {verifyDependencyAuditReports} from '../tools/verify_dependency_audit.mjs
 
 const clean=()=>({auditReportVersion:2,vulnerabilities:{},metadata:{vulnerabilities:{info:0,low:0,moderate:0,high:0,critical:0,total:0}}});
 const packageJson=()=>({
- dependencies:{'firebase-admin':'14.2.0','firebase-functions':'7.3.2','google-auth-library':'11.0.2'},
+ dependencies:{firebase:'12.17.1','firebase-admin':'14.2.0','firebase-functions':'7.3.2','google-auth-library':'11.0.2'},
  devDependencies:{},
  overrides:{uuid:'11.1.1'}
 });

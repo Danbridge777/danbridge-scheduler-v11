@@ -15,7 +15,7 @@ import {RECORD_SYNC_V2_GENESIS_RECORD_HASH_SCHEMA,RECORD_SYNC_V2_GENESIS_RECORD_
 import {selectRecordSyncV2GenesisIdentityIndexMembershipBucket,verifyRecordSyncV2GenesisIdentityIndexMembership} from './cloud-record-sync-v2-genesis-identity-index.js';
 import {assertRecordSyncV1RawNormalizedAudit,normalizeAndBuildRecordSyncV1RawDocumentLeaf} from './cloud-record-sync-v1-raw-document-leaf.js';
 import {RECORD_SYNC_V2_GENESIS_IDENTITY_INDEX_BUCKET_PATH,RECORD_SYNC_V2_GENESIS_IDENTITY_INDEX_BUCKET_SEAL_PATH,RECORD_SYNC_V2_GENESIS_IDENTITY_INDEX_ROOT_PATH} from './firebase-record-sync-v2-genesis-identity-index-adapter.js';
-import {RECORD_SYNC_V2_GENESIS_BATCH_RECORD_PATH} from './firebase-record-sync-v2-genesis-seed-batch-adapter.js';
+import {RECORD_SYNC_V2_GENESIS_BATCH_RECORD_PATH} from './firebase-record-sync-v2-genesis-paths.js';
 import {
  RECORD_SYNC_V1_PERMANENT_FENCE_V2_PATH,
  RECORD_SYNC_V2_STRUCTURAL_ACTIVE_CONTROL_PATH,
