@@ -1,4 +1,4 @@
-import {FULL_RECORD_COLLECTIONS,FULL_RECORD_SHADOW_SCHEMA} from './cloud-full-record-shadow.js';
+import {FULL_RECORD_COLLECTIONS,FULL_RECORD_SHADOW_SCHEMA,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js';
 import {assertChangeRecordIdentity} from './cloud-change-record-identity.js';
 import {isStrictActiveRecordSaveTimestamp,preflightActiveRecordSaveLocalEnvelopes,strictCloneActiveRecordSaveValue} from './cloud-active-record-save-plan.js';
 import {activeRecordAuthoritySaveV2DailyRecordEnvelope,assertActiveRecordAuthoritySaveCurrentV2Integrity} from './cloud-active-record-authority-save-chain-v2.js';
@@ -23,6 +23,23 @@ export function normalizeStagingV2FirestoreValue(value,seen=new Set(),path='valu
   if(Array.isArray(value)){if(Object.getPrototypeOf(value)!==Array.prototype||Reflect.ownKeys(value).length!==value.length+1)throw new Error(path+' invalid array');return value.map((_,index)=>{const descriptor=Object.getOwnPropertyDescriptor(value,String(index));if(!descriptor?.enumerable||!Object.prototype.hasOwnProperty.call(descriptor,'value'))throw new Error(path+' invalid array item');return normalizeStagingV2FirestoreValue(descriptor.value,seen,`${path}[${index}]`)})}
   if(!plain(value))throw new Error(path+' invalid object');const out={};for(const key of Reflect.ownKeys(value)){if(typeof key!=='string')throw new Error(path+' invalid key');const descriptor=Object.getOwnPropertyDescriptor(value,key);if(!descriptor?.enumerable||!Object.prototype.hasOwnProperty.call(descriptor,'value'))throw new Error(path+'.'+key+' invalid field');out[key]=normalizeStagingV2FirestoreValue(descriptor.value,seen,path+'.'+key)}return out;
  }finally{seen.delete(value)}
+}
+
+// H0 is structurally activated from an immutable V1 snapshot, while every
+// record in the sealed V2 Genesis index starts at revision 1.  The legacy
+// shadow revision is historical V1 metadata and must never become the caller
+// baseline for the first V2 daily save.  The authority server independently
+// checks these envelopes against the sealed Genesis membership index.
+export function stagingV2H0GenesisBaselineDocuments(raw){
+ const normalized=normalizeStagingV2FirestoreValue(raw),collections=exact(normalized,FULL_RECORD_COLLECTIONS,'staging V2 H0 shadow collections'),documents={};
+ for(const collection of FULL_RECORD_COLLECTIONS){
+  const rows=collections[collection];if(!Array.isArray(rows)||Object.getPrototypeOf(rows)!==Array.prototype)throw new Error('staging V2 H0 '+collection+' rows invalid');
+  documents[collection]=rows.map((rawRow,index)=>{const row=exact(rawRow,['id','data'],`staging V2 H0 ${collection} row ${index}`),data=row.data;if(!plain(data)||data.collection!==collection||data.recordId!==row.id)throw new Error('staging V2 H0 record identity invalid');return{id:row.id,data:{...data,revision:1}}});
+ }
+ // Rebuild performs the complete existing schema, identity, tombstone and
+ // immutable changes-index validation before this normalized view is usable.
+ rebuildFullRecordShadowDb(documents,{environment:'staging'});
+ return freeze(documents);
 }
 
 function changeIndex(recordId,record){const match=/^seq_(\d{8,})_[0-9a-f]{8}$/.exec(recordId);if(!match)throw new Error('staging V2 changes recordId invalid');const index=Number(match[1]);assertChangeRecordIdentity({recordIndex:index,recordId,record});return index}

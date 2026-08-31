@@ -210,6 +210,9 @@ test('永久 fence 存在後只走 V2；缺少 fence 才保留 legacy，任何 V
  assert.match(runtime,/assertStagingV2PermanentFence/);
  assert.match(runtime,/assertStagingV2RuntimeHead/);
  assert.match(runtime,/activeOwnerV2OperationSender=stagingV2BrowserOperationSender\(\)/);
+ assert.match(runtime,/stagingV2H0GenesisBaselineDocuments\(await readActiveRecordDocumentsFromServer\(\)\)/);
+ assert.match(runtime,/activeOwnerV2HeadState==='hn'&&latestState!=='hn'/);
+ assert.match(runtime,/const documents=await activeOwnerV2ReadDocuments\(\)/);
  assert.match(runtime,/activeRecordMode='active-blocked'/);
  assert.doesNotMatch(runtime,/catch\([^)]*\).+startOwnerLegacyActiveRecordRuntime/s);
 });
@@ -235,6 +238,7 @@ test('V2 Hn 權威主資料完整 ready 才自動補送角色逐筆檢視，H0 �
 	 const ownerRuntime=block('async function startOwnerStagingV2Runtime','async function flushActiveOwnerState');
 	 assert.match(source,/(?:async )?function acceptActiveOwnerSnapshot\(snapshot\)\{\s*[^\n]*activeRoleBootstrapSourceDb=deepCopy\(snapshot\.db\)/);
 	 assert.match(ownerRuntime,/if\(activeOwnerV2HeadState==='hn'\)queueInitialActiveRoleRecordViews\(\)/);
+	 assert.match(ownerRuntime,/activeRoleBootstrapSourceDb=deepCopy\(rebuilt\.db\)/);
 	 assert.doesNotMatch(ownerRuntime,/activeOwnerV2HeadState==='h0'\)queueInitialActiveRoleRecordViews\(\)/);
 	});
 
@@ -270,6 +274,12 @@ test('V2 寫入前 fresh-read 不可變 raw backup、Genesis、fence 與雙 head
 	 assert.match(retryFlow,/publishScopedViews\(roleSource\)/);
 	 assert.doesNotMatch(retryFlow,/publishActiveRoleRecordViews\(/);
 	});
+
+test('V2 H1/Hn主資料讀回後必須同步角色逐筆檢視，H0仍保持零角色寫入',()=>{
+ const controller=block('function ensureActiveOwnerPageController','async function acceptActiveOwnerSnapshot');
+ assert.match(controller,/activeRoleBootstrapSourceDb=deepCopy\(confirmedDb\)/);
+ assert.match(controller,/if\(activeOwnerV2HeadState==='hn'\)await getActiveRoleRecordPublishQueue\(\)\.enqueue\(\{kind:'confirmed',sourceDb:deepCopy\(confirmedDb\)\}\)/);
+});
 
 test('stopActiveRecordRuntimes 會 cancel pending queue 任務並保留 queue 實體，避免清空後建立新 queue',()=>{
  const stopFlow=block('function stopActiveRecordRuntimes','function localRoleCacheKey');
