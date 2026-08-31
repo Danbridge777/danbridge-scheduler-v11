@@ -48,7 +48,7 @@ const allRules=spawnSync(process.execPath,['tools/build_firestore_rules_deploy.m
 if(allRules.error){console.error(allRules.error.message);process.exit(1)}
 if((allRules.status??1)!==0)process.exit(allRules.status??1);
 const h0Read=spawnSync(process.execPath,[
- '--test','--test-concurrency=1','--test-name-pattern=精確H0','tests/firestore-rules.test.mjs'
+ '--test','--test-concurrency=1','--test-name-pattern=精確H0|prewrite','tests/firestore-rules.test.mjs'
 ],{
  cwd:process.cwd(),env:process.env,encoding:'utf8',stdio:'inherit'
 });

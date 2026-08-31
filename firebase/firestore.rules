@@ -129,6 +129,29 @@ service cloud.firestore {
         && head.sourceCandidateHeadHash == fence.candidateHeadHash
         && head.deploymentEvidenceHash == fence.deploymentEvidenceHash;
     }
+    // Before the first native save, the primary Owner re-reads the immutable
+    // Genesis manifest/readback/authority bound by the permanent fence.  Keep
+    // this to the three verifier inputs only; seed plans, batch receipts,
+    // records and audit receipts remain operator-only.
+    function v2OwnerPrewriteGenesisReadOpen(companyId, targetV2Epoch, seedId, artifactId) {
+      let fencePath = /databases/$(database)/documents/stagingRecordSyncV1PermanentFences/$(companyId);
+      let fence = get(fencePath).data;
+      return companyId == 'danbridge'
+        && isPrimaryOwner()
+        && exists(fencePath)
+        && artifactId in ['manifest', 'readback', 'authority']
+        && fence.schema == 'danbridge-record-sync-v1-permanent-fence-v2'
+        && fence.state == 'permanently-fenced-after-atomic-v2-structural-activation'
+        && fence.environment == 'staging' && fence.companyId == companyId
+        && fence.projectId == 'danbridge-d8877-staging'
+        && fence.targetV2Epoch == targetV2Epoch
+        && fence.seedId == seedId
+        && fence.fencePolicy == 'v1-all-mutation-surfaces-permanently-denied-no-resume-or-unfence'
+        && nonzeroSha256(fence.fenceHash)
+        && nonzeroSha256(fence.genesisAuthorityHash)
+        && nonzeroSha256(fence.genesisAuthorityAuditHash)
+        && nonzeroSha256(fence.parentFrozenSourceProofHash);
+    }
     function v1PermanentFenceExists(companyId) {
       return existsAfter(/databases/$(database)/documents/stagingRecordSyncV1PermanentFences/$(companyId));
     }
@@ -3375,7 +3398,8 @@ service cloud.firestore {
       }
 
       match /artifacts/{artifactId} {
-        allow read: if isRecordSyncV2CutoverOperator(companyId);
+        allow read: if isRecordSyncV2CutoverOperator(companyId)
+          || v2OwnerPrewriteGenesisReadOpen(companyId, targetV2Epoch, seedId, artifactId);
         // G2 manifest/readback are minted only by the Admin/CI fixed-five-read
         // binder. Clients can inspect exact artifacts but can never create or
         // mutate them, including legacy schema-v1 payloads.
@@ -3384,7 +3408,8 @@ service cloud.firestore {
     }
 
     match /stagingRecordSyncV2GenesisAuthorities/{companyId}/epochs/{targetV2Epoch}/seeds/{seedId} {
-      allow read: if isRecordSyncV2CutoverOperator(companyId);
+      allow read: if isRecordSyncV2CutoverOperator(companyId)
+        || v2OwnerPrewriteGenesisReadOpen(companyId, targetV2Epoch, seedId, 'authority');
       // G3 authority is minted only by the Admin/CI fixed-six-read binder.
       allow create, update, delete: if false;
     }
