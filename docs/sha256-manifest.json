@@ -1,7 +1,7 @@
 {
   ".firebaserc": "4bdc28543826edd638db8df62f91b6b4f43d4cc58619b103d8f6b01c96710070",
   ".github/workflows/ci.yml": "cf05c29e94b6951d71870ebd38df03d4614c2bdeb5d18bea76de9d2ad077aa35",
-  ".github/workflows/staging-v2-pre-atomic.yml": "c5fa8e36d9d2cbb870e78f491aa1cbe948e95adc7aefebadb767ea2cdd4e7ba4",
+  ".github/workflows/staging-v2-pre-atomic.yml": "42df2cab7a170696f873a15297b5b129312c379949b6a5bd7f0c089a3a816a20",
   ".gitignore": "99437f76cde881f723a2b2c3211a3fb28f7a67bdcdde43f5cbc20d2aeac31a3e",
   ".nojekyll": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
   ".npmrc": "8f65a38bcd4e6fefd454f51ae9c3bd1c130d23a63164d60fb15fdaf852bde871",

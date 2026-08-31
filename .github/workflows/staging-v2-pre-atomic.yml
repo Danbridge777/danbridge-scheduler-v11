@@ -15,7 +15,7 @@ jobs:
   pre-atomic:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     environment: staging
     steps:
       - name: Check out exact main revision
