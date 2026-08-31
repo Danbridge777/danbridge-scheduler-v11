@@ -36,6 +36,9 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
+      - name: Install exact Firebase CLI
+        run: npm install --global firebase-tools@15.26.0
+
       - name: Verify application and supervisor tests
         run: npm test
 
