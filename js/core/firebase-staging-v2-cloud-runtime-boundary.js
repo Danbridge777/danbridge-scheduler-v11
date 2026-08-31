@@ -16,7 +16,8 @@ export async function attestStagingV2CloudRuntime({
  authFactory=()=>new GoogleAuth({projectId:STAGING_V2_PROJECT_ID,scopes:['https://www.googleapis.com/auth/cloud-platform']}),
 }={}){
  if(expectedProjectId!==STAGING_V2_PROJECT_ID)blocked('expected-project');
- if(env.GOOGLE_CLOUD_PROJECT!==STAGING_V2_PROJECT_ID)blocked('google-cloud-project');
+ if(env.GOOGLE_CLOUD_PROJECT===undefined&&env.GCLOUD_PROJECT===undefined)blocked('project-missing');
+ if(env.GOOGLE_CLOUD_PROJECT!==undefined&&env.GOOGLE_CLOUD_PROJECT!==STAGING_V2_PROJECT_ID)blocked('google-cloud-project');
  if(env.GCLOUD_PROJECT!==undefined&&env.GCLOUD_PROJECT!==STAGING_V2_PROJECT_ID)blocked('gcloud-project');
  if(env.FUNCTION_TARGET!==STAGING_V2_CLOUD_RUNTIME_TARGET)blocked('function-target');
  if(env.FUNCTION_REGION!==STAGING_V2_CLOUD_RUNTIME_REGION)blocked('function-region');
