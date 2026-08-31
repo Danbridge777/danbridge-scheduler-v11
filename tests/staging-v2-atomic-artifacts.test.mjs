@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {dirname,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {buildStagingV2PreAtomicArtifacts} from '../js/core/staging-v2-pre-atomic-artifacts.js';
-import {buildStagingV2AtomicArtifacts,STAGING_V2_ATOMIC_CONFIRMATION} from '../js/core/staging-v2-atomic-artifacts.js';
+import {buildStagingV2AtomicArtifacts,confirmStagingV2AtomicRulesReadbacks,STAGING_V2_ATOMIC_CONFIRMATION} from '../js/core/staging-v2-atomic-artifacts.js';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),head='a'.repeat(40),preAtomicRunId='123456789',preAtomicRunAttempt=1,preRunId=`gh_${preAtomicRunId}_${preAtomicRunAttempt}_${head.slice(0,12)}`,currentRunId=`gh_123456790_1_${head.slice(0,12)}`;
 const metadata=(overrides={})=>({schema:'danbridge-staging-v2-pre-atomic-github-run-v1',runId:preAtomicRunId,runAttempt:preAtomicRunAttempt,headSha:head,headBranch:'main',event:'workflow_dispatch',status:'completed',conclusion:'success',repository:'Danbridge777/danbridge-scheduler-v11',workflowPath:'.github/workflows/staging-v2-pre-atomic.yml',...overrides});
@@ -37,4 +37,16 @@ test('receipt bytes, run lineage, source, Rules match and explicit confirmation 
  const receipt=JSON.parse(base.preAtomicReceiptRaw);receipt.productionTouched=true;
  const raw=JSON.stringify(receipt),hash=createHash('sha256').update(raw).digest('hex');
  assert.throws(()=>buildStagingV2AtomicArtifacts({...base,preAtomicReceiptRaw:raw,preAtomicReceiptSha256:hash}),/blocked/);
+});
+
+test('atomic Rules gate requires three read-only observations and two final consecutive exact matches',()=>{
+ const hash='a'.repeat(64),row=(activeRulesetHash,matches=activeRulesetHash===hash)=>({matches,activeRulesetHash,expectedRulesetHash:hash,readCount:1,writeCount:0});
+ const stable=confirmStagingV2AtomicRulesReadbacks({readbacks:[row(null),row(hash),row(hash)]});
+ assert.deepEqual(stable,{matches:true,readCount:3,writeCount:0,activeRulesetHash:hash,expectedRulesetHash:hash});
+ for(const readbacks of [
+  [row(hash),row(hash)],
+  [row(hash),row(hash),row(null)],
+  [row(hash),row(hash),{...row(hash),writeCount:1}],
+  [row(hash),row(hash),{...row(hash),matches:false}],
+ ])assert.throws(()=>confirmStagingV2AtomicRulesReadbacks({readbacks}),/blocked/);
 });

@@ -4,6 +4,7 @@ import {buildStagingV2PreAtomicArtifacts} from './staging-v2-pre-atomic-artifact
 
 export const STAGING_V2_ATOMIC_ARTIFACTS_SCOPE='exact-successful-pre-atomic-receipt-and-github-run-bound-atomic-manifest-v1';
 export const STAGING_V2_ATOMIC_CONFIRMATION='STAGING_V2_ATOMIC_ACTIVATION';
+export const STAGING_V2_ATOMIC_RULES_READBACK_COUNT=3;
 
 const PROJECT_ID='danbridge-d8877-staging';
 const REPOSITORY='Danbridge777/danbridge-scheduler-v11';
@@ -39,6 +40,18 @@ function metadata(raw){
  const value=exact(raw,['schema','runId','runAttempt','headSha','headBranch','event','status','conclusion','repository','workflowPath'],'staging V2 pre-atomic GitHub run');
  if(value.schema!=='danbridge-staging-v2-pre-atomic-github-run-v1'||!numeric(value.runId)||!integer(value.runAttempt)||!gitSha(value.headSha)||value.headBranch!=='main'||value.event!=='workflow_dispatch'||value.status!=='completed'||value.conclusion!=='success'||value.repository!==REPOSITORY||value.workflowPath!==WORKFLOW_PATH)throw new Error('staging V2 pre-atomic GitHub run blocked');
  return value;
+}
+
+export function confirmStagingV2AtomicRulesReadbacks(raw){
+ const input=exact(raw,['readbacks'],'staging V2 atomic Rules readback input');
+ if(!Array.isArray(input.readbacks)||input.readbacks.length!==STAGING_V2_ATOMIC_RULES_READBACK_COUNT)throw new Error('staging V2 atomic Rules readback count blocked');
+ const rows=input.readbacks.map((rawRow,index)=>{
+  const row=exact(rawRow,['matches','activeRulesetHash','expectedRulesetHash','readCount','writeCount'],`staging V2 atomic Rules readback ${index}`);
+  if(typeof row.matches!=='boolean'||(row.activeRulesetHash!==null&&!digest(row.activeRulesetHash))||!digest(row.expectedRulesetHash)||row.readCount!==1||row.writeCount!==0||row.matches!==(row.activeRulesetHash===row.expectedRulesetHash))throw new Error('staging V2 atomic Rules readback blocked');
+  return row;
+ });
+ if(new Set(rows.map(row=>row.expectedRulesetHash)).size!==1||rows.at(-2).matches!==true||rows.at(-1).matches!==true)throw new Error('staging V2 atomic Rules stability blocked');
+ return Object.freeze({matches:true,readCount:rows.length,writeCount:0,activeRulesetHash:rows.at(-1).activeRulesetHash,expectedRulesetHash:rows.at(-1).expectedRulesetHash});
 }
 
 export function buildStagingV2AtomicArtifacts(raw){

@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {applicationDefault,deleteApp,initializeApp} from 'firebase-admin/app';
 import {getFirestore} from 'firebase-admin/firestore';
 import {sha256Canonical} from '../js/core/cloud-immutable-migration-backup.js';
-import {buildStagingV2AtomicArtifacts,STAGING_V2_ATOMIC_CONFIRMATION} from '../js/core/staging-v2-atomic-artifacts.js';
+import {buildStagingV2AtomicArtifacts,confirmStagingV2AtomicRulesReadbacks,STAGING_V2_ATOMIC_CONFIRMATION,STAGING_V2_ATOMIC_RULES_READBACK_COUNT} from '../js/core/staging-v2-atomic-artifacts.js';
 import {createStagingV2ActivationSupervisor,STAGING_V2_SUPERVISOR_PHASES} from '../js/core/staging-v2-activation-supervisor.js';
 import {createStagingV2ConcreteManualSupervisorActions} from '../js/core/staging-v2-concrete-manual-supervisor-actions.js';
 import {createStagingV2AdminBinderRegistry} from '../js/core/staging-v2-admin-binder-registry.js';
@@ -46,8 +46,20 @@ function environment(){
 async function main(){
  const runtime=environment(),preAtomicReceiptRaw=safeRead(runtime.preAtomicReceiptPath,'staging V2 pre-atomic receipt'),preAtomicRunMetadata=await githubRun(runtime.githubToken,runtime.preAtomicRunId),app=initializeApp({projectId:PROJECT_ID,credential:applicationDefault()},'staging-v2-atomic-'+runtime.runId),firestore=getFirestore(app);
  try{
-  const rulesSource=readFileSync(resolve(ROOT,'firebase/firestore.rules.deploy'),'utf8'),readiness=createStagingV2AdminReadinessAdapter({app,firestore,expectedProjectId:PROJECT_ID}),rules=createStagingV2AdminRulesAttestation({app,expectedProjectId:PROJECT_ID,source:rulesSource}),preflight=await rules.preflight();
-  const artifacts=buildStagingV2AtomicArtifacts({root:ROOT,currentRunId:runtime.runId,currentGitSha:runtime.currentGitSha,preAtomicRunId:runtime.preAtomicRunId,preAtomicRunAttempt:runtime.preAtomicRunAttempt,preAtomicReceiptSha256:runtime.preAtomicReceiptSha256,preAtomicReceiptRaw,preAtomicRunMetadata,confirmation:STAGING_V2_ATOMIC_CONFIRMATION,rulesMatch:preflight.matches});
+  const rulesSource=readFileSync(resolve(ROOT,'firebase/firestore.rules.deploy'),'utf8'),readiness=createStagingV2AdminReadinessAdapter({app,firestore,expectedProjectId:PROJECT_ID}),rules=createStagingV2AdminRulesAttestation({app,expectedProjectId:PROJECT_ID,source:rulesSource}),rulesReadbacks=[];
+  let rulesBoundary;
+  try{
+   for(let index=0;index<STAGING_V2_ATOMIC_RULES_READBACK_COUNT;index++){
+    if(index>0)await new Promise(resolveDelay=>setTimeout(resolveDelay,1000));
+    rulesReadbacks.push(await rules.preflight());
+   }
+   rulesBoundary=confirmStagingV2AtomicRulesReadbacks({readbacks:rulesReadbacks});
+  }catch(error){
+   const output={schema:'danbridge-staging-v2-atomic-preflight-blocked-result-v1',status:'BLOCKED',failureClass:'RULES_PREFLIGHT_BLOCKED',runId:runtime.runId,projectId:PROJECT_ID,preAtomicRunId:runtime.preAtomicRunId,preAtomicRunAttempt:runtime.preAtomicRunAttempt,preAtomicReceiptSha256:runtime.preAtomicReceiptSha256,atomicStarted:false,atomicWriteCount:0,rulesReadbacks,firestoreRulesDeployed:false,productionTouched:false,hostingDeployed:false,timeMachineTouched:false};
+   writeFileSync(runtime.resultPath,JSON.stringify(output,null,2)+'\n',{encoding:'utf8',mode:0o600});
+   throw error;
+  }
+  const artifacts=buildStagingV2AtomicArtifacts({root:ROOT,currentRunId:runtime.runId,currentGitSha:runtime.currentGitSha,preAtomicRunId:runtime.preAtomicRunId,preAtomicRunAttempt:runtime.preAtomicRunAttempt,preAtomicReceiptSha256:runtime.preAtomicReceiptSha256,preAtomicReceiptRaw,preAtomicRunMetadata,confirmation:STAGING_V2_ATOMIC_CONFIRMATION,rulesMatch:rulesBoundary.matches});
   const registry=await createStagingV2AdminBinderRegistry({app,firestore,expectedProjectId:PROJECT_ID});
   await createStagingV2WriterCurrentPrerequisite({readiness,writerCurrent:registry.binders.writerCurrent}).run();
   const baselineReadback=async()=>{
