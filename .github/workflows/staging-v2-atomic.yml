@@ -1,0 +1,107 @@
+name: Staging V2 atomic activation
+
+on:
+  workflow_dispatch:
+    inputs:
+      pre_atomic_run_id:
+        description: Exact successful pre-atomic GitHub run id
+        required: true
+        type: string
+      pre_atomic_run_attempt:
+        description: Exact successful pre-atomic GitHub run attempt
+        required: true
+        type: string
+      pre_atomic_receipt_sha256:
+        description: Exact SHA-256 of the successful pre-atomic receipt
+        required: true
+        type: string
+      confirmation:
+        description: Must be STAGING_V2_ATOMIC_ACTIVATION
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: danbridge-staging-v2-activation
+  cancel-in-progress: false
+
+jobs:
+  atomic:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'STAGING_V2_ATOMIC_ACTIVATION'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: staging
+    steps:
+      - name: Check out exact main revision
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Download exact successful pre-atomic receipt
+        uses: actions/download-artifact@v4
+        with:
+          name: staging-v2-pre-atomic-${{ inputs.pre_atomic_run_id }}-${{ inputs.pre_atomic_run_attempt }}
+          path: pre-atomic
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.pre_atomic_run_id }}
+
+      - name: Normalize the pre-atomic receipt boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt_path="$(realpath pre-atomic/staging-v2-pre-atomic-result.json)"
+          test -f "$receipt_path"
+          chmod 600 "$receipt_path"
+          test "$(stat -c '%a' "$receipt_path")" = '600'
+          printf 'STAGING_V2_PRE_ATOMIC_RECEIPT_PATH=%s\n' "$receipt_path" >> "$GITHUB_ENV"
+
+      - name: Authenticate short-lived staging service account
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/883029466360/locations/global/workloadIdentityPools/danbridge-github-staging/providers/github
+          service_account: danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Normalize the short-lived credential boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          credential_path="$(realpath "$GOOGLE_APPLICATION_CREDENTIALS")"
+          test -f "$credential_path"
+          chmod 600 "$credential_path"
+          test "$(stat -c '%a' "$credential_path")" = '600'
+          printf 'GOOGLE_APPLICATION_CREDENTIALS=%s\n' "$credential_path" >> "$GITHUB_ENV"
+
+      - name: Execute the exact authorized staging atomic activation
+        env:
+          STAGING_V2_MODE: atomic
+          STAGING_V2_ATOMIC_CONFIRMATION: ${{ inputs.confirmation }}
+          STAGING_V2_PRE_ATOMIC_RUN_ID: ${{ inputs.pre_atomic_run_id }}
+          STAGING_V2_PRE_ATOMIC_RUN_ATTEMPT: ${{ inputs.pre_atomic_run_attempt }}
+          STAGING_V2_PRE_ATOMIC_RECEIPT_SHA256: ${{ inputs.pre_atomic_receipt_sha256 }}
+          STAGING_V2_GITHUB_TOKEN: ${{ github.token }}
+          STAGING_V2_RESULT_PATH: ${{ github.workspace }}/staging-v2-atomic-result.json
+          GOOGLE_CLOUD_PROJECT: danbridge-d8877-staging
+        run: node tools/run_staging_v2_atomic.mjs
+
+      - name: Preserve the exact atomic receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-v2-atomic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: staging-v2-atomic-result.json
+          if-no-files-found: warn
+          retention-days: 30

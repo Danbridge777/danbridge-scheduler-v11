@@ -14,7 +14,7 @@ const INVENTORIES=Object.freeze({
  clientWiring:Object.freeze(['js/core/firebase-auth-and-cloud-sync.module.js','js/core/staging-v2-active-record-browser-bridge.js','js/core/staging-v2-authority-save-browser-client.js']),
 });
 const GATE_FILES=Object.freeze({
- 'trusted-deployment-receipt':Object.freeze(['.github/workflows/staging-v2-pre-atomic.yml','js/core/firebase-staging-v2-service-account-boundary.js','js/core/firebase-record-sync-v2-deployment-gate-source-attestation-adapter.js']),
+ 'trusted-deployment-receipt':Object.freeze(['.github/workflows/staging-v2-pre-atomic.yml','.github/workflows/staging-v2-atomic.yml','tools/run_staging_v2_pre_atomic.mjs','tools/run_staging_v2_atomic.mjs','js/core/staging-v2-pre-atomic-artifacts.js','js/core/staging-v2-atomic-artifacts.js','js/core/firebase-staging-v2-service-account-boundary.js','js/core/firebase-record-sync-v2-deployment-gate-source-attestation-adapter.js']),
  'dual-mode-rules-emulator':Object.freeze(['firebase/firestore.rules.deploy','tests/firestore-rules.test.mjs','tests/firestore-rules-access-budget-regression.test.mjs']),
  'v1-permanent-fence':Object.freeze(['firebase/firestore.rules.deploy','js/core/firebase-record-sync-v2-atomic-activation-transition-v2-adapter.js','tests/firebase-record-sync-v2-atomic-activation-transition-v2-adapter.test.mjs']),
  'resume-race':Object.freeze(['js/core/firebase-staging-v2-readiness-adapter.js','js/core/firebase-record-sync-v1-v2-hard-pause-adapter.js','tests/firebase-staging-v2-readiness-adapter.test.mjs']),
