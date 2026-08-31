@@ -16,10 +16,17 @@ function reportRuntimeBlocked(error){
  console.error('STAGING_V2_RUNTIME_BLOCKED',JSON.stringify({name,message}));
 }
 
+function reportSaveBlocked(error){
+ const name=error instanceof Error&&typeof error.name==='string'?error.name:'UnknownError';
+ const message=error instanceof Error&&typeof error.message==='string'?error.message:'unknown authority save error';
+ console.error('STAGING_V2_SAVE_BLOCKED',JSON.stringify({name,message}));
+}
+
 async function runtime(){
  if(runtimePromise===null)runtimePromise=(async()=>{
   const app=getApps()[0]??initializeApp({projectId:PROJECT_ID,credential:applicationDefault()}),auth=getAuth(app),appCheck=getAppCheck(app),firestore=getFirestore(app),[{createFirebaseActiveRecordAuthoritySaveChainV2CloudRuntimeBinder},{createStagingV2AuthoritySaveAdminCloudRuntime}]=await Promise.all([import('../js/core/firebase-active-record-authority-save-chain-v2-adapter.js'),import('../js/core/staging-v2-authority-save-cloud-runtime.js')]),binder=createFirebaseActiveRecordAuthoritySaveChainV2CloudRuntimeBinder({app,firestore,expectedProjectId:PROJECT_ID});
-  return createStagingV2AuthoritySaveAdminCloudRuntime({app,auth,appCheck,firestore,binder,now:()=>Date.now()})
+  const reportingBinder=Object.freeze({scope:binder.scope,execute:async payload=>{try{return await binder.execute(payload)}catch(error){reportSaveBlocked(error);throw error}}});
+  return createStagingV2AuthoritySaveAdminCloudRuntime({app,auth,appCheck,firestore,binder:reportingBinder,now:()=>Date.now()})
  })().catch(error=>{runtimePromise=null;throw error});
  return runtimePromise
 }
