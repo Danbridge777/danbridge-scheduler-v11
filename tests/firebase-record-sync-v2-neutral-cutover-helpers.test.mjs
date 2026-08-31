@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {Timestamp} from 'firebase-admin/firestore';
 import {normalizeRecordSyncV2ServerTimestamp} from '../js/core/firebase-record-sync-v2-server-timestamp.js';
 import {
  assertRecordSyncV2TrustedCutoverCurrentUser,
@@ -14,6 +15,8 @@ const projectId='danbridge-rules-test',claims=(overrides={})=>({sub:'owner-12345
 function authWith(source=claims()){const user={uid:'owner-12345678',email:'OWNER@example.com',getIdTokenResult:async force=>{assert.equal(force,true);return{claims:source}}},app={options:{projectId}},auth={app,currentUser:user};return{auth,user}}
 
 test('neutral Timestamp helper原封保留9-digit nanos、UTC邊界與candidate舊export相容',()=>{class TimestampLike{constructor(seconds,nanoseconds){this.seconds=seconds;this.nanoseconds=nanoseconds}}for(const value of [new TimestampLike(-62135596800,0),new TimestampLike(0,123456789),new TimestampLike(253402300799,999999999)])assert.equal(normalizeRecordSyncV2ServerTimestamp(value),normalizeRecordSyncV2TakeoverCandidateServerTimestamp(value));assert.equal(normalizeRecordSyncV2ServerTimestamp(new TimestampLike(0,123456789)),'1970-01-01T00:00:00.123456789Z')});
+
+test('neutral Timestamp helper接受Firebase Admin實際Timestamp資料欄位且不呼叫prototype getter',()=>{const value=new Timestamp(0,123456789),prototype=Object.getPrototypeOf(value),seconds=Object.getOwnPropertyDescriptor(prototype,'seconds'),nanoseconds=Object.getOwnPropertyDescriptor(prototype,'nanoseconds');let calls=0;Object.defineProperty(prototype,'seconds',{...seconds,get(){calls++;return seconds.get.call(this)}});Object.defineProperty(prototype,'nanoseconds',{...nanoseconds,get(){calls++;return nanoseconds.get.call(this)}});try{assert.equal(normalizeRecordSyncV2ServerTimestamp(value),'1970-01-01T00:00:00.123456789Z');assert.equal(calls,0)}finally{Object.defineProperty(prototype,'seconds',seconds);Object.defineProperty(prototype,'nanoseconds',nanoseconds)}});
 
 test('neutral Timestamp拒accessor/extra/symbol/bounds且getter0',()=>{let calls=0;const accessor={nanoseconds:0};Object.defineProperty(accessor,'seconds',{enumerable:true,get(){calls++;return 0}});const nanosAccessor={seconds:0};Object.defineProperty(nanosAccessor,'nanoseconds',{enumerable:true,get(){calls++;return 0}});const symbol={seconds:0,nanoseconds:0};symbol[Symbol('x')]=true;for(const value of [accessor,nanosAccessor,symbol,{seconds:0,nanoseconds:0,extra:true},{seconds:-62135596801,nanoseconds:0},{seconds:253402300800,nanoseconds:0},{seconds:0,nanoseconds:-1},{seconds:0,nanoseconds:1000000000}])assert.throws(()=>normalizeRecordSyncV2ServerTimestamp(value),/Timestamp/);assert.equal(calls,0)});
 
