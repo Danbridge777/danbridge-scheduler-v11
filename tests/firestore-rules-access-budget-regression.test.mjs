@@ -82,7 +82,7 @@ test('V2 Owner runtime read gate requires fence+active control+H1 and keeps ever
 });
 
 test('V2 H0 Owner head-only bootstrap gate stays within budget and cannot open other namespaces',()=>{
- const body=functionBody('v2OwnerRuntimeH0HeadReadOpen','v1PermanentFenceExists');
+ const body=functionBody('v2OwnerRuntimeH0HeadReadOpen','v2OwnerPrewriteGenesisReadOpen');
  assert.equal((body.match(/\bget\(/g)??[]).length,2);
  assert.equal((body.match(/\bexists\(/g)??[]).length,2);
  for(const clause of [
@@ -102,5 +102,32 @@ test('V2 H0 Owner head-only bootstrap gate stays within budget and cannot open o
   const start=rules.indexOf(`match /${collection}/`);
   const block=rules.slice(start,rules.indexOf('\n    match /',start+1));
   assert.doesNotMatch(block,/v2OwnerRuntimeH0HeadReadOpen/);
+ }
+});
+
+test('V2 Owner prewrite gate exposes only the three permanent-fence-bound Genesis verifier inputs',()=>{
+ const body=functionBody('v2OwnerPrewriteGenesisReadOpen','v1PermanentFenceExists');
+ assert.equal((body.match(/\bget\(/g)??[]).length,1);
+ assert.equal((body.match(/\bexists\(/g)??[]).length,1);
+ for(const clause of [
+  'isPrimaryOwner()',
+  "artifactId in ['manifest', 'readback', 'authority']",
+  "fence.projectId == 'danbridge-d8877-staging'",
+  'fence.targetV2Epoch == targetV2Epoch',
+  'fence.seedId == seedId',
+  'nonzeroSha256(fence.genesisAuthorityHash)',
+  'nonzeroSha256(fence.genesisAuthorityAuditHash)',
+  'nonzeroSha256(fence.parentFrozenSourceProofHash)'
+ ])assert.ok(body.includes(clause),clause);
+ const genesisStart=rules.indexOf('match /stagingRecordSyncV2Genesis/');
+ const genesisBlock=rules.slice(genesisStart,rules.indexOf('\n    match /stagingRecordSyncV2GenesisAuthorities/',genesisStart));
+ assert.match(genesisBlock,/match \/artifacts\/\{artifactId\}[\s\S]*v2OwnerPrewriteGenesisReadOpen\(companyId, targetV2Epoch, seedId, artifactId\)/);
+ assert.doesNotMatch(genesisBlock.slice(0,genesisBlock.indexOf('match /artifacts/')),/v2OwnerPrewriteGenesisReadOpen/);
+ const authorityStart=rules.indexOf('match /stagingRecordSyncV2GenesisAuthorities/');
+ const authorityBlock=rules.slice(authorityStart,rules.indexOf('\n    match /',authorityStart+1));
+ assert.match(authorityBlock,/v2OwnerPrewriteGenesisReadOpen\(companyId, targetV2Epoch, seedId, 'authority'\)/);
+ for(const collection of ['stagingRecordSyncV2GenesisAuthorityAuditReceipts','stagingRecordSyncV2GenesisIdentityIndexes','stagingRecordSyncV2Reservations']){
+  const start=rules.indexOf(`match /${collection}/`),block=rules.slice(start,rules.indexOf('\n    match /',start+1));
+  assert.doesNotMatch(block,/v2OwnerPrewriteGenesisReadOpen/);
  }
 });

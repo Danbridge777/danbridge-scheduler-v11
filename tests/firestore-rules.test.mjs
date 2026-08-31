@@ -559,6 +559,35 @@ describe('V2 takeover candidate trusted atomic pair',()=>{
     await assertFails(getDoc(doc(owner,paths.head)));
   });
 
+  test('永久fence精確綁定時Owner僅可讀H1 prewrite所需Genesis三證據',async()=>{
+    const epoch='v2-owner-prewrite-epoch-1',h=value=>String(value).repeat(64),seed=`v2-genesis:${h('1')}`;
+    const base=`stagingRecordSyncV2Genesis/${COMPANY_ID}/epochs/${epoch}/seeds/${seed}`;
+    const paths={
+      fence:`stagingRecordSyncV1PermanentFences/${COMPANY_ID}`,
+      manifest:`${base}/artifacts/manifest`,
+      readback:`${base}/artifacts/readback`,
+      authority:`stagingRecordSyncV2GenesisAuthorities/${COMPANY_ID}/epochs/${epoch}/seeds/${seed}`,
+      seed:base,
+      batch:`${base}/batchReceipts/${h('2')}`,
+      audit:`stagingRecordSyncV2GenesisAuthorityAuditReceipts/${COMPANY_ID}/epochs/${epoch}/seeds/${seed}`,
+      foreignManifest:`stagingRecordSyncV2Genesis/${COMPANY_ID}/epochs/${epoch}-foreign/seeds/${seed}/artifacts/manifest`
+    };
+    await testEnv.withSecurityRulesDisabled(async context=>{
+      const db=context.firestore(),fixture={schema:'fixture-prewrite',persistedAt:Timestamp.now()};
+      await setDoc(doc(db,paths.fence),{schema:'danbridge-record-sync-v1-permanent-fence-v2',state:'permanently-fenced-after-atomic-v2-structural-activation',environment:'staging',companyId:COMPANY_ID,projectId:'danbridge-d8877-staging',targetV2Epoch:epoch,seedId:seed,fencePolicy:'v1-all-mutation-surfaces-permanently-denied-no-resume-or-unfence',fenceHash:h('f'),genesisAuthorityHash:h('a'),genesisAuthorityAuditHash:h('b'),parentFrozenSourceProofHash:h('c')});
+      for(const path of Object.values(paths).filter(path=>path!==paths.fence))await setDoc(doc(db,path),fixture);
+    });
+    const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),anonymous=unauthenticated();
+    for(const path of [paths.manifest,paths.readback,paths.authority])assert.equal((await assertSucceeds(getDoc(doc(owner,path)))).exists(),true);
+    for(const path of [paths.seed,paths.batch,paths.audit,paths.foreignManifest])await assertFails(getDoc(doc(owner,path)));
+    for(const db of [teacher,anonymous])for(const path of [paths.manifest,paths.readback,paths.authority])await assertFails(getDoc(doc(db,path)));
+    for(const db of [owner,trusted()])for(const path of [paths.manifest,paths.readback,paths.authority]){
+      await assertFails(setDoc(doc(db,path),{forged:true}));
+      await assertFails(updateDoc(doc(db,path),{forged:true}));
+      await assertFails(deleteDoc(doc(db,path)));
+    }
+  });
+
   test('V2永久 fence+active control+H1 後僅Owner可讀active epoch，所有client寫入仍拒',async()=>{
     const epoch='v2-runtime-owner-read-1',h=value=>String(value).repeat(64);
     const paths={
