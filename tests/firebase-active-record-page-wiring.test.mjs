@@ -3,14 +3,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const source=fs.readFileSync(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');
+const prewriteVerifier=fs.readFileSync(new URL('../js/core/staging-v2-prewrite-backup-verifier.js',import.meta.url),'utf8');
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const camps=fs.readFileSync(new URL('../js/modules/camps/camp-management.js',import.meta.url),'utf8');
 const block=(from,to)=>source.slice(source.indexOf(from),source.indexOf(to,source.indexOf(from)));
 const sourceBlock=(text,from,to)=>text.slice(text.indexOf(from),text.indexOf(to,text.indexOf(from)));
 
-test('browser Firebase SDK鎖定12.17.1，V2 candidate factory只允許staging明確呼叫且不自動接runtime',()=>{
- const imports=[...source.matchAll(/https:\/\/www\.gstatic\.com\/firebasejs\/([^/]+)\/firebase-(?:app|auth|firestore)\.js/g)].map(match=>match[1]);
- assert.deepEqual(imports,['12.17.1','12.17.1','12.17.1']);
+test('browser Firebase SDK鎖定12.17.1，V2 candidate factory只允許staging明確呼叫',()=>{
+ const imports=[...source.matchAll(/https:\/\/www\.gstatic\.com\/firebasejs\/([^/]+)\/firebase-(?:app|auth|app-check|firestore)\.js/g)].map(match=>match[1]);
+ assert.deepEqual(imports,['12.17.1','12.17.1','12.17.1','12.17.1']);
  assert.doesNotMatch(source,/firebasejs\/12\.16\.0/);
  assert.match(source,/getDocFromServer/);
  assert.match(source,/createFirebaseRecordSyncV2TakeoverCandidateAdapter/);
@@ -29,10 +30,10 @@ test('browser Firebase SDK鎖定12.17.1，V2 candidate factory只允許staging�
  assert.doesNotMatch(factory,/cloudRole|cloudUid|cloudEmailKey|onAuthStateChanged|activeRecordMode|window\.|readTakeoverEnabled:true|writeTakeoverEnabled:true/);
 });
 
-test('V2 authority reader factory保持明確呼叫、只做fresh server inventory且不自動切換runtime',()=>{
+test('V2 authority reader factory保持明確建構、只做fresh server inventory',()=>{
  assert.match(source,/getDocsFromServer/);
  assert.match(source,/createStagingV2AuthorityReadLoader/);
- assert.equal((source.match(/createExplicitStagingV2AuthorityReadLoader/g)||[]).length,1);
+ assert.equal((source.match(/export function createExplicitStagingV2AuthorityReadLoader/g)||[]).length,1);
  const factory=block('export function createExplicitStagingV2AuthorityReadLoader','// 舊版 Header');
  assert.match(factory,/DANBRIDGE_ENVIRONMENT!=='staging'/);
  assert.match(factory,/app\.options\?\.projectId!=='danbridge-d8877-staging'/);
@@ -153,7 +154,7 @@ test('Owner 啟用後 upload 與 save 先走永久日誌逐筆流程，不再落
 
 test('Owner 逐筆寫入前必須用已確認的雲端基準建立當日分片備份',()=>{
  const controller=block('function ensureActiveOwnerPageController','async function acceptActiveOwnerSnapshot');
- assert.match(controller,/ensureCloudBackup:confirmedDb=>createCloudSafetyBackup\(false,confirmedDb\)/);
+ assert.match(controller,/ensureCloudBackup:activeOwnerV2OperationSender\?\(\)=>confirmStagingV2DurablePrewriteBackup\(\):confirmedDb=>createCloudSafetyBackup\(false,confirmedDb\)/);
  const status=block('function handleActiveOwnerControllerStatus','function ensureActiveOwnerPageController');
  assert.match(status,/['\"]backing-up['\"]/);
  assert.match(status,/寫入前的雲端分片備份/);
@@ -203,12 +204,14 @@ test('營隊 render 不會建立或修改 backing student，只有明確 save/cr
  assert.match(create,/if\(!cls&&create\).+ensureCampBackingStudent\(cls,season\)/s);
 });
 
-test('控制不存在才回 legacy；loading、paused 或錯誤不會偷偷整份覆蓋',()=>{
- const owner=block('function startOwnerActiveRecordRuntime','async function flushActiveOwnerState');
- assert.match(owner,/event\.state==='legacy'.+subscribeOwnerLegacy\(\)/s);
- assert.match(owner,/event\.state==='loading'.+unsubscribeState\?\.\(\)/s);
- assert.match(owner,/event\.state==='blocked'.+persistOwnerSyncRecovery\(\)/s);
- assert.doesNotMatch(owner,/event\.state==='blocked'.+subscribeOwnerLegacy\(\)/s);
+test('永久 fence 存在後只走 V2；缺少 fence 才保留 legacy，任何 V2 錯誤都 fail closed',()=>{
+ const runtime=block('async function startOwnerStagingV2Runtime','async function flushActiveOwnerState');
+ assert.match(runtime,/if\(!fenceSnapshot\.exists\(\)\)return startOwnerLegacyActiveRecordRuntime\(\)/);
+ assert.match(runtime,/assertStagingV2PermanentFence/);
+ assert.match(runtime,/assertStagingV2RuntimeHead/);
+ assert.match(runtime,/activeOwnerV2OperationSender=stagingV2BrowserOperationSender\(\)/);
+ assert.match(runtime,/activeRecordMode='active-blocked'/);
+ assert.doesNotMatch(runtime,/catch\([^)]*\).+startOwnerLegacyActiveRecordRuntime/s);
 });
 
 test('角色逐筆發布重用現有 aa、老師、校區篩選且每個 scope 使用獨立 viewKey',()=>{
@@ -218,7 +221,7 @@ test('角色逐筆發布重用現有 aa、老師、校區篩選且每個 scope �
  assert.match(publish,/adapter\.synchronize\(targetDb/);
 });
 
-test('原子啟用後主資料完整 ready 才自動補送角色逐筆檢視，失敗會退避重試且不影響 production',()=>{
+test('V2 Hn 權威主資料完整 ready 才自動補送角色逐筆檢視，H0 不補送',()=>{
  const bootstrap=block('function queueInitialActiveRoleRecordViews','async function publishScopedViews');
  assert.match(bootstrap,/DANBRIDGE_ENVIRONMENT!=='staging'/);
  assert.match(bootstrap,/cloudRole!=='owner'/);
@@ -229,11 +232,33 @@ test('原子啟用後主資料完整 ready 才自動補送角色逐筆檢視，�
 	 assert.doesNotMatch(bootstrap,/__danbridgeGetDB/);
 	 assert.match(bootstrap,/getActiveRoleRecordPublishQueue\(\)\.enqueue\(\{kind:'bootstrap'/);
 	 assert.match(bootstrap,/setTimeout\(queueInitialActiveRoleRecordViews/);
-	 const ownerRuntime=block('function startOwnerActiveRecordRuntime','async function flushActiveOwnerState');
+	 const ownerRuntime=block('async function startOwnerStagingV2Runtime','async function flushActiveOwnerState');
 	 assert.match(source,/(?:async )?function acceptActiveOwnerSnapshot\(snapshot\)\{\s*[^\n]*activeRoleBootstrapSourceDb=deepCopy\(snapshot\.db\)/);
-	 assert.match(ownerRuntime,/event\.state==='ready'.+queueInitialActiveRoleRecordViews\(\)/s);
-	 assert.doesNotMatch(ownerRuntime,/event\.state==='paused'\)queueInitialActiveRoleRecordViews\(\)/);
+	 assert.match(ownerRuntime,/if\(activeOwnerV2HeadState==='hn'\)queueInitialActiveRoleRecordViews\(\)/);
+	 assert.doesNotMatch(ownerRuntime,/activeOwnerV2HeadState==='h0'\)queueInitialActiveRoleRecordViews\(\)/);
 	});
+
+test('App Check 與 H1 入口只存在 staging，limited-use token 送入固定 same-origin Function',()=>{
+ assert.match(source,/firebase-app-check\.js/);
+ assert.match(source,/DANBRIDGE_ENVIRONMENT==='staging'\?initializeAppCheck/);
+ assert.match(source,/new ReCaptchaEnterpriseProvider\(STAGING_V2_APP_CHECK_SITE_KEY\)/);
+ assert.match(source,/getLimitedUseToken\(stagingV2AppCheck\)/);
+ const h1=block('window.__danbridgeCommitStagingV2H1','async function flushActiveOwnerState');
+ assert.match(h1,/DANBRIDGE_ENVIRONMENT!=='staging'/);
+ assert.match(h1,/activeOwnerV2HeadState!=='h0'/);
+ assert.match(h1,/startsWith\('STAGING_'\)/);
+ assert.match(h1,/\[V2-H1-CUTOVER\]/);
+ assert.match(h1,/queueLocalSave\(\)/);
+ assert.match(h1,/result\?\.state!=='complete'/);
+});
+
+test('V2 寫入前 fresh-read 不可變 raw backup、Genesis、fence 與雙 head；legacy 才建立新 daily backup',()=>{
+ const verifier=block('async function confirmStagingV2DurablePrewriteBackup','async function startOwnerStagingV2Runtime');
+ for(const required of ['getDocFromServer','stagingRecordSyncV1PermanentFences','stagingRecordSyncV1FrozenSourceProofs','stagingRecordSyncV1RawCutoverBackups','stagingRecordSyncV2Genesis','stagingRecordSyncV2GenesisAuthorities','headBefore','headAfter','verifyStagingV2PrewriteBackup'])assert.match(verifier,new RegExp(required));
+ for(const forbidden of ['setDoc(','deleteDoc(','runTransaction('])assert.equal(verifier.includes(forbidden),false,forbidden);
+ for(const required of ['assertRecordSyncV1PermanentFenceV2Integrity','assertRecordSyncV1FrozenSourceProofIntegrity','assertRecordSyncV1RawCutoverBackupCompactMetadataLink','assertRecordSyncV2GenesisAuthorityIntegrity','active head changed during prewrite backup verification'])assert.match(prewriteVerifier,new RegExp(required));
+ for(const forbidden of ['setDoc','deleteDoc','runTransaction','firebase-admin','production'])assert.equal(prewriteVerifier.includes(forbidden),false,forbidden);
+});
 
 	test('staging active 的 publishScopedViews 不可繞過 active role publish queue',()=>{
 	 const legacyScoped=block('async function publishScopedViews','async function publishRoleViewsWithRetry');
