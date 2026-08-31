@@ -30,8 +30,9 @@ const stamp={seconds:1786853100,nanoseconds:123456789};
 const owner={uid:'owner-12345678',email:'owner@example.com'};
 const db=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(name=>[name,name==='students'?[{id:'student-1',name:'A'}]:[]]));
 const audit=(value,type='persisted')=>({...value,persistedAt:stamp,...(type==='control'?{activatedBy:owner.uid,activatedByEmail:owner.email}:type==='safety'?{updatedBy:owner.uid,updatedByEmail:owner.email}:{persistedBy:owner.uid,persistedByEmail:owner.email})});
+const adminSnapshot=value=>({exists:value!==null&&value!==undefined,data:()=>value??undefined});
 
-function fixture({withWriter=true}={}){
+function fixture({withWriter=true,adminSnapshots=false}={}){
   const mainDb=db(),sourceHash=recordDataHash(mainDb),legacyVersionHash='legacy-version-123';
   const roleEvidence=buildRecordSyncRoleEvidence({environment:'staging',primaryOwnerEmail:'owner@example.com',backupOwnerEmail:'backup@example.com',schedulerEmail:'scheduler@example.com',teacherAccounts:['teacher@example.com'],roleViewCount:4,candidateRunId:'role-run-123',candidateSourceHash:'b'.repeat(64),candidateManifestHash:'c'.repeat(64),receiptCount:6,receiptSetHash:'d'.repeat(64),results:Object.fromEntries(RECORD_SYNC_ROLE_SCENARIOS.map(key=>[key,true])),testedAt:'2026-08-16T11:55:00+08:00'});
   const open=buildOpenRecordSyncCandidateControl({candidateEpoch:'candidate-12345678',legacyVersionHash,createdAt:'2026-08-16T11:50:00+08:00'}),candidateControl=sealRecordSyncCandidateControl({control:open,currentLegacyVersionHash:legacyVersionHash,recordDataHash:sourceHash,documentCount:1,activeCount:1,tombstoneCount:0,sealedAt:'2026-08-16T11:58:00+08:00'});
@@ -54,7 +55,7 @@ function fixture({withWriter=true}={}){
   const reads=[],pages=[];
   const adapter=createStagingV2ReadinessAdapter({
     expectedProjectId:'danbridge-d8877-staging',
-    getDocumentFromServer:async path=>{reads.push(path);return docs.get(path)??null},
+    getDocumentFromServer:async path=>{reads.push(path);const value=docs.get(path)??null;return adminSnapshots?adminSnapshot(value):value},
     getCollectionPageFromServer:async(path,options)=>{pages.push([path,options]);const name=FULL_RECORD_COLLECTIONS.find(value=>RECORD_SYNC_V1_FULL_RECORD_COLLECTION_PATH(value)===path);return{name:undefined,docs:(rows[name]??[]).map(row=>({id:row.documentId,data:()=>row.data}))}},
   });
   const supervisorManifest={projectId:'danbridge-d8877-staging',requestHash:'1'.repeat(64),rulesetHash:'2'.repeat(64)};
@@ -74,6 +75,15 @@ test('W0 prerequisite以exact service account單次create，response readback後
   const first=createStagingV2WriterCurrentPrerequisite({readiness:value.adapter,writerCurrent:binder}),receipt=await first.run();assert.equal(receipt.state,'complete-confirmed');assert.equal(receipt.transactionState,'created');assert.equal(receipt.readCount,8);assert.equal(receipt.writeCount,1);assert.match(receipt.receiptHash,/^[a-f0-9]{64}$/);await assert.rejects(()=>first.run(),/one-shot/);
   const replay=await createStagingV2WriterCurrentPrerequisite({readiness:value.adapter,writerCurrent:binder}).run();assert.equal(replay.transactionState,'replayed');assert.equal(replay.writeCount,0);
   const denied=createFirebaseRecordSyncV1WriterCurrentAdapter({environment:'staging',role:'staging-service-account',actor:{...actor,email:'wrong@example.com'},serverTimestamp:()=>stamp,getDocumentFromServer:async()=>null,runTransaction:async()=>{throw new Error('must not transact')}}),deniedInput=(await value.adapter.seedInput()).input;await assert.rejects(()=>denied.execute(deniedInput),/exact WIF service account/);
+});
+
+test('Admin SDK boolean exists 與 data() 快照可完成 readiness 與 W0 單次建立',async()=>{
+  const ready=fixture({adminSnapshots:true}),result=await ready.adapter.readinessCheck(ready.context);
+  assert.equal(result.writeCount,0);assert.equal(result.capability.expected.recordSyncControl.activationEpoch,ready.control.activationEpoch);
+  const missing=fixture({withWriter:false,adminSnapshots:true}),actor={uid:'service-account:danbridge-staging-v2',email:'danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com',claims:{recordSyncV2CutoverOperator:true}};
+  const binder=createFirebaseRecordSyncV1WriterCurrentAdapter({environment:'staging',role:'staging-service-account',actor,serverTimestamp:()=>stamp,getDocumentFromServer:async path=>adminSnapshot(missing.docs.get(path)??null),runTransaction:async callback=>{const pending=[];const receipt=await callback({get:async path=>adminSnapshot(missing.docs.get(path)??null),set:(path,payload)=>pending.push([path,payload])});for(const row of pending)missing.docs.set(...row);return receipt}});
+  const receipt=await createStagingV2WriterCurrentPrerequisite({readiness:missing.adapter,writerCurrent:binder}).run();
+  assert.equal(receipt.transactionState,'created');assert.equal(receipt.writeCount,1);
 });
 
 test('readiness缺W0明確阻止；W0存在則16集合唯讀生成原生hard-pause capability',async()=>{
