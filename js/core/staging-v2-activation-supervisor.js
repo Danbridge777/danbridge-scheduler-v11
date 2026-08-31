@@ -26,6 +26,7 @@ export const STAGING_V2_SUPERVISOR_PHASES=Object.freeze([
 
 export const STAGING_V2_PRE_ATOMIC_PHASE='PRE_ATOMIC_GATE';
 export const STAGING_V2_ATOMIC_PHASE='ATOMIC_ACTIVATION';
+export const STAGING_V2_ATOMIC_TERMINAL_PHASE='POST_CUTOVER_RECOVERY';
 
 const PROJECT_ID='danbridge-d8877-staging';
 const SERVICE_ACCOUNT='danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com';
@@ -70,7 +71,7 @@ function entry({runId,sequence,phase,event,previousHash,receiptHash='',readCount
  return Object.freeze({...body,entryHash:sha256Canonical(body)});
 }
 
-function verifyJournal(rawRows,runId){
+export function verifyStagingV2SupervisorJournal(rawRows,runId){
  if(!Array.isArray(rawRows))throw new Error('staging V2 journal readback blocked');
  let previousHash='0'.repeat(64);
  for(let index=0;index<rawRows.length;index++){
@@ -82,15 +83,17 @@ function verifyJournal(rawRows,runId){
  return Object.freeze({count:rawRows.length,lastHash:previousHash});
 }
 
-export function createStagingV2ActivationSupervisor({rawManifest,actions,journal}={}){
+export function createStagingV2ActivationSupervisor({rawManifest,actions,journal,terminalPhase='FINAL_READBACK'}={}){
  const fixedManifest=manifest(rawManifest),actionMap=exact(actions,[...STAGING_V2_SUPERVISOR_PHASES,'ROLLBACK'],'staging V2 supervisor actions'),journalApi=exact(journal,['append','readAll'],'staging V2 supervisor journal');
+ const terminalIndex=STAGING_V2_SUPERVISOR_PHASES.indexOf(terminalPhase);
+ if(terminalIndex<STAGING_V2_SUPERVISOR_PHASES.indexOf(STAGING_V2_ATOMIC_PHASE)||![STAGING_V2_ATOMIC_TERMINAL_PHASE,'FINAL_READBACK'].includes(terminalPhase))throw new Error('staging V2 supervisor terminal phase blocked');
  for(const name of [...STAGING_V2_SUPERVISOR_PHASES,'ROLLBACK'])if(typeof actionMap[name]!=='function')throw new Error('staging V2 supervisor action missing '+name);
  if(typeof journalApi.append!=='function'||typeof journalApi.readAll!=='function')throw new Error('staging V2 supervisor journal incomplete');
  let used=false;
  const append=async payload=>{
-  const before=verifyJournal(await journalApi.readAll(),fixedManifest.runId),row=entry({...payload,runId:fixedManifest.runId,sequence:before.count,previousHash:before.lastHash});
+  const before=verifyStagingV2SupervisorJournal(await journalApi.readAll(),fixedManifest.runId),row=entry({...payload,runId:fixedManifest.runId,sequence:before.count,previousHash:before.lastHash});
   await journalApi.append(row);
-  const after=verifyJournal(await journalApi.readAll(),fixedManifest.runId);
+  const after=verifyStagingV2SupervisorJournal(await journalApi.readAll(),fixedManifest.runId);
   if(after.count!==before.count+1||after.lastHash!==row.entryHash)throw new Error('staging V2 journal append not durable');
   return row;
  };
@@ -98,10 +101,10 @@ export function createStagingV2ActivationSupervisor({rawManifest,actions,journal
   manifest:fixedManifest,
   async run(){
    if(used)throw new Error('staging V2 supervisor is one-shot');used=true;
-   if(verifyJournal(await journalApi.readAll(),fixedManifest.runId).count!==0)throw new Error('staging V2 supervisor journal must start empty');
+   if(verifyStagingV2SupervisorJournal(await journalApi.readAll(),fixedManifest.runId).count!==0)throw new Error('staging V2 supervisor journal must start empty');
    let capability=Object.freeze({schema:'danbridge-staging-v2-supervisor-start-capability-v1'}),atomicStarted=false,lastPhase='';
    try{
-    for(const phase of STAGING_V2_SUPERVISOR_PHASES){
+    for(const phase of STAGING_V2_SUPERVISOR_PHASES.slice(0,terminalIndex+1)){
      if(phase===STAGING_V2_ATOMIC_PHASE&&!fixedManifest.atomicActivationAllowed){
       await append({phase:STAGING_V2_PRE_ATOMIC_PHASE,event:'ready-for-separate-atomic-authorization'});
       return Object.freeze({status:'PRE_ATOMIC_READY',runId:fixedManifest.runId,lastPhase:STAGING_V2_PRE_ATOMIC_PHASE,atomicStarted:false});
@@ -113,7 +116,7 @@ export function createStagingV2ActivationSupervisor({rawManifest,actions,journal
      capability=completed.capability;
      await append({phase,event:'completed',receiptHash:completed.receiptHash,readCount:completed.readCount,writeCount:completed.writeCount,firestoreRulesDeployed:completed.firestoreRulesDeployed});
     }
-    return Object.freeze({status:'COMPLETE',runId:fixedManifest.runId,lastPhase:'FINAL_READBACK',atomicStarted:true});
+    return Object.freeze({status:terminalPhase===STAGING_V2_ATOMIC_TERMINAL_PHASE?'ATOMIC_ACTIVATED_AWAITING_FIRST_DAILY_SAVE':'COMPLETE',runId:fixedManifest.runId,lastPhase:terminalPhase,atomicStarted:true});
    }catch(error){
     await append({phase:lastPhase||'READINESS',event:'blocked'});
     if(atomicStarted)throw new Error('staging V2 terminal blocked after atomic start; recovery evidence retained',{cause:error});
