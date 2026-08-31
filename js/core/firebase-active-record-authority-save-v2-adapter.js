@@ -150,4 +150,4 @@ function createFirebaseActiveRecordAuthoritySaveV2BoundBinder(input){
 }
 
 export function createFirebaseActiveRecordAuthoritySaveV2AdminBinder(raw){return createFirebaseActiveRecordAuthoritySaveV2BoundBinder(binderInput(raw))}
-export function createFirebaseActiveRecordAuthoritySaveV2CloudRuntimeBinder(raw){const bound=createFirebaseActiveRecordAuthoritySaveV2BoundBinder(binderInput(raw,createStagingV2CloudRuntimeBoundary));return Object.freeze({scope:ACTIVE_RECORD_AUTHORITY_SAVE_V2_CLOUD_BINDER_SCOPE,execute:(recoveryCompletion,requestValue)=>bound.execute(recoveryCompletion,requestValue)})}
+export function createFirebaseActiveRecordAuthoritySaveV2CloudRuntimeBinder(raw){const bound=createFirebaseActiveRecordAuthoritySaveV2BoundBinder(binderInput(raw,createStagingV2CloudRuntimeBoundary));return Object.freeze({scope:ACTIVE_RECORD_AUTHORITY_SAVE_V2_CLOUD_BINDER_SCOPE,execute:(recoveryCompletion,requestValue)=>bound.execute(recoveryCompletion,requestValue),recover:()=>bound.recover()})}
