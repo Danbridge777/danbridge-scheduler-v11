@@ -97,6 +97,14 @@ test('401 documents固定400分頁，scan前後H/W/S fresh；duplicate/out-of-or
  const bad=await fixture({count:2}),base=bad.adapter;bad.documents.students=[bad.documents.students[1],bad.documents.students[0]];await assert.rejects(()=>base.executeU(bad.hardPauseCompletion),/out of order/);assert.equal(bad.store.has(RECORD_SYNC_V1_POST_PAUSE_SCAN_PATH('active-epoch-12345','freeze-12345678','U')),false);
 });
 
+test('Admin SDK Timestamp以官方語意形狀進入原始掃描，偽造的內部欄位仍fail closed',async()=>{
+ const {Timestamp}=await import('firebase-admin/firestore'),value=await fixture(),stamp=new Timestamp(times[0].seconds,times[0].nanoseconds);
+ value.documents.students[0].data.updatedAt=stamp;
+ const u=await value.adapter.executeU(value.hardPauseCompletion);assert.equal(u.writeCount,1);
+ const bad=await fixture();bad.documents.students[0].data.updatedAt={_seconds:times[0].seconds,_nanoseconds:times[0].nanoseconds};
+ await assert.rejects(()=>bad.adapter.executeU(bad.hardPauseCompletion),/Timestamp shape invalid/);assert.equal(bad.store.has(RECORD_SYNC_V1_POST_PAUSE_SCAN_PATH('active-epoch-12345','freeze-12345678','U')),false);
+});
+
 test('progression partial/tamper、早1ns server audit與anchor race都在write前拒絕',async()=>{
  const partial=await fixture();partial.store.set(RECORD_SYNC_V1_POST_PAUSE_SCAN_PATH('active-epoch-12345','freeze-12345678','V'),{forged:true});await assert.rejects(()=>partial.adapter.executeU(partial.hardPauseCompletion),/progression/);assert.equal(partial.transactions.at(-1).some(row=>row[0]==='set'),false);
  const early=await fixture(),u=await early.adapter.executeU(early.hardPauseCompletion);early.setStamp(0);await assert.rejects(()=>early.adapter.executeV(u),/precedes completedAt/);const race=await fixture();race.store.set(RECORD_SYNC_V1_SAFETY_CONTROL_PATH,{...race.store.get(RECORD_SYNC_V1_SAFETY_CONTROL_PATH),revision:99});await assert.rejects(()=>race.adapter.executeU(race.hardPauseCompletion),/anchor mismatch/);
