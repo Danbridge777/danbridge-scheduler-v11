@@ -44,6 +44,16 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
+      - name: Normalize the short-lived credential boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          credential_path="$(realpath "$GOOGLE_APPLICATION_CREDENTIALS")"
+          test -f "$credential_path"
+          chmod 600 "$credential_path"
+          test "$(stat -c '%a' "$credential_path")" = '600'
+          printf 'GOOGLE_APPLICATION_CREDENTIALS=%s\n' "$credential_path" >> "$GITHUB_ENV"
+
       - name: Verify the existing post-atomic state without writes
         env:
           STAGING_V2_FAILED_ATOMIC_RUN_ID: ${{ inputs.failed_atomic_run_id }}
