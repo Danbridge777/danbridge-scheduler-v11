@@ -63,6 +63,7 @@ const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
 const provider=new GoogleAuthProvider();
 provider.setCustomParameters({prompt:'select_account'});
+const STAGING_REDIRECT_LOGIN=new URLSearchParams(location.search).get('auth')==='redirect'&&DANBRIDGE_ENVIRONMENT==='staging';
 const STAGING_V2_APP_CHECK_SITE_KEY='6LfvKqItAAAAALRIut991852bJzOP3Aekm8WeXB9';
 const stagingV2AppCheck=DANBRIDGE_ENVIRONMENT==='staging'?initializeAppCheck(app,{provider:new ReCaptchaEnterpriseProvider(STAGING_V2_APP_CHECK_SITE_KEY),isTokenAutoRefreshEnabled:true}):null;
 
@@ -464,7 +465,7 @@ function setAuthCard(message='Sign in with your authorized Google account to con
     </div>
   </section>
 </div>`;
- document.getElementById('googleCloudLogin').onclick=async()=>{const btn=document.getElementById('googleCloudLogin');btn.disabled=true;btn.querySelector('.auth-google-label').textContent='Signing in…';try{await signInWithPopup(auth,provider)}catch(e){console.error(e);if(['auth/popup-blocked','auth/cancelled-popup-request','auth/popup-closed-by-user'].includes(e.code)){try{await signInWithRedirect(auth,provider);return}catch(e2){showCloudLoginError(e2.message)}}else showCloudLoginError(e.message);btn.disabled=false;btn.querySelector('.auth-google-label').textContent='Continue with Google'}};
+ document.getElementById('googleCloudLogin').onclick=async()=>{const btn=document.getElementById('googleCloudLogin');btn.disabled=true;btn.querySelector('.auth-google-label').textContent='Signing in…';try{if(STAGING_REDIRECT_LOGIN){await signInWithRedirect(auth,provider);return}await signInWithPopup(auth,provider)}catch(e){console.error(e);if(['auth/popup-blocked','auth/cancelled-popup-request','auth/popup-closed-by-user'].includes(e.code)){try{await signInWithRedirect(auth,provider);return}catch(e2){showCloudLoginError(e2.message)}}else showCloudLoginError(e.message);btn.disabled=false;btn.querySelector('.auth-google-label').textContent='Continue with Google'}};
 }
 function showCloudLoginError(msg){const e=document.getElementById('cloudLoginError');if(e){e.textContent=msg;e.classList.add('show')}}
 function setSignedOutIsolation(locked){
