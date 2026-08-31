@@ -13,6 +13,7 @@ export const RECORD_SYNC_V1_RAW_TIMESTAMP_SCHEMA='danbridge-firestore-semantic-v
 const ZERO_HASH='0'.repeat(64);
 const rawCoreFields=['schema','companyId','collection','recordId','record','recordIndex','sourceHash','revision','deleted','environment'];
 const rawAuditFields=['updatedAt','updatedBy','updatedByEmail'];
+const rawOperationAuditFields=['activationEpoch','deviceId','lastOperationId'];
 const timestampFields=['schema','type','seconds','nanoseconds'];
 const normalizedFields=['schema','documentId','environment','companyId','collection','recordId','record','recordIndex','sourceHash','revision','deleted','auditState','audit'];
 const normalizedAuditFields=['updatedAt','updatedBy','updatedByEmail'];
@@ -39,6 +40,7 @@ function validDocumentId(value){return isSafeCloudRecordId(value)&&!value.includ
 function validSourceHash(value){return validString(value)&&value===value.trim()&&value.length>0&&value.length<=256&&!/[\u0000-\u001f\u007f]/.test(value)}
 function validActor(value){return validString(value)&&value===value.trim()&&value.length>0&&value.length<=128&&!/[\u0000-\u001f\u007f/]/.test(value)}
 function validEmail(value){return validString(value)&&value===value.trim().toLowerCase()&&value.length>0&&value.length<=320&&!/[\u0000-\u001f\u007f/]/.test(value)&&/^[^@\s]+@[^@\s]+$/.test(value)}
+function validOperationToken(value){return validString(value)&&value===value.trim()&&value.length>0&&value.length<=1500&&!/[\u0000-\u001f\u007f/]/.test(value)}
 const digest=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value)&&value!==ZERO_HASH;
 
 function scalarAst(type,value){return value===undefined?{t:type}:{t:type,v:value}}
@@ -81,14 +83,32 @@ function normalizeTimestamp(value){
  return{value:{schema:tag.schema,type:tag.type,seconds:tag.seconds,nanoseconds:tag.nanoseconds},ast:{t:'timestamp',seconds:tag.seconds,nanoseconds:tag.nanoseconds}};
 }
 
+function auditShape(value,label){
+ if(!value||typeof value!=='object'||Array.isArray(value)||(Object.getPrototypeOf(value)!==Object.prototype&&Object.getPrototypeOf(value)!==null))throw new Error(label+' 必須是 plain object');
+ const keys=Reflect.ownKeys(value),operationCount=rawOperationAuditFields.filter(key=>keys.includes(key)).length,allowed=[...normalizedAuditFields,...rawOperationAuditFields];
+ if(operationCount!==0&&operationCount!==rawOperationAuditFields.length)throw new Error(label+' operation 欄位必須 all-or-none');
+ if(keys.length!==normalizedAuditFields.length+operationCount||keys.some(key=>typeof key!=='string'||!allowed.includes(key)))throw new Error(label+' 欄位無效');
+ const result={};for(const key of operationCount?allowed:normalizedAuditFields){const descriptor=Object.getOwnPropertyDescriptor(value,key);if(!descriptor?.enumerable||!('value' in descriptor))throw new Error(label+'.'+key+' 必須是 enumerable data field');result[key]=descriptor.value}
+ return result;
+}
+
+export function assertRecordSyncV1RawNormalizedAudit(value){
+ const audit=auditShape(value,'V1 raw normalized audit'),timestamp=normalizeTimestamp(audit.updatedAt),result={updatedAt:timestamp.value,updatedBy:audit.updatedBy,updatedByEmail:audit.updatedByEmail};
+ if(!validActor(result.updatedBy)||!validEmail(result.updatedByEmail))throw new Error('V1 raw audit actor 或 email 無效');
+ if('activationEpoch' in audit){const {activationEpoch,deviceId,lastOperationId}=audit,prefix=deviceId+':',sequence=lastOperationId.startsWith(prefix)?lastOperationId.slice(prefix.length):'';if(!validOperationToken(activationEpoch)||!validOperationToken(deviceId)||!validOperationToken(lastOperationId)||!/^[1-9]\d*$/.test(sequence)||!Number.isSafeInteger(Number(sequence)))throw new Error('V1 raw operation audit identity 無效');Object.assign(result,{activationEpoch,deviceId,lastOperationId})}
+ return deepFreeze(result);
+}
+
 function splitRawData(value){
  if(!value||typeof value!=='object'||Array.isArray(value)||(Object.getPrototypeOf(value)!==Object.prototype&&Object.getPrototypeOf(value)!==null))throw new Error('V1 raw data 必須是 plain object');
- const keys=Reflect.ownKeys(value),auditCount=rawAuditFields.filter(key=>keys.includes(key)).length;
+ const keys=Reflect.ownKeys(value),auditCount=rawAuditFields.filter(key=>keys.includes(key)).length,operationCount=rawOperationAuditFields.filter(key=>keys.includes(key)).length;
  if(auditCount!==0&&auditCount!==rawAuditFields.length)throw new Error('V1 raw data audit 欄位必須 all-or-none');
- if(keys.length!==rawCoreFields.length+auditCount||keys.some(key=>typeof key!=='string'||![...rawCoreFields,...rawAuditFields].includes(key)))throw new Error('V1 raw data 欄位無效');
+ if(operationCount!==0&&operationCount!==rawOperationAuditFields.length)throw new Error('V1 raw data operation audit 欄位必須 all-or-none');
+ if(operationCount&&auditCount!==rawAuditFields.length)throw new Error('V1 raw data operation audit 必須綁定完整 server audit');
+ if(keys.length!==rawCoreFields.length+auditCount+operationCount||keys.some(key=>typeof key!=='string'||![...rawCoreFields,...rawAuditFields,...rawOperationAuditFields].includes(key)))throw new Error('V1 raw data 欄位無效');
  const core={};for(const key of rawCoreFields){const descriptor=Object.getOwnPropertyDescriptor(value,key);if(!descriptor?.enumerable||!('value' in descriptor))throw new Error('V1 raw data.'+key+' 必須是 enumerable data field');core[key]=descriptor.value}
  if(!auditCount)return{core,audit:null};
- const audit={};for(const key of rawAuditFields){const descriptor=Object.getOwnPropertyDescriptor(value,key);if(!descriptor?.enumerable||!('value' in descriptor))throw new Error('V1 raw data.'+key+' 必須是 enumerable data field');audit[key]=descriptor.value}
+ const audit={};for(const key of [...rawAuditFields,...(operationCount?rawOperationAuditFields:[])]){const descriptor=Object.getOwnPropertyDescriptor(value,key);if(!descriptor?.enumerable||!('value' in descriptor))throw new Error('V1 raw data.'+key+' 必須是 enumerable data field');audit[key]=descriptor.value}
  return{core,audit};
 }
 
@@ -103,7 +123,7 @@ function validateIdentity(documentId,core,record){
 function normalizedToInput(normalized){
  const value=exact(normalized,normalizedFields,'V1 raw normalized document'),data={schema:FULL_RECORD_SHADOW_SCHEMA,companyId:value.companyId,collection:value.collection,recordId:value.recordId,record:value.record,recordIndex:value.recordIndex,sourceHash:value.sourceHash,revision:value.revision,deleted:value.deleted,environment:value.environment};
  if(value.schema!==RECORD_SYNC_V1_RAW_DOCUMENT_NORMALIZED_SCHEMA||value.documentId!==value.recordId||!['absent','present'].includes(value.auditState)||(value.auditState==='absent')!==(value.audit===null))throw new Error('V1 raw normalized document 格式無效');
- if(value.auditState==='present'){const audit=exact(value.audit,normalizedAuditFields,'V1 raw normalized audit');Object.assign(data,audit)}
+ if(value.auditState==='present')Object.assign(data,assertRecordSyncV1RawNormalizedAudit(value.audit));
  return{documentId:value.documentId,data};
 }
 
@@ -116,7 +136,7 @@ function prepareRecordSyncV1RawDocument(input){
  let normalizedAudit=null,auditAst=null;
  // A future adapter must convert the Firebase SDK Timestamp to this tagged,
  // nanosecond-preserving value first. SDK class instances fail closed here.
- if(audit){const timestamp=normalizeTimestamp(audit.updatedAt);if(!validActor(audit.updatedBy)||!validEmail(audit.updatedByEmail))throw new Error('V1 raw audit actor 或 email 無效');normalizedAudit={updatedAt:timestamp.value,updatedBy:audit.updatedBy,updatedByEmail:audit.updatedByEmail};auditAst=mapAst([['updatedAt',timestamp.ast],['updatedBy',scalarAst('string',audit.updatedBy)],['updatedByEmail',scalarAst('string',audit.updatedByEmail)]])}
+ if(audit){normalizedAudit=assertRecordSyncV1RawNormalizedAudit(audit);const timestamp=normalizeTimestamp(normalizedAudit.updatedAt),entries=[['updatedAt',timestamp.ast],['updatedBy',scalarAst('string',normalizedAudit.updatedBy)],['updatedByEmail',scalarAst('string',normalizedAudit.updatedByEmail)]];if('activationEpoch' in normalizedAudit)entries.push(['activationEpoch',scalarAst('string',normalizedAudit.activationEpoch)],['deviceId',scalarAst('string',normalizedAudit.deviceId)],['lastOperationId',scalarAst('string',normalizedAudit.lastOperationId)]);auditAst=mapAst(entries)}
  const normalizedDocument=deepFreeze({schema:RECORD_SYNC_V1_RAW_DOCUMENT_NORMALIZED_SCHEMA,documentId:raw.documentId,environment:core.environment,companyId:core.companyId,collection:core.collection,recordId:core.recordId,record:recordResult.value,recordIndex:core.recordIndex,sourceHash:core.sourceHash,revision:core.revision,deleted:core.deleted,auditState:normalizedAudit?'present':'absent',audit:normalizedAudit});
  return{normalizedDocument,recordAst:recordResult.ast,auditAst};
 }

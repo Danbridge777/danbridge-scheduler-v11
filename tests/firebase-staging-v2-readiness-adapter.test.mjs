@@ -96,6 +96,12 @@ test('readiness缺W0明確阻止；W0存在則16集合唯讀生成原生hard-pau
   assert.equal(result.capability.transitionPlan.request.freezeId,'freeze:'+'1'.repeat(32));
 });
 
+test('readiness接受與source control同epoch的V1 operation audit並拒絕cross-epoch',async()=>{
+  const valid=fixture(),trace={activationEpoch:valid.control.activationEpoch,deviceId:'device-readiness-12345',lastOperationId:'device-readiness-12345:7'};Object.assign(valid.rows.students[0].data,trace);
+  const accepted=await valid.adapter.readinessCheck(valid.context);assert.equal(accepted.writeCount,0);assert.match(accepted.capability.transitionPlan.request.preflightRawDocumentRoot,/^[a-f0-9]{64}$/);
+  const invalid=fixture();Object.assign(invalid.rows.students[0].data,{...trace,activationEpoch:'foreign-epoch-12345'});await assert.rejects(()=>invalid.adapter.readinessCheck(invalid.context),new RegExp(STAGING_V2_READINESS_BLOCKER));
+});
+
 test('hard pause後新runner由固定receipt重建同一W0與transition，prerequisite零寫跳過W0 binder',async()=>{
   const value=fixture(),first=await value.adapter.readinessCheck(value.context),transition=first.capability.transitionPlan;
   value.docs.set(RECORD_SYNC_V1_WRITER_CURRENT_PATH,audit(transition.nextWriterCurrent));

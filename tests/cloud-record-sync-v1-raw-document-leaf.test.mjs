@@ -91,6 +91,16 @@ test('audit present使用exact tagged Timestamp且audit不進document core hash'
  assert.notEqual(present.leafHash,absent.leafHash);
 });
 
+test('合法V1 operation audit三欄全有才接受、保留並納入audit hash',()=>{
+ const operationAudit={activationEpoch:'active-epoch-12345',deviceId:'device-12345678',lastOperationId:'device-12345678:9'},input=audited({},operationAudit),normalized=normalizeRecordSyncV1RawDocument(input),leaf=buildRecordSyncV1RawDocumentLeaf(input),base=buildRecordSyncV1RawDocumentLeaf(audited());
+ assert.deepEqual(normalized.audit,{updatedAt:timestamp(),updatedBy:'owner-12345678',updatedByEmail:'owner@example.com',...operationAudit});
+ assert.notEqual(leaf.auditHash,base.auditHash);
+ assert.equal(leaf.documentCoreHash,base.documentCoreHash);
+ assert.deepEqual(assertRecordSyncV1RawDocumentLeaf(leaf,{normalizedDocument:normalized}),leaf);
+ for(const dataExtra of [{activationEpoch:operationAudit.activationEpoch},{...operationAudit,lastOperationId:'other-device:9'},{...operationAudit,lastOperationId:'device-12345678:0'},{...operationAudit,lastOperationId:'device-12345678:not-a-sequence'}])assert.throws(()=>buildRecordSyncV1RawDocumentLeaf(audited({},dataExtra)),/all-or-none|operation audit/);
+ assert.throws(()=>buildRecordSyncV1RawDocumentLeaf(raw({},operationAudit)),/完整 server audit/);
+});
+
 test('Timestamp canonical decimal、nanosecond與Firestore UTC範圍邊界',()=>{
  for(const value of [timestamp('-62135596800',0),timestamp('253402300799',999999999),timestamp('0',0)])assert.doesNotThrow(()=>buildRecordSyncV1RawDocumentLeaf(audited({}, {updatedAt:value})));
  for(const value of [timestamp('-62135596801',0),timestamp('253402300800',0),timestamp('9999999999999',0),timestamp('-0',0),timestamp('+1',0),timestamp('01',0),timestamp('1',-1),timestamp('1',1000000000),{...timestamp(),extra:true}])assert.throws(()=>buildRecordSyncV1RawDocumentLeaf(audited({}, {updatedAt:value})),/timestamp/);
