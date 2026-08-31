@@ -536,6 +536,29 @@ describe('V2 takeover candidate trusted atomic pair',()=>{
 
   test('G2 manifest/readback與G3 authority僅operatorOwner可讀，所有client含舊schema CUD永久拒',async()=>{const seed='v2-genesis:'+hash('2'),base=`stagingRecordSyncV2Genesis/danbridge/epochs/g23-admin-only/seeds/${seed}`,paths=[`${base}/artifacts/manifest`,`${base}/artifacts/readback`,`stagingRecordSyncV2GenesisAuthorities/danbridge/epochs/g23-admin-only/seeds/${seed}`],operator=trusted(),backup=trusted('backup-owner-uid',BACKUP_OWNER_EMAIL),ordinary=auth('owner-uid',OWNER_EMAIL),teacher=authClaims('teacher-uid',TEACHER_EMAIL,{recordSyncV2CutoverOperator:true}),foreign=authClaims('foreign-owner','foreign@example.com',{recordSyncV2CutoverOperator:true}),anonymous=unauthenticated();await testEnv.withSecurityRulesDisabled(async context=>{for(const path of paths)await setDoc(doc(context.firestore(),path),{schema:'fixture-admin-ci',persistedAt:Timestamp.now()})});for(const db of [operator,backup])for(const path of paths)assert.equal((await assertSucceeds(getDoc(doc(db,path)))).exists(),true);for(const db of [ordinary,teacher,foreign,anonymous])for(const path of paths)await assertFails(getDoc(doc(db,path)));for(const db of [operator,backup,ordinary,teacher])for(const path of paths){await assertFails(setDoc(doc(db,path),{schema:'danbridge-record-sync-v2-legacy-v1'}));await assertFails(updateDoc(doc(db,path),{forged:true}));await assertFails(deleteDoc(doc(db,path)))}for(const db of [operator,backup]){const suffix=db===operator?'primary':'backup';await assertFails(setDoc(doc(db,`${base}/artifacts/legacy-${suffix}`),{schema:'danbridge-record-sync-v2-genesis-durable-manifest-v1'}));await assertFails(setDoc(doc(db,`stagingRecordSyncV2GenesisAuthorities/danbridge/epochs/g23-admin-only-${suffix}/seeds/${seed}`),{schema:'danbridge-record-sync-v2-genesis-authority-v1'}))}});
 
+  test('V2永久 fence+active control+精確H0時僅Owner可讀head，其他V2 namespace仍關閉',async()=>{
+    const epoch='v2-runtime-owner-h0-read-1',h=value=>String(value).repeat(64),zero='0'.repeat(64);
+    const paths={fence:`stagingRecordSyncV1PermanentFences/${COMPANY_ID}`,control:`stagingRecordSyncV2ActiveControls/${COMPANY_ID}/epochs/${epoch}`,head:`stagingActiveRecordV2Heads/${COMPANY_ID}/epochs/${epoch}`};
+    const roots={authorityRootHash:h('a'),genesisAuthorityHash:h('b'),reservationAuthorityHash:h('c')},activeHeadHash=h('d'),controlHash=h('e'),sourceV1ActivationEpoch='source-v1-h0-epoch-12345',sourceFreezeId='source-v1-h0-freeze-12345',seedId=`v2-genesis:${h('1')}`,candidateControlHash=h('2'),candidateHeadHash=h('3'),deploymentEvidenceHash=h('4');
+    await testEnv.withSecurityRulesDisabled(async context=>{
+      const db=context.firestore();
+      await setDoc(doc(db,paths.fence),{schema:'danbridge-record-sync-v1-permanent-fence-v2',state:'permanently-fenced-after-atomic-v2-structural-activation',environment:'staging',companyId:COMPANY_ID,projectId:'danbridge-d8877-staging',sourceV1ActivationEpoch,sourceFreezeId,targetV2Epoch:epoch,seedId,fencePolicy:'v1-all-mutation-surfaces-permanently-denied-no-resume-or-unfence',fenceHash:h('f'),activeControlHash:controlHash,activeHeadHash,candidateControlHash,candidateHeadHash,deploymentEvidenceHash,...roots});
+      await setDoc(doc(db,paths.control),{schema:'danbridge-record-sync-v2-structural-active-control-v2',state:'structural-active-transition-awaiting-native-fixed-path-atomic-cutover',environment:'staging',companyId:COMPANY_ID,sourceV1ActivationEpoch,sourceFreezeId,activationEpoch:epoch,seedId,writerProtocol:'v2',writerGeneration:2,readAllowed:true,writeAllowed:true,readTakeoverEnabled:true,writeTakeoverEnabled:true,acceptNewSessions:true,acceptNewMutations:true,allowAuditAppends:true,controlHash,activeHeadHash,...roots});
+      await setDoc(doc(db,paths.head),{schema:'danbridge-active-record-v2-structural-head0-v2',state:'structural-active-transition-awaiting-native-fixed-path-atomic-cutover',environment:'staging',companyId:COMPANY_ID,sourceV1ActivationEpoch,sourceFreezeId,activationEpoch:epoch,seedId,revision:0,headSaveId:'',operationCount:0,previousCommitHash:zero,commitHash:zero,headHash:activeHeadHash,sourceCandidateControlHash:candidateControlHash,sourceCandidateHeadHash:candidateHeadHash,deploymentEvidenceHash,...roots});
+    });
+    const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),anonymous=unauthenticated();
+    assert.equal((await assertSucceeds(getDoc(doc(owner,paths.head)))).exists(),true);
+    await assertFails(getDoc(doc(owner,paths.control)));
+    for(const db of [teacher,anonymous])await assertFails(getDoc(doc(db,paths.head)));
+    for(const db of [owner,trusted()]){
+      await assertFails(setDoc(doc(db,paths.head),{forged:true}));
+      await assertFails(updateDoc(doc(db,paths.head),{forged:true}));
+      await assertFails(deleteDoc(doc(db,paths.head)));
+    }
+    await testEnv.withSecurityRulesDisabled(async context=>updateDoc(doc(context.firestore(),paths.head),{deploymentEvidenceHash:h('9')}));
+    await assertFails(getDoc(doc(owner,paths.head)));
+  });
+
   test('V2永久 fence+active control+H1 後僅Owner可讀active epoch，所有client寫入仍拒',async()=>{
     const epoch='v2-runtime-owner-read-1',h=value=>String(value).repeat(64);
     const paths={
