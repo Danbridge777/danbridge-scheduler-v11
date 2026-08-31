@@ -62,7 +62,7 @@ test('hard-pause and U/V/Pair lineage artifacts remain create-only immutable',()
 });
 
 test('V2 Owner runtime read gate requires fence+active control+H1 and keeps every client write denied',()=>{
- const body=functionBody('v2OwnerRuntimeReadOpen','v1PermanentFenceExists');
+ const body=functionBody('v2OwnerRuntimeReadOpen','v2OwnerRuntimeH0HeadReadOpen');
  assert.equal((body.match(/\bget\(/g)??[]).length,3);
  assert.equal((body.match(/\bexists\(/g)??[]).length,3);
  for(const clause of [
@@ -78,5 +78,29 @@ test('V2 Owner runtime read gate requires fence+active control+H1 and keeps ever
  ])assert.ok(body.includes(clause),clause);
  for(const collection of ['stagingRecordSyncV2ActiveControls','stagingActiveRecordV2Baselines','stagingActiveRecordV2Records','stagingActiveRecordV2OperationReceipts','stagingActiveRecordV2SaveCommits']){
   const start=rules.indexOf(`match /${collection}/`);assert.notEqual(start,-1,collection);const block=rules.slice(start,rules.indexOf('\n    match /',start+1));assert.match(block,/v2OwnerRuntimeReadOpen/);assert.match(block,/allow create, update, delete: if false;/);
+ }
+});
+
+test('V2 H0 Owner head-only bootstrap gate stays within budget and cannot open other namespaces',()=>{
+ const body=functionBody('v2OwnerRuntimeH0HeadReadOpen','v1PermanentFenceExists');
+ assert.equal((body.match(/\bget\(/g)??[]).length,2);
+ assert.equal((body.match(/\bexists\(/g)??[]).length,2);
+ for(const clause of [
+  "head.schema == 'danbridge-active-record-v2-structural-head0-v2'",
+  'head.revision == 0',
+  "head.headSaveId == ''",
+  'head.operationCount == 0',
+  'head.headHash == fence.activeHeadHash',
+  'head.sourceCandidateControlHash == fence.candidateControlHash',
+  'head.sourceCandidateHeadHash == fence.candidateHeadHash',
+  'head.deploymentEvidenceHash == fence.deploymentEvidenceHash'
+ ])assert.ok(body.includes(clause),clause);
+ const headStart=rules.indexOf('match /stagingActiveRecordV2Heads/');
+ const headBlock=rules.slice(headStart,rules.indexOf('\n    match /',headStart+1));
+ assert.match(headBlock,/v2OwnerRuntimeH0HeadReadOpen\(companyId, targetV2Epoch, resource\.data\)/);
+ for(const collection of ['stagingRecordSyncV2ActiveControls','stagingActiveRecordV2Baselines','stagingActiveRecordV2Records','stagingActiveRecordV2OperationReceipts','stagingActiveRecordV2SaveCommits']){
+  const start=rules.indexOf(`match /${collection}/`);
+  const block=rules.slice(start,rules.indexOf('\n    match /',start+1));
+  assert.doesNotMatch(block,/v2OwnerRuntimeH0HeadReadOpen/);
  }
 });

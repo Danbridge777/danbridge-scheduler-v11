@@ -38,6 +38,22 @@ const reservations=spawnSync(process.execPath,['--test','--test-concurrency=1','
 });
 if(reservations.error){console.error(reservations.error.message);process.exit(1)}
 if((reservations.status??1)!==0)process.exit(reservations.status??1);
+// The browser creates H1 only after an authenticated Owner can read the exact
+// structural H0 head. Exercise that narrow head-only rule against the real
+// emulator after loading the complete Rules surface; all sibling V2
+// namespaces must remain closed until H1.
+const allRules=spawnSync(process.execPath,['tools/build_firestore_rules_deploy.mjs','--phase=all'],{
+ cwd:process.cwd(),env:process.env,encoding:'utf8',stdio:'inherit'
+});
+if(allRules.error){console.error(allRules.error.message);process.exit(1)}
+if((allRules.status??1)!==0)process.exit(allRules.status??1);
+const h0Read=spawnSync(process.execPath,[
+ '--test','--test-concurrency=1','--test-name-pattern=精確H0','tests/firestore-rules.test.mjs'
+],{
+ cwd:process.cwd(),env:process.env,encoding:'utf8',stdio:'inherit'
+});
+if(h0Read.error){console.error(h0Read.error.message);process.exit(1)}
+if((h0Read.status??1)!==0)process.exit(h0Read.status??1);
 const reset=spawnSync(process.execPath,['tools/build_firestore_rules_deploy.mjs','--phase=pause'],{
  cwd:process.cwd(),env:process.env,encoding:'utf8',stdio:'inherit'
 });

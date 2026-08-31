@@ -72,6 +72,63 @@ service cloud.firestore {
         && head.sourceActiveControlHash == control.controlHash
         && head.sourceStructuralHeadHash == fence.activeHeadHash;
     }
+    // H0 is the one immutable structural head that must be visible before the
+    // first native V2 save can create H1.  This gate is deliberately scoped to
+    // the head document only: it does not open active controls, records,
+    // ledgers, receipts or baselines before H1 exists.
+    function v2OwnerRuntimeH0HeadReadOpen(companyId, targetV2Epoch, head) {
+      let fencePath = /databases/$(database)/documents/stagingRecordSyncV1PermanentFences/$(companyId);
+      let controlPath = /databases/$(database)/documents/stagingRecordSyncV2ActiveControls/$(companyId)/epochs/$(targetV2Epoch);
+      let fence = get(fencePath).data;
+      let control = get(controlPath).data;
+      return companyId == 'danbridge'
+        && isOwner()
+        && exists(fencePath) && exists(controlPath)
+        && fence.schema == 'danbridge-record-sync-v1-permanent-fence-v2'
+        && fence.state == 'permanently-fenced-after-atomic-v2-structural-activation'
+        && fence.environment == 'staging' && fence.companyId == companyId
+        && fence.projectId == 'danbridge-d8877-staging'
+        && fence.targetV2Epoch == targetV2Epoch
+        && fence.fencePolicy == 'v1-all-mutation-surfaces-permanently-denied-no-resume-or-unfence'
+        && nonzeroSha256(fence.fenceHash)
+        && control.schema == 'danbridge-record-sync-v2-structural-active-control-v2'
+        && control.state == 'structural-active-transition-awaiting-native-fixed-path-atomic-cutover'
+        && control.environment == 'staging' && control.companyId == companyId
+        && control.activationEpoch == targetV2Epoch
+        && control.sourceV1ActivationEpoch == fence.sourceV1ActivationEpoch
+        && control.sourceFreezeId == fence.sourceFreezeId
+        && control.seedId == fence.seedId
+        && control.writerProtocol == 'v2' && control.writerGeneration == 2
+        && control.readAllowed == true && control.writeAllowed == true
+        && control.readTakeoverEnabled == true && control.writeTakeoverEnabled == true
+        && control.acceptNewSessions == true && control.acceptNewMutations == true
+        && control.allowAuditAppends == true
+        && nonzeroSha256(control.controlHash)
+        && control.controlHash == fence.activeControlHash
+        && control.activeHeadHash == fence.activeHeadHash
+        && control.authorityRootHash == fence.authorityRootHash
+        && control.genesisAuthorityHash == fence.genesisAuthorityHash
+        && control.reservationAuthorityHash == fence.reservationAuthorityHash
+        && head.schema == 'danbridge-active-record-v2-structural-head0-v2'
+        && head.state == 'structural-active-transition-awaiting-native-fixed-path-atomic-cutover'
+        && head.environment == 'staging' && head.companyId == companyId
+        && head.activationEpoch == targetV2Epoch
+        && head.sourceV1ActivationEpoch == fence.sourceV1ActivationEpoch
+        && head.sourceFreezeId == fence.sourceFreezeId
+        && head.seedId == fence.seedId
+        && head.revision == 0 && head.headSaveId == '' && head.operationCount == 0
+        && head.previousCommitHash == '0000000000000000000000000000000000000000000000000000000000000000'
+        && head.commitHash == '0000000000000000000000000000000000000000000000000000000000000000'
+        && nonzeroSha256(head.headHash)
+        && head.headHash == control.activeHeadHash
+        && head.headHash == fence.activeHeadHash
+        && head.authorityRootHash == control.authorityRootHash
+        && head.genesisAuthorityHash == control.genesisAuthorityHash
+        && head.reservationAuthorityHash == control.reservationAuthorityHash
+        && head.sourceCandidateControlHash == fence.candidateControlHash
+        && head.sourceCandidateHeadHash == fence.candidateHeadHash
+        && head.deploymentEvidenceHash == fence.deploymentEvidenceHash;
+    }
     function v1PermanentFenceExists(companyId) {
       return existsAfter(/databases/$(database)/documents/stagingRecordSyncV1PermanentFences/$(companyId));
     }
@@ -3272,6 +3329,7 @@ service cloud.firestore {
     }
     match /stagingActiveRecordV2Heads/{companyId}/epochs/{targetV2Epoch} {
       allow read: if isRecordSyncV2CutoverOperator(companyId)
+        || v2OwnerRuntimeH0HeadReadOpen(companyId, targetV2Epoch, resource.data)
         || v2OwnerRuntimeReadOpen(companyId, targetV2Epoch);
       allow create, update, delete: if false;
     }
