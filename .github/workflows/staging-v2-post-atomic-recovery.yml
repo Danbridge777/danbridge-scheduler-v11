@@ -1,0 +1,62 @@
+name: Staging V2 post-atomic recovery receipt
+
+on:
+  workflow_dispatch:
+    inputs:
+      failed_atomic_run_id:
+        description: Exact failed atomic run whose durable poststate must be verified
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: danbridge-staging-v2-activation
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - name: Check out exact main revision
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Authenticate short-lived staging service account
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/883029466360/locations/global/workloadIdentityPools/danbridge-github-staging/providers/github
+          service_account: danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Verify the existing post-atomic state without writes
+        env:
+          STAGING_V2_FAILED_ATOMIC_RUN_ID: ${{ inputs.failed_atomic_run_id }}
+          STAGING_V2_GITHUB_TOKEN: ${{ github.token }}
+          STAGING_V2_RECOVERY_RESULT_PATH: ${{ github.workspace }}/staging-v2-post-atomic-recovery-result.json
+          GOOGLE_CLOUD_PROJECT: danbridge-d8877-staging
+        run: node tools/recover_staging_v2_post_atomic.mjs
+
+      - name: Preserve the exact recovery receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-v2-post-atomic-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: staging-v2-post-atomic-recovery-result.json
+          if-no-files-found: error
+          retention-days: 30

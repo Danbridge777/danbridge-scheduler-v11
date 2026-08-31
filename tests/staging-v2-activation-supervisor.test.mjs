@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createStagingV2ActivationSupervisor,STAGING_V2_SUPERVISOR_PHASES} from '../js/core/staging-v2-activation-supervisor.js';
+import {createStagingV2ActivationSupervisor,STAGING_V2_ATOMIC_TERMINAL_PHASE,STAGING_V2_SUPERVISOR_PHASES} from '../js/core/staging-v2-activation-supervisor.js';
 import {sha256Canonical} from '../js/core/cloud-immutable-migration-backup.js';
 
 const hash=value=>sha256Canonical({value});
@@ -11,6 +11,10 @@ function fixture(changes={}){const rows=[],order=[],actions=Object.fromEntries(S
 test('未授權 atomic 時精確跑到 pre-atomic gate 後停止，完全不碰 atomic/H1/baseline/final',async()=>{const value=fixture(),result=await value.supervisor.run(),preIndex=STAGING_V2_SUPERVISOR_PHASES.indexOf('PRE_ATOMIC_GATE');assert.equal(result.status,'PRE_ATOMIC_READY');assert.deepEqual(value.order,STAGING_V2_SUPERVISOR_PHASES.slice(0,preIndex+1));assert.equal(value.order.includes('ATOMIC_ACTIVATION'),false);assert.equal(value.order.includes('H1_BASELINE_SNAPSHOT'),false);assert.equal(value.rows.at(-1).event,'ready-for-separate-atomic-authorization');assert.ok(value.rows.every((row,index)=>row.sequence===index&&row.productionTouched===false&&row.hostingDeployed===false&&row.timeMachineTouched===false));await assert.rejects(()=>value.supervisor.run(),/one-shot/)});
 
 test('明確 atomic gate 後固定順序完成 recovery、H1、完整 baseline 與 final readback',async()=>{const value=fixture({atomicActivationAllowed:true}),result=await value.supervisor.run();assert.equal(result.status,'COMPLETE');assert.deepEqual(value.order,STAGING_V2_SUPERVISOR_PHASES);assert.ok(value.order.indexOf('H1_SAVE')<value.order.indexOf('H1_BASELINE_SNAPSHOT'));assert.ok(value.order.indexOf('H1_BASELINE_SNAPSHOT')<value.order.indexOf('FINAL_READBACK'));assert.equal(value.rows.filter(row=>row.event==='started').length,STAGING_V2_SUPERVISOR_PHASES.length);assert.equal(value.rows.filter(row=>row.event==='completed').length,STAGING_V2_SUPERVISOR_PHASES.length)});
+
+test('atomic workflow 在 post-cutover recovery 精確成功終止，不捏造 H1 業務資料',async()=>{const value=fixture({atomicActivationAllowed:true}),supervisor=createStagingV2ActivationSupervisor({rawManifest:value.rawManifest,actions:value.actions,journal:value.journal,terminalPhase:STAGING_V2_ATOMIC_TERMINAL_PHASE}),result=await supervisor.run(),terminalIndex=STAGING_V2_SUPERVISOR_PHASES.indexOf(STAGING_V2_ATOMIC_TERMINAL_PHASE);assert.equal(result.status,'ATOMIC_ACTIVATED_AWAITING_FIRST_DAILY_SAVE');assert.equal(result.lastPhase,STAGING_V2_ATOMIC_TERMINAL_PHASE);assert.deepEqual(value.order,STAGING_V2_SUPERVISOR_PHASES.slice(0,terminalIndex+1));assert.equal(value.order.includes('H1_SAVE'),false);assert.equal(value.rows.length,(terminalIndex+1)*2);assert.equal(value.rows.some(row=>row.event==='blocked'),false)});
+
+test('atomic terminal 只允許 post-cutover recovery 或完整 final readback',()=>{const value=fixture({atomicActivationAllowed:true});assert.throws(()=>createStagingV2ActivationSupervisor({rawManifest:value.rawManifest,actions:value.actions,journal:value.journal,terminalPhase:'H1_SAVE'}),/terminal phase blocked/)});
 
 test('atomic 前失敗只允許 cleanup-only rollback 並留下不可變 blocked chain',async()=>{const value=fixture(),failed='GENESIS_AUTHORITY';value.actions[failed]=async()=>{value.order.push(failed);throw new Error('injected failure')};await assert.rejects(()=>value.build().run(),/rollback confirmed/);assert.equal(value.order.at(-1),'ROLLBACK');assert.equal(value.order.includes('ATOMIC_ACTIVATION'),false);assert.deepEqual(value.rows.slice(-3).map(row=>[row.phase,row.event]),[[failed,'blocked'],['ROLLBACK','started'],['ROLLBACK','completed']])});
 
