@@ -1,5 +1,6 @@
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 import {createStagingV2AdminBoundary} from './firebase-staging-v2-service-account-boundary.js';
+import {getFirestore} from 'firebase-admin/firestore';
 
 const token=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{8,128}$/.test(value);
 const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)&&(Object.getPrototypeOf(value)===Object.prototype||Object.getPrototypeOf(value)===null);
@@ -9,8 +10,9 @@ function ownData(value,key,label){const descriptor=Object.getOwnPropertyDescript
 
 export function createFirebaseStagingV2SupervisorJournal({app,firestore,expectedProjectId,runId}={}){
  if(!plain({app,firestore,expectedProjectId,runId})||!app||!firestore||!token(runId))throw new Error('staging V2 supervisor journal config blocked');
- const appOptions=ownData(app,'options','staging V2 supervisor app'),projectId=ownData(appOptions,'projectId','staging V2 supervisor app options'),firestoreApp=ownData(firestore,'app','staging V2 supervisor firestore');
- if(projectId!==expectedProjectId||firestoreApp!==app)throw new Error('staging V2 supervisor App/Firestore identity blocked');
+ const appOptions=app?.options,projectId=appOptions&&ownData(appOptions,'projectId','staging V2 supervisor app options');let nativeFirestore;
+ try{nativeFirestore=getFirestore(app)}catch{throw new Error('staging V2 supervisor App/Firestore identity blocked')}
+ if(projectId!==expectedProjectId||nativeFirestore!==firestore)throw new Error('staging V2 supervisor App/Firestore identity blocked');
  const collectionPath=`stagingRecordSyncV2SupervisorJournals/danbridge/runs/${runId}/entries`,boundary=createStagingV2AdminBoundary(expectedProjectId);
  return Object.freeze({
   collectionPath,
