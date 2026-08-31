@@ -14,6 +14,7 @@ import {ACTIVE_RECORD_AUTHORITY_V2_HEAD_SCHEMA} from './cloud-active-record-auth
 import {RECORD_SYNC_V2_GENESIS_IDENTITY_INDEX_ROOT_PATH} from './firebase-record-sync-v2-genesis-identity-index-adapter.js';
 import {RECORD_SYNC_V1_PERMANENT_FENCE_V2_PATH,createFirebaseRecordSyncV2PostCutoverCloudRecoveryV2Binder,normalizeFirebaseRecordSyncV2AtomicActivationV2Snapshot} from './firebase-record-sync-v2-atomic-activation-transition-v2-adapter.js';
 import {RECORD_SYNC_V2_TAKEOVER_CANDIDATE_V2_HEAD_PATH} from './firebase-record-sync-v2-takeover-candidate-v2-adapter.js';
+import {createFirebaseActiveRecordV2H1BaselineCloudRuntime} from './firebase-active-record-v2-h1-baseline-cloud-runtime.js';
 import {
  activeRecordAuthoritySaveV2DailyRecordEnvelope,
  assertActiveRecordAuthoritySaveCurrentV2Integrity,
@@ -74,11 +75,12 @@ function createBoundFirebaseActiveRecordAuthoritySaveChainV2Binder(input,boundar
 
 export function createFirebaseActiveRecordAuthoritySaveChainV2AdminBinder(raw){const input=binderConfig(raw);return createBoundFirebaseActiveRecordAuthoritySaveChainV2Binder(input,createStagingV2AdminBoundary(input.projectId),ACTIVE_RECORD_AUTHORITY_CHAIN_V2_ADMIN_BINDER_SCOPE)}
 export function createFirebaseActiveRecordAuthoritySaveChainV2CloudRuntimeBinder(raw){
- const input=binderConfig(raw),identity={app:input.app,firestore:input.firestore,expectedProjectId:input.expectedProjectId},chain=createBoundFirebaseActiveRecordAuthoritySaveChainV2Binder(input,createStagingV2CloudRuntimeBoundary(input.projectId),ACTIVE_RECORD_AUTHORITY_CHAIN_V2_CLOUD_BINDER_SCOPE),h1=createFirebaseActiveRecordAuthoritySaveV2CloudRuntimeBinder(identity),recovery=createFirebaseRecordSyncV2PostCutoverCloudRecoveryV2Binder(identity),ref=path=>input.firestore.doc(path);
+ const input=binderConfig(raw),identity={app:input.app,firestore:input.firestore,expectedProjectId:input.expectedProjectId},chain=createBoundFirebaseActiveRecordAuthoritySaveChainV2Binder(input,createStagingV2CloudRuntimeBoundary(input.projectId),ACTIVE_RECORD_AUTHORITY_CHAIN_V2_CLOUD_BINDER_SCOPE),h1=createFirebaseActiveRecordAuthoritySaveV2CloudRuntimeBinder(identity),baseline=createFirebaseActiveRecordV2H1BaselineCloudRuntime(identity),recovery=createFirebaseRecordSyncV2PostCutoverCloudRecoveryV2Binder(identity),ref=path=>input.firestore.doc(path);
  return Object.freeze({scope:ACTIVE_RECORD_AUTHORITY_CHAIN_V2_CLOUD_BINDER_SCOPE,async execute(requestValue){
   const fence=fenceIdentity(await ref(RECORD_SYNC_V1_PERMANENT_FENCE_V2_PATH).get(),input.projectId),head=normalized(await ref(RECORD_SYNC_V2_TAKEOVER_CANDIDATE_V2_HEAD_PATH(fence.targetV2Epoch)).get(),'authority runtime head selector'),revision=own(head,'revision','authority runtime head selector'),schema=own(head,'schema','authority runtime head selector');
-  if(schema==='danbridge-active-record-v2-structural-head0-v2'&&revision===0&&own(head,'headSaveId','authority runtime H0 selector')===''&&own(head,'operationCount','authority runtime H0 selector')===0)return h1.execute(await recovery.recover(),requestValue);
-  if(schema===ACTIVE_RECORD_AUTHORITY_V2_HEAD_SCHEMA&&Number.isSafeInteger(revision)&&revision>=1)return chain.execute(requestValue);
+  if(schema==='danbridge-active-record-v2-structural-head0-v2'&&revision===0&&own(head,'headSaveId','authority runtime H0 selector')===''&&own(head,'operationCount','authority runtime H0 selector')===0){const completion=await h1.execute(await recovery.recover(),requestValue);await baseline.execute(completion);return completion}
+  if(schema===ACTIVE_RECORD_AUTHORITY_V2_HEAD_SCHEMA&&revision===1){const completion=await h1.recover();await baseline.execute(completion);if(own(own(requestValue,'save','authority runtime request'),'saveId','authority runtime request save')===head.headSaveId)return completion;return chain.execute(requestValue)}
+  if(schema===ACTIVE_RECORD_AUTHORITY_V2_HEAD_SCHEMA&&Number.isSafeInteger(revision)&&revision>1)return chain.execute(requestValue);
   throw new Error('authority runtime head phase invalid')
  }})
 }
