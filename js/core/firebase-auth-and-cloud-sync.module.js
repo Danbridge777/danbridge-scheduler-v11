@@ -57,7 +57,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.128';
+const APP_RELEASE='20.26.129';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -2061,7 +2061,8 @@ async function auditProductionRoleViews(sourceDb){
  return{...counts,total:counts.schedulers+counts.teachers+counts.branchManagers,verified:issues.length===0,issueCount:issues.length,issues,evidence,roleViewDigest:sha256Canonical(evidence)};
 }
 window.__danbridgeRepublishProductionRoleViews=async()=>{
- if(DANBRIDGE_ENVIRONMENT!=='production'||cloudRole!=='owner'||cloudEmailKey!==OWNER_EMAIL||!sameOwner())throw new Error('production 角色檢視重發只允許同一位主要 Owner');
+ const currentUser=auth.currentUser,currentEmail=String(currentUser?.email||'').trim().toLowerCase();
+ if(DANBRIDGE_ENVIRONMENT!=='production'||cloudRole!=='owner'||cloudEmailKey!==OWNER_EMAIL||!currentUser||currentUser.uid!==cloudUid||currentEmail!==OWNER_EMAIL)throw new Error('production 角色檢視重發只允許同一位主要 Owner');
  if(activeRecordMode!=='active'||document.body.dataset.activeRecordAuthority!=='production-records-authoritative')throw new Error('production 逐筆權威資料尚未就緒');
  const sourceDb=deepCopy(window.__danbridgeGetDB?.()||emptyDB()),sourceHash=recordDataHash(sourceDb);
  if(!sourceHash||window.__danbridgeDataScore?.(sourceDb)===0)throw new Error('production 權威資料不可為空');

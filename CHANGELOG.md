@@ -1,5 +1,9 @@
 # Changelog
 
+## 20.26.129（角色驗證 Owner 身分修正）
+
+- 修正 production 角色權限驗證入口引用讀取器區域函式的錯誤；執行前直接重新核對目前 Firebase 使用者、UID 與主要 Owner Email。
+
 ## 20.26.128（Owner 角色權限驗證入口）
 
 - production Daniel Owner 新增「驗證角色權限」入口；只重發安全角色檢視並核對來源與角色雜湊，不改寫主要學生、老師或課程資料。

@@ -1,12 +1,12 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.128';
-const APP_SHELL_RELEASE = '20.26.128';
+const CLOUD_RELEASE = '20.26.129';
+const APP_SHELL_RELEASE = '20.26.129';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
-const ROLE_UX_RELEASE = '20.26.128';
+const ROLE_UX_RELEASE = '20.26.129';
 const ROLE_UX_STYLE_RELEASE = '20.25.10';
 const PWA_RELEASE = '20.26.113';
 const PWA_STYLE_RELEASE = '20.18.0';
