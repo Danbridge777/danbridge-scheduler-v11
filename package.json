@@ -16,8 +16,10 @@
     "pretest:rules": "node tools/build_firestore_rules_deploy.mjs --phase=pause",
     "test:rules": "node tools/run_firestore_rules_tests.mjs",
     "test:dependency-audit": "node tools/verify_dependency_audit.mjs",
-    "deploy:production": "firebase deploy --only hosting --project production",
-    "deploy:staging": "firebase deploy --only hosting,firestore:rules --project staging",
+    "predeploy:production": "node tools/validate_staging_deploy_target.mjs",
+    "deploy:production": "node tools/validate_staging_deploy_target.mjs && firebase deploy --only hosting --project danbridge-d8877 --config firebase.production.json --",
+    "predeploy:staging": "node tools/validate_staging_deploy_target.mjs",
+    "deploy:staging": "node tools/validate_staging_deploy_target.mjs && firebase deploy --only hosting --project danbridge-d8877-staging --",
     "predeploy:staging-rules": "node tools/build_firestore_rules_deploy.mjs",
     "deploy:staging-rules": "firebase deploy --only firestore:rules --project staging"
   },

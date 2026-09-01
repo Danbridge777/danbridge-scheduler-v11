@@ -6,10 +6,11 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const STAGING_PROJECT = 'danbridge-d8877-staging';
 const PRODUCTION_PROJECT = 'danbridge-d8877';
 const PREFLIGHT_SCRIPT = 'node tools/validate_staging_deploy_target.mjs';
-const STAGING_DEPLOY_SCRIPT = `${PREFLIGHT_SCRIPT} && firebase deploy --only hosting,firestore:rules --project ${STAGING_PROJECT} --`;
-const PRODUCTION_DEPLOY_SCRIPT = 'firebase deploy --only hosting --project production';
+const STAGING_DEPLOY_SCRIPT = `${PREFLIGHT_SCRIPT} && firebase deploy --only hosting --project ${STAGING_PROJECT} --`;
+const PRODUCTION_DEPLOY_SCRIPT = `${PREFLIGHT_SCRIPT} && firebase deploy --only hosting --project ${PRODUCTION_PROJECT} --config firebase.production.json --`;
 const HOSTING_IGNORE = [
   'firebase.json',
+  'firebase.production.json',
   'firebase-debug*.log',
   'firestore-debug*.log',
   '**/.*',
@@ -23,12 +24,36 @@ const HOSTING_IGNORE = [
   'firebase/**',
   'tests/**',
   'tools/**',
+  'functions/**',
   'package.json',
   'package-lock.json',
   'playwright.config.js',
   'playwright-report/**',
   'test-results/**'
 ];
+const FUNCTION_IGNORE = [
+  '.git/**',
+  '.firebase/**',
+  'node_modules/**',
+  'tests/**',
+  'tools/**',
+  'docs/**',
+  'outputs/**',
+  'firebase/**',
+  'playwright-report/**',
+  'test-results/**',
+  'firebase-debug*.log',
+  'firestore-debug*.log',
+  '*.html',
+  '*.png',
+  '*.webmanifest',
+  'sw.js',
+  'js/ui/**'
+];
+const STAGING_REWRITES = [{
+  source: '/api/staging-v2/authority-save',
+  function: { functionId: 'stagingV2AuthoritySave', region: 'asia-east1' }
+}];
 const DOC_SCAN_EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.firebase', '.npm-cache', 'playwright-report', 'test-results']);
 
 function fail(message) {
@@ -50,16 +75,16 @@ function exactArray(value, expected, label) {
   if (!Array.isArray(value) || JSON.stringify(value) !== JSON.stringify(expected)) fail(`${label} must be exact`);
 }
 
-export function validateConfigValues({ firebaserc, firebaseConfig, packageConfig }) {
+export function validateConfigValues({ firebaserc, firebaseConfig, productionConfig, packageConfig }) {
   exactKeys(firebaserc, ['projects'], '.firebaserc');
   exactKeys(firebaserc.projects, ['default', 'production', 'staging'], '.firebaserc.projects');
   if (firebaserc.projects.default !== PRODUCTION_PROJECT) fail('default project mismatch');
   if (firebaserc.projects.production !== PRODUCTION_PROJECT) fail('production project mismatch');
   if (firebaserc.projects.staging !== STAGING_PROJECT) fail('staging project mismatch');
 
-  exactKeys(firebaseConfig, ['emulators', 'firestore', 'hosting'], 'firebase.json');
+  exactKeys(firebaseConfig, ['emulators', 'firestore', 'functions', 'hosting'], 'firebase.json');
   exactKeys(firebaseConfig.firestore, ['rules'], 'firebase.firestore');
-  if (firebaseConfig.firestore.rules !== 'firebase/firestore.rules') fail('rules path mismatch');
+  if (firebaseConfig.firestore.rules !== 'firebase/firestore.rules.deploy') fail('rules path mismatch');
   exactKeys(firebaseConfig.emulators, ['auth', 'firestore', 'singleProjectMode', 'ui'], 'firebase.emulators');
   exactKeys(firebaseConfig.emulators.auth, ['port'], 'firebase.emulators.auth');
   exactKeys(firebaseConfig.emulators.firestore, ['port'], 'firebase.emulators.firestore');
@@ -68,16 +93,26 @@ export function validateConfigValues({ firebaserc, firebaseConfig, packageConfig
       firebaseConfig.emulators.ui.enabled !== false || firebaseConfig.emulators.singleProjectMode !== true) {
     fail('emulator configuration mismatch');
   }
-  exactKeys(firebaseConfig.hosting, ['ignore', 'public'], 'firebase.hosting');
+  exactKeys(firebaseConfig.functions, ['ignore', 'runtime', 'source'], 'firebase.functions');
+  if (firebaseConfig.functions.source !== '.' || firebaseConfig.functions.runtime !== 'nodejs22') fail('functions target mismatch');
+  exactArray(firebaseConfig.functions.ignore, FUNCTION_IGNORE, 'firebase.functions.ignore');
+  exactKeys(firebaseConfig.hosting, ['ignore', 'public', 'rewrites'], 'firebase.hosting');
   if (firebaseConfig.hosting.public !== '.') fail('hosting public must be repo root');
   exactArray(firebaseConfig.hosting.ignore, HOSTING_IGNORE, 'firebase.hosting.ignore');
+  exactArray(firebaseConfig.hosting.rewrites, STAGING_REWRITES, 'firebase.hosting.rewrites');
+
+  exactKeys(productionConfig, ['hosting'], 'firebase.production.json');
+  exactKeys(productionConfig.hosting, ['ignore', 'public'], 'production.hosting');
+  if (productionConfig.hosting.public !== '.') fail('production hosting public must be repo root');
+  exactArray(productionConfig.hosting.ignore, HOSTING_IGNORE, 'production.hosting.ignore');
 
   if (!isPlainObject(packageConfig) || !isPlainObject(packageConfig.scripts)) fail('package scripts missing');
   if (packageConfig.scripts['predeploy:staging'] !== PREFLIGHT_SCRIPT) fail('predeploy:staging mismatch');
+  if (packageConfig.scripts['predeploy:production'] !== PREFLIGHT_SCRIPT) fail('predeploy:production mismatch');
   if (packageConfig.scripts['deploy:staging'] !== STAGING_DEPLOY_SCRIPT) fail('deploy:staging mismatch');
   if (packageConfig.scripts['deploy:production'] !== PRODUCTION_DEPLOY_SCRIPT) fail('production script changed');
   const lifecycleKeys = Object.keys(packageConfig.scripts).filter(key => /^(?:(?:pre|post)?deploy)(?::|$)/.test(key)).sort();
-  if (JSON.stringify(lifecycleKeys) !== JSON.stringify(['deploy:production', 'deploy:staging', 'predeploy:staging'])) {
+  if (JSON.stringify(lifecycleKeys) !== JSON.stringify(['deploy:production', 'deploy:staging', 'deploy:staging-rules', 'predeploy:production', 'predeploy:staging', 'predeploy:staging-rules'])) {
     fail('deploy lifecycle keys must be exact');
   }
   return true;
@@ -132,6 +167,7 @@ export function validateRepository() {
   validateConfigValues({
     firebaserc: readExactJson('.firebaserc'),
     firebaseConfig: readExactJson('firebase.json'),
+    productionConfig: readExactJson('firebase.production.json'),
     packageConfig: readExactJson('package.json')
   });
   validateRepositoryMarkdown();

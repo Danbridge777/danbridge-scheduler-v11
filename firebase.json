@@ -41,6 +41,7 @@
     "public": ".",
     "ignore": [
       "firebase.json",
+      "firebase.production.json",
       "firebase-debug*.log",
       "firestore-debug*.log",
       "**/.*",

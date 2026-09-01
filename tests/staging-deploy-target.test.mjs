@@ -15,6 +15,7 @@ const readJson = path => JSON.parse(readFileSync(resolve(ROOT, path), 'utf8'));
 const baseline = () => ({
   firebaserc: readJson('.firebaserc'),
   firebaseConfig: readJson('firebase.json'),
+  productionConfig: readJson('firebase.production.json'),
   packageConfig: readJson('package.json')
 });
 const rejected = (mutate, pattern = /TARGET_CONFIG_INVALID/) => {
@@ -73,6 +74,23 @@ test('Firebase Rules, emulator and Hosting schema reject routing and inventory d
     c => { c.firebaseConfig.emulators.firestore.port = 8081; },
     c => { c.firebaseConfig.storage = {}; }
   ]) rejected(mutate);
+});
+
+test('production Hosting is isolated from staging-only rules, functions and rewrites', () => {
+  for (const mutate of [
+    c => { c.productionConfig.firestore = { rules: 'firebase/firestore.rules.deploy' }; },
+    c => { c.productionConfig.functions = c.firebaseConfig.functions; },
+    c => { c.productionConfig.hosting.rewrites = c.firebaseConfig.hosting.rewrites; },
+    c => { c.productionConfig.hosting.public = 'public'; },
+    c => { c.productionConfig.hosting.ignore = c.productionConfig.hosting.ignore.filter(x => x !== 'firebase.production.json'); }
+  ]) rejected(mutate);
+});
+
+test('staging release deploys Hosting only and leaves phased Rules on their explicit workflow', () => {
+  assert.equal(
+    baseline().packageConfig.scripts['deploy:staging'],
+    'node tools/validate_staging_deploy_target.mjs && firebase deploy --only hosting --project danbridge-d8877-staging --'
+  );
 });
 
 test('staging lifecycle rejects alias, production, foreign, missing, duplicate, config, scope and shell drift', () => {

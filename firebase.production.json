@@ -1,0 +1,28 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "firebase.production.json",
+      "firebase-debug*.log",
+      "firestore-debug*.log",
+      "**/.*",
+      ".firebase/**",
+      ".git/**",
+      ".npm-cache/**",
+      "**/node_modules/**",
+      "CHANGELOG.md",
+      "README.md",
+      "docs/**",
+      "firebase/**",
+      "tests/**",
+      "tools/**",
+      "functions/**",
+      "package.json",
+      "package-lock.json",
+      "playwright.config.js",
+      "playwright-report/**",
+      "test-results/**"
+    ]
+  }
+}

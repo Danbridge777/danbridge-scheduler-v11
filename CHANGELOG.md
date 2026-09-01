@@ -1,5 +1,12 @@
 # Changelog
 
+## 20.26.122（正式發布快取與環境隔離）
+
+- 將目前登入、staging H1 recovery 與 Genesis 基準修正統一發布為 `20.26.122`，同步更新首頁資源查詢版本與 Service Worker cache，避免新舊程式混用。
+- staging 受限瀏覽器登入加入明確 redirect fallback；H1 recovery 可在回應遺失後依不可變證據補齊基準，並以有界並行方式讀取 Genesis 批次，不放寬角色、Rules 或資料邊界。
+- production Hosting 改用獨立設定，明確排除 staging 專用 Function rewrite、Firestore Rules 與 Functions 部署；部署前驗證器會拒絕環境、專案、設定或命令漂移。
+- 本版已完成 720 項核心測試、完整 Firestore Emulator Rules 測試、199 項 Chromium／WebKit 多裝置瀏覽器測試與相依安全稽核；production 仍須在 staging 實站核對通過後才發布。
+
 ## 20.26.116（staging 日常逐筆同步延遲修正）
 
 - 修正 Owner 核心逐筆已完成、角色逐筆發布仍在執行時，舊的本機待同步標記會被串流快照誤判為新修改，導致多跑一輪零操作同步與完整角色發布；現在控制器仍在 `inFlight` 時不會排入恢復工作。
