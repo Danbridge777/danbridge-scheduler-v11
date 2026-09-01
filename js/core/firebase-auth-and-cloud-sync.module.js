@@ -61,7 +61,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.138';
+const APP_RELEASE='20.26.139';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -77,6 +77,7 @@ const productionAppCheck=DANBRIDGE_ENVIRONMENT==='production'?initializeAppCheck
 const productionFunctions=DANBRIDGE_ENVIRONMENT==='production'?getFunctions(app,'asia-east1'):null;
 const productionTrustedOperationClient=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?createProductionTrustedOperationClient({call:httpsCallable(productionFunctions,'productionTrustedOperation',{limitedUseAppCheckTokens:true}),getIdentity:()=>({uid:cloudUid,email:cloudEmailKey})}):null;
 const productionTeacherLeaveCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?httpsCallable(productionFunctions,'productionTeacherLeaveOperation',{limitedUseAppCheckTokens:true}):null;
+const productionNotificationAcknowledgeCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?httpsCallable(productionFunctions,'productionAcknowledgeScheduleNotification',{limitedUseAppCheckTokens:true}):null;
 
 // Explicit-only staging migration composition. Merely importing this module never creates or activates V2.
 export function createExplicitStagingV2TakeoverCandidateBinder(){
@@ -1970,7 +1971,9 @@ async function acknowledgeCurrentScheduleNotification(){
  try{
    if(button){button.disabled=true;button.textContent='處理中…'}
    if(modal)modal.hidden=true;
-   await Promise.all(ids.map(id=>setDoc(doc(cloud,'companies',COMPANY_ID,'scheduleNotifications',id),{read:true,acknowledgedAt:serverTimestamp(),acknowledgedBy:cloudUid},{merge:true})));
+   if(!productionNotificationAcknowledgeCall)throw new Error('通知確認服務尚未就緒');
+   const result=await productionNotificationAcknowledgeCall({notificationIds:ids});
+   if(result?.data?.ok!==true)throw new Error('通知確認未完成');
  }catch(e){console.error('Acknowledge schedule notification failed',e);cloudStatus('通知確認失敗：'+(e?.message||e),'error')}
  finally{if(button){button.disabled=false;button.textContent='知道了'}}
 }

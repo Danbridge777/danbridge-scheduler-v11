@@ -104,6 +104,7 @@ async function seed() {
       [`companies/${COMPANY_ID}/lessonReports/lesson-own`, { companyId: COMPANY_ID, lessonId: 'lesson-own', reportedForTeacherIds: ['teacher-1'], branchId: 'branch-a', content: 'own report' }],
       [`companies/${COMPANY_ID}/lessonReports/lesson-other`, { companyId: COMPANY_ID, lessonId: 'lesson-other', reportedForTeacherIds: ['teacher-2'], branchId: 'branch-b', content: 'other report' }],
       [`companies/${COMPANY_ID}/scheduleNotifications/teacher-notice`, { recipientEmail: TEACHER_EMAIL, read: false, message: 'own notice' }],
+      [`companies/${COMPANY_ID}/scheduleNotifications/scheduler-notice`, { recipientEmail: SECOND_SCHEDULER_EMAIL, recipientRole: 'scheduler', read: false, message: 'scheduler notice' }],
       [`companies/${COMPANY_ID}/scheduleNotifications/other-notice`, { recipientEmail: OTHER_TEACHER_EMAIL, read: false, message: 'other notice' }],
       ['productionTeacherLeaveRecords/leave-own', { companyId: COMPANY_ID, leaveId: 'leave-own', teacherId: 'teacher-1', teacherName: 'Teacher One', leaveType: 'sick', date: '2026-09-02', start: '09:00', end: '10:00', hours: 1, status: 'active', revision: 1 }],
       ['productionTeacherLeaveRecords/leave-other', { companyId: COMPANY_ID, leaveId: 'leave-other', teacherId: 'teacher-2', teacherName: 'Teacher Two', leaveType: 'personal', date: '2026-09-03', start: '10:00', end: '12:00', hours: 2, status: 'active', revision: 1 }],
@@ -1141,6 +1142,15 @@ describe('通知中心權限', () => {
     }));
     await assertFails(updateDoc(doc(db, `companies/${COMPANY_ID}/scheduleNotifications/teacher-notice`), {
       message: 'tampered'
+    }));
+  });
+
+  test('AA 排課專員可用自己的 uid 確認自己的通知', async () => {
+    const db = auth('scheduler-2-uid', SECOND_SCHEDULER_EMAIL);
+    await assertSucceeds(updateDoc(doc(db, `companies/${COMPANY_ID}/scheduleNotifications/scheduler-notice`), {
+      read: true,
+      acknowledgedAt: Timestamp.now(),
+      acknowledgedBy: 'scheduler-2-uid'
     }));
   });
 

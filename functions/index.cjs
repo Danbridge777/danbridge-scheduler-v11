@@ -88,6 +88,28 @@ exports.productionTeacherLeaveOperation=onCall({region:'asia-east1',serviceAccou
  }catch(error){if(error instanceof HttpsError)throw error;console.error('PRODUCTION_TEACHER_LEAVE_BLOCKED',JSON.stringify({name:String(error?.name||'Error'),message:String(error?.message||'blocked')}));throw new HttpsError('failed-precondition',String(error?.message||'請假操作已安全阻止。').slice(0,200))}
 });
 
+exports.productionAcknowledgeScheduleNotification=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:30,memory:'256MiB',concurrency:40,minInstances:0,maxInstances:20},async request=>{
+ try{
+  const runtimeValue=await productionRuntime(),firestore=runtimeValue.firestore,{normalizeProductionNotificationAcknowledgeRequest,normalizeProductionNotificationActor,assertProductionNotificationRecipient}=await import('../js/core/production-notification-policy.js'),actor=normalizeProductionNotificationActor({uid:request.auth?.uid,email:request.auth?.token?.email,emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)}),{notificationIds}=normalizeProductionNotificationAcknowledgeRequest(request.data);
+  const result=await firestore.runTransaction(async transaction=>{
+   const refs=notificationIds.map(id=>firestore.doc(`companies/danbridge/scheduleNotifications/${id}`)),snapshots=await Promise.all(refs.map(ref=>transaction.get(ref)));let updatedCount=0,alreadyReadCount=0;
+   for(let index=0;index<snapshots.length;index++){
+    const snapshot=snapshots[index];
+    if(!snapshot.exists)throw new Error('找不到通知，請重新整理');
+    assertProductionNotificationRecipient(snapshot.data(),actor);
+    if(snapshot.data()?.read===true){alreadyReadCount++;continue}
+    transaction.update(refs[index],{read:true,acknowledgedAt:FieldValue.serverTimestamp(),acknowledgedBy:actor.uid});updatedCount++;
+   }
+   return{updatedCount,alreadyReadCount};
+  });
+  return{schema:'danbridge-schedule-notification-acknowledge-response-v1',ok:true,notificationCount:notificationIds.length,...result};
+ }catch(error){
+  if(error instanceof HttpsError)throw error;
+  const message=String(error?.message||'通知確認已安全阻止。').slice(0,200),code=/只能確認|帳號未通過/.test(message)?'permission-denied':/筆數|識別碼/.test(message)?'invalid-argument':'failed-precondition';
+  console.error('PRODUCTION_NOTIFICATION_ACKNOWLEDGE_BLOCKED',JSON.stringify({name:String(error?.name||'Error'),message}));throw new HttpsError(code,message);
+ }
+});
+
 exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'512MiB',concurrency:8,minInstances:0,maxInstances:20},async request=>{
  try{
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),trusted=runtimeValue.assertProductionTrustedOperation(request.data);
