@@ -73,18 +73,40 @@ test('production 逐筆遷移只能由帶 hash 的 Owner 手動啟用，且不�
  assert.match(source,/button\.onclick=async\(\)=>/);
  assert.match(source,/DANBRIDGE_ENVIRONMENT!=='production'\|\|cloudRole!=='owner'/);
  assert.match(source,/sourceHash!==expectedSourceHash/);
+ assert.match(source,/async function readVerifiedProductionLegacySource/);
+ assert.match(source,/getDocFromServer\(doc\(cloud,'companies',COMPANY_ID,'data','main'\)\)/);
+ assert.match(source,/computedHash!==sourceHash/);
+ assert.match(source,/const \{sourceDb:targetDb,sourceHash\}=await readVerifiedProductionLegacySource\(expectedSourceHash\)/);
  assert.doesNotMatch(source,/uploadOwnerState[^}]+runProductionFullRecordMigration/);
  assert.doesNotMatch(source,/__danbridgeSetDB[^\n]+runProductionFullRecordMigration|runProductionFullRecordMigration[^\n]+__danbridgeSetDB/);
 });
 
 test('production 候選驗證只讀取逐筆集合與角色檢視，不寫入或接管讀取',()=>{
- assert.match(source,/new URLSearchParams\(location\.search\)\.get\('productionFullRecordVerify'\)/);
+ assert.match(source,/productionParams\.get\('productionFullRecordVerify'\)/);
  assert.match(source,/button\.id='productionFullRecordCandidateButton'/);
  assert.match(source,/verifyCandidate\(targetDb,\{sourceHash\}\)/);
  assert.match(source,/auditProductionRoleViews\(targetDb\)/);
+ assert.match(source,/const \{sourceDb:targetDb,sourceHash\}=await readVerifiedProductionLegacySource\(expectedSourceHash\)/);
  assert.match(source,/readTakeover:false,writes:0/);
  assert.doesNotMatch(source,/productionFullRecordCandidateButton[^}]+setDoc|productionFullRecordCandidateButton[^}]+runTransaction/);
  assert.doesNotMatch(source,/__danbridgeSetDB[^\n]+runProductionFullRecordCandidateVerification|runProductionFullRecordCandidateVerification[^\n]+__danbridgeSetDB/);
+});
+
+test('production 正式啟用先重驗全部候選，只原子建立兩個控制且保留 legacy main',()=>{
+ assert.match(source,/productionParams\.get\('productionRecordActivate'\)/);
+ assert.match(source,/button\.id='productionRecordActivationButton'/);
+ const flow=source.slice(source.indexOf('async function activateProductionRecordRuntime'),source.indexOf("if(DANBRIDGE_ENVIRONMENT==='production')",source.indexOf('async function activateProductionRecordRuntime')));
+ assert.match(flow,/runProductionFullRecordCandidateVerification\(expectedSourceHash\)/);
+ assert.match(flow,/verified\.roleViews\.total<1/);
+ assert.match(flow,/transaction\.get\(mainRef\)/);
+ assert.match(flow,/transaction\.get\(controlRef\)/);
+ assert.match(flow,/transaction\.get\(safetyRef\)/);
+ assert.match(flow,/transaction\.set\(controlRef/);
+ assert.match(flow,/transaction\.set\(safetyRef/);
+ assert.match(flow,/legacyMainWrites:0/);
+ assert.match(flow,/recordWrites:0/);
+ assert.match(flow,/timeMachineTouched:false/);
+ assert.doesNotMatch(flow,/transaction\.set\(mainRef|deleteDoc\s*\(|firebase\s+deploy/);
 });
 
 test('staging 實站候選入口支援正確與錯誤 sourceHash，且永遠唯讀',()=>{
@@ -121,6 +143,7 @@ test('production 角色逐筆候選需要目前來源 hash 與 Owner 手動按�
  assert.match(source,/button\.id='productionRoleViewCandidateButton'/);
  assert.match(source,/sourceHash!==expectedSourceHash/);
  assert.match(source,/runProductionRoleViewCandidate/);
+ assert.match(source,/const \{sourceDb,sourceHash\}=await readVerifiedProductionLegacySource\(expectedSourceHash\)/);
  assert.match(source,/permissionsSource:'existing-filter-functions',readTakeover:false/);
  assert.doesNotMatch(source,/uploadOwnerState[^}]+runProductionRoleViewCandidate/);
  assert.doesNotMatch(source,/__danbridgeSetDB[^\n]+runProductionRoleViewCandidate|runProductionRoleViewCandidate[^\n]+__danbridgeSetDB/);

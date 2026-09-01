@@ -320,7 +320,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.122'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.124'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -353,7 +353,8 @@ assert.match(cloudSource, /function applySchedulerRequest\(requestRef,data\)[\s\
 const schedulerApplySource=cloudSource.slice(cloudSource.indexOf('async function applySchedulerRequest'),cloudSource.indexOf('function subscribeSchedulerRequests'));
 assert.doesNotMatch(schedulerApplySource,/transaction\.set\(schedulerViewRef/,'aa request transaction does not contend with the serialized role-view publisher');
 assert.match(cloudSource,/function publishRoleViewsWithRetry\(sourceDb=null\)[\s\S]*roleViewPublishQueued=true;if\(roleViewPublishInFlight\)return[\s\S]*finally\{roleViewPublishInFlight=false;if\(roleViewPublishQueued&&!roleViewRetryCount\)queueMicrotask/,'teacher and aa role views publish in one serialized queue without dropping a newer main snapshot');
-assert.match(cloudSource,/const currentHash=mainSnap\.exists\(\)[\s\S]*if\(currentHash!==sourceHash\)return false;[\s\S]*scheduleTargets\.forEach\(target=>transaction\.set/,'teacher and aa views are atomically published only from the current main-data version');
+assert.match(cloudSource,/if\(!recordAuthority\)\{const mainSnap=await transaction\.get[\s\S]*if\(currentHash!==sourceHash\)return false\}[\s\S]*scheduleTargets\.forEach\(target=>transaction\.set/,'legacy teacher and aa views are atomically published only from the current main-data version');
+assert.match(cloudSource,/DANBRIDGE_ENVIRONMENT==='production'[\s\S]*publishScopedViews\(confirmedDb,\{recordAuthority:true\}\)/,'production teacher and aa views are published only from the controller verified per-record readback');
 assert.match(cloudSource,/publishRoleViewsWithRetry\(committed\.finalDb\)[\s\S]*publishRoleViewsWithRetry\(notificationAfter\)/,'Owner and aa changes both start teacher and aa view publishing immediately after the main transaction commits');
 assert.doesNotMatch(cloudSource, /\}\);\s*if\(notificationBefore&&notificationAfter\)[\s\S]*await setDoc\(requestRef,\{status:'applied'/, 'Wendy request acknowledgement is never written outside its main-data transaction');
 assert.match(cloudSource, /function uploadOwnerState\(force=false\)[\s\S]*ownerLessonShrinkRisk\(previousPublished,current\)[\s\S]*confirm\(`[\s\S]*已阻止大量課程減少/, 'owner uploads require explicit confirmation before a large lesson reduction can replace cloud data');

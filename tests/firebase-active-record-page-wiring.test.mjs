@@ -137,10 +137,12 @@ test('啟用前 aa、老師與管理者逐筆讀回自己的 16 集合，並實�
  assert.match(flow,/readTakeover:false,writeTakeover:false/);
 });
 
-test('production 永遠不啟動新的 staging 日常與角色逐筆 runtime',()=>{
+test('production 使用獨立 Owner 逐筆 runtime，且角色端不會誤啟 staging runtime',()=>{
  assert.match(source,/if\(DANBRIDGE_ENVIRONMENT!=='staging'\|\|cloudRole!=='owner'\)return false/);
  assert.match(source,/if\(DANBRIDGE_ENVIRONMENT!=='staging'\)\s*\{\s*activeRecordMode='legacy';\s*activeRoleWriteAllowed=true;\s*startLegacy\(\);\s*return;?\s*\}/);
- assert.match(source,/if\(DANBRIDGE_ENVIRONMENT==='staging'\)\{startOwnerActiveRecordRuntime\(\);return\}activeRecordMode='legacy';subscribeOwnerLegacy\(\)/);
+ assert.match(source,/createFirebaseProductionRecordStreamAdapter/);
+ assert.match(source,/if\(\['staging','production'\]\.includes\(DANBRIDGE_ENVIRONMENT\)\)\{startOwnerActiveRecordRuntime\(\);return\}/);
+ assert.match(source,/if\(DANBRIDGE_ENVIRONMENT==='production'\)return startOwnerProductionRecordRuntime\(\)/);
 });
 
 test('Owner 啟用後 upload 與 save 先走永久日誌逐筆流程，不再落入 1 MiB 主文件寫入',()=>{
@@ -159,7 +161,7 @@ test('Owner 逐筆寫入前必須用已確認的雲端基準建立當日分片�
  assert.match(status,/['\"]backing-up['\"]/);
  assert.match(status,/寫入前的雲端分片備份/);
  const schedule=block('function scheduleDailyCloudBackup','function readSyncHealthBaseline');
- assert.match(schedule,/DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy'/);
+ assert.match(schedule,/\['staging','production'\]\.includes\(DANBRIDGE_ENVIRONMENT\)&&activeRecordMode!=='legacy'/);
  assert.ok(schedule.indexOf("activeRecordMode!=='legacy'")<schedule.indexOf('setTimeout(()=>createCloudSafetyBackup(false)'));
 });
 

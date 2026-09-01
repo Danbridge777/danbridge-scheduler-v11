@@ -1,5 +1,17 @@
 # Changelog
 
+## 20.26.124（production 原子啟用監聽順序修正）
+
+- production 控制與安全文件在同一原子交易建立時，允許 Firestore 監聽回呼以任一順序抵達；等待期間立即維持禁止寫入，避免安全文件稍晚抵達造成假性 blocked。
+- 安全文件持續缺失仍會逾時 fail closed；讀回雜湊、文件數、revision、禁止實體刪除與舊主資料保留規則不變。
+
+## 20.26.123（production 逐筆正式接管）
+
+- 修正 production 候選、角色檢視與唯讀驗證錯把畫面衍生資料當成遷移來源的問題；現在一律 fresh-read 雲端主資料並核對 stored/computed hash 與 Owner 身分。
+- production Owner 在 activation 證據完整後改走 16 集合逐筆串流與單筆 revision 交易，不再寫入超過 Firestore 1 MiB 的 `companies/danbridge/data/main`；實體刪除仍禁止，重送操作由不可變 receipt 去重。
+- 每輪正式逐筆寫入前先確認不可覆寫的當日分片備份；同筆衝突另存分片備份。逐筆讀回確認後才發布現行 aa、老師與校區管理者角色檢視，主文件與 Time Machine 均不覆蓋。
+- production runtime 與 staging V2 使用完全不同的控制、操作及角色發布路徑；控制或 safety 證據缺失、雜湊不符、revision 倒退時一律 fail closed。
+
 ## 20.26.122（正式發布快取與環境隔離）
 
 - 將目前登入、staging H1 recovery 與 Genesis 基準修正統一發布為 `20.26.122`，同步更新首頁資源查詢版本與 Service Worker cache，避免新舊程式混用。
