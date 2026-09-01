@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.126（production 備份權限與同步狀態修正）
+
+- production 新版分片備份改用獨立 Rules 最小差異發布，保留既有正式同步與角色權限，不把 staging 專用 Rules 混入正式專案。
+- 備份清單分開讀取新版分片與舊版快照；其中一條舊路徑不可用時，不再拖垮已授權的新版備份清單。
+- production 逐筆串流完成驗證後會明確顯示就緒或中央暫停，不再殘留「正在載入權限…」提示。
+
 ## 20.26.125（production 可持續逐筆 head）
 
 - 每一筆正式變更現在會在同一 Firestore 交易內更新資料、exactly-once receipt 與帶 hash chain 的權威 head；舊主資料仍不修改。

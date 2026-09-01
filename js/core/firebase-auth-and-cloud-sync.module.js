@@ -44,8 +44,8 @@ import {createStagingV2AuthorityReadLoader} from './staging-v2-authority-read-lo
 import {createStagingV2AuthoritySaveBrowserClient} from './staging-v2-authority-save-browser-client.js?v=20.26.120';
 import {createStagingV2ActiveRecordOperationSender,normalizeStagingV2FirestoreValue,stagingV2H0GenesisBaselineDocuments} from './staging-v2-active-record-browser-bridge.js?v=20.26.121';
 import {verifyStagingV2PrewriteBackup} from './staging-v2-prewrite-backup-verifier.js?v=20.26.120';
-import {createFirebaseProductionRecordOperationAdapter,createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.125';
-import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.125';
+import {createFirebaseProductionRecordOperationAdapter,createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.126';
+import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.126';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -57,7 +57,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.125';
+const APP_RELEASE='20.26.126';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -575,7 +575,11 @@ function legacyDailyBackupDayRef(day){return doc(cloud,'companies',COMPANY_ID,'d
 async function listCloudSafetyBackups(){
  const list=document.getElementById('cloudBackupList');if(!list||cloudRole!=='owner')return;
  try{
-  const [sharded,legacy]=await Promise.all([getDocs(collection(cloud,'dailyShardedBackups',COMPANY_ID,'days')),getDocs(collection(cloud,'companies',COMPANY_ID,'dailyBackups'))]),byDay=new Map(legacy.docs.map(d=>[d.id,{id:d.id,...d.data()}]));sharded.docs.forEach(d=>byDay.set(d.id,{id:d.id,...d.data()}));
+  const [shardedResult,legacyResult]=await Promise.allSettled([getDocs(collection(cloud,'dailyShardedBackups',COMPANY_ID,'days')),getDocs(collection(cloud,'companies',COMPANY_ID,'dailyBackups'))]);
+  if(shardedResult.status==='rejected'&&legacyResult.status==='rejected')throw shardedResult.reason;
+  if(shardedResult.status==='rejected')console.warn('daily sharded backup list unavailable',shardedResult.reason);
+  if(legacyResult.status==='rejected')console.warn('legacy daily backup list unavailable',legacyResult.reason);
+  const sharded=shardedResult.status==='fulfilled'?shardedResult.value:null,legacy=legacyResult.status==='fulfilled'?legacyResult.value:null,byDay=new Map((legacy?.docs||[]).map(d=>[d.id,{id:d.id,...d.data()}]));(sharded?.docs||[]).forEach(d=>byDay.set(d.id,{id:d.id,...d.data()}));
   const rows=[...byDay.values()].sort((a,b)=>String(b.id).localeCompare(String(a.id))).slice(0,CLOUD_BACKUP_RETENTION_DAYS);
   list.innerHTML=rows.length?rows.map(x=>{const legacyVerified=!!x.snapshot&&dataHash(x.snapshot)===x.hash,shardedVerified=x.schema==='danbridge-daily-sharded-backup-v2'&&x.state==='verified'&&x.verifiedHash===x.sourceHash&&Number.isSafeInteger(x.chunkCount)&&x.chunkCount>0,verified=legacyVerified||shardedVerified,time=x.verifiedAt||x.createdAt;return`<div class="backup-item"><div class="info"><b>${escapeHTML(x.id)}</b><div class="small">學生 ${x.counts?.students||0}｜老師 ${x.counts?.teachers||0}｜課程 ${x.counts?.lessons||0}${shardedVerified?`<br>分片 ${x.chunkCount} 份｜${x.recordCount} 筆`:''}<br>${escapeHTML(formatNotificationTimestamp(time)||'時間確認中')}</div></div><div class="row-actions"><span class="pill ${verified?'green':'red'}">${shardedVerified?'分片讀回已驗證':legacyVerified?'雜湊一致':'驗證失敗'}</span>${verified?`<button type="button" class="btn cloud-backup-restore" data-day="${escapeHTML(x.id)}">還原</button>`:''}</div></div>`}).join(''):'<span class="small">尚未建立雲端安全快照。</span>';
   list.querySelectorAll('.cloud-backup-restore').forEach(button=>button.onclick=()=>restoreCloudSafetyBackup(button.dataset.day));
@@ -2766,7 +2770,7 @@ function startOwnerProductionRecordRuntime(){
     document.body.dataset.activeRecordState=event.state;
     if(event.state==='legacy'){activeOwnerProductionReadDocuments=null;activeRecordMode='legacy';document.body.dataset.activeRecordMode=activeRecordMode;subscribeOwnerLegacy();return}
     if(event.state==='loading'){activeOwnerProductionReadDocuments=()=>activeRecordStreamAdapter.readDocuments();activeRecordMode='active-loading';document.body.dataset.activeRecordMode=activeRecordMode;activeRecordPageController?.setWriteAllowed(false);unsubscribeState?.();unsubscribeState=null;return}
-    if(event.state==='ready'||event.state==='paused'){activeOwnerProductionReadDocuments=()=>activeRecordStreamAdapter.readDocuments();activeRecordMode='active';document.body.dataset.activeRecordMode=activeRecordMode;document.body.dataset.activeRecordAuthority='production-records-authoritative';activeRecordPageController?.setWriteAllowed(event.state==='ready');unsubscribeState?.();unsubscribeState=null;return}
+    if(event.state==='ready'||event.state==='paused'){activeOwnerProductionReadDocuments=()=>activeRecordStreamAdapter.readDocuments();activeRecordMode='active';document.body.dataset.activeRecordMode=activeRecordMode;document.body.dataset.activeRecordAuthority='production-records-authoritative';activeRecordPageController?.setWriteAllowed(event.state==='ready');unsubscribeState?.();unsubscribeState=null;cloudStatus(event.state==='ready'?'正式逐筆同步已就緒。':'正式逐筆同步已中央暫停；畫面資料已保留。',event.state==='ready'?'ok':'pending');return}
     if(event.state==='blocked'){activeRecordMode='active-blocked';document.body.dataset.activeRecordMode=activeRecordMode;unsubscribeState?.();unsubscribeState=null;persistOwnerSyncRecovery();cloudStatus('production 逐筆讀回驗證失敗，已封鎖寫入且未覆蓋資料：'+String(event.error||''),'error')}
    }
   });

@@ -320,7 +320,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.125'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.126'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -429,6 +429,8 @@ assert.match(cloudSource, /function notifyNewLessonReports\(reports\)[\s\S]*\['o
 assert.match(cloudSource, /function reportNotificationSeenKey\(\)[\s\S]*cloudEmailKey/, 'report popup acknowledgement is isolated per signed-in account');
 assert.match(cloudSource, /unsubscribeReports=onSnapshot[\s\S]*notifyNewLessonReports\(lessonReportDocuments\)[\s\S]*applyCachedLessonReportsToCurrentDB/, 'report notifications and local data updates share the same realtime Firestore stream');
 assert.match(cloudSource, /function createCloudSafetyBackup\(force=false,sourceOverride=null\)[\s\S]*sourceOverride\|\|window\.__danbridgeGetDB[\s\S]*prepareDailyShardedBackup\(current[\s\S]*dailyShardedBackupChunksRef\(day\)[\s\S]*verifyDailyShardedBackupReadback[\s\S]*sealDailyShardedBackup[\s\S]*transaction\.set\(ref/, 'owner daily cloud backups use the confirmed cloud baseline, split the full database, read every chunk back, and create the verified manifest last');
+assert.match(cloudSource, /function listCloudSafetyBackups\(\)[\s\S]*Promise\.allSettled\([\s\S]*shardedResult\.status==='rejected'&&legacyResult\.status==='rejected'[\s\S]*legacy\?\.docs\|\|\[\][\s\S]*sharded\?\.docs\|\|\[\]/, 'new and legacy backup lists fail independently while both denied still fail closed');
+assert.match(cloudSource, /event\.state==='ready'\|\|event\.state==='paused'[\s\S]*正式逐筆同步已就緒。[\s\S]*正式逐筆同步已中央暫停/, 'production runtime replaces the loading message with an explicit ready or paused status');
 assert.doesNotMatch(cloudSource, /function createCloudSafetyBackup\(force=false,sourceOverride=null\)[\s\S]{0,5000}snapshot:current/, 'new daily backups never store the full database in one Firestore document');
 assert.match(cloudSource, /dailyShardedBackups',COMPANY_ID,'days'/, 'new daily sharded backups stay outside the broad company wildcard so Rules can make them immutable');
 assert.match(cloudSource, /function restoreCloudSafetyBackup\(day\)[\s\S]*readCloudSafetyBackup\(day\)[\s\S]*createVersion[\s\S]*__danbridgeSetDB/, 'cloud backup restoration reads and verifies all chunks and creates a local rollback version first');
@@ -474,6 +476,49 @@ assert.equal(teacherView.students[0].parent, undefined);
 assert.equal(teacherView.lessons[0].paymentStatus, undefined);
 assert.equal(teacherView.teachers[0].rate, undefined);
 assert.deepEqual(Array.from(teacherView.fixedExpenses), []);
+
+const threeTeacherSource = {
+  ...context.emptyDB(),
+  students: [
+    { id: 'student-t1', name: 'T1 Student', parent: 'Private T1', rate: 111 },
+    { id: 'student-t2', name: 'T2 Student', parent: 'Private T2', rate: 222 },
+    { id: 'student-t3', name: 'T3 Student', parent: 'Private T3', rate: 333 },
+    { id: 'student-shared', name: 'Shared Student', parent: 'Private Shared', rate: 444 }
+  ],
+  teachers: [
+    { id: 't1', name: 'Teacher One', rate: 101 },
+    { id: 't2', name: 'Teacher Two', rate: 202 },
+    { id: 't3', name: 'Teacher Three', rate: 303 }
+  ],
+  lessons: [
+    lesson({ id: 'only-t1', studentId: 'student-t1', teacherId: 't1', teacherIds: ['t1'], paymentStatus: 'paid', chargeStudent: 'yes', payTeacher: 'yes' }),
+    lesson({ id: 'only-t2', studentId: 'student-t2', teacherId: 't2', teacherIds: ['t2'], paymentStatus: 'paid', chargeStudent: 'yes', payTeacher: 'yes' }),
+    lesson({ id: 'only-t3', studentId: 'student-t3', teacherId: 't3', teacherIds: ['t3'], paymentStatus: 'paid', chargeStudent: 'yes', payTeacher: 'yes' }),
+    lesson({ id: 'shared-t1-t2', studentId: 'student-shared', teacherId: 't1', teacherIds: ['t1', 't2'], paymentStatus: 'paid', chargeStudent: 'yes', payTeacher: 'yes' }),
+    lesson({ id: 'shared-t2-t3', studentId: 'student-shared', teacherId: 't2', teacherIds: ['t2', 't3'], paymentStatus: 'paid', chargeStudent: 'yes', payTeacher: 'yes' }),
+    lesson({ id: 'shared-all', studentId: 'student-shared', teacherId: 't1', teacherIds: ['t1', 't2', 't3'], paymentStatus: 'paid', chargeStudent: 'yes', payTeacher: 'yes' }),
+    lesson({ id: 'draft-hidden', studentId: 'student-t1', teacherId: 't1', teacherIds: ['t1'], isDraft: true })
+  ],
+  fixedExpenses: [{ id: 'private-expense', amount: 99999 }],
+  oneTimeExpenses: [{ id: 'private-one-time', amount: 88888 }],
+  settlementRecords: [{ id: 'private-payroll', teacherId: 't1', amount: 77777 }],
+  collectionRecords: [{ id: 'private-payment', studentIds: ['student-t1'], amount: 66666 }]
+};
+const expectedTeacherLessons = {
+  t1: ['only-t1', 'shared-all', 'shared-t1-t2'],
+  t2: ['only-t2', 'shared-all', 'shared-t1-t2', 'shared-t2-t3'],
+  t3: ['only-t3', 'shared-all', 'shared-t2-t3']
+};
+for (const teacherId of ['t1', 't2', 't3']) {
+  const view = context.filteredTeacherDB(threeTeacherSource, teacherId);
+  assert.deepEqual(Array.from(view.lessons, row => row.id).sort(), expectedTeacherLessons[teacherId], `${teacherId} only receives own and explicitly co-taught lessons`);
+  assert.deepEqual(Array.from(view.teachers, row => row.id), [teacherId], `${teacherId} never receives another teacher profile`);
+  assert.equal(view.lessons.some(row => row.id === 'draft-hidden'), false, `${teacherId} never receives draft lessons`);
+  for (const row of view.lessons) for (const field of ['paymentStatus', 'chargeStudent', 'payTeacher', 'draftOriginal']) assert.equal(row[field], undefined, `${teacherId} lesson excludes ${field}`);
+  for (const row of view.students) for (const field of ['parent', 'contact', 'rate']) assert.equal(row[field], undefined, `${teacherId} student excludes ${field}`);
+  for (const row of view.teachers) assert.equal(row.rate, undefined, `${teacherId} teacher profile excludes rate`);
+  for (const collectionName of ['fixedExpenses', 'oneTimeExpenses', 'settlementRecords', 'collectionRecords']) assert.deepEqual(Array.from(view[collectionName]), [], `${teacherId} receives no ${collectionName}`);
+}
 const legacyTeacherView = context.filteredTeacherDB({...scopedSource,lessons:[lesson({id:'legacy-own',teacherId:'t1',teacherIds:[]})]}, 't1');
 assert.deepEqual(Array.from(legacyTeacherView.lessons,row=>row.id), ['legacy-own'], 'an empty legacy teacherIds list falls back to the primary teacher');
 const schedulerView = context.filteredSchedulerDB({
