@@ -16,7 +16,7 @@ test('頁面匯入獨立 record-shadow adapter 且只公開專屬手動入口',(
 });
 
 test('Checkpoint B 以版本化 service worker 解除舊 staging 快取',()=>{
- assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.132'/);
+ assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.133'/);
 });
 
 test('候選驗證主模組與內層 adapter 必須載入同一版歷史來源語意',()=>{

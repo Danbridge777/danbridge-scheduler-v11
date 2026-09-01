@@ -1,5 +1,12 @@
 # Changelog
 
+## 20.26.133（第一優先可靠性與復原強化）
+
+- 正式高風險逐筆寫入新增受信任 Gen2 callable 邊界，強制 Firebase Auth、Owner、App Check limited-use token 與 receipt exactly-once。
+- 正式環境新增每日 03:17 維護排程：錯誤紀錄保留 30 天，已讀通知 30 天、未讀通知 90 天，並將 verified receipt 顯示於 Owner 健康中心。
+- 登入與同步改為五階段可視進度，逾時會明確進入安全唯讀提示並持續重試，不再無限顯示單一句「正在載入權限」。
+- 新增 Firestore PITR、刪除保護與獨立資料庫 restore drill runbook；所有復原流程都不覆蓋 `(default)`，也不依賴 Time Machine。
+
 ## 20.26.132（排課專員全域課表通知）
 
 - 加課、移動、刪課與其他課表異動會同時建立 Daniel Owner、AA 排課專員與受影響老師的獨立通知；AA 使用全老師課表範圍，一般老師仍只收到自己的課。
