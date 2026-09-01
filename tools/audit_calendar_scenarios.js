@@ -83,7 +83,7 @@ const gapRangeStart = schedulerSource.indexOf('function teacherGapWeekRange');
 const gapRangeEnd = schedulerSource.indexOf('function renderCalendarAnalysis');
 vm.runInContext(schedulerSource.slice(gapRangeStart, gapRangeEnd), context);
 const selectedCopyStart = schedulerSource.indexOf('function copySelectedLessons');
-const selectedCopyEnd = schedulerSource.indexOf('function deleteSelectedLessons');
+const selectedCopyEnd = schedulerSource.indexOf('async function deleteSelectedLessons');
 vm.runInContext(schedulerSource.slice(selectedCopyStart, selectedCopyEnd), context);
 
 const courseSource = fs.readFileSync(path.join(root, 'js/modules/calendar/course-operations.js'), 'utf8');

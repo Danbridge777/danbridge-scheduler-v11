@@ -162,11 +162,15 @@
     let text=`【${$('settleMonth').value} 月底結算｜${scopeLabel(scope)}】\n\n學生應收：\n`;sr.forEach(x=>text+=`${x.s.name}：${x.charged}堂／${fmtHours(x.h)}hr，請假率${x.rate.toFixed(1)}%，應收${money(x.amount)}\n`);text+='\n老師工時與薪資：\n';tr.forEach(x=>{text+=`\n${x.t.name}\n實際：${fmtHours(x.h)}hr\n公司營收：${money(x.revenue)}\n應付：${money(x.amount)}\n`;if(x.companyWide){text+=`本月最低：${fmtHours(x.expected)}hr\n差額：${diffText(x.diff)}\n`;x.branches.forEach(b=>text+=`  ${scopeLabel(b.branchId)}：${fmtHours(b.h)}hr／${money(b.amount)}\n`)}});$('settlementText').value=text;renderSettlementHistory();
   };
 
-  window.saveMonthlySettlement=function(){
+  window.saveMonthlySettlement=async function(){
     const month=$('settleMonth').value||monthNow(),scope=allowedScope(scopes.settlement),data=settlementDataFor(month,scope);
     const id=`${month}::${scope}`;db.settlementRecords||=[];const existing=db.settlementRecords.find(x=>(x.id||`${x.month}::${x.branchId||'all'}`)===id);
     if(existing){toast(`${monthLabel(month)}｜${scopeLabel(scope)} 已鎖定，原始月結不會被覆寫`);return}
-    snapshot();db.settlementRecords.push(createLockedSettlementRecord(month,scope,data));saveDB();renderSettlementHistory();toast(`${monthLabel(month)}｜${scopeLabel(scope)} 月結已鎖定`);
+    const record=createLockedSettlementRecord(month,scope,data);
+    if(window.__DANBRIDGE_ENVIRONMENT__==='production'&&window.__danbridgeRunProductionHighRiskMutation){
+      try{await window.__danbridgeRunProductionHighRiskMutation({reason:'settlement',mutate:target=>{target.settlementRecords||=[];if(target.settlementRecords.some(x=>(x.id||`${x.month}::${x.branchId||'all'}`)===id))throw new Error('雲端已有相同月份與範圍的鎖定月結');target.settlementRecords.push(record);return{id,month,scope}}});renderSettlementHistory();toast(`${monthLabel(month)}｜${scopeLabel(scope)} 月結已由後端原子鎖定`)}catch(error){console.error(error);alert('月結未執行：'+(error?.message||error))}return;
+    }
+    snapshot();db.settlementRecords.push(record);saveDB();renderSettlementHistory();toast(`${monthLabel(month)}｜${scopeLabel(scope)} 月結已鎖定`);
   };
   window.__danbridgeReconcileLockedSettlements=function(){
     if(ctx().role!=='owner')return false;let changed=false;

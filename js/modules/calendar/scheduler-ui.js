@@ -151,11 +151,17 @@ function copySelectedLessons(){
   selectedLessonIds.clear();selectionMode=false;saveDB();
   alert(`已複製 ${added} 堂到 ${toMonth}${skipped?`，略過 ${skipped} 堂重複或撞課課程`:''}。`);
 }
-function deleteSelectedLessons(){
+async function deleteSelectedLessons(){
   if(!calendarOwnerCanEdit())return alert('目前帳號沒有修改課表的權限。');
   const ids=[...selectedLessonIds];
   if(!ids.length)return alert('請先選取要刪除的課程。');
   if(!confirm(`確定刪除已選取的 ${ids.length} 堂課？`))return;
+  if(window.__DANBRIDGE_ENVIRONMENT__==='production'&&window.__danbridgeRunProductionHighRiskMutation){
+    try{
+      const idSet=new Set(ids),at=new Date().toISOString(),ctx=window.DanbridgeAccess?.getContext?.()||{},actorName=(document.body.dataset.cloudDisplayName||ctx.email||'目前使用者').trim();
+      const result=await window.__danbridgeRunProductionHighRiskMutation({reason:'batch-delete-lessons',mutate:target=>{target.lessons||=[];target.makeups||=[];target.changes||=[];const removed=target.lessons.filter(lesson=>idSet.has(lesson.id));if(removed.length!==idSet.size)throw new Error('雲端課程已變更，請重新選取後再試');for(const lesson of removed){if(lesson.status==='學生請假'){const makeup=target.makeups.find(item=>item.sourceLessonId===lesson.id&&!['done','cancelled'].includes(item.status));if(makeup){const scheduled=target.lessons.find(item=>item.id===makeup.scheduledLessonId);if(scheduled){scheduled.status='取消';scheduled.payTeacher='no';scheduled.chargeStudent='no';scheduled.cancelledBecauseSourceRestored=true}makeup.status='cancelled';makeup.cancelledAt=at}}const makeupId=lessonMakeupId(lesson);if(makeupId){const makeup=target.makeups.find(item=>item.id===makeupId||item.scheduledLessonId===lesson.id);if(makeup){makeup.status='pending';makeup.scheduledLessonId='';makeup.completedAt='';makeup.rescheduledAt=at}}target.changes.unshift({id:uid(),at,type:'刪除選取課程',lessonId:lesson.id||'',studentId:lesson.studentId||'',actorName,actorEmail:ctx.email||'',before:JSON.parse(JSON.stringify(lesson)),after:null})}target.lessons=target.lessons.filter(lesson=>!idSet.has(lesson.id));return{removed:removed.length}}});selectedLessonIds.clear();selectionMode=false;toast(`已由後端原子刪除 ${result.mutationResult.removed} 堂課`);return;
+    }catch(error){console.error(error);alert('批次刪課未執行：'+(error?.message||error));return}
+  }
   snapshot();
   const idSet=new Set(ids),removed=db.lessons.filter(l=>idSet.has(l.id));
   removed.forEach(l=>{window.syncMakeupForDeletedLesson?.(l);logChange('刪除選取課程',null,l)});

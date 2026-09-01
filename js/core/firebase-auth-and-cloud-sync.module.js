@@ -47,8 +47,9 @@ import {createStagingV2ActiveRecordOperationSender,normalizeStagingV2FirestoreVa
 import {verifyStagingV2PrewriteBackup} from './staging-v2-prewrite-backup-verifier.js?v=20.26.120';
 import {createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.127';
 import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.127';
-import {CLOUD_BOOTSTRAP_STAGES,createCloudBootstrapProgress} from './cloud-bootstrap-progress.js?v=20.26.133';
-import {createProductionTrustedOperationClient} from './production-trusted-operation-client.js?v=20.26.133';
+import {CLOUD_BOOTSTRAP_STAGES,createCloudBootstrapProgress} from './cloud-bootstrap-progress.js?v=20.26.134';
+import {createProductionTrustedOperationClient} from './production-trusted-operation-client.js?v=20.26.134';
+import {prepareActiveRecordSync} from './cloud-active-record-sync.js?v=20.26.134';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -60,7 +61,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.133';
+const APP_RELEASE='20.26.134';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -184,6 +185,7 @@ let unsubscribeAccessGuard=null;
 let syncTimer=null;
 let unsubscribeReports=null;
 let unsubscribeScheduleNotifications=null;
+let unsubscribeOwnerHealth=null,lastOwnerHealthSignal='';
 let scheduleNotificationDocuments=[];
 let currentScheduleNotification=null;
 let scheduleNotificationCleanupStarted=false;
@@ -297,6 +299,7 @@ let cloudBootstrapProgress=null,cloudBootstrapTimeout=null;
 function renderCloudBootstrapProgress(snapshot){
  let panel=document.getElementById('cloudBootstrapProgress');if(!panel){panel=document.createElement('section');panel.id='cloudBootstrapProgress';panel.setAttribute('role','status');panel.setAttribute('aria-live','polite');panel.style.cssText='position:fixed;left:12px;bottom:58px;z-index:10000;width:min(360px,calc(100vw - 24px));padding:12px 14px;border-radius:14px;background:#fff;color:#172033;border:1px solid #dbe4ef;box-shadow:0 12px 30px rgba(15,23,42,.18);font-size:12px';document.body.appendChild(panel)}
  const labels={authenticated:'Google 登入',profile:'權限資料',role:'角色範圍',data:'雲端資料',ready:'可以使用'},index=CLOUD_BOOTSTRAP_STAGES.indexOf(snapshot.stage);panel.hidden=snapshot.state==='ready';panel.dataset.state=snapshot.state;panel.innerHTML=`<div style="font-weight:900;margin-bottom:8px">登入與同步檢查</div><div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px">${CLOUD_BOOTSTRAP_STAGES.map((stage,i)=>`<span style="height:5px;border-radius:99px;background:${i<=index?'#18794e':'#dbe4ef'}"></span>`).join('')}</div><div style="margin-top:8px"><b>${escapeHTML(labels[snapshot.stage]||snapshot.stage)}</b>｜${escapeHTML(snapshot.message)}</div>${snapshot.readOnly?'<div style="margin-top:6px;color:#9a6700;font-weight:800">安全唯讀：權限或雲端資料確認完成前不會寫入。</div>':''}`;
+ const main=document.querySelector('main'),locked=snapshot.state!=='ready';if(main){main.inert=locked;main.setAttribute('aria-busy',locked?'true':'false');main.style.pointerEvents=locked?'none':'';main.style.userSelect=locked?'none':''}
  document.body.dataset.cloudBootstrapState=snapshot.state;
 }
 function beginCloudBootstrap(){clearTimeout(cloudBootstrapTimeout);cloudBootstrapProgress=createCloudBootstrapProgress({timeoutMs:20000});renderCloudBootstrapProgress(cloudBootstrapProgress.snapshot());cloudBootstrapTimeout=setTimeout(()=>{if(!cloudBootstrapProgress)return;const current=cloudBootstrapProgress.snapshot();if(current.state!=='loading')return;renderCloudBootstrapProgress(cloudBootstrapProgress.fail(new Error('雲端確認超過 20 秒，仍會自動重試'),{readOnly:true}));cloudStatus('雲端確認較久，目前安全唯讀並持續重試','pending')},20050)}
@@ -399,13 +402,34 @@ async function writeImmutableAudit(detail={}){
  if(cloudRole!=='owner'||!cloudUid||!cloudEmailKey)return false;
  const audit=immutableAuditRecord(detail);await runTransaction(cloud,async transaction=>{const existing=await transaction.get(audit.ref);if(!existing.exists())transaction.set(audit.ref,audit.payload)});return true;
 }
-async function setCompanyAccessWithAudit(email,payload,detail,merge=true){
- const audit=immutableAuditRecord(detail),accessRef=doc(cloud,'companyAccess',email);await runTransaction(cloud,async transaction=>{const existing=await transaction.get(audit.ref);transaction.set(accessRef,payload,{merge});if(!existing.exists())transaction.set(audit.ref,audit.payload)});
+const COMPANY_ACCESS_MUTABLE_FIELDS=['email','displayName','role','companyId','active','invitedBy','teacherId','teacherName','managerName','branchIds','branchNames','readOnly','canSubmitOwnReports','canManageSchedule','scopedDb'];
+const COMPANY_ACCESS_USER_MIRROR_FIELDS=['displayName','role','active','teacherId','teacherName','managerName','branchIds','branchNames','readOnly','canSubmitOwnReports','canManageSchedule','scopedDb'];
+function isDeleteFieldSentinel(value){return value?._methodName==='deleteField'||/DeleteField/i.test(String(value?.constructor?.name||''))}
+function canonicalCompanyAccessPayload(current,payload,merge){const next={};for(const key of COMPANY_ACCESS_MUTABLE_FIELDS){if(Object.prototype.hasOwnProperty.call(payload||{},key)){if(!isDeleteFieldSentinel(payload[key]))next[key]=payload[key]}else if(merge&&Object.prototype.hasOwnProperty.call(current||{},key))next[key]=current[key]}return next}
+function companyAccessUserMirrorPayload(payload){return Object.fromEntries(Object.entries(payload||{}).filter(([key])=>COMPANY_ACCESS_USER_MIRROR_FIELDS.includes(key)))}
+async function companyUserRefs(email){const snapshot=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',String(email||'').trim().toLowerCase())));return snapshot.docs.map(row=>row.ref)}
+async function setCompanyAccessWithAudit(email,payload,detail,merge=true,userRefs=[]){
+ if(DANBRIDGE_ENVIRONMENT==='production'){
+  const accessRef=doc(cloud,'companyAccess',email),snapshot=await getDocFromServer(accessRef),current=snapshot.exists()?snapshot.data():{},next=canonicalCompanyAccessPayload(current,payload,merge);
+  if(snapshot.exists()&&JSON.stringify(canonicalCompanyAccessPayload({},current,false))===JSON.stringify(next))return{kind:'unchanged-access',write:false,revision:Number(current.accessRevision)||0};
+  return productionTrustedOperationClient.mutateAccess({action:'upsert',email,expectedRevision:Number(current.accessRevision)||0,payload:next,userPaths:userRefs.map(ref=>ref.path),detail:{...detail,release:APP_RELEASE}});
+ }
+ const audit=immutableAuditRecord(detail),accessRef=doc(cloud,'companyAccess',email),mirror=companyAccessUserMirrorPayload(payload);await runTransaction(cloud,async transaction=>{const existing=await transaction.get(audit.ref);transaction.set(accessRef,payload,{merge});userRefs.forEach(userRef=>transaction.set(userRef,mirror,{merge:true}));if(!existing.exists())transaction.set(audit.ref,audit.payload)});
 }
-async function deleteCompanyAccessWithAudit(email,detail){
- const audit=immutableAuditRecord(detail),accessRef=doc(cloud,'companyAccess',email);await runTransaction(cloud,async transaction=>{const existing=await transaction.get(audit.ref);transaction.delete(accessRef);if(!existing.exists())transaction.set(audit.ref,audit.payload)});
+async function deleteCompanyAccessWithAudit(email,detail,userRefs=[]){
+ if(DANBRIDGE_ENVIRONMENT==='production'){
+  const snapshot=await getDocFromServer(doc(cloud,'companyAccess',email)),current=snapshot.exists()?snapshot.data():{};
+  if(!snapshot.exists())return{kind:'unchanged-access',write:false,revision:0};
+  return productionTrustedOperationClient.mutateAccess({action:'delete',email,expectedRevision:Number(current.accessRevision)||0,userPaths:userRefs.map(ref=>ref.path),detail:{...detail,release:APP_RELEASE}});
+ }
+ const audit=immutableAuditRecord(detail),accessRef=doc(cloud,'companyAccess',email);await runTransaction(cloud,async transaction=>{const existing=await transaction.get(audit.ref);userRefs.forEach(userRef=>transaction.set(userRef,{active:false,role:'revoked',updatedAt:serverTimestamp()},{merge:true}));transaction.delete(accessRef);if(!existing.exists())transaction.set(audit.ref,audit.payload)});
 }
 async function deleteOwnerAccessWithAudit(email,userRefs,detail){
+ if(DANBRIDGE_ENVIRONMENT==='production'){
+  const snapshot=await getDocFromServer(doc(cloud,'companyAccess',email)),current=snapshot.exists()?snapshot.data():{};
+  if(!snapshot.exists())return{kind:'unchanged-access',write:false,revision:0};
+  return productionTrustedOperationClient.mutateAccess({action:'delete',email,expectedRevision:Number(current.accessRevision)||0,userPaths:userRefs.map(ref=>ref.path),detail:{...detail,release:APP_RELEASE}});
+ }
  const audit=immutableAuditRecord(detail),accessRef=doc(cloud,'companyAccess',email);await runTransaction(cloud,async transaction=>{const existing=await transaction.get(audit.ref);userRefs.forEach(userRef=>transaction.set(userRef,{active:false,role:'revoked',updatedAt:serverTimestamp()},{merge:true}));transaction.delete(accessRef);if(!existing.exists())transaction.set(audit.ref,audit.payload)});
 }
 async function listImmutableAudit(){
@@ -646,7 +670,7 @@ function updateSyncHealthBaseline(counts){
 }
 function syncHealthTimestamp(value){const millis=value?.toMillis?.()||0;return millis?new Date(millis).toISOString():''}
 function formatHealthBytes(bytes){return bytes<1024?`${bytes} B`:bytes<1048576?`${(bytes/1024).toFixed(1)} KiB`:`${(bytes/1048576).toFixed(2)} MiB`}
-function buildSyncHealthReport({db,mainData,pendingRequests,errorRows,maintenanceData=null}){
+function buildSyncHealthReport({db,mainData,pendingRequests,errorRows,maintenanceData=null,ownerHealthData=null,restoreRehearsalData=null}){
  const counts=backupCounts(db),estimatedBytes=new TextEncoder().encode(JSON.stringify({db})).length,recordAuthority=DANBRIDGE_ENVIRONMENT==='production'&&activeRecordMode==='active'&&document.body.dataset.activeRecordAuthority==='production-records-authoritative',baseline=updateSyncHealthBaseline(counts),drop=Math.max(0,baseline.lessons-counts.lessons),dropRatio=baseline.lessons?drop/baseline.lessons:0;
  const sharded=createShardedSnapshot(db,{hash:dataHash,maxChunkBytes:180000,generationId:'read-only-preflight'}),rebuilt=assembleShardedSnapshot(sharded.manifest,sharded.chunks,{hash:dataHash}),shardPreflight={schema:sharded.manifest.schema,maxChunkBytes:sharded.manifest.maxChunkBytes,totalChunks:sharded.manifest.totalChunks,totalRecords:sharded.manifest.totalRecords,sourceHash:sharded.manifest.sourceHash,reassembledHash:dataHash(rebuilt),verified:true,collections:sharded.manifest.collections};
  const requestAges=pendingRequests.map(row=>{const created=row.createdAt?.toMillis?.()||0;return created?Math.max(0,Date.now()-created):0}),oldestRequestMs=Math.max(0,...requestAges);
@@ -654,6 +678,7 @@ function buildSyncHealthReport({db,mainData,pendingRequests,errorRows,maintenanc
  const alerts=[];
  const maintenanceAge=maintenanceData?.finishedAt?.toMillis?.()?Date.now()-maintenanceData.finishedAt.toMillis():Infinity;
  if(DANBRIDGE_ENVIRONMENT==='production'&&maintenanceAge>36*3600000)alerts.push({level:maintenanceData?'error':'pending',message:maintenanceData?'每日後端維護超過 36 小時未成功，請檢查排程執行紀錄。':'正式後端每日維護尚未產生第一份 verified receipt。'});
+ if(ownerHealthData?.state==='attention')for(const message of ownerHealthData.alerts||[])alerts.push({level:'error',message:`後端健康警示：${message}`});
  if(!flags.online)alerts.push({level:'error',message:'目前離線；所有新變更會留在本機，恢復網路後才續傳。'});
  if(!recordAuthority&&estimatedBytes>=921600)alerts.push({level:'error',message:`主資料估計 ${formatHealthBytes(estimatedBytes)}，已接近 Firestore 1 MiB 文件上限，應立即進行資料拆分。`});else if(!recordAuthority&&estimatedBytes>=768000)alerts.push({level:'pending',message:`主資料估計 ${formatHealthBytes(estimatedBytes)}，已進入容量預警區，建議安排資料拆分。`});
  if(drop>=10&&dropRatio>=.1)alerts.push({level:'error',message:`本機監測基準為 ${baseline.lessons} 堂，目前少 ${drop} 堂（${Math.round(dropRatio*100)}%）；已警示但不會自動還原或寫入。`});
@@ -662,7 +687,7 @@ function buildSyncHealthReport({db,mainData,pendingRequests,errorRows,maintenanc
  if(roleViewRetryCount>=3)alerts.push({level:'error',message:`老師／aa 檢視已連續重試 ${roleViewRetryCount} 次，請保持 Owner 裝置連線並檢查錯誤紀錄。`});else if(roleViewPublishQueued||roleViewPublishInFlight)alerts.push({level:'pending',message:'老師／aa 檢視正在背景更新。'});
  const activeWork=flags.localDirty||flags.ownerUploading||flags.ownerQueued||flags.roleViewUploading||flags.roleViewQueued||flags.notificationBatches||flags.schedulerLocalQueue||flags.pendingCloudRequests;
  const level=alerts.some(x=>x.level==='error')?'error':alerts.length||activeWork?'pending':'ok';
- return{generatedAt:new Date().toISOString(),release:APP_RELEASE,environment:DANBRIDGE_ENVIRONMENT,readOnly:true,level,counts,estimatedMainDocumentBytes:estimatedBytes,authority:{mode:recordAuthority?'production-records-authoritative':'legacy-main',recordAuthority},main:{clientHash:String(mainData?.clientHash||'').slice(0,16),updatedAt:syncHealthTimestamp(mainData?.updatedAt),localMatchesCloud:recordAuthority?null:Boolean(mainData?.clientHash)&&mainData.clientHash===dataHash(db),retainedReadOnlySource:recordAuthority},maintenance:maintenanceData&&maintenanceData.schema==='danbridge-production-maintenance-run-v1'?{state:maintenanceData.state||'',runId:maintenanceData.runId||'',finishedAt:syncHealthTimestamp(maintenanceData.finishedAt),deleted:maintenanceData.deleted||{}}:null,shardPreflight,baseline:{...baseline,drop,dropRatio:Number(dropRatio.toFixed(4))},flags,alerts,errorEvents:errorRows.map(row=>({area:String(row.area||'sync'),code:String(row.code||'unknown'),retryable:row.retryable===true,occurredAt:syncHealthTimestamp(row.occurredAt)}))};
+ return{generatedAt:new Date().toISOString(),release:APP_RELEASE,environment:DANBRIDGE_ENVIRONMENT,readOnly:true,level,counts,estimatedMainDocumentBytes:estimatedBytes,authority:{mode:recordAuthority?'production-records-authoritative':'legacy-main',recordAuthority},main:{clientHash:String(mainData?.clientHash||'').slice(0,16),updatedAt:syncHealthTimestamp(mainData?.updatedAt),localMatchesCloud:recordAuthority?null:Boolean(mainData?.clientHash)&&mainData.clientHash===dataHash(db),retainedReadOnlySource:recordAuthority},maintenance:maintenanceData&&maintenanceData.schema==='danbridge-production-maintenance-run-v1'?{state:maintenanceData.state||'',runId:maintenanceData.runId||'',finishedAt:syncHealthTimestamp(maintenanceData.finishedAt),deleted:maintenanceData.deleted||{}}:null,ownerHealth:ownerHealthData&&ownerHealthData.schema==='danbridge-production-owner-health-v1'?{state:ownerHealthData.state,checkedAt:syncHealthTimestamp(ownerHealthData.checkedAt),metrics:ownerHealthData.metrics||{},pitrEnabled:ownerHealthData.pitrEnabled===true,deleteProtectionEnabled:ownerHealthData.deleteProtectionEnabled===true,configurationVerified:ownerHealthData.configurationVerified===true,earliestVersionTime:String(ownerHealthData.earliestVersionTime||''),timeMachineDependency:ownerHealthData.timeMachineDependency===true}:null,restoreRehearsal:restoreRehearsalData&&restoreRehearsalData.schema==='danbridge-production-pitr-rehearsal-v1'?{state:restoreRehearsalData.state,runId:restoreRehearsalData.runId,snapshotTime:syncHealthTimestamp(restoreRehearsalData.snapshotTime),finishedAt:syncHealthTimestamp(restoreRehearsalData.finishedAt),formalDataWrites:Number(restoreRehearsalData.formalDataWrites)||0}:null,shardPreflight,baseline:{...baseline,drop,dropRatio:Number(dropRatio.toFixed(4))},flags,alerts,errorEvents:errorRows.map(row=>({area:String(row.area||'sync'),code:String(row.code||'unknown'),retryable:row.retryable===true,occurredAt:syncHealthTimestamp(row.occurredAt)}))};
 }
 function downloadSyncHealthReport(){if(!lastSyncHealthReport)return alert('請先按「重新整理」完成健康檢查。');const blob=new Blob([JSON.stringify(lastSyncHealthReport,null,2)],{type:'application/json'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`danbridge-sync-health-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000)}
 async function renderSyncRecoveryCenter(){
@@ -672,10 +697,10 @@ async function renderSyncRecoveryCenter(){
  summary.textContent=`網路：${navigator.onLine?'正常':'離線'}｜${pending.length?pending.join('｜'):'目前沒有待處理項目'}`;summary.dataset.kind=pending.length?'pending':'ok';
  badge.textContent='檢查中';badge.className='sync-health-badge pending';
  try{
-  const [mainSnap,errorSnap,requestSnap,maintenanceSnap]=await Promise.all([getDoc(doc(cloud,'companies',COMPANY_ID,'data','main')),getDocs(collection(cloud,'companies',COMPANY_ID,'errorEvents')),getDocs(query(collection(cloud,'companies',COMPANY_ID,'scheduleRequests'),where('status','==','pending'))),getDoc(doc(cloud,'companies',COMPANY_ID,'systemHealth','maintenance'))]),rows=errorSnap.docs.map(d=>d.data()).sort((a,b)=>(b.occurredAt?.toMillis?.()||0)-(a.occurredAt?.toMillis?.()||0)).slice(0,12),requests=requestSnap.docs.map(d=>d.data()),db=deepCopy(window.__danbridgeGetDB?.()||emptyDB());
-  lastSyncHealthReport=buildSyncHealthReport({db,mainData:mainSnap.data()||{},pendingRequests:requests,errorRows:rows,maintenanceData:maintenanceSnap.data()||null});const report=lastSyncHealthReport;
+  const [mainSnap,errorSnap,requestSnap,maintenanceSnap,ownerHealthSnap,rehearsalSnap]=await Promise.all([getDoc(doc(cloud,'companies',COMPANY_ID,'data','main')),getDocs(collection(cloud,'companies',COMPANY_ID,'errorEvents')),getDocs(query(collection(cloud,'companies',COMPANY_ID,'scheduleRequests'),where('status','==','pending'))),getDoc(doc(cloud,'companies',COMPANY_ID,'systemHealth','maintenance')),getDoc(doc(cloud,'companies',COMPANY_ID,'systemHealth','ownerAlert')),getDoc(doc(cloud,'companies',COMPANY_ID,'systemHealth','restoreRehearsal'))]),rows=errorSnap.docs.map(d=>d.data()).sort((a,b)=>(b.occurredAt?.toMillis?.()||0)-(a.occurredAt?.toMillis?.()||0)).slice(0,12),requests=requestSnap.docs.map(d=>d.data()),db=deepCopy(window.__danbridgeGetDB?.()||emptyDB());
+  lastSyncHealthReport=buildSyncHealthReport({db,mainData:mainSnap.data()||{},pendingRequests:requests,errorRows:rows,maintenanceData:maintenanceSnap.data()||null,ownerHealthData:ownerHealthSnap.data()||null,restoreRehearsalData:rehearsalSnap.data()||null});const report=lastSyncHealthReport;
   badge.textContent=report.level==='ok'?'健康':report.level==='pending'?'處理中／注意':'需要處理';badge.className=`sync-health-badge ${report.level}`;
-  metrics.innerHTML=[['主資料',`課程 ${report.counts.lessons}｜學生 ${report.counts.students}｜老師 ${report.counts.teachers}`],['資料權威',report.authority.recordAuthority?'正式逐筆資料｜舊主文件保留不覆蓋':'舊主文件'],['估計容量',report.authority.recordAuthority?`${formatHealthBytes(report.estimatedMainDocumentBytes)}｜逐筆模式不受單一文件上限影響`:`${formatHealthBytes(report.estimatedMainDocumentBytes)} / 1 MiB`],['分片唯讀預檢',`${report.shardPreflight.totalChunks} 片｜${report.shardPreflight.totalRecords} 筆｜重組驗證通過`],['Owner 主資料',report.authority.recordAuthority?'逐筆讀回驗證通過':report.main.localMatchesCloud?'本機與雲端一致':(report.flags.localDirty?'本機變更待確認':'正在比對版本')],['每日維護',report.maintenance?`${report.maintenance.runId} 已驗證｜清除錯誤 ${report.maintenance.deleted.errorEvents||0}、通知 ${report.maintenance.deleted.scheduleNotifications||0}`:'尚未收到後端維護 receipt'],['aa 要求',`雲端待處理 ${report.flags.pendingCloudRequests}｜本機佇列 ${report.flags.schedulerLocalQueue}｜隔離 ${report.flags.schedulerQuarantined}`],['老師／aa 檢視',report.flags.roleViewUploading||report.flags.roleViewQueued?`更新中｜重試 ${report.flags.roleViewRetryCount}`:'目前無待處理'],['課表通知',`待送 ${report.flags.notificationBatches} 批`]].map(([label,value])=>`<div class="sync-health-metric"><span>${escapeHTML(label)}</span><b>${escapeHTML(value)}</b></div>`).join('');
+  metrics.innerHTML=[['主資料',`課程 ${report.counts.lessons}｜學生 ${report.counts.students}｜老師 ${report.counts.teachers}`],['資料權威',report.authority.recordAuthority?'正式逐筆資料｜舊主文件保留不覆蓋':'舊主文件'],['估計容量',report.authority.recordAuthority?`${formatHealthBytes(report.estimatedMainDocumentBytes)}｜逐筆模式不受單一文件上限影響`:`${formatHealthBytes(report.estimatedMainDocumentBytes)} / 1 MiB`],['分片唯讀預檢',`${report.shardPreflight.totalChunks} 片｜${report.shardPreflight.totalRecords} 筆｜重組驗證通過`],['Owner 主資料',report.authority.recordAuthority?'逐筆讀回驗證通過':report.main.localMatchesCloud?'本機與雲端一致':(report.flags.localDirty?'本機變更待確認':'正在比對版本')],['災難復原',report.ownerHealth?.configurationVerified&&report.ownerHealth?.pitrEnabled&&report.ownerHealth?.deleteProtectionEnabled?`PITR 與刪除保護已實際讀回｜最早可還原 ${report.ownerHealth.earliestVersionTime||'確認中'}｜不依賴 Time Machine`:'PITR／刪除保護尚未完成實際讀回'],['還原演練',report.restoreRehearsal?`${report.restoreRehearsal.runId} 歷史快照讀回通過｜正式資料寫入 ${report.restoreRehearsal.formalDataWrites}`:'等待第一份每月 PITR 唯讀演練 receipt'],['後端健康',report.ownerHealth?`${report.ownerHealth.state==='healthy'?'正常':'注意'}｜錯誤 ${report.ownerHealth.metrics.recentErrors||0}｜待處理 ${report.ownerHealth.metrics.pendingRequests||0}`:'等待第一份健康評估'],['每日維護',report.maintenance?`${report.maintenance.runId} 已驗證｜清除錯誤 ${report.maintenance.deleted.errorEvents||0}、通知 ${report.maintenance.deleted.scheduleNotifications||0}`:'尚未收到後端維護 receipt'],['aa 要求',`雲端待處理 ${report.flags.pendingCloudRequests}｜本機佇列 ${report.flags.schedulerLocalQueue}｜隔離 ${report.flags.schedulerQuarantined}`],['老師／aa 檢視',report.flags.roleViewUploading||report.flags.roleViewQueued?`更新中｜重試 ${report.flags.roleViewRetryCount}`:'目前無待處理'],['課表通知',`待送 ${report.flags.notificationBatches} 批`]].map(([label,value])=>`<div class="sync-health-metric"><span>${escapeHTML(label)}</span><b>${escapeHTML(value)}</b></div>`).join('');
   alerts.innerHTML=report.alerts.length?report.alerts.map(item=>`<div class="sync-health-alert ${item.level}">${escapeHTML(item.message)}</div>`).join(''):'<div class="sync-health-alert ok">目前未偵測到容量、課程數下降或同步佇列異常。</div>';
   errors.innerHTML=rows.length?rows.map(x=>`<div class="backup-item"><div class="info"><b>${escapeHTML(x.area||'同步')}｜${escapeHTML(x.code||'unknown')}</b><div class="small">${escapeHTML(formatNotificationTimestamp(x.occurredAt)||'時間確認中')}｜${x.retryable?'可自動重試':'需人工檢查'}</div></div><span class="pill ${x.retryable?'blue':'red'}">${x.retryable?'已記錄':'注意'}</span></div>`).join(''):'<span class="small">目前沒有同步錯誤紀錄。</span>';
  }catch(e){badge.textContent='檢查失敗';badge.className='sync-health-badge error';alerts.innerHTML='<div class="sync-health-alert error">唯讀健康檢查暫時無法完成；沒有修改任何資料。</div>';errors.innerHTML='<span class="small">錯誤紀錄暫時無法讀取。</span>';console.error('renderSyncRecoveryCenter',e)}
@@ -712,13 +737,17 @@ async function saveEmergencyOwner(){
  if(!validGmailAddress(email))return emergencyOwnerStatus('請輸入有效的 Gmail。','error');
  if(email===OWNER_EMAIL||email===cloudEmailKey)return emergencyOwnerStatus('主要 Owner 或目前登入帳號不需要重複加入。','error');
  if(!confirm(`確定授予 ${email} 完整 Owner 權限？此帳號可查看及修改所有課表、學生、財務與帳號設定。`))return;
- try{const existing=await getDoc(doc(cloud,'companyAccess',email));if(existing.exists()&&existing.data()?.role!=='owner'&&!confirmCloudRoleTransition(existing,'owner',email))return;const payload={email,displayName,role:'owner',companyId:COMPANY_ID,active:true,invitedAt:existing.exists()?existing.data()?.invitedAt||serverTimestamp():serverTimestamp(),invitedBy:cloudEmailKey,updatedAt:serverTimestamp()};await setCompanyAccessWithAudit(email,payload,{action:existing.exists()?'backup-owner-updated':'backup-owner-created',category:'access',targetType:'account',targetId:email,changedFields:['role','active'],totalChanges:1},false);await Promise.allSettled([deleteDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email)),deleteDoc(doc(cloud,'companies',COMPANY_ID,'branchViews',email))]);invalidateCompanyAccessCache();emergencyOwnerStatus('備援 Owner 已建立；首次 Google 登入後即可使用。','ok');await Promise.all([listEmergencyOwners(),listImmutableAudit()])}catch(e){console.error(e);emergencyOwnerStatus('建立備援 Owner 失敗：'+(e?.message||e),'error')}
+ try{const existing=await getDoc(doc(cloud,'companyAccess',email));if(existing.exists()&&existing.data()?.role!=='owner'&&!confirmCloudRoleTransition(existing,'owner',email))return;const payload={email,displayName,role:'owner',companyId:COMPANY_ID,active:true,invitedAt:existing.exists()?existing.data()?.invitedAt||serverTimestamp():serverTimestamp(),invitedBy:cloudEmailKey,updatedAt:serverTimestamp()},userRefs=await companyUserRefs(email);await setCompanyAccessWithAudit(email,payload,{action:existing.exists()?'backup-owner-updated':'backup-owner-created',category:'access',targetType:'account',targetId:email,changedFields:['role','active'],totalChanges:1},false,userRefs);await Promise.allSettled([deleteDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email)),deleteDoc(doc(cloud,'companies',COMPANY_ID,'branchViews',email))]);invalidateCompanyAccessCache();emergencyOwnerStatus('備援 Owner 已建立；首次 Google 登入後即可使用。','ok');await Promise.all([listEmergencyOwners(),listImmutableAudit()])}catch(e){console.error(e);emergencyOwnerStatus('建立備援 Owner 失敗：'+(e?.message||e),'error')}
 }
 function installOperationalResilienceUI(){
  if(cloudRole!=='owner')return;
  const bind=(id,handler)=>{const button=document.getElementById(id);if(button)button.onclick=handler};
  bind('createCloudBackupNow',()=>createCloudSafetyBackup(true));bind('refreshCloudBackups',listCloudSafetyBackups);bind('retryAllSync',retryAllOperationalSync);bind('refreshSyncRecovery',renderSyncRecoveryCenter);bind('downloadSyncHealthReport',downloadSyncHealthReport);bind('saveEmergencyOwner',saveEmergencyOwner);bind('refreshImmutableAudit',listImmutableAudit);
- listCloudSafetyBackups();renderSyncRecoveryCenter();listEmergencyOwners();listImmutableAudit();
+ subscribeOwnerHealthAlerts();listCloudSafetyBackups();renderSyncRecoveryCenter();listEmergencyOwners();listImmutableAudit();
+}
+function subscribeOwnerHealthAlerts(){
+ unsubscribeOwnerHealth?.();unsubscribeOwnerHealth=null;if(cloudRole!=='owner')return;
+ unsubscribeOwnerHealth=onSnapshot(doc(cloud,'companies',COMPANY_ID,'systemHealth','ownerAlert'),snapshot=>{if(!snapshot.exists())return;const health=snapshot.data()||{},signal=JSON.stringify([health.runId,health.state,health.alerts,health.checkedAt?.toMillis?.()||'']);if(signal===lastOwnerHealthSignal)return;lastOwnerHealthSignal=signal;if(health.state==='attention'){const first=Array.isArray(health.alerts)&&health.alerts.length?health.alerts[0]:'請開啟系統健康中心檢查';cloudStatus(`系統健康警示：${first}`,'error')}renderSyncRecoveryCenter()},error=>{console.error('owner health listener failed',error);cloudStatus('系統健康監控暫時無法連線','error')});
 }
 
 function lessonTeacherIds(lesson){
@@ -783,11 +812,11 @@ async function renderCloudUserManager(){
     const payload={email,role:'teacher',companyId:COMPANY_ID,teacherId,teacherName:teacherBadgeName(t),active:true,canManageSchedule:canManageSchedule?true:deleteField(),branchIds:deleteField(),branchNames:deleteField(),managerName:deleteField(),readOnly:canManageSchedule?false:deleteField(),canSubmitOwnReports:deleteField(),scopedDb:deleteField(),scopedClientHash:deleteField(),scopedUpdatedAt:deleteField(),updatedAt:serverTimestamp()};
     if(!existing.exists()){payload.invitedAt=serverTimestamp();payload.invitedBy=cloudEmailKey||OWNER_EMAIL}
     invalidateCompanyAccessCache();
-    await setCompanyAccessWithAudit(email,payload,{action:existing.exists()?'teacher-access-updated':'teacher-access-created',category:'access',targetType:'account',targetId:email,changedFields:['role','teacherId','active','canManageSchedule'],totalChanges:1},true);
+    const userRefs=await companyUserRefs(email);
+    await setCompanyAccessWithAudit(email,payload,{action:existing.exists()?'teacher-access-updated':'teacher-access-created',category:'access',targetType:'account',targetId:email,changedFields:['role','teacherId','active','canManageSchedule'],totalChanges:1},true,userRefs);
     const schedulerViewRef=doc(cloud,'companies',COMPANY_ID,'schedulerViews',email);
     if(canManageSchedule){const db=filteredSchedulerDB(window.__danbridgeGetDB());await setDoc(schedulerViewRef,{db,clientHash:dataHash(db),updatedAt:serverTimestamp(),email},{merge:false})}
     else {await deleteDoc(schedulerViewRef).catch(()=>{});await setDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email),{db:filteredTeacherDB(window.__danbridgeGetDB(),teacherId),updatedAt:serverTimestamp(),teacherId,email},{merge:false})}
-    try{const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));await Promise.all(userQs.docs.map(u=>setDoc(u.ref,payload,{merge:true})))}catch(e){console.warn('同步老師帳號資料失敗：',e)}
     if(canManageSchedule)await deleteDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email)).catch(()=>{});
     await deleteDoc(doc(cloud,'companies',COMPANY_ID,'branchViews',email)).catch(()=>{});
     alert(existing.exists()?'老師邀請與專屬課表已更新。':'老師邀請已建立。請複製登入邀請給老師。');
@@ -822,15 +851,13 @@ async function removeCloudTeacherAccess(email,teacherName='老師'){
  if(!confirm(`確定要刪除 ${teacherName}（${email}）的登入權限嗎？\n刪除後該帳號將無法再登入。`))return;
  try{
    cloudStatus('正在刪除老師權限…','pending');
-   // 先停用已建立的 users 登入資料，避免只刪 companyAccess 後仍可登入。
-   const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));
-   await Promise.all(userQs.docs.map(u=>setDoc(u.ref,{active:false,updatedAt:serverTimestamp()},{merge:true})));
+   const userRefs=await companyUserRefs(email);
    invalidateCompanyAccessCache();
    await Promise.all([
      deleteDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email)),
      deleteDoc(doc(cloud,'companies',COMPANY_ID,'branchViews',email))
    ]);
-   await deleteCompanyAccessWithAudit(email,{action:'teacher-access-deleted',category:'access',targetType:'account',targetId:email,changedFields:['active','role'],totalChanges:1});
+   await deleteCompanyAccessWithAudit(email,{action:'teacher-access-deleted',category:'access',targetType:'account',targetId:email,changedFields:['active','role'],totalChanges:1},userRefs);
    await listCloudTeacherAccess();
    cloudStatus('老師權限已刪除','ok');
  }catch(e){
@@ -847,9 +874,8 @@ async function setCloudAccessActive(email,active){
  if(!confirm(`確定要${action} ${email}？\n${active?'原本的角色與資料範圍會恢復。':'帳號會立即失去存取權，但綁定與歷史紀錄會保留。'}`))return;
  try{
   cloudStatus(`正在${action}帳號…`,'pending');invalidateCompanyAccessCache();
-  await setCompanyAccessWithAudit(email,{active,updatedAt:serverTimestamp()},{action:active?'account-enabled':'account-disabled',category:'access',targetType:'account',targetId:email,changedFields:['active'],totalChanges:1},true);
-  const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));
-  await Promise.all(userQs.docs.map(u=>setDoc(u.ref,{active,updatedAt:serverTimestamp()},{merge:true})));
+  const userRefs=await companyUserRefs(email);
+  await setCompanyAccessWithAudit(email,{active,updatedAt:serverTimestamp()},{action:active?'account-enabled':'account-disabled',category:'access',targetType:'account',targetId:email,changedFields:['active'],totalChanges:1},true,userRefs);
   await Promise.all([listCloudTeacherAccess(),listCloudBranchManagerAccess(),listEmergencyOwners()]);
   if(active)publishRoleViewsWithRetry();
   cloudStatus(`帳號已${action}`,'ok');
@@ -863,9 +889,8 @@ async function disableTeacherAccessForArchive(teacherId){
  for(const accessDoc of matches){
   const x=accessDoc.data()||{},email=String(x.email||accessDoc.id).trim().toLowerCase();
   invalidateCompanyAccessCache();
-  await setCompanyAccessWithAudit(email,{active:false,updatedAt:serverTimestamp()},{action:'teacher-archived-account-disabled',category:'access',targetType:'account',targetId:email,changedFields:['active','teacherId'],totalChanges:1},true);
-  const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));
-  await Promise.all(userQs.docs.map(u=>setDoc(u.ref,{active:false,updatedAt:serverTimestamp()},{merge:true})));
+  const userRefs=await companyUserRefs(email);
+  await setCompanyAccessWithAudit(email,{active:false,updatedAt:serverTimestamp()},{action:'teacher-archived-account-disabled',category:'access',targetType:'account',targetId:email,changedFields:['active','teacherId'],totalChanges:1},true,userRefs);
  }
  await Promise.all([listCloudTeacherAccess(),listCloudBranchManagerAccess()]);
  return matches.length;
@@ -933,11 +958,8 @@ async function saveCloudBranchManagerAccess(){
    const payload={email,role:'branch_manager',companyId:COMPANY_ID,branchIds,branchNames,teacherId,teacherName:teacherBadgeName(managerTeacher),managerName:teacherBadgeName(managerTeacher),active:true,readOnly:true,canSubmitOwnReports:true,scopedDb,scopedUpdatedAt:serverTimestamp(),updatedAt:serverTimestamp()};
    if(!existing.exists()){payload.invitedAt=serverTimestamp();payload.invitedBy=cloudEmailKey||OWNER_EMAIL}
    invalidateCompanyAccessCache();
-   await setCompanyAccessWithAudit(email,payload,{action:existing.exists()?'branch-access-updated':'branch-access-created',category:'access',targetType:'account',targetId:email,changedFields:['role','teacherId','branchIds','active'],totalChanges:1},true);
-   try{
-     const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));
-     await Promise.all(userQs.docs.map(u=>setDoc(u.ref,payload,{merge:true})));
-   }catch(e){console.warn('同步既有使用者資料失敗：',e)}
+   const userRefs=await companyUserRefs(email);
+   await setCompanyAccessWithAudit(email,payload,{action:existing.exists()?'branch-access-updated':'branch-access-created',category:'access',targetType:'account',targetId:email,changedFields:['role','teacherId','branchIds','active'],totalChanges:1},true,userRefs);
    await deleteDoc(doc(cloud,'companies',COMPANY_ID,'teacherViews',email)).catch(()=>{});
    // 不再把儲存成功綁在 branchViews / teacherViews 上。
    // 舊 Firebase 規則若不允許這些路徑，主權限仍已完整儲存在 companyAccess。
@@ -1012,10 +1034,9 @@ async function listCloudBranchManagerAccess(){
 async function removeCloudBranchManagerAccess(email){
  if(cloudRole!=='owner')return;
  if(!confirm(`確定刪除 ${email} 的校區管理權限？`))return;
- const userQs=await getDocs(query(collection(cloud,'users'),where('companyId','==',COMPANY_ID),where('email','==',email)));
- await Promise.all(userQs.docs.map(u=>setDoc(u.ref,{active:false,updatedAt:serverTimestamp()},{merge:true})));
+ const userRefs=await companyUserRefs(email);
  invalidateCompanyAccessCache();
- await deleteCompanyAccessWithAudit(email,{action:'branch-access-deleted',category:'access',targetType:'account',targetId:String(email).toLowerCase(),changedFields:['active','role','branchIds'],totalChanges:1});
+ await deleteCompanyAccessWithAudit(email,{action:'branch-access-deleted',category:'access',targetType:'account',targetId:String(email).toLowerCase(),changedFields:['active','role','branchIds'],totalChanges:1},userRefs);
  // 舊檢視只做清理，不讓未部署的 Firestore 規則阻斷刪除流程。
  await Promise.allSettled([
    deleteDoc(doc(cloud,'companies',COMPANY_ID,'branchViews',email)),
@@ -2719,6 +2740,26 @@ function ensureActiveOwnerPageController(activationEpoch){
 async function acceptActiveOwnerSnapshot(snapshot){
  const controller=ensureActiveOwnerPageController(snapshot?.activationEpoch),beforeAccept=controller.diagnostics();activeRoleBootstrapSourceDb=deepCopy(snapshot.db);if(localDirtyHash&&!beforeAccept.dirty&&!beforeAccept.inFlight)controller.queueLocalSave();const result=await controller.acceptCloudSnapshot(snapshot),diagnostics=controller.diagnostics();if(!diagnostics.dirty&&!diagnostics.inFlight){lastPublishedOwnerDB=deepCopy(snapshot.db);ownerBaselineReady=true;lastCloudSnapshotHash=snapshot.hash;lastUploadedHash=snapshot.hash}if(activeOwnerResumedEpoch!==snapshot.activationEpoch){activeOwnerResumedEpoch=snapshot.activationEpoch;await controller.resume()}return result;
 }
+async function runProductionHighRiskMutation({reason,mutate,requirePreview=false,confirmPreview}={}){
+ if(DANBRIDGE_ENVIRONMENT!=='production'||cloudRole!=='owner'||!productionTrustedOperationClient||typeof mutate!=='function')throw new Error('正式高風險操作只允許已登入 Owner');
+ if(activeRecordMode!=='active'||!activeOwnerProductionReadDocuments||!activeRecordPageController)throw new Error('正式逐筆同步尚未就緒，未執行任何變更');
+ const diagnostics=activeRecordPageController.diagnostics();
+ if(diagnostics.dirty||diagnostics.inFlight||diagnostics.writeAllowed===false)throw new Error('仍有一筆同步尚未確認，請等候同步完成後再執行');
+ const documents=await activeOwnerProductionReadDocuments(),remote=rebuildFullRecordShadowDb(documents,{environment:'production'}),target=deepCopy(remote.db),mutationResult=await mutate(target);
+ const plan=prepareActiveRecordSync({documentsByCollection:documents,baselineDb:remote.db,localDb:target,environment:'production',deviceId:`trusted-${crypto.randomUUID()}`,activationEpoch:diagnostics.activationEpoch||activeOwnerControllerEpoch,createdAt:new Date().toISOString()});
+ if(plan.conflicts.length)throw new Error('正式高風險操作偵測到資料衝突，未執行任何變更');
+ if(!plan.operationCount)return{state:'unchanged',operationCount:0,mutationResult};
+ if(plan.operationCount>180)throw new Error(`本次涉及 ${plan.operationCount} 筆，超過單次原子安全上限 180 筆；未執行任何變更`);
+ let preview=null,batch={activationEpoch:plan.activationEpoch,reason:String(reason||'high-risk').slice(0,120),operations:plan.operations};
+ if(requirePreview){preview=await productionTrustedOperationClient.previewBatch(batch);if(typeof confirmPreview==='function'&&await confirmPreview({...preview,plan,mutationResult})!==true)return{state:'cancelled',operationCount:plan.operationCount,preview};batch={...batch,previewId:preview.previewId}}
+ const receipt=await productionTrustedOperationClient.applyBatch(batch);
+ await acceptActiveOwnerSnapshot({activationEpoch:plan.activationEpoch,db:plan.db,hash:plan.targetHash,writeAllowed:true});
+ const before=lastPublishedOwnerDB?deepCopy(lastPublishedOwnerDB):deepCopy(remote.db);
+ await Promise.all([publishScopedViews(plan.db,{recordAuthority:true}),publishLessonMeta(plan.db)]);
+ queueScheduleChangeNotifications(before,plan.db,plan.targetHash);lastPublishedOwnerDB=deepCopy(plan.db);ownerBaselineReady=true;
+ return{state:'complete',operationCount:plan.operationCount,targetHash:plan.targetHash,preview,receipt,mutationResult};
+}
+window.__danbridgeRunProductionHighRiskMutation=runProductionHighRiskMutation;
 function startOwnerLegacyActiveRecordRuntime(){
  if(DANBRIDGE_ENVIRONMENT!=='staging'||cloudRole!=='owner')return false;
  try{
@@ -3285,7 +3326,7 @@ installClassFocusMode();
 installBranchManagerAccessEvents();
 installRoleInteractionGuards();
 onAuthStateChanged(auth,async user=>{
- unsubscribeState?.();unsubscribeState=null;stopActiveRecordRuntimes();unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;scheduleNotificationDocuments=[];lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();roleViewPublishSourceDB=null;
+ unsubscribeState?.();unsubscribeState=null;stopActiveRecordRuntimes();unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;unsubscribeOwnerHealth?.();unsubscribeOwnerHealth=null;lastOwnerHealthSignal='';unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;scheduleNotificationDocuments=[];lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();roleViewPublishSourceDB=null;
  unsubscribeAccessGuard?.();unsubscribeAccessGuard=null;
  if(!user){clearTimeout(cloudBootstrapTimeout);cloudBootstrapTimeout=null;cloudBootstrapProgress=null;document.getElementById('cloudBootstrapProgress')?.remove();delete document.body.dataset.cloudBootstrapState;lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);clearTimeout(dailyBackupTimer);clearTimeout(schedulerRequestRetryTimer);clearTimeout(schedulerUploadRetryTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudCanManageSchedule=false;schedulerBaselineLessons=[];schedulerBaselineStudents=[];schedulerSaveChain=Promise.resolve();schedulerOptimisticLessons=new Map();schedulerOptimisticStudents=new Map();schedulerUploadRetryCount=0;schedulerStartupRecoveryChecked=false;schedulerRecoveryHold=false;schedulerRequestQueue=[];schedulerRequestQueueIds=new Set();schedulerQuarantinedRequestIds=new Set();schedulerAppliedRequestCount=0;schedulerRequestWorkerActive=false;cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';document.body.classList.remove('wendy-teacher-role');window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true,canManageSchedule:false});showCloudLogin();cloudStatus('尚未登入');return}
  try{

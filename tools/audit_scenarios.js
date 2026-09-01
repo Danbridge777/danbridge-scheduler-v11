@@ -321,7 +321,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.133'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.134'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -668,7 +668,10 @@ assert.match(teachersCrmSource, /function restoreTeacher[\s\S]*登入權限仍�
 assert.doesNotMatch(teachersCrmSource, /function deleteTeacher/, 'teacher CRM no longer exposes destructive record deletion');
 assert.match(selectOptionsSource, /function activeStudents\(\)[\s\S]*!isArchivedRecord[\s\S]*function activeTeachers\(\)[\s\S]*!teacherIsArchived/, 'new scheduling selectors exclude archived students and teachers');
 assert.match(selectOptionsSource, /optionsWithCurrent[\s\S]*（已封存）/, 'an archived participant already attached to a historical lesson remains identifiable while editing history');
-assert.match(cloudSource, /function disableTeacherAccessForArchive[\s\S]*teacher-archived-account-disabled[\s\S]*active:false[\s\S]*window\.__danbridgeDisableTeacherAccessForArchive/, 'teacher archival atomically audits access suspension and exposes the guarded workflow');
+const teacherArchiveAccessSource=cloudSource.slice(cloudSource.indexOf('async function disableTeacherAccessForArchive'),cloudSource.indexOf('async function listCloudTeacherAccess'));
+assert.match(teacherArchiveAccessSource, /teacher-archived-account-disabled/, 'teacher archival records the guarded access suspension audit');
+assert.match(teacherArchiveAccessSource, /active:false/, 'teacher archival disables the linked access');
+assert.match(cloudSource, /window\.__danbridgeDisableTeacherAccessForArchive=disableTeacherAccessForArchive/, 'teacher archival exposes the guarded workflow');
 assert.match(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.fixedTotal\+d\.oneTimeTotal\)/, 'expense management totals only fixed and one-time expenses');
 assert.doesNotMatch(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.totalExpenses\)/, 'expense management total excludes teacher payroll');
 assert.match(branchBusinessSource, /expenseTotalScope'\)\.textContent=scopeLabel\(scope\)/, 'expense total identifies the selected branch scope');
