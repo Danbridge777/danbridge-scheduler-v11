@@ -57,7 +57,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.131';
+const APP_RELEASE='20.26.132';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1768,6 +1768,46 @@ function buildScheduleLessonChanges(previousDb,currentDb){
  for(const [id,before] of beforeMap){if(!afterMap.has(id))changes.push({type:'removed',lessonId:id,before,after:null})}
  return changes;
 }
+function buildScheduleNotificationRecipientGroups(accessRows,teacherChanges,lessonChanges,ownerEmail,ownerDisplayName,schedulerEmails){
+ const accessByTeacher=new Map(),managers=[],schedulers=[];
+ const owners=[{email:ownerEmail,role:'owner',teacherName:ownerDisplayName,branchIds:[]}];
+ const schedulerSet=schedulerEmails instanceof Set?schedulerEmails:new Set(schedulerEmails||[]);
+ for(const row of accessRows||[]){
+   const a=row||{},email=String(a.email||a.id||'').trim().toLowerCase();
+   if(a.active===false||!email)continue;
+   if(a.role==='owner'){
+     if(!owners.some(owner=>owner.email===email))owners.push({email,role:'owner',teacherName:a.displayName||'',branchIds:[]});
+     continue;
+   }
+   if(a.role==='branch_manager'&&Array.isArray(a.branchIds)&&a.branchIds.length){
+     managers.push({email,role:'branch_manager',teacherName:a.managerName||a.teacherName||'',branchIds:a.branchIds.map(String)});
+     continue;
+   }
+   if(a.role!=='teacher')continue;
+   if(a.canManageSchedule===true||schedulerSet.has(email))schedulers.push({email,role:'scheduler',teacherName:a.teacherName||a.displayName||'aa',branchIds:[]});
+   if(!a.teacherId)continue;
+   const teacherId=String(a.teacherId);
+   if(!accessByTeacher.has(teacherId))accessByTeacher.set(teacherId,[]);
+   accessByTeacher.get(teacherId).push({email,role:'teacher',teacherName:a.teacherName||''});
+ }
+ const grouped=new Map();
+ const addRecipientItem=(recipient,item,teacherId='')=>{
+   const key=recipient.email;
+   if(!grouped.has(key))grouped.set(key,{recipient,teacherId,items:new Map()});
+   grouped.get(key).items.set(`${item.type}:${item.lessonId}`,item);
+ };
+ for(const change of teacherChanges||[]){
+   const recipients=accessByTeacher.get(String(change.teacherId))||[];
+   for(const recipient of recipients)addRecipientItem(recipient,change,String(change.teacherId));
+ }
+ for(const change of lessonChanges||[]){
+   const affectedBranches=new Set([change.before&&lessonBranchId(change.before),change.after&&lessonBranchId(change.after)].filter(Boolean).map(String));
+   for(const owner of owners)addRecipientItem(owner,change,'');
+   for(const scheduler of schedulers)addRecipientItem(scheduler,change,'');
+   for(const manager of managers){if(manager.branchIds.some(branchId=>affectedBranches.has(branchId)))addRecipientItem(manager,change,'')}
+ }
+ return [...grouped.values()];
+}
 async function createScheduleNotificationIfMissing(notificationRef,payload){
  await runTransaction(cloud,async transaction=>{
   const existing=await transaction.get(notificationRef);
@@ -1780,43 +1820,9 @@ async function publishScheduleChangeNotifications(previousDb,currentDb,batchKey,
  const lessonChanges=buildScheduleLessonChanges(previousDb,currentDb);
  if(!lessonChanges.length)return;
  const accessDocs=await getCompanyAccessDocs();
- const accessByTeacher=new Map();
- const managers=[];
- const owners=[{email:OWNER_EMAIL,role:'owner',teacherName:OWNER_DISPLAY_NAME,branchIds:[]}];
- for(const d of accessDocs){
-   const a=d.data()||{};
-   const email=String(a.email||d.id||'').trim().toLowerCase();
-   if(a.active===false||!email)continue;
-   if(a.role==='owner'){
-     if(!owners.some(owner=>owner.email===email))owners.push({email,role:'owner',teacherName:a.displayName||'',branchIds:[]});
-     continue;
-   }
-   if(a.role==='branch_manager'&&Array.isArray(a.branchIds)&&a.branchIds.length){
-     managers.push({email,role:'branch_manager',teacherName:a.managerName||a.teacherName||'',branchIds:a.branchIds.map(String)});
-     continue;
-   }
-   if(a.role!=='teacher'||!a.teacherId)continue;
-   const teacherId=String(a.teacherId);
-   if(!accessByTeacher.has(teacherId))accessByTeacher.set(teacherId,[]);
-   accessByTeacher.get(teacherId).push({email,role:'teacher',teacherName:a.teacherName||''});
- }
- const grouped=new Map();
- const addRecipientItem=(recipient,item,teacherId='')=>{
-   const key=recipient.email;
-   if(!grouped.has(key))grouped.set(key,{recipient,teacherId,items:new Map()});
-   grouped.get(key).items.set(`${item.type}:${item.lessonId}`,item);
- };
- for(const change of teacherChanges){
-   const recipients=accessByTeacher.get(String(change.teacherId))||[];
-   for(const recipient of recipients)addRecipientItem(recipient,change,String(change.teacherId));
- }
- for(const change of lessonChanges){
-   const affectedBranches=new Set([change.before&&lessonBranchId(change.before),change.after&&lessonBranchId(change.after)].filter(Boolean).map(String));
-   for(const owner of owners)addRecipientItem(owner,change,'');
-   for(const manager of managers){if(manager.branchIds.some(branchId=>affectedBranches.has(branchId)))addRecipientItem(manager,change,'')}
- }
+ const grouped=buildScheduleNotificationRecipientGroups(accessDocs.map(d=>({id:d.id,...(d.data()||{})})),teacherChanges,lessonChanges,OWNER_EMAIL,OWNER_DISPLAY_NAME,SCHEDULER_ACCOUNT_EMAILS);
  const jobs=[];
- for(const {recipient,teacherId,items:itemsByKey} of grouped.values()){
+ for(const {recipient,teacherId,items:itemsByKey} of grouped){
    if(!recipient.email)continue;
    const items=[...itemsByKey.values()];
    const safeBatch=String(batchKey||dataHash(currentDb)).replace(/[^a-zA-Z0-9_-]/g,'_');
@@ -1831,8 +1837,8 @@ async function publishScheduleChangeNotifications(previousDb,currentDb,batchKey,
      before:item.before?{date:item.before.date||'',start:item.before.start||'',end:item.before.end||'',studentId:item.before.studentId||'',title:item.before.title||'',location:item.before.location||'',branchId:item.before.branchId||'',deliveryMode:item.before.deliveryMode||'',room:item.before.room||'',address:item.before.address||'',onlinePlatform:item.before.onlinePlatform||'',meetingUrl:item.before.meetingUrl||'',status:item.before.status||'',note:item.before.note||'',teacherIds:lessonTeacherIds(item.before)}:null,
      after:item.after?{date:item.after.date||'',start:item.after.start||'',end:item.after.end||'',studentId:item.after.studentId||'',title:item.after.title||'',location:item.after.location||'',branchId:item.after.branchId||'',deliveryMode:item.after.deliveryMode||'',room:item.after.room||'',address:item.after.address||'',onlinePlatform:item.after.onlinePlatform||'',meetingUrl:item.after.meetingUrl||'',status:item.after.status||'',note:item.after.note||'',teacherIds:lessonTeacherIds(item.after)}:null
    })).map(item=>recipient.role==='teacher'?{...item,before:item.before?{...item.before,address:'',meetingUrl:'',note:''}:null,after:item.after?{...item.after,address:'',meetingUrl:'',note:''}:null}:item);
-   const manager=recipient.role==='branch_manager',owner=recipient.role==='owner';
-   jobs.push(createScheduleNotificationIfMissing(notificationRef,{companyId:COMPANY_ID,recipientEmail:recipient.email,recipientRole:recipient.role,teacherId,branchIds:manager?recipient.branchIds:[],teacherName:recipient.teacherName||'',title:'課表更新通知',message:owner?`公司課表有 ${items.length} 個變更`:manager?`您管理的校區課表有 ${items.length} 個變更`:`您的課表有 ${items.length} 個變更`,changeCount:items.length,details,read:false,createdAt:serverTimestamp(),createdBy:actor.uid||cloudUid,createdByName:actor.name||document.body.dataset.cloudDisplayName||auth.currentUser?.displayName||auth.currentUser?.email||'Owner'}));
+   const manager=recipient.role==='branch_manager',owner=recipient.role==='owner',scheduler=recipient.role==='scheduler';
+   jobs.push(createScheduleNotificationIfMissing(notificationRef,{companyId:COMPANY_ID,recipientEmail:recipient.email,recipientRole:recipient.role,teacherId,branchIds:manager?recipient.branchIds:[],teacherName:recipient.teacherName||'',title:'課表更新通知',message:owner?`公司課表有 ${items.length} 個變更`:scheduler?`全老師課表有 ${items.length} 個變更`:manager?`您管理的校區課表有 ${items.length} 個變更`:`您的課表有 ${items.length} 個變更`,changeCount:items.length,details,read:false,createdAt:serverTimestamp(),createdBy:actor.uid||cloudUid,createdByName:actor.name||document.body.dataset.cloudDisplayName||auth.currentUser?.displayName||auth.currentUser?.email||'Owner'}));
  }
  if(jobs.length)await withSyncTimeout(Promise.all(jobs),15000);
 }
@@ -1905,7 +1911,7 @@ function subscribeScheduleNotifications(){
    if(current&&!document.getElementById('scheduleNotificationModal')?.hidden)return;
    if(current){
      const details=scheduleNotificationDocuments.flatMap(n=>Array.isArray(n.details)?n.details:[]);
-     renderScheduleNotification({...current,notificationIds:scheduleNotificationDocuments.map(n=>n.id),details,message:current.recipientRole==='owner'?`公司課表共有 ${details.length} 個變更`:current.recipientRole==='branch_manager'?`您管理的校區課表共有 ${details.length} 個變更`:`您的課表共有 ${details.length} 個變更`});
+     renderScheduleNotification({...current,notificationIds:scheduleNotificationDocuments.map(n=>n.id),details,message:current.recipientRole==='owner'?`公司課表共有 ${details.length} 個變更`:current.recipientRole==='scheduler'?`全老師課表共有 ${details.length} 個變更`:current.recipientRole==='branch_manager'?`您管理的校區課表共有 ${details.length} 個變更`:`您的課表共有 ${details.length} 個變更`});
    }
  },e=>{console.error('Schedule notification listener failed',e);cloudStatus('課表通知讀取失敗：'+(e?.message||e),'error')});
 }

@@ -18,6 +18,7 @@ const context = {
     return (minutes(end) - minutes(start)) / 60;
   },
   lessonTeacherIds(lesson) { return [...new Set((lesson.teacherIds || [lesson.teacherId]).filter(Boolean))]; },
+  lessonBranchId(lesson) { return String(lesson?.branchId || 'unassigned'); },
   effectiveCampId: () => '',
   sameCampSlot: () => false,
   summerRegistrationTotal: row => Number(row.totalFee) || 0,
@@ -320,7 +321,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.131'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.132'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -568,6 +569,30 @@ assert.deepEqual(Array.from(modifiedTeacherChanges,row=>`${row.teacherId}:${row.
 const removedTeacherChanges=context.buildScheduleNotificationChanges({lessons:[lesson({id:'removed',teacherId:'t1',teacherIds:['t1']})]},{lessons:[]});
 assert.deepEqual(Array.from(removedTeacherChanges,row=>`${row.teacherId}:${row.type}`),['t1:removed'],'deleting a lesson produces a large notification for its former teacher');
 assert.deepEqual(Array.from(context.buildScheduleLessonChanges(before,after),row=>row.type),['modified'],'each teacher reassignment remains one company-wide Owner notification item');
+const extremeBefore={lessons:Array.from({length:1000},(_,index)=>lesson({id:`extreme-${index}`,teacherId:'t1',teacherIds:['t1'],branchId:index%2?'a':'b',start:'10:00'}))};
+const extremeAdded={lessons:[...extremeBefore.lessons,...Array.from({length:1000},(_,index)=>lesson({id:`added-extreme-${index}`,teacherId:'t1',teacherIds:['t1'],branchId:index%2?'a':'b'}))]};
+const extremeMoved={lessons:extremeAdded.lessons.map(row=>({...row,start:'11:00'}))};
+const extremeDeleted={lessons:[]};
+const accessRows=[
+ {id:'daniel@example.com',email:'daniel@example.com',active:true,role:'owner',displayName:'Daniel'},
+ {id:'aa@example.com',email:'aa@example.com',active:true,role:'teacher',teacherId:'aa-teacher',teacherName:'AA',canManageSchedule:true},
+ {id:'zhang@example.com',email:'zhang@example.com',active:true,role:'teacher',teacherId:'t1',teacherName:'張毅'},
+ {id:'other@example.com',email:'other@example.com',active:true,role:'teacher',teacherId:'t2',teacherName:'無關老師'}
+];
+for(const [label,from,to,expected] of [
+ ['add',extremeBefore,extremeAdded,1000],
+ ['move',extremeAdded,extremeMoved,2000],
+ ['delete',extremeMoved,extremeDeleted,2000]
+]){
+ const teacherChanges=context.buildScheduleNotificationChanges(from,to),lessonChanges=context.buildScheduleLessonChanges(from,to);
+ const groups=context.buildScheduleNotificationRecipientGroups(accessRows,teacherChanges,lessonChanges,'daniel@example.com','Daniel',new Set(['aa@example.com']));
+ const byEmail=new Map(Array.from(groups,row=>[row.recipient.email,row]));
+ assert.equal(byEmail.get('daniel@example.com').items.size,expected,`${label}: Owner bell receives every company lesson change exactly once`);
+ assert.equal(byEmail.get('aa@example.com').items.size,expected,`${label}: scheduler bell receives every company lesson change exactly once`);
+ assert.equal(byEmail.get('zhang@example.com').items.size,expected,`${label}: affected teacher bell receives every own lesson change exactly once`);
+ assert.equal(byEmail.get('aa@example.com').recipient.role,'scheduler',`${label}: scheduling authority uses the all-teacher notification scope`);
+ assert.equal(byEmail.has('other@example.com'),false,`${label}: unrelated teacher never receives another teacher's lesson details`);
+}
 
 const notificationRules = fs.readFileSync(path.join(root, 'firebase/firestore.rules'), 'utf8').match(/match \/companies\/\{companyId\}\/scheduleNotifications[\s\S]*?match \/companies\/\{companyId\}\/lessonReports/)[0];
 assert.match(notificationRules, /recipientEmail == emailKey\(\)/);
@@ -717,7 +742,8 @@ assert.match(pointerDragMoveSource, /state\.moved=true[\s\S]*setPointerCapture/,
 
 const pwaSource = fs.readFileSync(path.join(root, 'js/core/pwa-installation.js'), 'utf8');
 assert.match(cloudSource, /if\(cloudRole==='owner'\)return \{\.\.\.meta,teacherIds\};[\s\S]*if\(!cloudTeacherId\)throw new Error/, 'every Owner can submit a lesson report without a linked teacher profile');
-assert.match(cloudSource, /const owners=\[\{email:OWNER_EMAIL[\s\S]*if\(a\.role==='owner'\)[\s\S]*for\(const owner of owners\)addRecipientItem/, 'every active Owner receives a large schedule-change notification');
+assert.match(cloudSource, /function buildScheduleNotificationRecipientGroups[\s\S]*const owners=\[\{email:ownerEmail[\s\S]*if\(a\.role==='owner'\)[\s\S]*for\(const owner of owners\)addRecipientItem/, 'every active Owner receives a large schedule-change notification');
+assert.match(cloudSource, /if\(a\.canManageSchedule===true\|\|schedulerSet\.has\(email\)\)schedulers\.push[\s\S]*for\(const scheduler of schedulers\)addRecipientItem/, 'every approved scheduler receives every company schedule-change notification');
 assert.doesNotMatch(cloudSource,/function (?:publish|queue)ScheduleChangeNotifications\([^)]*\)\{\s*if\([^\n]*ownerBaselineReady/,'aa and Owner schedule notifications never depend on owner snapshot startup timing');
 assert.match(cloudSource, /applySchedulerRequest[\s\S]*transaction\.set\(requestRef,\{status:'applied'[\s\S]*queueScheduleChangeNotifications\(notificationBefore,notificationAfter,`scheduler-\$\{requestRef\.id\}`/, 'scheduler requests commit atomically while large role notifications continue in the retry queue');
 assert.match(cloudSource, /課表已立即更新，[\s\S]*正在同步給 Owner、校區管理者與老師/, 'Wendy sees the locally updated all-teacher schedule immediately');
