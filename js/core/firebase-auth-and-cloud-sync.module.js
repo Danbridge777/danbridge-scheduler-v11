@@ -61,7 +61,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.139';
+const APP_RELEASE='20.26.143';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -69,7 +69,7 @@ const OWNER_SYNC_RECOVERY_KEY='danbridge_owner_sync_recovery_v20210';
 const CLOUD_BACKUP_RETENTION_DAYS=30;
 const provider=new GoogleAuthProvider();
 provider.setCustomParameters({prompt:'select_account'});
-const STAGING_REDIRECT_LOGIN=new URLSearchParams(location.search).get('auth')==='redirect'&&DANBRIDGE_ENVIRONMENT==='staging';
+const PREFER_REDIRECT_LOGIN=new URLSearchParams(location.search).get('auth')==='redirect';
 const STAGING_V2_APP_CHECK_SITE_KEY='6LfvKqItAAAAALRIut991852bJzOP3Aekm8WeXB9';
 const PRODUCTION_APP_CHECK_SITE_KEY='6Lf8MqMtAAAAAEGgj4w4c5X6f4bI4dqdVvOtqPoa';
 const stagingV2AppCheck=DANBRIDGE_ENVIRONMENT==='staging'?initializeAppCheck(app,{provider:new ReCaptchaEnterpriseProvider(STAGING_V2_APP_CHECK_SITE_KEY),isTokenAutoRefreshEnabled:true}):null;
@@ -78,6 +78,7 @@ const productionFunctions=DANBRIDGE_ENVIRONMENT==='production'?getFunctions(app,
 const productionTrustedOperationClient=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?createProductionTrustedOperationClient({call:httpsCallable(productionFunctions,'productionTrustedOperation',{limitedUseAppCheckTokens:true}),getIdentity:()=>({uid:cloudUid,email:cloudEmailKey})}):null;
 const productionTeacherLeaveCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?httpsCallable(productionFunctions,'productionTeacherLeaveOperation',{limitedUseAppCheckTokens:true}):null;
 const productionNotificationAcknowledgeCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?httpsCallable(productionFunctions,'productionAcknowledgeScheduleNotification',{limitedUseAppCheckTokens:true}):null;
+const productionPitrPreviewCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?httpsCallable(productionFunctions,'productionPitrClonePreview',{limitedUseAppCheckTokens:true},):null;
 
 // Explicit-only staging migration composition. Merely importing this module never creates or activates V2.
 export function createExplicitStagingV2TakeoverCandidateBinder(){
@@ -544,7 +545,7 @@ function setAuthCard(message='Sign in with your authorized Google account to con
     </div>
   </section>
 </div>`;
- document.getElementById('googleCloudLogin').onclick=async()=>{const btn=document.getElementById('googleCloudLogin');btn.disabled=true;btn.querySelector('.auth-google-label').textContent='Signing in…';try{if(STAGING_REDIRECT_LOGIN){await signInWithRedirect(auth,provider);return}await signInWithPopup(auth,provider)}catch(e){console.error(e);if(['auth/popup-blocked','auth/cancelled-popup-request','auth/popup-closed-by-user'].includes(e.code)){try{await signInWithRedirect(auth,provider);return}catch(e2){showCloudLoginError(e2.message)}}else showCloudLoginError(e.message);btn.disabled=false;btn.querySelector('.auth-google-label').textContent='Continue with Google'}};
+ document.getElementById('googleCloudLogin').onclick=async()=>{const btn=document.getElementById('googleCloudLogin');btn.disabled=true;btn.querySelector('.auth-google-label').textContent='Signing in…';try{if(PREFER_REDIRECT_LOGIN){await signInWithRedirect(auth,provider);return}await signInWithPopup(auth,provider)}catch(e){console.error(e);if(['auth/popup-blocked','auth/cancelled-popup-request','auth/popup-closed-by-user','auth/network-request-failed'].includes(e.code)){try{await signInWithRedirect(auth,provider);return}catch(e2){showCloudLoginError(e2.message)}}else showCloudLoginError(e.message);btn.disabled=false;btn.querySelector('.auth-google-label').textContent='Continue with Google'}};
 }
 function showCloudLoginError(msg){const e=document.getElementById('cloudLoginError');if(e){e.textContent=msg;e.classList.add('show')}}
 function setSignedOutIsolation(locked){
@@ -614,6 +615,8 @@ async function ensureProfile(user){
 async function recordSuccessfulLogin(user,profile){
  const email=String(user?.email||profile?.email||'').trim().toLowerCase();
  if(!user?.uid||!email)return;
+ const userRef=doc(cloud,'users',user.uid),existing=await getDoc(userRef),personal={displayName:user.displayName||profile?.displayName||'',photoURL:user.photoURL||'',lastLoginAt:serverTimestamp(),updatedAt:serverTimestamp()};
+ if(existing.exists()){await setDoc(userRef,personal,{merge:true});return}
  const payload={email,displayName:user.displayName||profile?.displayName||'',photoURL:user.photoURL||'',role:profile.role,companyId:COMPANY_ID,active:profile.active!==false,lastLoginAt:serverTimestamp(),updatedAt:serverTimestamp()};
  if(profile.teacherId)payload.teacherId=String(profile.teacherId);
  if(profile.teacherName)payload.teacherName=profile.teacherName;
@@ -622,7 +625,7 @@ async function recordSuccessfulLogin(user,profile){
  if(Array.isArray(profile.branchNames))payload.branchNames=profile.branchNames;
  if(profile.role==='branch_manager'){payload.readOnly=true;payload.canSubmitOwnReports=profile.canSubmitOwnReports!==false}
  if(profile.role==='teacher'&&profile.canManageSchedule===true)payload.canManageSchedule=true;
- await setDoc(doc(cloud,'users',user.uid),payload,{merge:true});
+ await setDoc(userRef,payload,{merge:false});
 }
 async function loadSignedInProfile(user){
  const load=()=>loadProfileAfterAuthReady({user,loadProfile:()=>ensureProfile(user)});
@@ -726,6 +729,12 @@ function buildSyncHealthReport({db,mainData,pendingRequests,errorRows,maintenanc
  return{generatedAt:new Date().toISOString(),release:APP_RELEASE,environment:DANBRIDGE_ENVIRONMENT,readOnly:true,level,counts,estimatedMainDocumentBytes:estimatedBytes,authority:{mode:recordAuthority?'production-records-authoritative':'legacy-main',recordAuthority},main:{clientHash:String(mainData?.clientHash||'').slice(0,16),updatedAt:syncHealthTimestamp(mainData?.updatedAt),localMatchesCloud:recordAuthority?null:Boolean(mainData?.clientHash)&&mainData.clientHash===dataHash(db),retainedReadOnlySource:recordAuthority},maintenance:maintenanceData&&maintenanceData.schema==='danbridge-production-maintenance-run-v1'?{state:maintenanceData.state||'',runId:maintenanceData.runId||'',finishedAt:syncHealthTimestamp(maintenanceData.finishedAt),deleted:maintenanceData.deleted||{}}:null,ownerHealth:ownerHealthData&&ownerHealthData.schema==='danbridge-production-owner-health-v1'?{state:ownerHealthData.state,checkedAt:syncHealthTimestamp(ownerHealthData.checkedAt),metrics:ownerHealthData.metrics||{},pitrEnabled:ownerHealthData.pitrEnabled===true,deleteProtectionEnabled:ownerHealthData.deleteProtectionEnabled===true,configurationVerified:ownerHealthData.configurationVerified===true,earliestVersionTime:String(ownerHealthData.earliestVersionTime||''),timeMachineDependency:ownerHealthData.timeMachineDependency===true}:null,restoreRehearsal:restoreRehearsalData&&restoreRehearsalData.schema==='danbridge-production-pitr-rehearsal-v1'?{state:restoreRehearsalData.state,runId:restoreRehearsalData.runId,snapshotTime:syncHealthTimestamp(restoreRehearsalData.snapshotTime),finishedAt:syncHealthTimestamp(restoreRehearsalData.finishedAt),formalDataWrites:Number(restoreRehearsalData.formalDataWrites)||0}:null,shardPreflight,baseline:{...baseline,drop,dropRatio:Number(dropRatio.toFixed(4))},flags,alerts,errorEvents:errorRows.map(row=>({area:String(row.area||'sync'),code:String(row.code||'unknown'),retryable:row.retryable===true,occurredAt:syncHealthTimestamp(row.occurredAt)}))};
 }
 function downloadSyncHealthReport(){if(!lastSyncHealthReport)return alert('請先按「重新整理」完成健康檢查。');const blob=new Blob([JSON.stringify(lastSyncHealthReport,null,2)],{type:'application/json'}),link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=`danbridge-sync-health-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000)}
+function pitrPreviewStatus(message,kind='pending'){const element=document.getElementById('pitrPreviewStatus');if(element){element.textContent=message;element.dataset.kind=kind}}
+function renderPitrPreviewDiff(diff){const box=document.getElementById('pitrPreviewDiff');if(!box)return;const summary=diff?.summary;if(!summary){box.innerHTML='';return}box.innerHTML=[['暫存資料庫',diff.databaseId],['指定時間',new Date(diff.snapshotTime).toLocaleString('zh-TW')],['新增',summary.added],['變更',summary.changed],['當時有、目前已刪除',summary.removed],['未變更',summary.unchanged],['正式資料寫入',diff.formalDataWrites]].map(([label,value])=>`<div class="sync-health-metric"><span>${escapeHTML(String(label))}</span><b>${escapeHTML(String(value))}</b></div>`).join('')}
+async function pollPitrPreview(databaseId,attempt=0){if(!productionPitrPreviewCall||attempt>120)return pitrPreviewStatus('暫存還原仍在雲端進行；稍後可用相同時間重新檢查。','pending');try{const response=await productionPitrPreviewCall({schema:'danbridge-production-pitr-clone-preview-request-v1',action:'status',requestId:`status-${crypto.randomUUID().replaceAll('-','')}`,databaseId}),data=response?.data||{};if(data.schema!=='danbridge-production-pitr-clone-preview-response-v1'||data.formalDataWrites!==0)throw new Error('PITR 預覽回應無效');if(data.state==='ready-read-only'){pitrPreviewStatus('暫存資料庫已建立，差異比對完成；正式資料完全未修改。','ok');renderPitrPreviewDiff(data.diff);return}const progress=data.progress?.completedWork&&data.progress?.estimatedWork?Math.round(Number(data.progress.completedWork)/Number(data.progress.estimatedWork)*100):0;pitrPreviewStatus(`正在建立獨立暫存資料庫${progress?`（${progress}%）`:''}；正式資料未修改。`,'pending');setTimeout(()=>pollPitrPreview(databaseId,attempt+1),5000)}catch(error){console.error('PITR preview status',error);pitrPreviewStatus(`PITR 預覽失敗：${String(error?.message||error)}`,'error')}}
+async function startPitrPreview(){if(cloudRole!=='owner'||cloudEmailKey!==OWNER_EMAIL||!productionPitrPreviewCall)return pitrPreviewStatus('只有 Daniel 主要 Owner 可以建立正式 PITR 暫存還原。','error');const input=document.getElementById('pitrPreviewTime'),raw=String(input?.value||'');if(!raw)return pitrPreviewStatus('請先選擇要還原檢視的日期與時間。','error');const selected=new Date(raw);if(!Number.isFinite(selected.getTime()))return pitrPreviewStatus('選擇的時間無效。','error');selected.setSeconds(0,0);pitrPreviewStatus('正在驗證 PITR 時間並建立獨立暫存資料庫…','pending');try{const response=await productionPitrPreviewCall({schema:'danbridge-production-pitr-clone-preview-request-v1',action:'start',requestId:`preview-${crypto.randomUUID().replaceAll('-','')}`,snapshotTime:selected.toISOString()}),data=response?.data||{};if(data.schema!=='danbridge-production-pitr-clone-preview-response-v1'||!['cloning','ready-read-only'].includes(data.state)||data.formalDataWrites!==0||!data.databaseId)throw new Error('PITR 暫存還原回應無效');if(data.state==='ready-read-only'){pitrPreviewStatus('暫存資料庫已建立，差異比對完成；正式資料完全未修改。','ok');renderPitrPreviewDiff(data.diff);return}await pollPitrPreview(data.databaseId)}catch(error){console.error('start PITR preview',error);pitrPreviewStatus(`PITR 預覽未建立：${String(error?.message||error)}`,'error')}}
+async function enableOwnerSystemNotifications(){const button=document.getElementById('enableOwnerSystemNotifications');if(cloudEmailKey!==OWNER_EMAIL)return;if(!('Notification'in window)){if(button)button.textContent='此瀏覽器不支援系統通知';return}const permission=await Notification.requestPermission();if(button)button.textContent=permission==='granted'?'Daniel 系統通知已啟用':'系統通知未允許';if(permission==='granted')new Notification('Danbridge 系統通知已啟用',{body:'正式環境出現健康警示時，Daniel 會收到瀏覽器系統通知。',tag:'danbridge-owner-health-enabled'})}
+function notifyOwnerHealth(health){if(cloudEmailKey!==OWNER_EMAIL||!('Notification'in window)||Notification.permission!=='granted'||health?.state!=='attention')return;const body=(Array.isArray(health.alerts)?health.alerts:[]).slice(0,3).join('；')||'請開啟系統健康中心檢查';new Notification('Danbridge 正式環境需要注意',{body,tag:`danbridge-owner-health-${health.runId||'current'}`,renotify:true})}
 async function renderSyncRecoveryCenter(){
  if(cloudRole!=='owner')return;
  const summary=document.getElementById('syncRecoverySummary'),errors=document.getElementById('syncRecoveryErrors'),badge=document.getElementById('syncHealthBadge'),metrics=document.getElementById('syncHealthMetrics'),alerts=document.getElementById('syncHealthAlerts');if(!summary||!errors||!badge||!metrics||!alerts)return;
@@ -778,12 +787,12 @@ async function saveEmergencyOwner(){
 function installOperationalResilienceUI(){
  if(cloudRole!=='owner')return;
  const bind=(id,handler)=>{const button=document.getElementById(id);if(button)button.onclick=handler};
- bind('createCloudBackupNow',()=>createCloudSafetyBackup(true));bind('refreshCloudBackups',listCloudSafetyBackups);bind('retryAllSync',retryAllOperationalSync);bind('refreshSyncRecovery',renderSyncRecoveryCenter);bind('downloadSyncHealthReport',downloadSyncHealthReport);bind('saveEmergencyOwner',saveEmergencyOwner);bind('refreshImmutableAudit',listImmutableAudit);
+ bind('createCloudBackupNow',()=>createCloudSafetyBackup(true));bind('refreshCloudBackups',listCloudSafetyBackups);bind('retryAllSync',retryAllOperationalSync);bind('refreshSyncRecovery',renderSyncRecoveryCenter);bind('downloadSyncHealthReport',downloadSyncHealthReport);bind('enableOwnerSystemNotifications',enableOwnerSystemNotifications);bind('startPitrPreview',startPitrPreview);bind('saveEmergencyOwner',saveEmergencyOwner);bind('refreshImmutableAudit',listImmutableAudit);
  subscribeOwnerHealthAlerts();listCloudSafetyBackups();renderSyncRecoveryCenter();listEmergencyOwners();listImmutableAudit();
 }
 function subscribeOwnerHealthAlerts(){
  unsubscribeOwnerHealth?.();unsubscribeOwnerHealth=null;if(cloudRole!=='owner')return;
- unsubscribeOwnerHealth=onSnapshot(doc(cloud,'companies',COMPANY_ID,'systemHealth','ownerAlert'),snapshot=>{if(!snapshot.exists())return;const health=snapshot.data()||{},signal=JSON.stringify([health.runId,health.state,health.alerts,health.checkedAt?.toMillis?.()||'']);if(signal===lastOwnerHealthSignal)return;lastOwnerHealthSignal=signal;if(health.state==='attention'){const first=Array.isArray(health.alerts)&&health.alerts.length?health.alerts[0]:'請開啟系統健康中心檢查';cloudStatus(`系統健康警示：${first}`,'error')}renderSyncRecoveryCenter()},error=>{console.error('owner health listener failed',error);cloudStatus('系統健康監控暫時無法連線','error')});
+ unsubscribeOwnerHealth=onSnapshot(doc(cloud,'companies',COMPANY_ID,'systemHealth','ownerAlert'),snapshot=>{if(!snapshot.exists())return;const health=snapshot.data()||{},signal=JSON.stringify([health.runId,health.state,health.alerts,health.checkedAt?.toMillis?.()||'']);if(signal===lastOwnerHealthSignal)return;lastOwnerHealthSignal=signal;if(health.state==='attention'){const first=Array.isArray(health.alerts)&&health.alerts.length?health.alerts[0]:'請開啟系統健康中心檢查';cloudStatus(`系統健康警示：${first}`,'error');notifyOwnerHealth(health)}renderSyncRecoveryCenter()},error=>{console.error('owner health listener failed',error);cloudStatus('系統健康監控暫時無法連線','error')});
 }
 
 function lessonTeacherIds(lesson){

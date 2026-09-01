@@ -1,5 +1,13 @@
 # Changelog
 
+## 20.26.143（營運安全第一優先完整化）
+
+- 既有帳號登入只更新顯示名稱、照片、最後登入時間與更新時間，不再重寫角色欄位；正式 Rules 保持最小權限。
+- 新增 App Check 保護、僅限 Daniel 的指定時間 PITR 暫存複製與 16 集合差異預覽；正式資料寫入固定為 0。
+- Owner 健康中心新增 Daniel 系統通知，健康統計只計算寄給 Daniel 的未讀通知，並精確排除 20.26.122／123 已由逐筆後端修復的舊上傳權限事件與 20.26.139 已修復的登入事件；新版本同類錯誤仍會警示。
+- PITR 執行服務只新增 clone、metadata、list 與 operation get 四項 custom role 權限，不授予刪除或資料庫設定修改權限。
+- 正式登入的 Google popup 若被網路或內嵌瀏覽器阻擋，會自動改走同頁 redirect；網址也可用 `auth=redirect` 明確指定，不再停在無法登入的錯誤畫面。
+
 ## 20.26.139（通知確認改由受保護後端交易）
 
 - AA、Daniel 與老師端的通知確認改走 App Check 保護的 production callable，不再依賴瀏覽器直接寫入 Firestore。
