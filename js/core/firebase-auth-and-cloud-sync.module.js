@@ -44,8 +44,8 @@ import {createStagingV2AuthorityReadLoader} from './staging-v2-authority-read-lo
 import {createStagingV2AuthoritySaveBrowserClient} from './staging-v2-authority-save-browser-client.js?v=20.26.120';
 import {createStagingV2ActiveRecordOperationSender,normalizeStagingV2FirestoreValue,stagingV2H0GenesisBaselineDocuments} from './staging-v2-active-record-browser-bridge.js?v=20.26.121';
 import {verifyStagingV2PrewriteBackup} from './staging-v2-prewrite-backup-verifier.js?v=20.26.120';
-import {createFirebaseProductionRecordOperationAdapter,createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.124';
-import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.124';
+import {createFirebaseProductionRecordOperationAdapter,createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.125';
+import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.125';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -57,7 +57,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.124';
+const APP_RELEASE='20.26.125';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -2220,15 +2220,16 @@ async function activateProductionRecordRuntime(expectedSourceHash){
   if(!mainSnapshot.exists()||!mainSnapshot.data()?.db||String(mainSnapshot.data()?.clientHash||'')!==verified.sourceHash||dataHash(mainSnapshot.data().db)!==verified.sourceHash||sha256Canonical(mainSnapshot.data().db)!==verified.sourceSha256)throw new Error('production 主資料在啟用前已改變');
   if(controlSnapshot.exists()||safetySnapshot.exists()){
    if(!controlSnapshot.exists()||!safetySnapshot.exists())throw new Error('production runtime 控制只存在一半，禁止補寫');
-   const existingControl=assertProductionRecordRuntimeControl(controlSnapshot.data()),existingSafety=assertProductionRecordRuntimeSafety(safetySnapshot.data(),{activationEpoch:existingControl.activationEpoch});
-   if(existingControl.legacyVersionHash!==verified.sourceHash||existingControl.recordDataHash!==verified.recordDataHash||existingControl.sourceSha256!==verified.sourceSha256||existingControl.roleViewDigest!==verified.roleViews.roleViewDigest||existingSafety.state!=='active')throw new Error('production runtime 已存在但證據不一致');
-   return{kind:'duplicate',activationEpoch:existingControl.activationEpoch,activationHash:existingControl.activationHash};
+   const existingControl=assertProductionRecordRuntimeControl(controlSnapshot.data()),rawSafety=safetySnapshot.data();
+   if(existingControl.legacyVersionHash!==verified.sourceHash||existingControl.recordDataHash!==verified.recordDataHash||existingControl.sourceSha256!==verified.sourceSha256||existingControl.roleViewDigest!==verified.roleViews.roleViewDigest)throw new Error('production runtime 已存在但證據不一致');
+   try{const existingSafety=assertProductionRecordRuntimeSafety(rawSafety,{activationEpoch:existingControl.activationEpoch});if(existingSafety.state!=='active'||existingSafety.recordDataHash!==verified.recordDataHash||existingSafety.documentCount!==verified.documentCount||existingSafety.activeCount!==verified.activeCount||existingSafety.tombstoneCount!==verified.tombstoneCount)throw new Error('production runtime head 已存在但證據不一致');return{kind:'duplicate',activationEpoch:existingControl.activationEpoch,activationHash:existingControl.activationHash}}
+   catch(error){assertLegacyProductionRecordRuntimeSafety(rawSafety,{activationEpoch:existingControl.activationEpoch,activationHash:existingControl.activationHash});const upgradedSafety=buildProductionRecordRuntimeSafety({control:existingControl,updatedAt:rawSafety.updatedAt}),upgradeAudit={persistedAt:serverTimestamp(),updatedBy:cloudUid,updatedByEmail:cloudEmailKey};transaction.set(safetyRef,{...upgradedSafety,...upgradeAudit},{merge:false});return{kind:'upgraded-safety',activationEpoch:existingControl.activationEpoch,activationHash:existingControl.activationHash}}
   }
   const audit={persistedAt:serverTimestamp(),activatedBy:cloudUid,activatedByEmail:cloudEmailKey};transaction.set(controlRef,{...control,...audit},{merge:false});transaction.set(safetyRef,{...safety,...audit},{merge:false});return{kind:'created',activationEpoch:control.activationEpoch,activationHash:control.activationHash};
  });
  const [savedControlSnapshot,savedSafetySnapshot,mainAfterSnapshot]=await Promise.all([getDocFromServer(controlRef),getDocFromServer(safetyRef),getDocFromServer(mainRef)]),savedControl=assertProductionRecordRuntimeControl(savedControlSnapshot.data()),savedSafety=assertProductionRecordRuntimeSafety(savedSafetySnapshot.data(),{activationEpoch:savedControl.activationEpoch});
  if(savedControl.legacyVersionHash!==verified.sourceHash||savedControl.recordDataHash!==verified.recordDataHash||savedControl.sourceSha256!==verified.sourceSha256||savedControl.roleViewDigest!==verified.roleViews.roleViewDigest||savedSafety.state!=='active'||!mainAfterSnapshot.exists()||String(mainAfterSnapshot.data()?.clientHash||'')!==verified.sourceHash||dataHash(mainAfterSnapshot.data()?.db)!==verified.sourceHash)throw new Error('production runtime 啟用讀回驗證失敗');
- const result={state:'active',kind:transactionResult.kind,activationEpoch:savedControl.activationEpoch,activationHash:savedControl.activationHash,sourceHash:verified.sourceHash,recordDataHash:verified.recordDataHash,documentCount:verified.documentCount,activeCount:verified.activeCount,tombstoneCount:verified.tombstoneCount,roleCount:verified.roleViews.total,controlWrites:transactionResult.kind==='created'?2:0,recordWrites:0,legacyMainWrites:0,productionTouched:true,deployTouched:false,timeMachineTouched:false,rollbackChannel:savedControl.rollbackChannel};document.body.dataset.productionRecordActivationResult=JSON.stringify(result);return result;
+ const result={state:'active',kind:transactionResult.kind,activationEpoch:savedControl.activationEpoch,activationHash:savedControl.activationHash,sourceHash:verified.sourceHash,recordDataHash:verified.recordDataHash,documentCount:verified.documentCount,activeCount:verified.activeCount,tombstoneCount:verified.tombstoneCount,roleCount:verified.roleViews.total,controlWrites:transactionResult.kind==='created'?1:0,safetyWrites:transactionResult.kind==='created'||transactionResult.kind==='upgraded-safety'?1:0,recordWrites:0,legacyMainWrites:0,productionTouched:true,deployTouched:false,timeMachineTouched:false,rollbackChannel:savedControl.rollbackChannel};document.body.dataset.productionRecordActivationResult=JSON.stringify(result);return result;
 }
 if(DANBRIDGE_ENVIRONMENT==='production'){
  window.__danbridgeActivateProductionRecordRuntime=activateProductionRecordRuntime;

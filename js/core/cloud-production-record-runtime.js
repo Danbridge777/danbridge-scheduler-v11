@@ -28,9 +28,22 @@ export function assertProductionRecordRuntimeControl(control){
 
 export function buildProductionRecordRuntimeSafety({control,updatedAt}={}){
  assertProductionRecordRuntimeControl(control);if(!timestamp(updatedAt))throw new Error('production 逐筆 runtime 安全控制時間無效');
- return{schema:'danbridge-production-record-runtime-safety-v1',environment:'production',companyId:'danbridge',activationEpoch:control.activationEpoch,state:'active',revision:1,lastEventHash:control.activationHash,readAllowed:true,writeAllowed:true,updatedAt};
+ const body={schema:'danbridge-production-record-runtime-safety-v2',environment:'production',companyId:'danbridge',activationEpoch:control.activationEpoch,state:'active',revision:1,recordRevision:0,recordDataHash:control.recordDataHash,documentCount:control.documentCount,activeCount:control.activeCount,tombstoneCount:control.tombstoneCount,lastOperationId:'',previousEventHash:control.activationHash,readAllowed:true,writeAllowed:true,updatedAt};
+ return{...body,lastEventHash:sha256Canonical(body)};
 }
 
 export function assertProductionRecordRuntimeSafety(safety,{activationEpoch}={}){
- if(!safety||safety.schema!=='danbridge-production-record-runtime-safety-v1'||safety.environment!=='production'||safety.companyId!=='danbridge'||safety.activationEpoch!==activationEpoch||!token(safety.activationEpoch)||!['active','paused'].includes(safety.state)||!integer(safety.revision)||safety.revision<1||!digest(safety.lastEventHash)||safety.readAllowed!==true||safety.writeAllowed!==(safety.state==='active')||!timestamp(safety.updatedAt))throw new Error('production 逐筆 runtime 安全控制格式無效');return safety;
+ if(!safety||safety.schema!=='danbridge-production-record-runtime-safety-v2'||safety.environment!=='production'||safety.companyId!=='danbridge'||safety.activationEpoch!==activationEpoch||!token(safety.activationEpoch)||!['active','paused'].includes(safety.state)||!integer(safety.revision)||safety.revision<1||!integer(safety.recordRevision)||!recordHash(safety.recordDataHash)||!integer(safety.documentCount)||!integer(safety.activeCount)||!integer(safety.tombstoneCount)||safety.documentCount!==safety.activeCount+safety.tombstoneCount||typeof safety.lastOperationId!=='string'||(safety.lastOperationId&&!token(safety.lastOperationId))||!digest(safety.previousEventHash)||!digest(safety.lastEventHash)||safety.readAllowed!==true||safety.writeAllowed!==(safety.state==='active')||!timestamp(safety.updatedAt))throw new Error('production 逐筆 runtime 安全控制格式無效');
+ const body=clone(safety);delete body.lastEventHash;delete body.persistedAt;delete body.activatedBy;delete body.activatedByEmail;delete body.updatedBy;delete body.updatedByEmail;if(sha256Canonical(body)!==safety.lastEventHash)throw new Error('production 逐筆 runtime safety hash 不符');return safety;
+}
+
+export function assertLegacyProductionRecordRuntimeSafety(safety,{activationEpoch,activationHash}={}){
+ if(!safety||safety.schema!=='danbridge-production-record-runtime-safety-v1'||safety.environment!=='production'||safety.companyId!=='danbridge'||safety.activationEpoch!==activationEpoch||!token(safety.activationEpoch)||safety.state!=='active'||safety.revision!==1||safety.lastEventHash!==activationHash||safety.readAllowed!==true||safety.writeAllowed!==true||!timestamp(safety.updatedAt))throw new Error('production 舊安全控制格式無效');return safety;
+}
+
+export function advanceProductionRecordRuntimeSafety(safety,{operation}={}){
+ const current=assertProductionRecordRuntimeSafety(safety,{activationEpoch:operation?.activationEpoch});
+ if(!operation||operation.baseHash!==current.recordDataHash||!recordHash(operation.targetHash)||!integer(operation.targetDocumentCount)||!integer(operation.targetActiveCount)||!integer(operation.targetTombstoneCount)||operation.targetDocumentCount!==operation.targetActiveCount+operation.targetTombstoneCount||!token(operation.operationId)||!timestamp(operation.createdAt))throw new Error('production 逐筆 head operation 無效');
+ const body={schema:current.schema,environment:current.environment,companyId:current.companyId,activationEpoch:current.activationEpoch,state:current.state,revision:current.revision+1,recordRevision:current.recordRevision+1,recordDataHash:operation.targetHash,documentCount:operation.targetDocumentCount,activeCount:operation.targetActiveCount,tombstoneCount:operation.targetTombstoneCount,lastOperationId:operation.operationId,previousEventHash:current.lastEventHash,readAllowed:current.readAllowed,writeAllowed:current.writeAllowed,updatedAt:operation.createdAt};
+ return{...body,lastEventHash:sha256Canonical(body)};
 }

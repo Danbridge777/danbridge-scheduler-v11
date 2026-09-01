@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.125（production 可持續逐筆 head）
+
+- 每一筆正式變更現在會在同一 Firestore 交易內更新資料、exactly-once receipt 與帶 hash chain 的權威 head；舊主資料仍不修改。
+- 新登入、重新整理、Mac／Windows 與多裝置會依最新 head 驗證完整逐筆資料，不再把啟用後的合法變更與初始雜湊比較。
+- head 與資料監聽可任一順序抵達，僅在完整 hash、文件數、有效筆數與墓碑數收斂後才恢復寫入；逾時、實體刪除、revision 倒退或同版變造仍 fail closed。
+
 ## 20.26.124（production 原子啟用監聽順序修正）
 
 - production 控制與安全文件在同一原子交易建立時，允許 Firestore 監聽回呼以任一順序抵達；等待期間立即維持禁止寫入，避免安全文件稍晚抵達造成假性 blocked。
