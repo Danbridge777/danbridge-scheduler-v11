@@ -82,3 +82,8 @@
 #teacherReportModal[data-read-only="true"] .report-status-option{opacity:.78;cursor:default}
 #teacherReportModal[data-read-only="true"] textarea,
 #teacherReportModal[data-read-only="true"] input[type="file"]{background:#f4f6f8;color:#536174}
+
+/* Read-only report actions must stay absent even when responsive button rules use display:flex!important. */
+#teacherReportModal #startClassFocusBtn[hidden],
+#teacherReportModal #quickCompleteTeacherReportBtn[hidden],
+#teacherReportModal #saveTeacherReportBtn[hidden]{display:none!important}

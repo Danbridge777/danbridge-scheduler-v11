@@ -1,13 +1,14 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.130';
-const APP_SHELL_RELEASE = '20.26.130';
+const CLOUD_RELEASE = '20.26.131';
+const APP_SHELL_RELEASE = '20.26.131';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
-const ROLE_UX_RELEASE = '20.26.130';
-const ROLE_UX_STYLE_RELEASE = '20.25.10';
+const ROLE_UX_RELEASE = '20.26.131';
+const REPORT_STYLE_RELEASE = '20.26.131';
+const ROLE_UX_STYLE_RELEASE = '20.26.131';
 const PWA_RELEASE = '20.26.113';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
@@ -77,6 +78,7 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/app/v20-scheduling-efficiency.js?v=${SCHEDULING_EFFICIENCY_RELEASE}`);
   const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(elements => elements.map(element => element.getAttribute('href')));
   expect(styles).toContain(`./css/core/73-v20014-role-responsive-ux.css?v=${ROLE_UX_STYLE_RELEASE}`);
+  expect(styles).toContain(`./css/core/37-v15252-lesson-reporting-and-toolbar-fix.css?v=${REPORT_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/77-pwa-install-and-update.css?v=${PWA_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/67-v185-interface-clarity.css?v=${INTERFACE_CLARITY_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/78-v20259-premium-responsive-controls.css?v=${PREMIUM_CONTROLS_RELEASE}`);
@@ -536,6 +538,27 @@ test('lesson report dialog scrolls independently for every role and viewport', a
     expect(result.top).toBeGreaterThanOrEqual(0);
     expect(result.bottom).toBeLessThanOrEqual(result.viewportHeight + 1);
   }
+});
+
+test('read-only lesson report actions stay hidden under responsive teacher styles', async ({ page }) => {
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  const result = await page.evaluate(() => {
+    document.body.classList.remove('auth-locked');
+    document.body.classList.add('teacher-cloud-role');
+    const modal = document.getElementById('teacherReportModal');
+    modal.dataset.readOnly = 'true';
+    const ids = ['startClassFocusBtn', 'quickCompleteTeacherReportBtn', 'saveTeacherReportBtn'];
+    return ids.map(id => {
+      const button = document.getElementById(id);
+      button.hidden = true;
+      return { id, hidden: button.hidden, display: getComputedStyle(button).display };
+    });
+  });
+  expect(result).toEqual([
+    { id: 'startClassFocusBtn', hidden: true, display: 'none' },
+    { id: 'quickCompleteTeacherReportBtn', hidden: true, display: 'none' },
+    { id: 'saveTeacherReportBtn', hidden: true, display: 'none' }
+  ]);
 });
 
 test('lesson editor scrolls independently above the mobile navigation', async ({ page }) => {
