@@ -61,7 +61,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.136';
+const APP_RELEASE='20.26.137';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -131,6 +131,12 @@ window.authLogout=async function authLogout(){
    cloudStatus('登出失敗：'+(error?.message||error),'error');
  }
 };
+document.addEventListener('click',event=>{
+ const target=event.target instanceof Element?event.target.closest('#firebaseLogoutBtn'):null;
+ if(!target)return;
+ event.preventDefault();
+ window.authLogout();
+},true);
 try{await setPersistence(auth,browserLocalPersistence)}catch(e){console.warn(e)}
 let cloudRole='';
 let cloudTeacherId='';
@@ -1448,7 +1454,7 @@ function applyRoleUI(profile,user){
    setDoc(ownerRef,{displayName:signedInName,updatedAt:serverTimestamp()},{merge:true}).catch(error=>console.warn('owner display name sync failed',error));
  }
  const header=document.querySelector('.header-auth-actions');
- if(header)header.innerHTML=`<span class="cloud-role-label" style="font-size:12px;font-weight:800">${cloudCanManageSchedule?'排課專員':(window.DanbridgeAccess?.ROLE_LABELS?.[profile.role]||profile.role)}｜${String(signedInName).trim()}</span>${profile.role==='owner'?'<button type="button" class="btn notification-bell" onclick="DanbridgeNotifications.open()" aria-label="開啟通知中心"><span class="notification-bell-icon">🔔</span><span id="notificationCount" class="notification-count" hidden>0</span></button>':''}${profile.role==='owner'&&DANBRIDGE_ENVIRONMENT==='production'?'<button type="button" class="btn" id="productionRolePrivacyBtn">驗證角色權限</button>':''}<button type="button" class="btn" id="firebaseLogoutBtn" onclick="authLogout()">登出</button>`;
+ if(header)header.innerHTML=`<span class="cloud-role-label" style="font-size:12px;font-weight:800">${cloudCanManageSchedule?'排課專員':(window.DanbridgeAccess?.ROLE_LABELS?.[profile.role]||profile.role)}｜${String(signedInName).trim()}</span>${profile.role==='owner'?'<button type="button" class="btn notification-bell" onclick="DanbridgeNotifications.open()" aria-label="開啟通知中心"><span class="notification-bell-icon">🔔</span><span id="notificationCount" class="notification-count" hidden>0</span></button>':''}${profile.role==='owner'&&DANBRIDGE_ENVIRONMENT==='production'?'<button type="button" class="btn" id="productionRolePrivacyBtn">驗證角色權限</button>':''}<button type="button" class="btn" id="firebaseLogoutBtn">登出</button>`;
  const productionRolePrivacyBtn=document.getElementById('productionRolePrivacyBtn');
  productionRolePrivacyBtn?.addEventListener('click',async()=>{
    productionRolePrivacyBtn.disabled=true;productionRolePrivacyBtn.textContent='正在驗證角色權限…';
