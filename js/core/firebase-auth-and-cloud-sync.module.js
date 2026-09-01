@@ -61,7 +61,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.137';
+const APP_RELEASE='20.26.138';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -124,18 +124,26 @@ export function createExplicitStagingV2AuthorityReadLoader(){
 }
 
 // 舊版 Header 使用 onclick="authLogout()"；公開相容 API，避免 Header 重建前點擊失效。
+let logoutInFlight=false;
 window.authLogout=async function authLogout(){
- try{await signOut(auth)}
+ if(logoutInFlight)return;
+ logoutInFlight=true;
+ const button=document.getElementById('firebaseLogoutBtn');
+ if(button){button.disabled=true;button.textContent='正在安全登出…'}
+ cloudStatus('正在安全登出…','pending');
+ try{await signOut(auth);window.location.reload()}
  catch(error){
    console.error('Firebase logout failed:',error);
    cloudStatus('登出失敗：'+(error?.message||error),'error');
+   logoutInFlight=false;
+   if(button){button.disabled=false;button.textContent='登出'}
  }
 };
 document.addEventListener('click',event=>{
  const target=event.target instanceof Element?event.target.closest('#firebaseLogoutBtn'):null;
  if(!target)return;
  event.preventDefault();
- window.authLogout();
+ void window.authLogout();
 },true);
 try{await setPersistence(auth,browserLocalPersistence)}catch(e){console.warn(e)}
 let cloudRole='';
