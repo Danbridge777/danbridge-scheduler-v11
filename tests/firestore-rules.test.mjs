@@ -104,7 +104,10 @@ async function seed() {
       [`companies/${COMPANY_ID}/lessonReports/lesson-own`, { companyId: COMPANY_ID, lessonId: 'lesson-own', reportedForTeacherIds: ['teacher-1'], branchId: 'branch-a', content: 'own report' }],
       [`companies/${COMPANY_ID}/lessonReports/lesson-other`, { companyId: COMPANY_ID, lessonId: 'lesson-other', reportedForTeacherIds: ['teacher-2'], branchId: 'branch-b', content: 'other report' }],
       [`companies/${COMPANY_ID}/scheduleNotifications/teacher-notice`, { recipientEmail: TEACHER_EMAIL, read: false, message: 'own notice' }],
-      [`companies/${COMPANY_ID}/scheduleNotifications/other-notice`, { recipientEmail: OTHER_TEACHER_EMAIL, read: false, message: 'other notice' }]
+      [`companies/${COMPANY_ID}/scheduleNotifications/other-notice`, { recipientEmail: OTHER_TEACHER_EMAIL, read: false, message: 'other notice' }],
+      ['productionTeacherLeaveRecords/leave-own', { companyId: COMPANY_ID, leaveId: 'leave-own', teacherId: 'teacher-1', teacherName: 'Teacher One', leaveType: 'sick', date: '2026-09-02', start: '09:00', end: '10:00', hours: 1, status: 'active', revision: 1 }],
+      ['productionTeacherLeaveRecords/leave-other', { companyId: COMPANY_ID, leaveId: 'leave-other', teacherId: 'teacher-2', teacherName: 'Teacher Two', leaveType: 'personal', date: '2026-09-03', start: '10:00', end: '12:00', hours: 2, status: 'active', revision: 1 }],
+      ['productionTeacherLeaveOperationReceipts/leave-operation-own', { companyId: COMPANY_ID, leaveId: 'leave-own', committedByUid: 'teacher-uid' }]
     ];
     for (const [path, data] of rows) await setDoc(doc(db, path), data);
   });
@@ -112,6 +115,18 @@ async function seed() {
 
 before(async () => {
   testEnv = await initializeTestEnvironment({ projectId: PROJECT_ID });
+});
+
+describe('正式老師請假角色隔離',()=>{
+ test('Daniel 與 AA 可讀全部；老師只能讀自己；校區管理者不可讀',async()=>{
+  const owner=auth('owner-uid',OWNER_EMAIL),scheduler=auth('scheduler-2-uid',SECOND_SCHEDULER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),other=auth('other-uid',OTHER_TEACHER_EMAIL),manager=auth('manager-uid',MANAGER_EMAIL);
+  await assertSucceeds(getDoc(doc(owner,'productionTeacherLeaveRecords/leave-own')));await assertSucceeds(getDoc(doc(owner,'productionTeacherLeaveRecords/leave-other')));
+  await assertSucceeds(getDocs(query(collection(scheduler,'productionTeacherLeaveRecords'),where('companyId','==',COMPANY_ID))));
+  await assertSucceeds(getDocs(query(collection(teacher,'productionTeacherLeaveRecords'),where('companyId','==',COMPANY_ID),where('teacherId','==','teacher-1'))));
+  await assertFails(getDoc(doc(teacher,'productionTeacherLeaveRecords/leave-other')));await assertSucceeds(getDoc(doc(other,'productionTeacherLeaveRecords/leave-other')));await assertFails(getDoc(doc(manager,'productionTeacherLeaveRecords/leave-own')));
+ });
+ test('任何前端角色都不能直接新增、修改或刪除請假紀錄',async()=>{for(const [uid,email] of [['owner-uid',OWNER_EMAIL],['scheduler-2-uid',SECOND_SCHEDULER_EMAIL],['teacher-uid',TEACHER_EMAIL]]){const db=auth(uid,email),ref=doc(db,'productionTeacherLeaveRecords/leave-own');await assertFails(setDoc(doc(db,'productionTeacherLeaveRecords/forged'),{companyId:COMPANY_ID,teacherId:'teacher-1'}));await assertFails(updateDoc(ref,{hours:99}));await assertFails(deleteDoc(ref))}});
+ test('操作 receipt 僅 Daniel 或實際提交者可讀，所有前端均不可寫',async()=>{const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),other=auth('other-uid',OTHER_TEACHER_EMAIL),ref='productionTeacherLeaveOperationReceipts/leave-operation-own';await assertSucceeds(getDoc(doc(owner,ref)));await assertSucceeds(getDoc(doc(teacher,ref)));await assertFails(getDoc(doc(other,ref)));await assertFails(setDoc(doc(owner,'productionTeacherLeaveOperationReceipts/forged'),{companyId:COMPANY_ID,committedByUid:'owner-uid'}))});
 });
 
 describe('staging 全資料與角色候選原子控制',()=>{

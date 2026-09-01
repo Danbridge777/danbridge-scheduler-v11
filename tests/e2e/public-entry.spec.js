@@ -1,15 +1,15 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.134';
-const APP_SHELL_RELEASE = '20.26.134';
+const CLOUD_RELEASE = '20.26.135';
+const APP_SHELL_RELEASE = '20.26.135';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
-const ROLE_UX_RELEASE = '20.26.134';
-const REPORT_STYLE_RELEASE = '20.26.134';
-const ROLE_UX_STYLE_RELEASE = '20.26.134';
-const PWA_RELEASE = '20.26.134';
+const ROLE_UX_RELEASE = '20.26.135';
+const REPORT_STYLE_RELEASE = '20.26.135';
+const ROLE_UX_STYLE_RELEASE = '20.26.135';
+const PWA_RELEASE = '20.26.135';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
@@ -68,6 +68,7 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/app/scheduler-student-tools.js?v=${CLOUD_RELEASE}`);
   expect(sources).toContain(`./js/ui/clean-field-hints.js?v=${CLEAN_FIELD_RELEASE}`);
   expect(sources).toContain(`./js/modules/teachers/teacher-kpi.js?v=${TEACHER_KPI_RELEASE}`);
+  expect(sources).toContain('./js/modules/teachers/teacher-leave.js?v=20.26.135');
   expect(sources).toContain(`./js/core/branch-business-scope.js?v=${BRANCH_SCOPE_RELEASE}`);
   expect(sources).toContain(`./js/app/v20014-role-responsive-ux.js?v=${ROLE_UX_RELEASE}`);
   expect(sources).toContain(`./js/core/pwa-installation.js?v=${PWA_RELEASE}`);
@@ -78,6 +79,7 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/app/v20-scheduling-efficiency.js?v=${SCHEDULING_EFFICIENCY_RELEASE}`);
   const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(elements => elements.map(element => element.getAttribute('href')));
   expect(styles).toContain(`./css/core/73-v20014-role-responsive-ux.css?v=${ROLE_UX_STYLE_RELEASE}`);
+  expect(styles).toContain('./css/teachers/24-teacher-leave.css?v=20.26.135');
   expect(styles).toContain(`./css/core/37-v15252-lesson-reporting-and-toolbar-fix.css?v=${REPORT_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/77-pwa-install-and-update.css?v=${PWA_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/67-v185-interface-clarity.css?v=${INTERFACE_CLARITY_STYLE_RELEASE}`);
@@ -86,6 +88,16 @@ test('critical teacher and finance resources load the current release', async ({
   expect(manifest).toBe('./manifest.webmanifest');
   const appleIcon = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
   expect(appleIcon).toBe('./icon-192.png?v=20.18.1');
+});
+
+test('老師請假頁在 Daniel、AA、老師三種角色下呈現正確範圍並提交精確時數',async({page})=>{
+ await page.goto('/index.html',{waitUntil:'domcontentloaded'});await page.waitForTimeout(450);
+ await page.addStyleTag({content:'#authScreen{display:none!important;pointer-events:none!important}'});
+ await page.evaluate(()=>{document.body.classList.remove('auth-locked');document.getElementById('authScreen').style.display='none';window.currentCloudRole=()=>window.DanbridgeAccess.getContext().role;db={...db,teachers:[{id:'teacher-1',name:'張毅'},{id:'teacher-2',name:'AA'}]};window.DanbridgeAccess.setContext({role:'owner',email:'owner@example.com',teacherId:'',canManageSchedule:false});window.__leaveTestPayload=null;window.__danbridgeSaveTeacherLeave=async payload=>{window.__leaveTestPayload=structuredClone(payload);return{ok:true}};window.__danbridgeSetTeacherLeaves([{id:'leave-existing',leaveId:'leave-existing',teacherId:'teacher-1',teacherName:'張毅',leaveType:'sick',date:'2026-09-02',start:'09:00',end:'10:30',hours:1.5,note:'看診',status:'active',revision:1}]);window.renderAll();window.switchTab('teacherLeave')});
+ await expect(page.locator('#teacherLeave')).toHaveClass(/active/);await expect(page.locator('#teacherLeaveRows')).toContainText('張毅');await expect(page.locator('#teacherLeaveRows')).toContainText('1.5 小時');
+ await page.locator('#teacherLeaveTeacher').selectOption('teacher-1');await page.locator('#teacherLeaveType').selectOption('bereavement');await page.locator('#teacherLeaveDate').fill('2026-09-04');await page.locator('#teacherLeaveStart').selectOption('13:00');await page.locator('#teacherLeaveEnd').selectOption('15:30');await expect(page.locator('#teacherLeaveHoursPreview')).toHaveText('共 2.5 小時');await page.locator('#teacherLeaveSaveBtn').click();await expect.poll(()=>page.evaluate(()=>window.__leaveTestPayload?.input)).toEqual({teacherId:'teacher-1',leaveType:'bereavement',date:'2026-09-04',start:'13:00',end:'15:30',note:''});
+ const roles=await page.evaluate(()=>{const result={};window.DanbridgeAccess.setContext({role:'teacher',email:'teacher@example.com',teacherId:'teacher-1',canManageSchedule:false});window.DanbridgeRoleResponsive.apply();window.renderTeacherLeaves();result.teacher={tabs:[...document.querySelectorAll('nav button[data-tab]')].filter(button=>!button.hidden&&getComputedStyle(button).display!=='none').map(button=>button.dataset.tab),teacherDisabled:document.getElementById('teacherLeaveTeacher').disabled,teacherValue:document.getElementById('teacherLeaveTeacher').value};window.DanbridgeAccess.setContext({role:'teacher',email:'aa@example.com',teacherId:'teacher-2',canManageSchedule:true});window.DanbridgeRoleResponsive.apply();window.renderTeacherLeaves();result.scheduler={tabs:[...document.querySelectorAll('nav button[data-tab]')].filter(button=>!button.hidden&&getComputedStyle(button).display!=='none').map(button=>button.dataset.tab),teacherDisabled:document.getElementById('teacherLeaveTeacher').disabled};return result});
+ expect(roles.teacher).toEqual({tabs:['dashboard','teacherLeave','calendar','lessons'],teacherDisabled:true,teacherValue:'teacher-1'});expect(roles.scheduler).toEqual({tabs:['teacherLeave','calendar'],teacherDisabled:false});
 });
 
 test('刪除課程可沿用同一 ID 重建且永久日誌只追加不覆寫',async({page})=>{
@@ -171,7 +183,7 @@ test('every owner navigation and dashboard shortcut responds before heavy render
     renderNames.forEach(name=>{originals[name]=window[name];window[name]=()=>{renderCalls.push(name)}});
     window.requestAnimationFrame=callback=>{frames.push(callback);return frames.length};
     try{
-      const tabs=['dashboard','students','teachers','calendar','lessons','makeups','camps','finance','data','security'],checks=[];
+      const tabs=['dashboard','students','teachers','teacherLeave','calendar','lessons','makeups','camps','finance','data','security'],checks=[];
       for(const tab of tabs){
         const before=renderCalls.length,expectedRenderer=rendererByTab[tab]??null;window.switchTab(tab);
         const section=document.getElementById(tab).classList.contains('active'),button=document.querySelector(`nav button[data-tab="${tab}"]`).classList.contains('active'),renderedDuringSwitch=renderCalls.length!==before,queuedFrames=frames.length;
@@ -194,16 +206,16 @@ test('role navigation matrix rejects every forbidden workspace', async ({ page }
     document.body.classList.remove('auth-locked');
     const attempt=(role,canManageSchedule,tabs)=>{window.DanbridgeAccess.setContext({role,canManageSchedule});window.currentCloudRole=()=>role;return tabs.map(tab=>{window.switchTab(tab);return[tab,document.body.dataset.activeSection]})};
     return{
-      owner:attempt('owner',false,['dashboard','students','teachers','calendar','lessons','makeups','camps','finance','data','security']),
-      scheduler:attempt('teacher',true,['students','calendar','dashboard','lessons','finance','security']),
-      teacher:attempt('teacher',false,['dashboard','calendar','lessons','students','teachers','finance','security']),
-      manager:attempt('branch_manager',false,['dashboard','students','teachers','calendar','lessons','makeups','settlement','finance','data','security'])
+      owner:attempt('owner',false,['dashboard','students','teachers','teacherLeave','calendar','lessons','makeups','camps','finance','data','security']),
+      scheduler:attempt('teacher',true,['teacherLeave','students','calendar','dashboard','lessons','finance','security']),
+      teacher:attempt('teacher',false,['teacherLeave','dashboard','calendar','lessons','students','teachers','finance','security']),
+      manager:attempt('branch_manager',false,['teacherLeave','dashboard','students','teachers','calendar','lessons','makeups','settlement','finance','data','security'])
     };
   });
   expect(matrix.owner.every(([requested,active])=>requested===active)).toBe(true);
-  expect(matrix.scheduler).toEqual([['students','calendar'],['calendar','calendar'],['dashboard','calendar'],['lessons','calendar'],['finance','calendar'],['security','calendar']]);
-  expect(matrix.teacher).toEqual([['dashboard','dashboard'],['calendar','calendar'],['lessons','lessons'],['students','dashboard'],['teachers','dashboard'],['finance','dashboard'],['security','dashboard']]);
-  expect(matrix.manager).toEqual([['dashboard','dashboard'],['students','students'],['teachers','teachers'],['calendar','calendar'],['lessons','lessons'],['makeups','makeups'],['settlement','finance'],['finance','finance'],['data','dashboard'],['security','dashboard']]);
+  expect(matrix.scheduler).toEqual([['teacherLeave','teacherLeave'],['students','calendar'],['calendar','calendar'],['dashboard','calendar'],['lessons','calendar'],['finance','calendar'],['security','calendar']]);
+  expect(matrix.teacher).toEqual([['teacherLeave','teacherLeave'],['dashboard','dashboard'],['calendar','calendar'],['lessons','lessons'],['students','dashboard'],['teachers','dashboard'],['finance','dashboard'],['security','dashboard']]);
+  expect(matrix.manager).toEqual([['teacherLeave','dashboard'],['dashboard','dashboard'],['students','students'],['teachers','teachers'],['calendar','calendar'],['lessons','lessons'],['makeups','makeups'],['settlement','finance'],['finance','finance'],['data','dashboard'],['security','dashboard']]);
 });
 
 test('ordinary teacher cannot reveal owner or aa-only controls', async ({ page }) => {

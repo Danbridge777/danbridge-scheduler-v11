@@ -163,7 +163,7 @@
     if(current==='owner')restoreRoleResponsiveControls();
     if(current==='teacher'){
       const scheduler=accessContext().canManageSchedule===true;
-      const labels=scheduler?{calendar:'全老師課表'}:{dashboard:'我的總覽',calendar:'我的課表',lessons:'課程回報'};
+      const labels=scheduler?{calendar:'全老師課表',teacherLeave:'請假管理'}:{dashboard:'我的總覽',calendar:'我的課表',lessons:'課程回報',teacherLeave:'我的請假'};
       $$('nav button[data-tab]').forEach(button=>{const allowed=Object.prototype.hasOwnProperty.call(labels,button.dataset.tab);button.hidden=!allowed;button.style.setProperty('display',allowed?'':'none',allowed?'':'important');if(allowed)button.textContent=labels[button.dataset.tab]});
       const hidden=scheduler?'#dashboard .owner-only-action,#dashboard .owner-v33-only,.branch-scope-bar,#calendarAnalysis,#lessons .toolbar button':'.owner-only-action,.owner-v33-only,.branch-scope-bar,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#calendar .day-add,#calendarAnalysis,#lessons .toolbar button,#courseDrawerEditBtn';
       $$(hidden).forEach(hideForRole);

@@ -3664,6 +3664,22 @@ service cloud.firestore {
     match /stagingRecordSyncV2GenesisAuthorityAuditReceipts/{document=**} { allow read, write: if false; }
     match /stagingRecordSyncV2Reservations/{document=**} { allow read, write: if false; }
 
+    // 正式老師請假紀錄由受 App Check 保護的 callable transaction 寫入。
+    // 放在 company broad namespace 外，避免任何前端 Owner 寫入路徑繞過後端版本檢查。
+    match /productionTeacherLeaveRecords/{leaveId} {
+      allow read: if resource.data.companyId == 'danbridge' && (
+        isOwner()
+        || canManageSchedule('danbridge')
+        || (isTeacher('danbridge') && resource.data.teacherId == ownTeacherId())
+      );
+      allow create, update, delete: if false;
+    }
+
+    match /productionTeacherLeaveOperationReceipts/{operationId} {
+      allow read: if isOwner() || (activeMember('danbridge') && resource.data.committedByUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // Immutable V1 retirement fence. Clients can observe it but can never create,
     // replace, or delete it; only a future trusted cutover service may install it.
     match /stagingRecordSyncV1PermanentFences/{companyId} {
@@ -3770,13 +3786,12 @@ service cloud.firestore {
         || (activeMember(companyId)
           && resource.data.recipientEmail == emailKey());
       allow create, delete: if isOwner() && legacyV1WriteOpen(companyId);
-      allow update: if legacyV1WriteOpen(companyId)
-        && (isOwner()
-          || (activeMember(companyId)
+      allow update: if isOwner()
+        || (activeMember(companyId)
           && resource.data.recipientEmail == emailKey()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'read','acknowledgedAt','acknowledgedBy'
-          ])));
+          ]));
     }
 
     match /companies/{companyId}/errorEvents/{eventId} {

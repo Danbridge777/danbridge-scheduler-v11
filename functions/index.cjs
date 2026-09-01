@@ -56,6 +56,39 @@ async function verifiedProductionOwner(request,runtimeValue){
  try{return runtimeValue.assertProductionTrustedCaller(access)}catch{throw new HttpsError('permission-denied','只有有效 Owner 可以執行正式寫入。')}
 }
 
+async function verifiedProductionLeaveActor(request,runtimeValue){
+ const uid=String(request.auth?.uid||''),email=String(request.auth?.token?.email||'').trim().toLowerCase();
+ if(!uid||!email||request.auth?.token?.email_verified!==true||!request.app)throw new HttpsError('unauthenticated','需要有效登入與 App Check。');
+ let access={uid,email,role:'owner',active:true,companyId:'danbridge',teacherId:'',canManageSchedule:false};
+ if(email!==PRIMARY_OWNER_EMAIL){const snapshot=await runtimeValue.firestore.doc(`companyAccess/${email}`).get(),row=snapshot.exists?snapshot.data():null;access={uid,email,role:row?.role,active:row?.active,companyId:row?.companyId,teacherId:row?.teacherId,canManageSchedule:row?.canManageSchedule===true}}
+ const {normalizeTeacherLeaveActor}=await import('../js/core/teacher-leave-policy.js');
+ try{return normalizeTeacherLeaveActor(access)}catch{throw new HttpsError('permission-denied','此帳號沒有請假操作權限。')}
+}
+
+exports.productionTeacherLeaveOperation=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'512MiB',concurrency:20,minInstances:0,maxInstances:20},async request=>{
+ try{
+  const runtimeValue=await productionRuntime(),actor=await verifiedProductionLeaveActor(request,runtimeValue),firestore=runtimeValue.firestore,{normalizeTeacherLeaveRequest,buildTeacherLeaveRecord,teacherLeaveRequestFingerprint,teacherLeaveTypeLabel}=await import('../js/core/teacher-leave-policy.js'),normalized=normalizeTeacherLeaveRequest(request.data),fingerprint=teacherLeaveRequestFingerprint(request.data),leaveRef=firestore.doc(`productionTeacherLeaveRecords/${normalized.leaveId}`),receiptRef=firestore.doc(`productionTeacherLeaveOperationReceipts/${normalized.operationId}`),auditRef=firestore.doc(`companyAudit/teacher-leave-${normalized.operationId}`),accessSnapshot=await firestore.collection('companyAccess').get(),accessRows=accessSnapshot.docs.map(row=>({email:row.id.toLowerCase(),...(row.data()||{})})).filter(row=>row.active===true&&row.companyId==='danbridge'),actorAccess=accessRows.find(row=>row.email===actor.email),actorName=actor.kind==='owner'?'Daniel':actor.kind==='scheduler'?'AA':String(actorAccess?.teacherName||actorAccess?.displayName||actor.email),nowIso=new Date().toISOString();
+  const result=await firestore.runTransaction(async transaction=>{
+   const [currentSnapshot,receiptSnapshot]=await Promise.all([transaction.get(leaveRef),transaction.get(receiptRef)]),current=currentSnapshot.exists?currentSnapshot.data():null,receipt=receiptSnapshot.exists?receiptSnapshot.data():null;
+   if(receipt){if(receipt.requestFingerprint!==fingerprint||receipt.leaveId!==normalized.leaveId)throw new Error('請假操作 receipt identity 衝突');return{duplicate:true,record:current,revision:receipt.revision}}
+   const teacherId=normalized.action==='cancel'?String(current?.teacherId||''):String(normalized.input?.teacherId||''),teacherRef=firestore.doc(`productionFullRecordShadows/danbridge/collections/teachers/records/${teacherId}`),teacherSnapshot=await transaction.get(teacherRef),teacher=teacherSnapshot.exists?teacherSnapshot.data():null;
+   if(!teacher||teacher.deleted===true||!teacher.data||String(teacher.data.id||teacherId)!==teacherId)throw new Error('找不到有效老師資料');
+   const record=buildTeacherLeaveRecord({request:request.data,actor,current,teacherName:String(teacher.data.name||teacher.data.displayName||teacherId),nowIso}),audit={updatedAt:FieldValue.serverTimestamp(),updatedByUid:actor.uid,updatedByEmail:actor.email};
+   transaction.set(leaveRef,{...record,...audit},{merge:false});
+   transaction.set(receiptRef,{schema:'danbridge-teacher-leave-operation-receipt-v1',environment:'production',companyId:'danbridge',operationId:normalized.operationId,leaveId:normalized.leaveId,action:normalized.action,requestFingerprint:fingerprint,revision:record.revision,committedAt:FieldValue.serverTimestamp(),committedByUid:actor.uid,committedByEmail:actor.email},{merge:false});
+   transaction.set(auditRef,{schema:'danbridge-company-audit-v2',environment:'production',companyId:'danbridge',category:'teacher-leave',action:`teacher-leave-${normalized.action}`,actorUid:actor.uid,actorEmail:actor.email,targetType:'teacherLeave',targetId:normalized.leaveId,teacherId:record.teacherId,leaveType:record.leaveType,date:record.date,durationMinutes:record.durationMinutes,status:record.status,revision:record.revision,createdAt:FieldValue.serverTimestamp()},{merge:false});
+   const recipientMap=new Map([[PRIMARY_OWNER_EMAIL,{email:PRIMARY_OWNER_EMAIL,role:'owner',teacherId:''}]]);
+   for(const row of accessRows){const email=String(row.email||'').toLowerCase(),scheduler=row.role==='teacher'&&row.canManageSchedule===true&&email==='aa0966626336@gmail.com',ownTeacher=row.role==='teacher'&&String(row.teacherId||'')===record.teacherId;if(scheduler||ownTeacher)recipientMap.set(email,{email,role:scheduler?'scheduler':'teacher',teacherId:String(row.teacherId||'')})}
+   for(const recipient of recipientMap.values()){
+    const safeRecipient=recipient.email.replace(/[^A-Za-z0-9_-]/g,'_'),notificationRef=firestore.doc(`companies/danbridge/scheduleNotifications/leave_${normalized.operationId}_${safeRecipient}`),verb=normalized.action==='create'?'新增':normalized.action==='update'?'更新':'取消',typeLabel=teacherLeaveTypeLabel(record.leaveType);
+    transaction.set(notificationRef,{companyId:'danbridge',notificationType:'teacher-leave',recipientEmail:recipient.email,recipientRole:recipient.role,teacherId:recipient.teacherId,teacherName:record.teacherName,title:'老師請假異動',message:`${record.teacherName} ${record.date} ${record.start}–${record.end} ${typeLabel}已${verb}`,changeCount:1,details:[{leaveId:record.leaveId,teacherId:record.teacherId,teacherName:record.teacherName,leaveType:record.leaveType,leaveTypeLabel:typeLabel,date:record.date,start:record.start,end:record.end,hours:record.hours,status:record.status,action:normalized.action,summary:`${typeLabel} ${record.hours} 小時`}],read:false,createdAt:FieldValue.serverTimestamp(),createdBy:actor.uid,createdByName:actorName},{merge:false});
+   }
+   return{duplicate:false,record,revision:record.revision};
+  });
+  return{schema:'danbridge-teacher-leave-operation-response-v1',ok:true,...result};
+ }catch(error){if(error instanceof HttpsError)throw error;console.error('PRODUCTION_TEACHER_LEAVE_BLOCKED',JSON.stringify({name:String(error?.name||'Error'),message:String(error?.message||'blocked')}));throw new HttpsError('failed-precondition',String(error?.message||'請假操作已安全阻止。').slice(0,200))}
+});
+
 exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'512MiB',concurrency:8,minInstances:0,maxInstances:20},async request=>{
  try{
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),trusted=runtimeValue.assertProductionTrustedOperation(request.data);

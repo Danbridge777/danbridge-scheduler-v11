@@ -112,7 +112,7 @@
 <link rel="stylesheet" href="./css/core/35-v1525-owner-brand-refinement.css">
 <link rel="stylesheet" href="./css/core/36-v15255-owner-lesson-reporting.css">
 <link rel="stylesheet" href="./css/core/36-v1525-ui-contrast-balance.css">
-<link rel="stylesheet" href="./css/core/37-v15252-lesson-reporting-and-toolbar-fix.css?v=20.26.134">
+<link rel="stylesheet" href="./css/core/37-v15252-lesson-reporting-and-toolbar-fix.css?v=20.26.135">
 <link rel="stylesheet" href="./css/core/36-v1526-notification-center.css">
 <link rel="stylesheet" href="./css/calendar/38-v15293-calendar-toolbar-polish.css?v=15.293.1">
 <link rel="stylesheet" href="./css/calendar/39-v16-calendar-ui-refresh.css?v=16.2">
@@ -148,7 +148,7 @@
 <link rel="stylesheet" href="./css/core/70-v1822-usability-polish.css?v=18.22">
 <link rel="stylesheet" href="./css/calendar/71-v20-scheduling-efficiency.css?v=20.0.8">
 <link rel="stylesheet" href="./css/core/72-v20013-mobile-header-alignment.css?v=20.0.13">
-<link rel="stylesheet" href="./css/core/73-v20014-role-responsive-ux.css?v=20.26.134">
+<link rel="stylesheet" href="./css/core/73-v20014-role-responsive-ux.css?v=20.26.135">
 <link rel="stylesheet" href="./css/calendar/74-premium-week-calendar.css?v=20.26.33">
 <link rel="stylesheet" href="./css/core/75-v2067-language-and-gap-alignment.css?v=20.6.7">
 <link rel="stylesheet" href="./css/core/76-finance-expense-scope.css?v=20.13.2">
@@ -158,6 +158,7 @@
 <link rel="stylesheet" href="./css/core/80-24-hour-time.css?v=20.26.5">
 <link rel="stylesheet" href="./css/core/81-windows-performance.css?v=20.26.6">
 <link rel="stylesheet" href="./css/teachers/23-wendy-orange-interface.css?v=20.26.34">
+<link rel="stylesheet" href="./css/teachers/24-teacher-leave.css?v=20.26.135">
 <link rel="stylesheet" href="./css/core/82-owner-muted-gold-sidebar.css?v=20.26.35">
 <link rel="stylesheet" href="./css/core/83-seamless-auth-panel.css?v=20.26.36">
 <link rel="stylesheet" href="./css/core/14-sync-health.css?v=20.26.52">
@@ -193,7 +194,7 @@
 </div>
 
 <header><h1>Danbridge Operations</h1><p>Education Management System｜多校區營運｜課務｜財務｜師資管理</p><div class="header-auth-actions"><button type="button" class="btn notification-bell" onclick="DanbridgeNotifications.open()" aria-label="開啟通知中心"><span class="notification-bell-icon">🔔</span><span id="notificationCount" class="notification-count" hidden>0</span></button><button type="button" class="btn" onclick="switchTab('security')">安全設定</button><button type="button" class="btn" onclick="authLogout()">登出</button></div></header>
-<nav><button class="active" data-tab="dashboard">總覽</button><button data-tab="students">學生／家長</button><button data-tab="teachers">老師</button><button data-tab="calendar">拖曳課表</button><button data-tab="lessons">課程紀錄</button><button data-tab="makeups">補課中心</button><button data-tab="camps">冬／夏令營</button><button data-tab="finance">公司財務</button><button data-tab="data">備份／iPad</button><button data-tab="security">安全設定</button></nav>
+<nav><button class="active" data-tab="dashboard">總覽</button><button data-tab="students">學生／家長</button><button data-tab="teachers">老師</button><button data-tab="teacherLeave">請假管理</button><button data-tab="calendar">拖曳課表</button><button data-tab="lessons">課程紀錄</button><button data-tab="makeups">補課中心</button><button data-tab="camps">冬／夏令營</button><button data-tab="finance">公司財務</button><button data-tab="data">備份／iPad</button><button data-tab="security">安全設定</button></nav>
 <main><section id="dashboard" class="active"><div class="branch-scope-bar"><div><label>查看校區</label><select id="dashboardBranchScope" onchange="DanbridgeBranchBusiness.setScope('dashboard',this.value)"></select></div><div id="dashboardBranchScopeNote" class="small"></div></div>
   <div class="v32-welcome">
     <div><div class="v32-eyebrow">DANBRIDGE OPERATIONS</div><h2 id="v32Greeting">今日營運總覽</h2><p id="v32DateText">正在整理今天的課程與營運資料。</p></div>
@@ -232,6 +233,7 @@
 </section>
 
 <section id="students"><div class="grid"><div class="card col-4"><h2>學生／家長 CRM</h2><div id="studentEditIndicator" class="hint" style="display:none;margin-top:0"></div><input type="hidden" id="studentId"><div class="crm-form-grid"><div><label>學生姓名 *</label><input id="studentName"></div><div><label>狀態</label><select id="studentStatus"><option value="active">在讀</option><option value="trial">試讀</option><option value="paused">暫停</option><option value="inactive">離班</option></select></div><div><label>學校</label><input id="studentSchool"></div><div><label>年級</label><input id="studentGrade" placeholder="例如：G4／國一"></div><div><label>英文程度</label><input id="studentLevel" placeholder="例如：Flyers／FCE"></div><div><label>固定老師</label><select id="studentPreferredTeacher"></select></div><div><label>家長姓名</label><input id="parentName"></div><div><label>電話</label><input id="parentContact"></div><div><label>LINE</label><input id="parentLine"></div><div><label>Email</label><input id="parentEmail" type="email"></div><div class="span-2"><label>到府地址</label><input id="studentHomeAddress" placeholder="選擇到府課程時會自動帶入"></div><div><label>課程類型</label><select id="studentCourseType"><option>1對1</option><option>1對4</option><option>團班</option><option>安親</option></select></div><div><label>收費方式</label><select id="studentBilling"><option value="hour">每小時</option><option value="lesson">每堂</option><option value="month">月費</option></select></div><div><label>單價</label><input id="studentRate" type="number"></div><div><label>教材</label><input id="studentMaterials" placeholder="例如：Great Writing 4"></div><div class="span-2"><label>每週可上課時段</label><textarea id="studentAvailability" placeholder="每行一個時段，例如：&#10;週一 16:00-20:00&#10;週三 18:00-21:00&#10;週六 09:00-12:00"></textarea></div><div class="span-2"><label>考試／成績紀錄</label><textarea id="studentScores" placeholder="例如：2026/07 Flyers Mock 13 shields"></textarea></div><div class="span-2"><label>學習備註</label><textarea id="studentNote"></textarea></div></div><br><button class="btn primary" onclick="saveStudent()">儲存</button> <button class="btn" onclick="clearStudentForm()">清空</button> <button class="btn ok" onclick="openSmartScheduler()">智慧排課</button></div><div class="card col-8"><div class="toolbar"><div><h2 style="margin:0">學生清單</h2></div><div style="flex:1;min-width:220px"><label>搜尋 CRM</label><input id="crmSearch" placeholder="姓名、家長、學校、程度、電話" oninput="renderStudents()"></div></div><div class="table-wrap"><table><thead><tr><th>學生</th><th>家長／聯絡</th><th>學校／程度</th><th>課程／收費</th><th>歷程</th><th>操作</th></tr></thead><tbody id="studentRows"></tbody></table></div></div></div></section><section id="teachers"><div class="grid"><div class="card col-4"><h2>新增／修改老師</h2><input type="hidden" id="teacherId"><label>老師姓名</label><input id="teacherName"><label>名牌顯示名稱</label><input id="teacherDisplayName" placeholder="例如：Daniel／Wendy；留白則顯示老師姓名"><div class="small">登入右上角、歡迎詞與課堂回報署名會優先使用此名稱。</div><label>薪資制度</label><select id="teacherPayrollMode"><option value="hourly">純時薪制</option><option value="fixed">固定底薪制</option></select><label>一般時薪（純時薪制）</label><input id="teacherRate" type="number" min="0" step="1" placeholder="請自行輸入"><label>固定底薪</label><input id="teacherBaseSalary" type="number" min="0" step="1" placeholder="請自行輸入"><label>超時時薪</label><input id="teacherOvertimeRate" type="number" min="0" step="1" placeholder="請自行輸入"><label>不足工時扣款時薪</label><input id="teacherDeductionRate" type="number" min="0" step="1" placeholder="請自行輸入"><label>每週最低工時</label><input id="teacherMinWeeklyHours" type="number" min="0" step="0.5" placeholder="請自行輸入"><label>固定工作日</label><div id="teacherWorkDays" class="workday-checks"><label class="workday-check"><input type="checkbox" value="1" checked>週一</label><label class="workday-check"><input type="checkbox" value="2" checked>週二</label><label class="workday-check"><input type="checkbox" value="3" checked>週三</label><label class="workday-check"><input type="checkbox" value="4" checked>週四</label><label class="workday-check"><input type="checkbox" value="5" checked>週五</label><label class="workday-check"><input type="checkbox" value="6">週六</label><label class="workday-check"><input type="checkbox" value="0">週日</label></div><div class="small">所有薪資數字均由你自行填寫；系統不套用共同預設值。固定底薪制必須填寫底薪、超時時薪與不足扣款時薪。<br>月底最低工時＝每週最低工時 ÷ 固定工作天數 × 該月實際出現的固定工作日天數。</div><label>身份</label><select id="teacherType"><option>兼職</option><option>正職</option><option>外師</option></select><label>可教科目</label><input id="teacherSubjects"><label>課表顏色</label><input id="teacherColor" type="color" value="#2563eb"><label>備註</label><textarea id="teacherNote"></textarea><br><button class="btn primary" onclick="saveTeacher()">儲存</button> <button class="btn" onclick="clearTeacherForm()">清空</button></div><div class="card col-8"><h2>老師清單</h2><div class="table-wrap"><table><thead><tr><th>老師</th><th>時薪</th><th>最低工時／工作日</th><th>身份</th><th>科目</th><th>操作</th></tr></thead><tbody id="teacherRows"></tbody></table></div></div></div><div class="card col-12 teacher-kpi-card"><div class="teacher-kpi-head"><div><div class="kpi-eyebrow">TEACHER PERFORMANCE</div><h2>老師 KPI</h2><p class="small">依月份與校區查看老師的學生數、堂數、時數、營收、請假率、補課率與課堂回報完成率。營收依每位老師的課表分別計算；同一堂 SC 排多位老師時，每位老師各計一筆。</p></div><div class="teacher-kpi-filters"><div><label>月份</label><input id="teacherKpiMonth" type="month" onchange="renderTeacherKpi()"></div><div><label>校區</label><select id="teacherKpiBranch" onchange="renderTeacherKpi()"></select></div></div></div><div id="teacherKpiSummary" class="teacher-kpi-summary"></div><div id="teacherKpiGrid" class="teacher-kpi-grid"></div></div></div></section>
+<section id="teacherLeave"><div class="teacher-leave-layout"><div class="card teacher-leave-form-card"><div class="teacher-leave-kicker">TEACHER LEAVE</div><h2>請假登記</h2><p class="small">每筆請假由受保護後端驗證角色、老師、版本與時數後一次完成，取消紀錄仍會保留。</p><input type="hidden" id="teacherLeaveId"><input type="hidden" id="teacherLeaveRevision" value="0"><label>老師 *</label><select id="teacherLeaveTeacher"></select><label>請假類別 *</label><select id="teacherLeaveType"><option value="personal">事假</option><option value="sick">病假</option><option value="bereavement">喪假</option></select><label>日期 *</label><input id="teacherLeaveDate" type="date"><div class="teacher-leave-time-grid"><div><label>開始時間 *</label><input id="teacherLeaveStart" type="time" step="300" value="09:00"></div><div><label>結束時間 *</label><input id="teacherLeaveEnd" type="time" step="300" value="10:00"></div></div><div id="teacherLeaveHoursPreview" class="teacher-leave-hours">共 1 小時</div><label>備註</label><textarea id="teacherLeaveNote" maxlength="500" placeholder="選填；例如看診或家庭事務"></textarea><div id="teacherLeaveFormStatus" class="small" aria-live="polite"></div><div class="row-actions"><button type="button" class="btn primary" id="teacherLeaveSaveBtn" onclick="saveTeacherLeave()">儲存請假</button><button type="button" class="btn" onclick="clearTeacherLeaveForm()">清空</button></div></div><div class="card teacher-leave-list-card"><div class="teacher-leave-head"><div><div class="teacher-leave-kicker">LEAVE RECORDS</div><h2>老師請假紀錄</h2><p class="small">Daniel 與 AA 可查看全部老師；老師帳號只能查看與操作自己的紀錄。</p></div><div class="teacher-leave-filters"><div><label>月份</label><input id="teacherLeaveMonth" type="month" onchange="renderTeacherLeaves()"></div><div><label>老師</label><select id="teacherLeaveFilterTeacher" onchange="renderTeacherLeaves()"></select></div><div><label>狀態</label><select id="teacherLeaveStatus" onchange="renderTeacherLeaves()"><option value="active">有效</option><option value="all">全部</option><option value="cancelled">已取消</option></select></div></div></div><div id="teacherLeaveSummary" class="teacher-leave-summary"></div><div class="table-wrap"><table><thead><tr><th>老師</th><th>日期</th><th>時間</th><th>類別</th><th>時數</th><th>備註</th><th>狀態／版本</th><th>操作</th></tr></thead><tbody id="teacherLeaveRows"></tbody></table></div></div></div></section>
 <section id="calendar"><div class="card"><div class="calendar-workspace-head"><div><span class="calendar-eyebrow">WEEKLY SCHEDULING</span><h2>課表管理</h2><p>以每週為單位安排與複製課程，減少頻繁異動造成的重複課程。</p></div><button class="btn primary calendar-head-add" onclick="openLessonModal()">＋ 新增課程</button></div><div class="toolbar calendar-toolbar calendar-toolbar-v16">
   <div class="calendar-toolbar-row calendar-toolbar-navigation">
     <div class="calendar-field calendar-mode-field"><label>顯示模式</label><select id="calendarMode" onchange="calendarActionChanged()"><option value="month">月</option><option value="week">週</option></select></div>
@@ -419,6 +421,7 @@
 <script src="./js/modules/students/students-crm.js?v=20.22.0"></script>
 <script src="./js/modules/students/student-crm-independent-scroll.js?v=17.17"></script>
 <script src="./js/modules/teachers/teachers-crm.js?v=20.22.0"></script>
+<script src="./js/modules/teachers/teacher-leave.js?v=20.26.135"></script>
 <script src="./js/modules/calendar/scheduler-ui.js?v=20.26.8"></script>
 <script src="./js/modules/calendar/course-operations.js?v=20.26.8"></script>
 <script src="./js/modules/calendar/lesson-save-visibility-guard.js?v=18.16.1"></script>
@@ -432,7 +435,7 @@
 <script src="./js/core/branch-business-scope.js?v=20.22.0"></script>
 <script src="./js/modules/teachers/teacher-kpi.js?v=20.22.0"></script>
 <script src="./js/modules/lessons/lesson-list-and-search.js?v=20.0.21"></script>
-<script src="./js/app/app-shell.js?v=20.26.134"></script>
+<script src="./js/app/app-shell.js?v=20.26.135"></script>
 <script src="./js/ui/select-options.js?v=20.22.0"></script>
 <script src="./js/app/render-orchestrator.js?v=20.5.7"></script>
 <script src="./js/ui/searchable-student-selects.js?v=17.30"></script>
@@ -448,11 +451,11 @@
 
 <script src="./js/ui/accessibility-baseline.js?v=20.12.0"></script>
 
-<script src="./js/app/scheduler-student-tools.js?v=20.26.134"></script>
-<script type="module" src="./js/core/firebase-auth-and-cloud-sync.module.js?v=20.26.134"></script>
+<script src="./js/app/scheduler-student-tools.js?v=20.26.135"></script>
+<script type="module" src="./js/core/firebase-auth-and-cloud-sync.module.js?v=20.26.135"></script>
 
 
-<script src="./js/core/pwa-installation.js?v=20.26.134"></script>
+<script src="./js/core/pwa-installation.js?v=20.26.135"></script>
 
 <script src="./js/modules/calendar/marquee-multi-selection.js?v=20.26.9"></script>
 
@@ -462,7 +465,7 @@
 <script src="./js/app/v1819-responsive-convenience.js?v=18.22.5"></script>
 <script src="./js/app/v1822-usability-polish.js?v=20.16.0"></script>
 <script src="./js/app/v20-scheduling-efficiency.js?v=20.26.98"></script>
-<script src="./js/app/v20014-role-responsive-ux.js?v=20.26.134"></script>
+<script src="./js/app/v20014-role-responsive-ux.js?v=20.26.135"></script>
 <script src="./js/core/ui-language.js?v=20.25.0"></script>
 <script src="./js/ui/clean-field-hints.js?v=20.19.0"></script>
 </body></html>

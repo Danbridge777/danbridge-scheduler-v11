@@ -187,7 +187,7 @@
     const settlement=window.renderSettlement;if(typeof settlement==='function'&&!settlement.__v181){window.renderSettlement=function(){settlement();renderCollectionSummary();rebuildTeacherWorkspace()};window.renderSettlement.__v181=true}
   }
   function relabelNavigation(){
-    const labels={dashboard:'營運總覽',students:'學生 CRM',teachers:'老師管理',calendar:'課程管理',lessons:'課程紀錄',camps:'冬／夏令營',finance:'財務中心',data:'系統資料'};
+    const labels={dashboard:'營運總覽',students:'學生 CRM',teachers:'老師管理',teacherLeave:'請假管理',calendar:'課程管理',lessons:'課程紀錄',camps:'冬／夏令營',finance:'財務中心',data:'系統資料'};
     Object.entries(labels).forEach(([tab,label])=>{const b=$(`nav button[data-tab="${tab}"]`);if(b)b.textContent=label});
   }
   function patchSwitchTab(){

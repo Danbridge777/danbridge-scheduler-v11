@@ -61,7 +61,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.134';
+const APP_RELEASE='20.26.135';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -76,6 +76,7 @@ const stagingV2AppCheck=DANBRIDGE_ENVIRONMENT==='staging'?initializeAppCheck(app
 const productionAppCheck=DANBRIDGE_ENVIRONMENT==='production'?initializeAppCheck(app,{provider:new ReCaptchaEnterpriseProvider(PRODUCTION_APP_CHECK_SITE_KEY),isTokenAutoRefreshEnabled:true}):null;
 const productionFunctions=DANBRIDGE_ENVIRONMENT==='production'?getFunctions(app,'asia-east1'):null;
 const productionTrustedOperationClient=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?createProductionTrustedOperationClient({call:httpsCallable(productionFunctions,'productionTrustedOperation',{limitedUseAppCheckTokens:true}),getIdentity:()=>({uid:cloudUid,email:cloudEmailKey})}):null;
+const productionTeacherLeaveCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?httpsCallable(productionFunctions,'productionTeacherLeaveOperation',{limitedUseAppCheckTokens:true}):null;
 
 // Explicit-only staging migration composition. Merely importing this module never creates or activates V2.
 export function createExplicitStagingV2TakeoverCandidateBinder(){
@@ -188,6 +189,8 @@ let unsubscribeScheduleNotifications=null;
 let unsubscribeOwnerHealth=null,lastOwnerHealthSignal='';
 let scheduleNotificationDocuments=[];
 let currentScheduleNotification=null;
+let unsubscribeTeacherLeaves=null;
+let teacherLeaveDocuments=[];
 let scheduleNotificationCleanupStarted=false;
 let lastPublishedOwnerDB=null;
 let ownerBaselineReady=false;
@@ -251,6 +254,24 @@ const originalEditLesson=window.editLesson;
 
 function emptyDB(){return {students:[],teachers:[],lessons:[],makeups:[],changes:[],teacherGroups:[],winterTeacherGroups:[],summerCampClasses:[],summerCampRegistrations:[],winterCampRegistrations:[],winterCampClasses:[],settlementRecords:[],fixedExpenses:[],oneTimeExpenses:[],collectionRecords:[],branches:[]}}
 function deepCopy(x){return JSON.parse(JSON.stringify(x||emptyDB()))}
+function teacherLeaveOperationId(){return`leaveop-${globalThis.crypto?.randomUUID?.().replaceAll('-','')||`${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`}`}
+async function executeTeacherLeaveOperation(payload={}){
+ if(DANBRIDGE_ENVIRONMENT!=='production'||!productionTeacherLeaveCall)throw new Error('請假操作只允許正式環境的受保護後端');
+ const user=auth.currentUser,uid=user?.uid||'',email=String(user?.email||'').trim().toLowerCase();if(!user||uid!==cloudUid||email!==cloudEmailKey)throw new Error('登入身分已變更，請重新整理');
+ const operationId=String(payload.operationId||teacherLeaveOperationId()),leaveId=String(payload.leaveId||`leave-${globalThis.crypto?.randomUUID?.().replaceAll('-','')||Date.now().toString(36)}`),request={...payload,operationId,leaveId},result=await productionTeacherLeaveCall(request);
+ if(auth.currentUser!==user||auth.currentUser?.uid!==uid||String(auth.currentUser?.email||'').trim().toLowerCase()!==email)throw new Error('請假同步完成時登入身分已改變，請重新整理確認');
+ if(result?.data?.ok!==true)throw new Error('請假後端未回傳完成確認');
+ return result.data;
+}
+window.__danbridgeSaveTeacherLeave=payload=>executeTeacherLeaveOperation(payload);
+window.__danbridgeCancelTeacherLeave=payload=>executeTeacherLeaveOperation({...payload,action:'cancel'});
+function subscribeTeacherLeaves(){
+ unsubscribeTeacherLeaves?.();unsubscribeTeacherLeaves=null;teacherLeaveDocuments=[];window.__danbridgeSetTeacherLeaves?.([]);
+ if(DANBRIDGE_ENVIRONMENT!=='production'||!['owner','teacher'].includes(cloudRole))return;
+ let leaveQuery=query(collection(cloud,'productionTeacherLeaveRecords'),where('companyId','==',COMPANY_ID));
+ if(cloudRole==='teacher'&&!cloudCanManageSchedule){if(!cloudTeacherId)return;leaveQuery=query(collection(cloud,'productionTeacherLeaveRecords'),where('companyId','==',COMPANY_ID),where('teacherId','==',cloudTeacherId))}
+ unsubscribeTeacherLeaves=onSnapshot(leaveQuery,{includeMetadataChanges:true},snapshot=>{if(snapshot.metadata.hasPendingWrites)return;teacherLeaveDocuments=snapshot.docs.map(row=>({id:row.id,...row.data()})).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.start||'').localeCompare(String(a.start||'')));window.__danbridgeSetTeacherLeaves?.(teacherLeaveDocuments)},error=>{console.error('Teacher leave listener failed',error);window.__danbridgeSetTeacherLeaveError?.(String(error?.message||error));cloudStatus('請假紀錄讀取失敗：'+String(error?.message||error),'error')});
+}
 function activeFirestoreDocument(path){
  const parts=String(path||'').split('/');if(!path||parts.some(part=>!part)||parts.length%2!==0)throw new Error('逐筆 Firestore 文件路徑無效');return doc(cloud,path);
 }
@@ -1457,8 +1478,8 @@ function applyRoleUI(profile,user){
    window.renderAll?.();
    applyingCloud=false;
 
-   const teacherAllowedTabs=new Set(cloudCanManageSchedule?['calendar']:['dashboard','calendar','lessons']);
-   const teacherTabLabels={dashboard:'我的總覽',calendar:cloudCanManageSchedule?'全老師課表':'我的課表',lessons:'課程回報'};
+   const teacherAllowedTabs=new Set(cloudCanManageSchedule?['calendar','teacherLeave']:['dashboard','calendar','lessons','teacherLeave']);
+   const teacherTabLabels={dashboard:'我的總覽',calendar:cloudCanManageSchedule?'全老師課表':'我的課表',lessons:'課程回報',teacherLeave:cloudCanManageSchedule?'請假管理':'我的請假'};
    document.querySelectorAll('nav button[data-tab]').forEach(b=>{
      const allowed=teacherAllowedTabs.has(b.dataset.tab);
      if(allowed)b.textContent=teacherTabLabels[b.dataset.tab];
@@ -1910,9 +1931,11 @@ function renderScheduleNotification(notification){
  if(!modal||!body||!notification)return;
  const details=Array.isArray(notification.details)?notification.details:[];
  currentScheduleNotification=notification;
- body.innerHTML=`<p class="schedule-notification-lead"><b>Daniel 已更新您的課表</b><span>${escapeHTML(notification.message||`共有 ${details.length} 個變更`)}，已合併整理如下。</span></p><div class="schedule-notification-table-wrap"><table class="schedule-notification-table"><thead><tr><th>異動</th><th>學生／課程</th><th>原課程</th><th>新課程</th><th>內容</th><th>來源</th></tr></thead><tbody>${details.map((item,index)=>`<tr data-type="${escapeHTML(item.type||'modified')}"><td><span class="schedule-notification-type">${item.type==='added'?'新增':item.type==='removed'?'取消':'修改'}</span></td><td><b>${escapeHTML(item.studentName||'課程')}</b></td><td>${escapeHTML(item.beforeTime||'—')}</td><td>${escapeHTML(item.afterTime||'—')}</td><td>${escapeHTML(item.summary||'課表內容已更新')}</td><td><button type="button" class="btn schedule-notification-source" data-notification-detail="${index}">查看課表</button></td></tr>`).join('')}</tbody></table></div><div class="schedule-notification-time">更新時間：${escapeHTML(formatNotificationTimestamp(notification.createdAt)||'剛剛')}</div>`;
- const notificationLead=body.querySelector('.schedule-notification-lead b');if(notificationLead)notificationLead.textContent=`${notification.createdByName||'Owner'} 已更新課表`;
+ if(notification.notificationType==='teacher-leave')body.innerHTML=`<p class="schedule-notification-lead"><b>老師請假異動</b><span>${escapeHTML(notification.message||'請假紀錄已更新')}</span></p><div class="schedule-notification-table-wrap"><table class="schedule-notification-table"><thead><tr><th>老師</th><th>日期</th><th>時間</th><th>類別</th><th>時數</th><th>狀態</th></tr></thead><tbody>${details.map(item=>`<tr><td><b>${escapeHTML(item.teacherName||'老師')}</b></td><td>${escapeHTML(item.date||'')}</td><td>${escapeHTML(`${item.start||''}–${item.end||''}`)}</td><td>${escapeHTML(item.leaveTypeLabel||'')}</td><td>${escapeHTML(String(item.hours??''))}</td><td>${item.status==='cancelled'?'已取消':'有效'}</td></tr>`).join('')}</tbody></table></div><div class="schedule-notification-actions"><button type="button" class="btn" data-leave-notification-open>查看請假紀錄</button></div><div class="schedule-notification-time">更新時間：${escapeHTML(formatNotificationTimestamp(notification.createdAt)||'剛剛')}</div>`;
+ else body.innerHTML=`<p class="schedule-notification-lead"><b>Daniel 已更新您的課表</b><span>${escapeHTML(notification.message||`共有 ${details.length} 個變更`)}，已合併整理如下。</span></p><div class="schedule-notification-table-wrap"><table class="schedule-notification-table"><thead><tr><th>異動</th><th>學生／課程</th><th>原課程</th><th>新課程</th><th>內容</th><th>來源</th></tr></thead><tbody>${details.map((item,index)=>`<tr data-type="${escapeHTML(item.type||'modified')}"><td><span class="schedule-notification-type">${item.type==='added'?'新增':item.type==='removed'?'取消':'修改'}</span></td><td><b>${escapeHTML(item.studentName||'課程')}</b></td><td>${escapeHTML(item.beforeTime||'—')}</td><td>${escapeHTML(item.afterTime||'—')}</td><td>${escapeHTML(item.summary||'課表內容已更新')}</td><td><button type="button" class="btn schedule-notification-source" data-notification-detail="${index}">查看課表</button></td></tr>`).join('')}</tbody></table></div><div class="schedule-notification-time">更新時間：${escapeHTML(formatNotificationTimestamp(notification.createdAt)||'剛剛')}</div>`;
+ const notificationLead=body.querySelector('.schedule-notification-lead b');if(notificationLead&&notification.notificationType!=='teacher-leave')notificationLead.textContent=`${notification.createdByName||'Owner'} 已更新課表`;
  body.querySelectorAll('[data-notification-detail]').forEach(button=>button.addEventListener('click',()=>openScheduleNotificationSource(Number(button.dataset.notificationDetail))));
+ body.querySelector('[data-leave-notification-open]')?.addEventListener('click',()=>{modal.hidden=true;window.switchTab?.('teacherLeave')});
  modal.dataset.notificationId=notification.id||'';
  modal.dataset.notificationIds=JSON.stringify(Array.isArray(notification.notificationIds)?notification.notificationIds.filter(Boolean):[notification.id].filter(Boolean));
  modal.hidden=false;
@@ -1945,12 +1968,12 @@ function subscribeScheduleNotifications(){
  const q=query(collection(cloud,'companies',COMPANY_ID,'scheduleNotifications'),where('recipientEmail','==',cloudEmailKey));
  unsubscribeScheduleNotifications=onSnapshot(q,{includeMetadataChanges:true},snap=>{
    if(snap.metadata.hasPendingWrites)return;
-   scheduleNotificationDocuments=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.read!==true&&!scheduleNotificationExpired(x)).sort((a,b)=>{const at=a.createdAt?.toMillis?.()||0,bt=b.createdAt?.toMillis?.()||0;return at-bt});
+   scheduleNotificationDocuments=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.read!==true&&!scheduleNotificationExpired(x)).sort((a,b)=>{const priority=(b.notificationType==='teacher-leave')-(a.notificationType==='teacher-leave');if(priority)return priority;const at=a.createdAt?.toMillis?.()||0,bt=b.createdAt?.toMillis?.()||0;return bt-at});
    const current=scheduleNotificationDocuments[0];
    if(current&&!document.getElementById('scheduleNotificationModal')?.hidden)return;
    if(current){
-     const details=scheduleNotificationDocuments.flatMap(n=>Array.isArray(n.details)?n.details:[]);
-     renderScheduleNotification({...current,notificationIds:scheduleNotificationDocuments.map(n=>n.id),details,message:current.recipientRole==='owner'?`公司課表共有 ${details.length} 個變更`:current.recipientRole==='scheduler'?`全老師課表共有 ${details.length} 個變更`:current.recipientRole==='branch_manager'?`您管理的校區課表共有 ${details.length} 個變更`:`您的課表共有 ${details.length} 個變更`});
+     const sameType=scheduleNotificationDocuments.filter(n=>(n.notificationType||'schedule')===(current.notificationType||'schedule')),details=sameType.flatMap(n=>Array.isArray(n.details)?n.details:[]);
+     renderScheduleNotification({...current,notificationIds:sameType.map(n=>n.id),details,message:current.notificationType==='teacher-leave'?current.message:(current.recipientRole==='owner'?`公司課表共有 ${details.length} 個變更`:current.recipientRole==='scheduler'?`全老師課表共有 ${details.length} 個變更`:current.recipientRole==='branch_manager'?`您管理的校區課表共有 ${details.length} 個變更`:`您的課表共有 ${details.length} 個變更`)});
    }
  },e=>{console.error('Schedule notification listener failed',e);cloudStatus('課表通知讀取失敗：'+(e?.message||e),'error')});
 }
@@ -3326,11 +3349,11 @@ installClassFocusMode();
 installBranchManagerAccessEvents();
 installRoleInteractionGuards();
 onAuthStateChanged(auth,async user=>{
- unsubscribeState?.();unsubscribeState=null;stopActiveRecordRuntimes();unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;unsubscribeOwnerHealth?.();unsubscribeOwnerHealth=null;lastOwnerHealthSignal='';unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;scheduleNotificationDocuments=[];lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();roleViewPublishSourceDB=null;
+ unsubscribeState?.();unsubscribeState=null;stopActiveRecordRuntimes();unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;unsubscribeTeacherLeaves?.();unsubscribeTeacherLeaves=null;unsubscribeOwnerHealth?.();unsubscribeOwnerHealth=null;lastOwnerHealthSignal='';unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;scheduleNotificationDocuments=[];teacherLeaveDocuments=[];window.__danbridgeSetTeacherLeaves?.([]);lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();roleViewPublishSourceDB=null;
  unsubscribeAccessGuard?.();unsubscribeAccessGuard=null;
  if(!user){clearTimeout(cloudBootstrapTimeout);cloudBootstrapTimeout=null;cloudBootstrapProgress=null;document.getElementById('cloudBootstrapProgress')?.remove();delete document.body.dataset.cloudBootstrapState;lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);clearTimeout(dailyBackupTimer);clearTimeout(schedulerRequestRetryTimer);clearTimeout(schedulerUploadRetryTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudCanManageSchedule=false;schedulerBaselineLessons=[];schedulerBaselineStudents=[];schedulerSaveChain=Promise.resolve();schedulerOptimisticLessons=new Map();schedulerOptimisticStudents=new Map();schedulerUploadRetryCount=0;schedulerStartupRecoveryChecked=false;schedulerRecoveryHold=false;schedulerRequestQueue=[];schedulerRequestQueueIds=new Set();schedulerQuarantinedRequestIds=new Set();schedulerAppliedRequestCount=0;schedulerRequestWorkerActive=false;cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';document.body.classList.remove('wendy-teacher-role');window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true,canManageSchedule:false});showCloudLogin();cloudStatus('尚未登入');return}
  try{
    beginCloudBootstrap();cloudStatus('1/5 已確認 Google 登入','pending');const profile=await loadSignedInProfile(user);try{await recordSuccessfulLogin(user,profile)}catch(e){console.warn('最後登入時間更新失敗：',e);reportOperationalError(e,{category:'cloud-write',area:'access-guard',retryable:true})}advanceCloudBootstrap('profile','帳號權限已從雲端讀回');cloudStatus('2/5 權限資料已確認','pending');applyRoleUI(profile,user);advanceCloudBootstrap('role',`${profile.role} 資料範圍已鎖定`);cloudStatus('3/5 角色範圍已確認','pending');showCloudApp();advanceCloudBootstrap('data','正在驗證角色專屬雲端資料');cloudStatus('4/5 正在驗證雲端資料','pending');
-   if(profile.role==='owner'){subscribeOwner();subscribeSchedulerRequests();setTimeout(()=>{renderCloudUserManager();renderBranchManagerAccess()},0)}else if(profile.role==='teacher'&&profile.canManageSchedule===true)subscribeSchedulerTeacher();else if(profile.role==='teacher')subscribeTeacher();else if(profile.role==='branch_manager')subscribeBranchManager();else throw new Error('不支援的角色：'+profile.role);subscribeRoleAccessGuard();subscribeLessonReports();subscribeScheduleNotifications();
+   if(profile.role==='owner'){subscribeOwner();subscribeSchedulerRequests();setTimeout(()=>{renderCloudUserManager();renderBranchManagerAccess()},0)}else if(profile.role==='teacher'&&profile.canManageSchedule===true)subscribeSchedulerTeacher();else if(profile.role==='teacher')subscribeTeacher();else if(profile.role==='branch_manager')subscribeBranchManager();else throw new Error('不支援的角色：'+profile.role);subscribeRoleAccessGuard();subscribeLessonReports();subscribeScheduleNotifications();subscribeTeacherLeaves();
  }catch(e){console.error(e);failCloudBootstrap(e);await signOut(auth);showCloudLogin();showCloudLoginError(e.message);cloudStatus(e.message,'error')}
 });
