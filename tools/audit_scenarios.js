@@ -320,7 +320,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.129'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.130'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -541,9 +541,10 @@ assert.deepEqual(Array.from(branchView.teachers,row=>row.id), ['t1']);
 assert.deepEqual(Array.from(branchView.fixedExpenses, row => row.id), ['expense']);
 assert.deepEqual(Array.from(branchView.collectionRecords,row=>row.id), ['payment']);
 assert.match(cloudSource,/function buildCurrentRoleViewCandidates[\s\S]*filteredSchedulerDB\(sourceDb\)[\s\S]*filteredTeacherDB\(sourceDb,access\.teacherId\)[\s\S]*filteredBranchDB\(sourceDb,access\.branchIds\)/,'role-record candidates reuse the exact live permission projections instead of a duplicate permission model');
-assert.match(cloudSource,/__danbridgeRepublishProductionRoleViews[\s\S]*production-records-authoritative[\s\S]*publishScopedViews\(sourceDb,\{recordAuthority:true\}\)[\s\S]*auditProductionRoleViews\(sourceDb\)[\s\S]*if\(!audit\.verified\)throw/,'production Owner can republish and hash-verify every sanitized role view without rewriting primary data');
+assert.match(cloudSource,/__danbridgeRepublishProductionRoleViews[\s\S]*production-records-authoritative[\s\S]*publishScopedViews\(sourceDb,\{recordAuthority:true\}\)[\s\S]*auditProductionRoleViews\(sourceDb\)[\s\S]*if\(!audit\.verified\)[\s\S]*throw new Error/,'production Owner can republish and hash-verify every sanitized role view without rewriting primary data');
 assert.match(cloudSource,/productionRolePrivacyBtn[\s\S]*__danbridgeRepublishProductionRoleViews\(\)[\s\S]*角色權限已驗證/,'production Owner has a visible control that only reports success after role-view hash verification');
 assert.match(cloudSource,/__danbridgeRepublishProductionRoleViews=async\(\)=>\{[\s\S]*auth\.currentUser[\s\S]*currentUser\.uid!==cloudUid[\s\S]*currentEmail!==OWNER_EMAIL/,'production role-view republish rechecks the live primary Owner without referencing a reader-local guard');
+assert.match(cloudSource,/productionRolePrivacyRepublish=JSON\.stringify\(\{state:'failed'[\s\S]*issues:audit\.issues/,'production role-view verification exposes only account/kind/reason diagnostics when a hash check fails');
 assert.match(cloudSource,/function stagingRoleViewCandidateGuard\(\)\{if\(DANBRIDGE_ENVIRONMENT!==\x27staging\x27\|\|cloudRole!==\x27owner\x27\)/,'role-record candidate writes remain staging Owner only');
 
 const notificationStart = cloudSource.indexOf('const SCHEDULE_NOTIFICATION_FIELDS');

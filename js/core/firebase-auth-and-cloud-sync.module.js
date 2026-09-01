@@ -57,7 +57,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.129';
+const APP_RELEASE='20.26.130';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -2068,7 +2068,7 @@ window.__danbridgeRepublishProductionRoleViews=async()=>{
  if(!sourceHash||window.__danbridgeDataScore?.(sourceDb)===0)throw new Error('production 權威資料不可為空');
  await publishScopedViews(sourceDb,{recordAuthority:true});
  const audit=await auditProductionRoleViews(sourceDb);
- if(!audit.verified)throw new Error(`production 角色檢視重發後仍有 ${audit.issueCount} 個不一致`);
+ if(!audit.verified){document.body.dataset.productionRolePrivacyRepublish=JSON.stringify({state:'failed',release:APP_RELEASE,sourceHash,issues:audit.issues,counts:{schedulers:audit.schedulers,teachers:audit.teachers,branchManagers:audit.branchManagers,total:audit.total}});throw new Error(`production 角色檢視重發後仍有 ${audit.issueCount} 個不一致`)}
  const result={state:'verified',release:APP_RELEASE,sourceHash,roleViewDigest:audit.roleViewDigest,counts:{schedulers:audit.schedulers,teachers:audit.teachers,branchManagers:audit.branchManagers,total:audit.total}};
  document.body.dataset.productionRolePrivacyRepublish=JSON.stringify(result);
  return result;
