@@ -57,7 +57,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.127';
+const APP_RELEASE='20.26.128';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1388,8 +1388,14 @@ function applyRoleUI(profile,user){
    setDoc(ownerRef,{displayName:signedInName,updatedAt:serverTimestamp()},{merge:true}).catch(error=>console.warn('owner display name sync failed',error));
  }
  const header=document.querySelector('.header-auth-actions');
- if(header)header.innerHTML=`<span class="cloud-role-label" style="font-size:12px;font-weight:800">${cloudCanManageSchedule?'排課專員':(window.DanbridgeAccess?.ROLE_LABELS?.[profile.role]||profile.role)}｜${String(signedInName).trim()}</span>${profile.role==='owner'?'<button type="button" class="btn notification-bell" onclick="DanbridgeNotifications.open()" aria-label="開啟通知中心"><span class="notification-bell-icon">🔔</span><span id="notificationCount" class="notification-count" hidden>0</span></button>':''}<button type="button" class="btn" id="firebaseLogoutBtn">登出</button>`;
+ if(header)header.innerHTML=`<span class="cloud-role-label" style="font-size:12px;font-weight:800">${cloudCanManageSchedule?'排課專員':(window.DanbridgeAccess?.ROLE_LABELS?.[profile.role]||profile.role)}｜${String(signedInName).trim()}</span>${profile.role==='owner'?'<button type="button" class="btn notification-bell" onclick="DanbridgeNotifications.open()" aria-label="開啟通知中心"><span class="notification-bell-icon">🔔</span><span id="notificationCount" class="notification-count" hidden>0</span></button>':''}${profile.role==='owner'&&DANBRIDGE_ENVIRONMENT==='production'?'<button type="button" class="btn" id="productionRolePrivacyBtn">驗證角色權限</button>':''}<button type="button" class="btn" id="firebaseLogoutBtn">登出</button>`;
  document.getElementById('firebaseLogoutBtn')?.addEventListener('click',()=>signOut(auth));
+ const productionRolePrivacyBtn=document.getElementById('productionRolePrivacyBtn');
+ productionRolePrivacyBtn?.addEventListener('click',async()=>{
+   productionRolePrivacyBtn.disabled=true;productionRolePrivacyBtn.textContent='正在驗證角色權限…';
+   try{const result=await window.__danbridgeRepublishProductionRoleViews();productionRolePrivacyBtn.dataset.result=JSON.stringify(result);productionRolePrivacyBtn.textContent='角色權限已驗證';cloudStatus('production 角色權限檢視已重發並通過雜湊核對。','ok')}
+   catch(error){productionRolePrivacyBtn.dataset.error=String(error?.message||error);productionRolePrivacyBtn.textContent='重新驗證角色權限';cloudStatus('角色權限驗證失敗：'+String(error?.message||error),'error');productionRolePrivacyBtn.disabled=false}
+ });
  document.body.classList.toggle('teacher-cloud-role',profile.role==='teacher');
  document.body.classList.toggle('wendy-teacher-role',cloudRole==='teacher'&&cloudEmailKey==='wendylee0820520@gmail.com');
  document.body.classList.toggle('branch-manager-cloud-role',profile.role==='branch_manager');
