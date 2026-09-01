@@ -110,7 +110,7 @@
   "docs/cloud-data-sharding-migration.md": "55c69adb60c9186013e74f42d2d34a6a284f568d2b330b4c7804ca4ec2de5fe7",
   "firebase/DEPLOY_RULES.md": "b86462e32615aa899e2644c424b5f501728af4bcd5fc1da6730fe4f0b11c5716",
   "firebase/firestore.rules": "878f96afb3a3488da29ed0107ef98bc84db34d003e26e49d91c7ca6a49b9d116",
-  "firebase/firestore.rules.deploy": "3024d63ecb0915303bf0219a11c436fc1ee53e1ea6d97aab2978743db0c95df0",
+  "firebase/firestore.rules.deploy": "95d1dae0db2b1836885ed29622bbd9e5839800559c9d1c8abce103677c78755f",
   "firebase.json": "a62f01a9fc0b1ed210553eae9d3843519208658e9b96ed541c578fada5d0d146",
   "firebase.production.json": "1e58ab574eb3cb12d41f69ffbb9f86c4ad3f6e48e2a39bcddd8725205277fd41",
   "functions/index.cjs": "69400bec40c360a5f787dbb837b1900d1f50934b88e9e487e7c8f85cf9440a62",
