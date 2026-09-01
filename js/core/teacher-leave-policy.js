@@ -32,6 +32,12 @@ export function assertTeacherLeaveScope(actor,input){
  return normalized;
 }
 
+export function teacherRecordFromAuthorityEnvelope(envelope={},teacherId=''){
+ const expectedId=text(teacherId,128),record=envelope&&typeof envelope==='object'&&envelope.record&&typeof envelope.record==='object'?envelope.record:null;
+ if(!TOKEN.test(expectedId)||!record||envelope.deleted===true||text(envelope.recordId,128)!==expectedId||text(record.id,128)!==expectedId)throw new Error('找不到有效老師資料');
+ return Object.freeze({...record});
+}
+
 export function normalizeTeacherLeaveRequest(request={}){
  const action=text(request.action,16),operationId=text(request.operationId,128),leaveId=text(request.leaveId,128),expectedRevision=Number(request.expectedRevision);
  if(!['create','update','cancel'].includes(action))throw new Error('請假操作類型無效');
