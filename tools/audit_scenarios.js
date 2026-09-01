@@ -320,7 +320,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.126'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.127'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -527,8 +527,7 @@ const schedulerView = context.filteredSchedulerDB({
   lessons: [lesson({id:'schedule-safe',address:'Scheduling address',meetingUrl:'https://meeting',note:'Scheduling note',paymentStatus:'paid',chargeStudent:'yes',payTeacher:'yes'})]
 });
 assert.equal(schedulerView.students.length,scopedSource.students.length,'aa receives the complete active student directory instead of only students already scheduled');
-assert.equal(schedulerView.students[0].parent,scopedSource.students[0].parent,'aa student directory retains parent identity needed for scheduling');
-assert.equal(schedulerView.students[0].rate,undefined,'aa student directory never exposes tuition rates');
+for (const field of ['parent','contact','parentLine','parentEmail','homeAddress','rate','billing']) assert.equal(schedulerView.students[0][field],undefined,`aa student directory never exposes ${field}`);
 assert.deepEqual(Object.keys(schedulerView.branches[0]).sort(), ['id','name','rooms']);
 assert.equal(schedulerView.lessons[0].address, 'Scheduling address', 'Wendy scheduler lessons retain the scheduling address');
 assert.equal(schedulerView.lessons[0].meetingUrl, 'https://meeting', 'Wendy scheduler lessons retain the online meeting link');
@@ -542,6 +541,7 @@ assert.deepEqual(Array.from(branchView.teachers,row=>row.id), ['t1']);
 assert.deepEqual(Array.from(branchView.fixedExpenses, row => row.id), ['expense']);
 assert.deepEqual(Array.from(branchView.collectionRecords,row=>row.id), ['payment']);
 assert.match(cloudSource,/function buildCurrentRoleViewCandidates[\s\S]*filteredSchedulerDB\(sourceDb\)[\s\S]*filteredTeacherDB\(sourceDb,access\.teacherId\)[\s\S]*filteredBranchDB\(sourceDb,access\.branchIds\)/,'role-record candidates reuse the exact live permission projections instead of a duplicate permission model');
+assert.match(cloudSource,/__danbridgeRepublishProductionRoleViews[\s\S]*production-records-authoritative[\s\S]*publishScopedViews\(sourceDb,\{recordAuthority:true\}\)[\s\S]*auditProductionRoleViews\(sourceDb\)[\s\S]*if\(!audit\.verified\)throw/,'production Owner can republish and hash-verify every sanitized role view without rewriting primary data');
 assert.match(cloudSource,/function stagingRoleViewCandidateGuard\(\)\{if\(DANBRIDGE_ENVIRONMENT!==\x27staging\x27\|\|cloudRole!==\x27owner\x27\)/,'role-record candidate writes remain staging Owner only');
 
 const notificationStart = cloudSource.indexOf('const SCHEDULE_NOTIFICATION_FIELDS');

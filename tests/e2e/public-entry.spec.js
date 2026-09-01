@@ -1,12 +1,12 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.126';
-const APP_SHELL_RELEASE = '20.26.27';
+const CLOUD_RELEASE = '20.26.127';
+const APP_SHELL_RELEASE = '20.26.127';
 const BUSINESS_RELEASE = '20.23.0';
 const TEACHER_KPI_RELEASE = '20.22.0';
 const BRANCH_SCOPE_RELEASE = '20.22.0';
-const ROLE_UX_RELEASE = '20.26.4';
+const ROLE_UX_RELEASE = '20.26.127';
 const ROLE_UX_STYLE_RELEASE = '20.25.10';
 const PWA_RELEASE = '20.26.113';
 const PWA_STYLE_RELEASE = '20.18.0';
@@ -64,6 +64,7 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/modules/notifications/notification-center.js?v=${RELEASE}`);
   expect(sources).toContain(`./js/core/firebase-auth-and-cloud-sync.module.js?v=${CLOUD_RELEASE}`);
   expect(sources).toContain(`./js/app/app-shell.js?v=${APP_SHELL_RELEASE}`);
+  expect(sources).toContain(`./js/app/scheduler-student-tools.js?v=${CLOUD_RELEASE}`);
   expect(sources).toContain(`./js/ui/clean-field-hints.js?v=${CLEAN_FIELD_RELEASE}`);
   expect(sources).toContain(`./js/modules/teachers/teacher-kpi.js?v=${TEACHER_KPI_RELEASE}`);
   expect(sources).toContain(`./js/core/branch-business-scope.js?v=${BRANCH_SCOPE_RELEASE}`);
@@ -198,7 +199,7 @@ test('role navigation matrix rejects every forbidden workspace', async ({ page }
     };
   });
   expect(matrix.owner.every(([requested,active])=>requested===active)).toBe(true);
-  expect(matrix.scheduler).toEqual([['students','students'],['calendar','calendar'],['dashboard','calendar'],['lessons','calendar'],['finance','calendar'],['security','calendar']]);
+  expect(matrix.scheduler).toEqual([['students','calendar'],['calendar','calendar'],['dashboard','calendar'],['lessons','calendar'],['finance','calendar'],['security','calendar']]);
   expect(matrix.teacher).toEqual([['dashboard','dashboard'],['calendar','calendar'],['lessons','lessons'],['students','dashboard'],['teachers','dashboard'],['finance','dashboard'],['security','dashboard']]);
   expect(matrix.manager).toEqual([['dashboard','dashboard'],['students','students'],['teachers','teachers'],['calendar','calendar'],['lessons','lessons'],['makeups','makeups'],['settlement','finance'],['finance','finance'],['data','dashboard'],['security','dashboard']]);
 });
@@ -226,10 +227,12 @@ for (const schedulerAccount of [
   { name: 'aa', teacherId: 'aa', email: 'aa0966626336@gmail.com' }
 ]) test(`${schedulerAccount.name} scheduler stays private, centered and contained on every device`, async ({ page }) => {
   await page.goto('/index.html', { waitUntil: 'load' });
+  await page.waitForFunction(() => Boolean(window.DanbridgeRoleResponsive));
   const result = await page.evaluate(schedulerAccount => {
     document.body.classList.remove('auth-locked');
     document.body.classList.add('teacher-cloud-role');
     window.DanbridgeAccess.setContext({role:'teacher',teacherId:schedulerAccount.teacherId,email:schedulerAccount.email,canManageSchedule:true});
+    window.currentCloudRole=()=> 'teacher';
     window.DanbridgeRoleResponsive?.apply?.();
     window.renderCalendar?.();
     const selectionBar=document.getElementById('selectionBar');
@@ -244,10 +247,8 @@ for (const schedulerAccount of [
     document.getElementById('calendar').classList.remove('active');document.getElementById('students').classList.add('active');
     const contextHiddenOnStudents=getComputedStyle(contextMenu).display==='none';
     window.switchTab('students');
-    const studentNavigationWorks=document.getElementById('students').classList.contains('active')&&document.body.dataset.activeSection==='students';
-    const studentContentVisible=getComputedStyle(document.getElementById('students')).display!=='none'&&getComputedStyle(document.querySelector('#students>.grid>.card.col-8')).display!=='none';
-    const studentCard=document.querySelector('#students>.grid>.card.col-8').getBoundingClientRect(),studentSection=document.getElementById('students').getBoundingClientRect();
-    const studentDirectoryUsesWidth=studentCard.width>=Math.min(680,studentSection.width*.8);
+    const studentNavigationRejected=document.body.dataset.activeSection==='calendar'&&!document.getElementById('students').classList.contains('active');
+    const studentContentHidden=getComputedStyle(document.getElementById('students')).display==='none';
     document.getElementById('students').classList.remove('active');document.getElementById('calendar').classList.add('active');contextMenu.classList.remove('show');
     const sampleLesson=db.lessons[0];
     if(sampleLesson)window.editLesson(sampleLesson.id);
@@ -268,7 +269,7 @@ for (const schedulerAccount of [
       overflow: document.documentElement.scrollWidth - innerWidth,
       uncentered: visibleControls.filter(control => getComputedStyle(control).textAlign !== 'center').map(control => control.id || control.textContent.trim().slice(0, 20)),
       escaped: visibleControls.filter(control => { const rect = control.getBoundingClientRect(); return rect.left < modalRect.left - 1 || rect.right > modalRect.right + 1 || rect.left < -1 || rect.right > innerWidth + 1; }).map(control => control.id || control.textContent.trim().slice(0, 20)),
-      privateVisible: ['paymentStatus','chargeStudent','payTeacher','quickBilling','quickRate'].filter(id => {const el=document.getElementById(id),rect=el.getBoundingClientRect();return getComputedStyle(el).display!=='none'&&rect.width>0&&rect.height>0}),
+      privateVisible: ['quickParentName','quickParentContact','quickHomeAddress','paymentStatus','chargeStudent','payTeacher','quickBilling','quickRate'].filter(id => {const el=document.getElementById(id),rect=el.getBoundingClientRect();return getComputedStyle(el).display!=='none'&&rect.width>0&&rect.height>0}),
       scheduleFieldsHidden: ['lessonAddress','lessonMeetingUrl','lessonNote','lessonState'].filter(id => getComputedStyle(document.getElementById(id)).display === 'none'),
       singleClickOpenedEditor: !sampleLesson || document.getElementById('lessonId').value===sampleLesson.id,
       capabilityAllowsEditing: window.calendarOwnerCanEdit?.()===true,
@@ -283,14 +284,14 @@ for (const schedulerAccount of [
       editingToolsHidden: ['#calendar .calendar-head-add','#calendar .calendar-quick-add','#calendar .weekly-copy-btn','#calendar #selectionModeBtn','#calendar .day-add','#courseDrawerEditBtn'].filter(selector => {
         const element=document.querySelector(selector);return !element||element.hidden||getComputedStyle(element).display==='none';
       }),
-      forbiddenSections: ['dashboard','teachers','lessons','makeups','camps','finance','data','security'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none'),
+      forbiddenSections: ['dashboard','students','teachers','lessons','makeups','camps','finance','data','security'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none'),
       studentSectionVisible: getComputedStyle(document.querySelector('nav button[data-tab="students"]')).display!=='none',
       addStudentButtonVisible: getComputedStyle(document.querySelector('#lessonModal .student-select-row>button')).display!=='none',
       reportTabVisible: getComputedStyle(document.querySelector('nav button[data-tab="lessons"]')).display!=='none',
       reportShortcutExists: Boolean(document.getElementById('teacherReportShortcut')),
       selectionPosition: getComputedStyle(selectionBar).position,
       selectionContained: selectionRect.left>=calendarCardRect.left-1&&selectionRect.right<=calendarCardRect.right+1
-      ,contextHiddenByDefault,contextVisibleOnCalendar,contextHiddenOnStudents,studentNavigationWorks,studentContentVisible,studentDirectoryUsesWidth
+      ,contextHiddenByDefault,contextVisibleOnCalendar,contextHiddenOnStudents,studentNavigationRejected,studentContentHidden
     };
   }, schedulerAccount);
   expect(result.modalLeft).toBeGreaterThanOrEqual(0);
@@ -311,7 +312,7 @@ for (const schedulerAccount of [
   expect(result.idleSelectionMarkers).toBe(0);
   expect(result.editingToolsHidden).toEqual([]);
   expect(result.forbiddenSections).toEqual([]);
-  expect(result.studentSectionVisible).toBe(true);
+  expect(result.studentSectionVisible).toBe(false);
   expect(result.addStudentButtonVisible).toBe(true);
   expect(result.reportTabVisible).toBe(false);
   expect(result.reportShortcutExists).toBe(false);
@@ -320,9 +321,8 @@ for (const schedulerAccount of [
   expect(result.contextHiddenByDefault).toBe(true);
   expect(result.contextVisibleOnCalendar).toBe(true);
   expect(result.contextHiddenOnStudents).toBe(true);
-  expect(result.studentNavigationWorks).toBe(true);
-  expect(result.studentContentVisible).toBe(true);
-  expect(result.studentDirectoryUsesWidth).toBe(true);
+  expect(result.studentNavigationRejected).toBe(true);
+  expect(result.studentContentHidden).toBe(true);
 });
 
 test('English mode translates the major application workspaces', async ({ page }) => {

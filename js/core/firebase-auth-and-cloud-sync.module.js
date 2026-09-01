@@ -44,8 +44,8 @@ import {createStagingV2AuthorityReadLoader} from './staging-v2-authority-read-lo
 import {createStagingV2AuthoritySaveBrowserClient} from './staging-v2-authority-save-browser-client.js?v=20.26.120';
 import {createStagingV2ActiveRecordOperationSender,normalizeStagingV2FirestoreValue,stagingV2H0GenesisBaselineDocuments} from './staging-v2-active-record-browser-bridge.js?v=20.26.121';
 import {verifyStagingV2PrewriteBackup} from './staging-v2-prewrite-backup-verifier.js?v=20.26.120';
-import {createFirebaseProductionRecordOperationAdapter,createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.126';
-import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.126';
+import {createFirebaseProductionRecordOperationAdapter,createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.127';
+import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.127';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -57,7 +57,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.126';
+const APP_RELEASE='20.26.127';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -724,7 +724,8 @@ function schedulerSafeLesson(lesson={}){
  return Object.fromEntries(allowed.filter(key=>lesson[key]!==undefined).map(key=>[key,JSON.parse(JSON.stringify(lesson[key]))]));
 }
 function schedulerSafeStudent(student={}){
- const allowed=['id','name','status','school','grade','level','preferredTeacherId','parent','contact','parentLine','parentEmail','homeAddress','courseType','branchIds'];
+ // 排課只需要辨識學生與課程歸屬；家長、聯絡方式與住址永遠不得進入排課專員檢視。
+ const allowed=['id','name','status','school','grade','level','preferredTeacherId','courseType','branchIds'];
  return Object.fromEntries(allowed.filter(key=>student[key]!==undefined).map(key=>[key,JSON.parse(JSON.stringify(student[key]))]));
 }
 function filteredSchedulerDB(source){
@@ -1411,7 +1412,7 @@ function applyRoleUI(profile,user){
    window.renderAll?.();
    applyingCloud=false;
 
-   const teacherAllowedTabs=new Set(cloudCanManageSchedule?['students','calendar']:['dashboard','calendar','lessons']);
+   const teacherAllowedTabs=new Set(cloudCanManageSchedule?['calendar']:['dashboard','calendar','lessons']);
    const teacherTabLabels={dashboard:'我的總覽',calendar:cloudCanManageSchedule?'全老師課表':'我的課表',lessons:'課程回報'};
    document.querySelectorAll('nav button[data-tab]').forEach(b=>{
      const allowed=teacherAllowedTabs.has(b.dataset.tab);
@@ -1430,7 +1431,7 @@ function applyRoleUI(profile,user){
    document.querySelectorAll(teacherHiddenSelector).forEach(e=>{const target=e.matches('select')?e.closest('.calendar-field,#lessons .toolbar>div')||e:e;markRoleIsolated(target)});
    const teacherAnalysis=document.getElementById('calendarAnalysis');if(teacherAnalysis){markRoleIsolated(teacherAnalysis);teacherAnalysis.replaceChildren()}
    if(!cloudCanManageSchedule)document.querySelectorAll('.floating-actions').forEach(e=>e.remove());
-   document.querySelectorAll(`#teachers,#drafts,#makeups,#camps,#winterCamps,#settlement,#finance,#data,#security${cloudCanManageSchedule?',#dashboard,#lessons':',#students'}`).forEach(e=>{markRoleIsolated(e);e.classList.remove('active')});
+   document.querySelectorAll(`#teachers,#drafts,#makeups,#camps,#winterCamps,#settlement,#finance,#data,#security${cloudCanManageSchedule?',#dashboard,#students,#lessons':',#students'}`).forEach(e=>{markRoleIsolated(e);e.classList.remove('active')});
 
    // 隱藏公司營收、未收款、薪資、老師總數與公司異動等敏感資訊。
    ['mTeachers','mRevenue','mUnpaid','mPayroll','mChanges'].forEach(id=>{
@@ -2053,6 +2054,18 @@ async function auditProductionRoleViews(sourceDb){
  evidence.sort((a,b)=>`${a.kind}:${a.email}`.localeCompare(`${b.kind}:${b.email}`));
  return{...counts,total:counts.schedulers+counts.teachers+counts.branchManagers,verified:issues.length===0,issueCount:issues.length,issues,evidence,roleViewDigest:sha256Canonical(evidence)};
 }
+window.__danbridgeRepublishProductionRoleViews=async()=>{
+ if(DANBRIDGE_ENVIRONMENT!=='production'||cloudRole!=='owner'||cloudEmailKey!==OWNER_EMAIL||!sameOwner())throw new Error('production 角色檢視重發只允許同一位主要 Owner');
+ if(activeRecordMode!=='active'||document.body.dataset.activeRecordAuthority!=='production-records-authoritative')throw new Error('production 逐筆權威資料尚未就緒');
+ const sourceDb=deepCopy(window.__danbridgeGetDB?.()||emptyDB()),sourceHash=recordDataHash(sourceDb);
+ if(!sourceHash||window.__danbridgeDataScore?.(sourceDb)===0)throw new Error('production 權威資料不可為空');
+ await publishScopedViews(sourceDb,{recordAuthority:true});
+ const audit=await auditProductionRoleViews(sourceDb);
+ if(!audit.verified)throw new Error(`production 角色檢視重發後仍有 ${audit.issueCount} 個不一致`);
+ const result={state:'verified',release:APP_RELEASE,sourceHash,roleViewDigest:audit.roleViewDigest,counts:{schedulers:audit.schedulers,teachers:audit.teachers,branchManagers:audit.branchManagers,total:audit.total}};
+ document.body.dataset.productionRolePrivacyRepublish=JSON.stringify(result);
+ return result;
+};
 async function buildCurrentRoleViewCandidates(sourceDb){
  const accessDocs=await getCompanyAccessDocs(),views=[];
  for(const accessDoc of accessDocs){

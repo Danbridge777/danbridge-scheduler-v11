@@ -8,7 +8,7 @@
     const duplicate=db.students.find(s=>String(s.name||'').trim().toLowerCase()===name.toLowerCase());
     if(duplicate){$('lessonStudent').value=duplicate.id;toggleQuickStudent(false);handleLessonStudentChange();return toast(`已選取既有學生 ${duplicate.name}`)}
     const branch=$('v20QuickBranch')?.value||'',duration=+$('v20QuickDuration')?.value||60;
-    const student=studentDefaults({id:uid(),name,parent:$('quickParentName').value.trim(),contact:$('quickParentContact').value.trim(),homeAddress:$('quickHomeAddress').value.trim(),courseType:$('quickCourseType').value,preferredTeacherId:$('v20QuickTeacher')?.value||'',branchIds:branch?[branch]:[],status:'active'});
+    const student=studentDefaults({id:uid(),name,parent:'',contact:'',homeAddress:'',courseType:$('quickCourseType').value,preferredTeacherId:$('v20QuickTeacher')?.value||'',branchIds:branch?[branch]:[],status:'active'});
     db.students.push(student);saveDB();renderSelects();$('lessonStudent').value=student.id;
     if(student.preferredTeacherId)$('lessonTeacher').value=student.preferredTeacherId;
     if(branch){$('lessonBranch').value=branch;handleBranchChange()}
