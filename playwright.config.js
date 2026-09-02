@@ -24,7 +24,9 @@ module.exports = defineConfig({
     { name: 'mobile-chromium', use: { ...devices['iPhone 13'], browserName: 'chromium' } },
     { name: 'desktop-webkit', use: { ...devices['Desktop Safari'], browserName: 'webkit' } },
     { name: 'ipad-webkit', use: { ...devices['iPad Pro 11'], browserName: 'webkit' } },
-    { name: 'mobile-webkit', use: { ...devices['iPhone 13'], browserName: 'webkit' } }
+    { name: 'mobile-webkit', use: { ...devices['iPhone 13'], browserName: 'webkit' } },
+    { name: 'windows-chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1366, height: 768 }, userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36' } },
+    { name: 'android-chromium', use: { ...devices['Pixel 7'], browserName: 'chromium' } }
   ],
   webServer: process.env.E2E_BASE_URL ? undefined : {
     command: 'node tools/e2e_static_server.js',

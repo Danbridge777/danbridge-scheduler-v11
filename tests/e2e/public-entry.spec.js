@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.145';
+const CLOUD_RELEASE = '20.26.146';
 const SCHEDULER_STUDENT_TOOLS_RELEASE = '20.26.139';
 const APP_SHELL_RELEASE = '20.26.139';
 const BUSINESS_RELEASE = '20.23.0';
@@ -10,7 +10,7 @@ const BRANCH_SCOPE_RELEASE = '20.22.0';
 const ROLE_UX_RELEASE = '20.26.139';
 const REPORT_STYLE_RELEASE = '20.26.139';
 const ROLE_UX_STYLE_RELEASE = '20.26.139';
-const PWA_RELEASE = '20.26.145';
+const PWA_RELEASE = '20.26.146';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
@@ -20,6 +20,7 @@ const PREMIUM_CONTROLS_RELEASE = '20.25.10';
 const PERMANENT_HISTORY_RELEASE = '20.26.98';
 const APPLICATION_FEATURES_RELEASE = '20.26.98';
 const SCHEDULING_EFFICIENCY_RELEASE = '20.26.98';
+const CROSS_PLATFORM_LAYOUT_RELEASE = '20.26.146';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
   await page.route('https://www.gstatic.com/**', route => route.abort());
@@ -85,6 +86,7 @@ test('critical teacher and finance resources load the current release', async ({
   expect(styles).toContain(`./css/core/77-pwa-install-and-update.css?v=${PWA_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/67-v185-interface-clarity.css?v=${INTERFACE_CLARITY_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/78-v20259-premium-responsive-controls.css?v=${PREMIUM_CONTROLS_RELEASE}`);
+  expect(styles).toContain(`./css/core/84-v2026146-cross-platform-layout-guard.css?v=${CROSS_PLATFORM_LAYOUT_RELEASE}`);
   const manifest = await page.locator('link[rel="manifest"]').getAttribute('href');
   expect(manifest).toBe('./manifest.webmanifest');
   const appleIcon = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
