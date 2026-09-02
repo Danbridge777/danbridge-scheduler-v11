@@ -111,7 +111,33 @@ exports.productionAcknowledgeScheduleNotification=onCall({region:'asia-east1',se
  }
 });
 
-exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'512MiB',concurrency:8,minInstances:0,maxInstances:20},async request=>{
+exports.productionPublishScheduleNotifications=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:30,memory:'256MiB',concurrency:40,minInstances:1,maxInstances:20},async request=>{
+ try{
+  const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),firestore=runtimeValue.firestore,{normalizeProductionScheduleNotificationPublishRequest,assertProductionScheduleNotificationAccess}=await import('../js/core/production-notification-policy.js'),input=normalizeProductionScheduleNotificationPublishRequest(request.data),fingerprint=createHash('sha256').update(JSON.stringify(input)).digest('hex'),safetyRef=firestore.doc('companies/danbridge/productionRecordRuntime/safety'),receiptRef=firestore.doc(`companies/danbridge/productionScheduleNotificationReceipts/${input.requestId}`),notificationRefs=input.notifications.map(item=>firestore.doc(`companies/danbridge/scheduleNotifications/${item.id}`)),accessRefs=input.notifications.map(item=>item.payload.recipientEmail===PRIMARY_OWNER_EMAIL?null:firestore.doc(`companyAccess/${item.payload.recipientEmail}`));
+  const result=await firestore.runTransaction(async transaction=>{
+   const [safetySnapshot,receiptSnapshot,...memberAndNotificationSnapshots]=await Promise.all([transaction.get(safetyRef),transaction.get(receiptRef),...accessRefs.map(ref=>ref?transaction.get(ref):Promise.resolve(null)),...notificationRefs.map(ref=>transaction.get(ref))]),safety=safetySnapshot.exists?safetySnapshot.data():null,receipt=receiptSnapshot.exists?receiptSnapshot.data():null,accessSnapshots=memberAndNotificationSnapshots.slice(0,accessRefs.length),notificationSnapshots=memberAndNotificationSnapshots.slice(accessRefs.length);
+   if(!safety||safety.state!=='active'||safety.writeAllowed!==true||safety.recordDataHash!==input.sourceHash)throw new Error('通知來源不是目前正式權威 head');
+   if(receipt){if(receipt.fingerprint!==fingerprint||receipt.sourceHash!==input.sourceHash)throw new Error('通知發布 receipt identity 衝突');return{kind:'duplicate',writeCount:0,notificationCount:Number(receipt.notificationCount)||input.notifications.length,duplicateCount:input.notifications.length}}
+   let writeCount=0,duplicateCount=0;
+   input.notifications.forEach((item,index)=>{
+    const accessSnapshot=accessSnapshots[index],access=accessSnapshot?.exists?{id:accessSnapshot.id,...(accessSnapshot.data()||{})}:null;
+    assertProductionScheduleNotificationAccess(item,access,PRIMARY_OWNER_EMAIL);
+    const currentSnapshot=notificationSnapshots[index],current=currentSnapshot?.exists?currentSnapshot.data():null;
+    if(current){if(current.publishFingerprint!==fingerprint||current.publishRequestId!==input.requestId||current.recipientEmail!==item.payload.recipientEmail)throw new Error('既有通知 identity 衝突');duplicateCount++;return}
+    transaction.set(notificationRefs[index],{...item.payload,sourceHash:input.sourceHash,release:input.release,publishRequestId:input.requestId,publishFingerprint:fingerprint,createdAt:FieldValue.serverTimestamp(),createdBy:caller.uid,createdByEmail:caller.email},{merge:false});writeCount++;
+   });
+   transaction.set(receiptRef,{schema:'danbridge-production-schedule-notification-publish-receipt-v1',environment:'production',companyId:'danbridge',requestId:input.requestId,sourceHash:input.sourceHash,release:input.release,fingerprint,notificationCount:input.notifications.length,writeCount,duplicateCount,committedAt:FieldValue.serverTimestamp(),committedByUid:caller.uid,committedByEmail:caller.email},{merge:false});
+   return{kind:'published',writeCount,notificationCount:input.notifications.length,duplicateCount};
+  });
+  return{schema:'danbridge-production-schedule-notification-publish-response-v1',ok:true,requestId:input.requestId,sourceHash:input.sourceHash,...result};
+ }catch(error){
+  if(error instanceof HttpsError)throw error;
+  const message=String(error?.message||'課表通知發布已安全阻止。').slice(0,240),code=/identity|請求|內容|收件者|角色|識別碼|範圍/.test(message)?'invalid-argument':/Owner|成員/.test(message)?'permission-denied':'failed-precondition';
+  console.error('PRODUCTION_SCHEDULE_NOTIFICATION_PUBLISH_BLOCKED',JSON.stringify({name:String(error?.name||'Error'),message}));throw new HttpsError(code,message);
+ }
+});
+
+exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'512MiB',concurrency:8,minInstances:1,maxInstances:20},async request=>{
  try{
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),trusted=runtimeValue.assertProductionTrustedOperation(request.data);
   if(trusted.actor.uid!==caller.uid||trusted.actor.email!==caller.email)throw new HttpsError('permission-denied','操作身分不一致。');
@@ -135,7 +161,7 @@ async function commitProductionDerivedWrites(firestore,writes){
  return committed;
 }
 
-exports.productionPublishRoleViews=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:540,memory:'1GiB',concurrency:4,minInstances:0,maxInstances:10},async request=>{
+exports.productionPublishRoleViews=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:540,memory:'1GiB',concurrency:4,minInstances:1,maxInstances:10},async request=>{
  try{
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),firestore=runtimeValue.firestore,[projection,fullRecord,recordHash]=await Promise.all([import('../js/core/production-role-view-projection.js'),import('../js/core/cloud-full-record-shadow.js'),import('../js/core/cloud-record-data-hash.js')]),input=projection.assertProductionRoleViewPublishRequest(request.data),receiptRef=firestore.doc(`productionRoleViewPublishReceipts/${input.requestId}`),existingReceipt=await receiptRef.get();
   if(existingReceipt.exists){const saved=existingReceipt.data()||{};if(saved.sourceHash!==input.sourceHash||saved.createdByUid!==caller.uid)throw new Error('production 角色檢視發布 receipt identity 衝突');return{...saved,result:{...(saved.result||{}),kind:'duplicate'}}}
