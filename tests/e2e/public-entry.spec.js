@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.152';
+const CLOUD_RELEASE = '20.26.153';
 const SCHEDULER_STUDENT_TOOLS_RELEASE = '20.26.139';
 const APP_SHELL_RELEASE = '20.26.139';
 const BUSINESS_RELEASE = '20.23.0';
@@ -10,7 +10,7 @@ const BRANCH_SCOPE_RELEASE = '20.22.0';
 const ROLE_UX_RELEASE = '20.26.139';
 const REPORT_STYLE_RELEASE = '20.26.139';
 const ROLE_UX_STYLE_RELEASE = '20.26.139';
-const PWA_RELEASE = '20.26.152';
+const PWA_RELEASE = '20.26.153';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
@@ -20,7 +20,7 @@ const PREMIUM_CONTROLS_RELEASE = '20.25.10';
 const PERMANENT_HISTORY_RELEASE = '20.26.98';
 const APPLICATION_FEATURES_RELEASE = '20.26.98';
 const SCHEDULING_EFFICIENCY_RELEASE = '20.26.98';
-const CROSS_PLATFORM_LAYOUT_RELEASE = '20.26.152';
+const CROSS_PLATFORM_LAYOUT_RELEASE = '20.26.153';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
   await page.route('https://www.gstatic.com/**', route => route.abort());
@@ -99,9 +99,11 @@ test('主選單在桌機、平板與手機都只顯示一致文字',async({page}
   await page.evaluate(()=>document.body.classList.remove('auth-locked'));
   for(const viewport of [{width:1440,height:900},{width:1024,height:768},{width:390,height:844}]){
     await page.setViewportSize(viewport);
-    const items=await page.locator('body>nav>button[data-tab]').evaluateAll(buttons=>buttons.map(button=>({label:button.textContent.trim(),before:getComputedStyle(button,'::before').content,after:getComputedStyle(button,'::after').content,marginTop:getComputedStyle(button).marginTop})));
+    const items=await page.locator('body>nav>button[data-tab]').evaluateAll(buttons=>buttons.map(button=>{const style=getComputedStyle(button);const rect=button.getBoundingClientRect();return{label:button.textContent.trim(),before:getComputedStyle(button,'::before').content,after:getComputedStyle(button,'::after').content,marginTop:style.marginTop,display:style.display,height:rect.height,overflowing:button.scrollWidth>button.clientWidth+1||button.scrollHeight>button.clientHeight+1}}));
     expect(items.map(item=>item.label)).toEqual(expected);
     expect(items.every(item=>item.before==='none'&&item.after==='none'&&item.marginTop==='0px')).toBeTruthy();
+    expect(items.every(item=>item.display==='flex'&&!item.overflowing)).toBeTruthy();
+    expect(new Set(items.map(item=>item.height)).size).toBe(1);
   }
 });
 
