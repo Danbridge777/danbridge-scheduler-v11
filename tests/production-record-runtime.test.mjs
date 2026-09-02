@@ -38,8 +38,8 @@ function streamHarness(){
   onApply:async value=>applies.push(value),
   onState:value=>states.push(value)
  });
- const emitDocument=(path,data)=>documentListeners.get(path).next({exists:data!==null,data,hasPendingWrites:false});
- const emitCollection=(collection,documents,changes=documents.map(row=>({type:'added',...row})))=>collectionListeners.get(productionRecordCollectionPath(collection)).next({hasPendingWrites:false,documents,changes});
+ const emitDocument=(path,data,{fromCache=false,hasPendingWrites=false}={})=>documentListeners.get(path).next({exists:data!==null,data,fromCache,hasPendingWrites});
+ const emitCollection=(collection,documents,changes=documents.map(row=>({type:'added',...row})),{fromCache=false,hasPendingWrites=false}={})=>collectionListeners.get(productionRecordCollectionPath(collection)).next({fromCache,hasPendingWrites,documents,changes});
  const settle=async()=>{for(let index=0;index<8;index++)await new Promise(resolve=>setImmediate(resolve))};
  return{adapter,documentListeners,collectionListeners,states,applies,emitDocument,emitCollection,settle};
 }
@@ -65,8 +65,8 @@ test('production stream 原子啟用時 control 與 safety 回呼順序不同不
  await app.settle();assert.equal(app.adapter.diagnostics().state,'ready');assert.equal(app.adapter.diagnostics().blocked,false);assert.equal(app.adapter.diagnostics().initialVerified,true);
 });
 
-test('production 舊 safety 升級期間 fail closed 但不誤 blocked，v2 抵達即自動 ready',async()=>{
- const {db,control,safety}=activation(),app=streamHarness(),documents=productionDocuments(db),legacySafety={schema:'danbridge-production-record-runtime-safety-v1',environment:'production',companyId:'danbridge',activationEpoch:control.activationEpoch,state:'active',revision:1,lastEventHash:control.activationHash,readAllowed:true,writeAllowed:true,updatedAt:'2026-09-01T04:00:00.000Z'};app.adapter.start();app.emitDocument(PRODUCTION_RECORD_SAFETY_PATH,legacySafety);app.emitDocument(PRODUCTION_RECORD_CONTROL_PATH,control);for(const collection of FULL_RECORD_COLLECTIONS)app.emitCollection(collection,documents[collection]);await app.settle();assert.equal(app.adapter.diagnostics().state,'loading');assert.equal(app.adapter.diagnostics().blocked,false);assert.equal(app.applies.length,0);app.emitDocument(PRODUCTION_RECORD_SAFETY_PATH,safety);await app.settle();assert.equal(app.adapter.diagnostics().state,'ready');assert.equal(app.adapter.diagnostics().blocked,false);assert.equal(app.applies.length,1);
+test('production 舊 safety 不再被日常 runtime 接受，立即 fail closed',async()=>{
+ const {control,safety}=activation(),app=streamHarness(),legacySafety={schema:'danbridge-production-record-runtime-safety-v1',environment:'production',companyId:'danbridge',activationEpoch:control.activationEpoch,state:'active',revision:1,lastEventHash:control.activationHash,readAllowed:true,writeAllowed:true,updatedAt:'2026-09-01T04:00:00.000Z'};app.adapter.start();app.emitDocument(PRODUCTION_RECORD_SAFETY_PATH,legacySafety);app.emitDocument(PRODUCTION_RECORD_CONTROL_PATH,control);await app.settle();assert.equal(app.adapter.diagnostics().state,'blocked');assert.equal(app.adapter.diagnostics().blocked,true);assert.equal(app.collectionListeners.size,0);assert.equal(app.applies.length,0);app.emitDocument(PRODUCTION_RECORD_SAFETY_PATH,safety);await app.settle();assert.equal(app.adapter.diagnostics().state,'blocked');assert.equal(app.applies.length,0);
 });
 
 test('production 寫入後 safety 與 record 任一先抵達都會收斂，重新載入仍以新 head ready',async()=>{
@@ -85,4 +85,6 @@ test('production stream 對 activation 變造、實體刪除與 revision 倒退�
  }
 });
 
-test('production stream 缺少 control 時只回到 legacy，不建立逐筆寫入權限',async()=>{const app=streamHarness();app.adapter.start();app.emitDocument(PRODUCTION_RECORD_CONTROL_PATH,null);await app.settle();assert.equal(app.adapter.diagnostics().state,'legacy');assert.equal(app.collectionListeners.size,0);assert.equal(app.applies.length,0)});
+test('production stream 不採信快取 control，伺服器確認缺少時阻擋且絕不回退舊主資料',async()=>{const app=streamHarness();app.adapter.start();app.emitDocument(PRODUCTION_RECORD_CONTROL_PATH,null,{fromCache:true});await app.settle();assert.equal(app.adapter.diagnostics().state,'checking');assert.equal(app.adapter.diagnostics().blocked,false);assert.equal(app.collectionListeners.size,0);app.emitDocument(PRODUCTION_RECORD_CONTROL_PATH,null);await app.settle();assert.equal(app.adapter.diagnostics().state,'blocked');assert.equal(app.adapter.diagnostics().blocked,true);assert.equal(app.collectionListeners.size,0);assert.equal(app.applies.length,0)});
+
+test('production stream 快取中的舊 control、safety 與逐筆資料皆不具權威性',async()=>{const {db,control,safety}=activation(),app=streamHarness(),documents=productionDocuments(db);app.adapter.start();app.emitDocument(PRODUCTION_RECORD_CONTROL_PATH,control,{fromCache:true});app.emitDocument(PRODUCTION_RECORD_SAFETY_PATH,safety,{fromCache:true});await app.settle();assert.equal(app.collectionListeners.size,0);assert.equal(app.adapter.diagnostics().freshControlVerified,false);assert.equal(app.adapter.diagnostics().freshSafetyVerified,false);app.emitDocument(PRODUCTION_RECORD_CONTROL_PATH,control);app.emitDocument(PRODUCTION_RECORD_SAFETY_PATH,safety);for(const collection of FULL_RECORD_COLLECTIONS)app.emitCollection(collection,documents[collection],undefined,{fromCache:true});await app.settle();assert.equal(app.applies.length,0);for(const collection of FULL_RECORD_COLLECTIONS)app.emitCollection(collection,documents[collection]);await app.settle();assert.equal(app.adapter.diagnostics().state,'ready');assert.equal(app.adapter.diagnostics().freshControlVerified,true);assert.equal(app.adapter.diagnostics().freshSafetyVerified,true);assert.equal(app.applies.length,1)});
