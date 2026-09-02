@@ -6,7 +6,7 @@ const empty=()=>({students:[],teachers:[],lessons:[],makeups:[],changes:[],teach
 const source={...empty(),branches:[{id:'art_museum',name:'美術東四路',rooms:['1']},{id:'hexi',name:'河西一路',rooms:['2']}],students:[{id:'s1',name:'甲',parentName:'不得外洩',phone:'0911',branchIds:['art_museum']},{id:'s2',name:'乙',parentName:'不得外洩',branchIds:['hexi']}],teachers:[{id:'t1',name:'張毅',rate:999,assignedBranchIds:['art_museum']},{id:'t2',name:'王師',rate:888,assignedBranchIds:['hexi']}],lessons:[{id:'l1',date:'2026-09-02',start:'10:00',end:'11:00',studentId:'s1',teacherId:'t1',branchId:'art_museum',paymentStatus:'paid',teacherReportContent:'未到日期不得發布',teacherReportUpdatedAt:'2026-09-01T10:00:00Z',status:'已上課'},{id:'l2',date:'2026-09-01',start:'12:00',end:'13:00',studentId:'s2',teacherIds:['t2'],branchId:'hexi',paymentStatus:'paid',teacherReportContent:'已完成',teacherReportUpdatedAt:'2026-09-01T10:00:00Z',status:'已上課'}]};
 
 test('發布請求精確綁定正式逐筆 hash、版本與未知欄位拒絕',()=>{
- const request=assertProductionRoleViewPublishRequest({schema:PRODUCTION_ROLE_VIEW_PUBLISH_SCHEMA,requestId:'roleview-1234567890',sourceHash:`record-v1:${'a'.repeat(64)}`,release:'20.26.151'});assert.equal(request.release,'20.26.151');
+ const request=assertProductionRoleViewPublishRequest({schema:PRODUCTION_ROLE_VIEW_PUBLISH_SCHEMA,requestId:'roleview-1234567890',sourceHash:`record-v1:${'a'.repeat(64)}`,release:'20.26.152'});assert.equal(request.release,'20.26.152');
  assert.throws(()=>assertProductionRoleViewPublishRequest({...request,sourceHash:'legacy'}));assert.throws(()=>assertProductionRoleViewPublishRequest({...request,extra:true}));
 });
 

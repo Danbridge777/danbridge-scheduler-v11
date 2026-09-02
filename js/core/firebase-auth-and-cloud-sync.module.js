@@ -61,7 +61,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.151';
+const APP_RELEASE='20.26.152';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1555,7 +1555,7 @@ function applyRoleUI(profile,user){
    document.querySelectorAll('#drafts,#camps,#winterCamps,#data,#security').forEach(e=>{markRoleIsolated(e);e.classList.remove('active')});
    window.DanbridgeRoleResponsive?.apply?.();
  }else{
-   const ownerTabLabels={dashboard:'總覽',students:'學生／家長',teachers:'老師',calendar:'拖曳課表',lessons:'課程紀錄',makeups:'補課中心',camps:'冬／夏令營',finance:'公司財務',data:'備份／iPad',security:'安全設定'};
+   const ownerTabLabels={dashboard:'總覽',students:'學生／家長',teachers:'老師',calendar:'課表',lessons:'課程紀錄',makeups:'補課中心',camps:'冬／夏令營',finance:'公司財務',data:'備份／iPad',security:'安全設定'};
    document.querySelectorAll('nav button[data-tab]').forEach(b=>{b.hidden=false;b.inert=false;b.classList.remove('teacher-nav-hidden');b.style.removeProperty('display');b.removeAttribute('aria-hidden');b.removeAttribute('tabindex');if(ownerTabLabels[b.dataset.tab])b.textContent=ownerTabLabels[b.dataset.tab]});
    document.querySelectorAll('#students,#teachers,#drafts,#makeups,#camps,#winterCamps,#settlement,#finance,#data,#security').forEach(e=>{e.hidden=false;e.inert=false;e.removeAttribute('aria-hidden');e.style.removeProperty('display')});
    document.querySelectorAll('.owner-only-action,.v20-owner-action,#v18Fab,#v18FabMenu,#lessonModal,#smartSchedulerModal,#batchModal,#v20ReplaceModal,#v20HistoryModal').forEach(e=>{e.hidden=false;e.inert=false;e.removeAttribute('aria-hidden');e.style.removeProperty('display')});

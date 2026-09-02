@@ -190,3 +190,25 @@ body:not(.auth-locked) :is(.backup-item,.smart-slot,.camp-class-item,.finance-pa
 @media print{
   html,body{overflow:visible!important}
 }
+
+/* Primary navigation is text-only on every platform. */
+body:not(.auth-locked)>nav>button[data-tab]::before,
+body:not(.auth-locked)>nav>button[data-tab]::after{
+  content:none!important;
+  display:none!important;
+}
+body:not(.auth-locked)>nav>button[data-tab]{
+  margin-top:0!important;
+  padding-left:16px!important;
+  padding-right:16px!important;
+  justify-content:flex-start!important;
+}
+
+@media(max-width:1100px){
+  body:not(.auth-locked)>nav>button[data-tab]{
+    padding-left:7px!important;
+    padding-right:7px!important;
+    justify-content:center!important;
+    text-align:center!important;
+  }
+}

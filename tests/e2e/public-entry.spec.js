@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.151';
+const CLOUD_RELEASE = '20.26.152';
 const SCHEDULER_STUDENT_TOOLS_RELEASE = '20.26.139';
 const APP_SHELL_RELEASE = '20.26.139';
 const BUSINESS_RELEASE = '20.23.0';
@@ -10,7 +10,7 @@ const BRANCH_SCOPE_RELEASE = '20.22.0';
 const ROLE_UX_RELEASE = '20.26.139';
 const REPORT_STYLE_RELEASE = '20.26.139';
 const ROLE_UX_STYLE_RELEASE = '20.26.139';
-const PWA_RELEASE = '20.26.151';
+const PWA_RELEASE = '20.26.152';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
@@ -20,7 +20,7 @@ const PREMIUM_CONTROLS_RELEASE = '20.25.10';
 const PERMANENT_HISTORY_RELEASE = '20.26.98';
 const APPLICATION_FEATURES_RELEASE = '20.26.98';
 const SCHEDULING_EFFICIENCY_RELEASE = '20.26.98';
-const CROSS_PLATFORM_LAYOUT_RELEASE = '20.26.146';
+const CROSS_PLATFORM_LAYOUT_RELEASE = '20.26.152';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
   await page.route('https://www.gstatic.com/**', route => route.abort());
@@ -91,6 +91,18 @@ test('critical teacher and finance resources load the current release', async ({
   expect(manifest).toBe('./manifest.webmanifest');
   const appleIcon = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
   expect(appleIcon).toBe('./icon-192.png?v=20.18.1');
+});
+
+test('主選單在桌機、平板與手機都只顯示一致文字',async({page})=>{
+  const expected=['總覽','學生／家長','老師','請假管理','課表','課程紀錄','補課中心','冬／夏令營','公司財務','備份／iPad','安全設定'];
+  await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+  await page.evaluate(()=>document.body.classList.remove('auth-locked'));
+  for(const viewport of [{width:1440,height:900},{width:1024,height:768},{width:390,height:844}]){
+    await page.setViewportSize(viewport);
+    const items=await page.locator('body>nav>button[data-tab]').evaluateAll(buttons=>buttons.map(button=>({label:button.textContent.trim(),before:getComputedStyle(button,'::before').content,after:getComputedStyle(button,'::after').content,marginTop:getComputedStyle(button).marginTop})));
+    expect(items.map(item=>item.label)).toEqual(expected);
+    expect(items.every(item=>item.before==='none'&&item.after==='none'&&item.marginTop==='0px')).toBeTruthy();
+  }
 });
 
 test('老師請假頁在 Daniel、AA、老師三種角色下呈現正確範圍並提交精確時數',async({page})=>{

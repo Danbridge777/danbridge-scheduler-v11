@@ -162,7 +162,7 @@
 <link rel="stylesheet" href="./css/core/82-owner-muted-gold-sidebar.css?v=20.26.35">
 <link rel="stylesheet" href="./css/core/83-seamless-auth-panel.css?v=20.26.36">
 <link rel="stylesheet" href="./css/core/14-sync-health.css?v=20.26.52">
-<link rel="stylesheet" href="./css/core/84-v2026146-cross-platform-layout-guard.css?v=20.26.146">
+<link rel="stylesheet" href="./css/core/84-v2026146-cross-platform-layout-guard.css?v=20.26.152">
 </head>
 <body class="auth-locked">
 <div id="authScreen" class="auth-screen">
@@ -195,7 +195,7 @@
 </div>
 
 <header><h1>Danbridge Operations</h1><p>Education Management System｜多校區營運｜課務｜財務｜師資管理</p><div class="header-auth-actions"><button type="button" class="btn notification-bell" onclick="DanbridgeNotifications.open()" aria-label="開啟通知中心"><span class="notification-bell-icon">🔔</span><span id="notificationCount" class="notification-count" hidden>0</span></button><button type="button" class="btn" onclick="switchTab('security')">安全設定</button><button type="button" class="btn" onclick="authLogout()">登出</button></div></header>
-<nav><button class="active" data-tab="dashboard">總覽</button><button data-tab="students">學生／家長</button><button data-tab="teachers">老師</button><button data-tab="teacherLeave">請假管理</button><button data-tab="calendar">拖曳課表</button><button data-tab="lessons">課程紀錄</button><button data-tab="makeups">補課中心</button><button data-tab="camps">冬／夏令營</button><button data-tab="finance">公司財務</button><button data-tab="data">備份／iPad</button><button data-tab="security">安全設定</button></nav>
+<nav><button class="active" data-tab="dashboard">總覽</button><button data-tab="students">學生／家長</button><button data-tab="teachers">老師</button><button data-tab="teacherLeave">請假管理</button><button data-tab="calendar">課表</button><button data-tab="lessons">課程紀錄</button><button data-tab="makeups">補課中心</button><button data-tab="camps">冬／夏令營</button><button data-tab="finance">公司財務</button><button data-tab="data">備份／iPad</button><button data-tab="security">安全設定</button></nav>
 <main><section id="dashboard" class="active"><div class="branch-scope-bar"><div><label>查看校區</label><select id="dashboardBranchScope" onchange="DanbridgeBranchBusiness.setScope('dashboard',this.value)"></select></div><div id="dashboardBranchScopeNote" class="small"></div></div>
   <div class="v32-welcome">
     <div><div class="v32-eyebrow">DANBRIDGE OPERATIONS</div><h2 id="v32Greeting">今日營運總覽</h2><p id="v32DateText">正在整理今天的課程與營運資料。</p></div>
@@ -224,7 +224,7 @@
     </div>
     <div class="v32-side-stack">
       <div class="card v32-insight-card"><div class="v32-card-head"><div><span class="v32-section-icon purple">AI</span><div><h2>智慧提醒</h2><p>依目前資料自動整理</p></div></div></div><div id="v32Insights" class="v32-insights"></div></div>
-      <div class="card v32-quick-card"><div class="v32-card-head"><div><span class="v32-section-icon green">快</span><div><h2>快速操作</h2><p>常用功能捷徑</p></div></div></div><div class="searchbar"><input id="globalSearch" placeholder="搜尋學生、老師、課程、日期" oninput="renderGlobalSearch()"></div><div id="globalSearchResults" style="margin-top:8px"></div><div class="row-actions"><button class="btn" onclick="switchTab('calendar')">拖曳課表</button><button class="btn" onclick="switchTab('lessons')">課程紀錄</button><button class="btn" onclick="switchTab('makeups')">補課中心</button></div></div>
+      <div class="card v32-quick-card"><div class="v32-card-head"><div><span class="v32-section-icon green">快</span><div><h2>快速操作</h2><p>常用功能捷徑</p></div></div></div><div class="searchbar"><input id="globalSearch" placeholder="搜尋學生、老師、課程、日期" oninput="renderGlobalSearch()"></div><div id="globalSearchResults" style="margin-top:8px"></div><div class="row-actions"><button class="btn" onclick="switchTab('calendar')">課表</button><button class="btn" onclick="switchTab('lessons')">課程紀錄</button><button class="btn" onclick="switchTab('makeups')">補課中心</button></div></div>
     </div>
     <div class="card v33-room-card owner-v33-only"><div class="v32-card-head"><div><span class="v32-section-icon green">室</span><div><h2>教室即時狀態</h2><p>依今天課表與目前時間判斷</p></div></div></div><div id="v33RoomStatus" class="v33-room-grid"></div></div>
     <div class="card v33-week-card owner-v33-only"><div class="v32-card-head"><div><span class="v32-section-icon">週</span><div><h2>未來七天課程量</h2><p>快速掌握每日負載</p></div></div></div><div id="v33WeekBars" class="v33-week-bars"></div></div>
@@ -453,15 +453,15 @@
 <script src="./js/ui/accessibility-baseline.js?v=20.12.0"></script>
 
 <script src="./js/app/scheduler-student-tools.js?v=20.26.139"></script>
-<script type="module" src="./js/core/firebase-auth-and-cloud-sync.module.js?v=20.26.151"></script>
+<script type="module" src="./js/core/firebase-auth-and-cloud-sync.module.js?v=20.26.152"></script>
 
 
-<script src="./js/core/pwa-installation.js?v=20.26.151"></script>
+<script src="./js/core/pwa-installation.js?v=20.26.152"></script>
 
 <script src="./js/modules/calendar/marquee-multi-selection.js?v=20.26.9"></script>
 
 <script src="./js/core/undo-redo-history.js?v=20.13.8"></script>
-<script src="./js/app/v18-information-architecture.js?v=20.15.3"></script>
+<script src="./js/app/v18-information-architecture.js?v=20.26.152"></script>
 <script src="./js/app/v18-convenience-suite.js?v=20.23.1"></script>
 <script src="./js/app/v1819-responsive-convenience.js?v=18.22.5"></script>
 <script src="./js/app/v1822-usability-polish.js?v=20.16.0"></script>
