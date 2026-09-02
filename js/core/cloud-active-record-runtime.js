@@ -12,7 +12,12 @@ export async function runActiveRecordSync({journal,readDocuments,send,persistCon
   let backup=null;if(plan.conflicts.length){if(typeof persistConflicts!=='function')throw new Error('偵測到同筆衝突但缺少不可變備份介面');backup=await persistConflicts(clone(plan.conflicts),{environment,activationEpoch,deviceId,baseHash:plan.baseHash,targetHash:plan.targetHash});if(!backup)throw new Error('同筆衝突備份未完成');conflictBackups.push(clone(backup))}
   if(replace)await journal.replaceUnconfirmed(plan.operations,{reason});else await enqueueOperationPlan(journal,plan);lastPlan=plan;await onProgress({kind:replace?'replanned':'planned',plan,backup});return plan;
  };
- await journal.recoverInterrupted();let rows=await journal.list();if(!rows.some(row=>!['confirmed','superseded'].includes(row.status)))await prepare();
+ await journal.recoverInterrupted();let rows=await journal.list();
+ if(rows.some(row=>row.status==='quarantined')){
+  await prepare({replace:true,reason:'隔離操作重新讀取雲端後安全重排'});
+  rows=await journal.list();
+ }
+ if(!rows.some(row=>!['confirmed','superseded'].includes(row.status)))await prepare();
  while(true){
   const worker=await runOperationWorker({journal,send,recoverInterrupted:false,maxOperations,onProgress});
   if(worker.state==='complete')return{state:'complete',worker,plan:lastPlan,db:clone(lastPlan?.db??localDb),nextSequence:sequence,rebases,conflictBackups};

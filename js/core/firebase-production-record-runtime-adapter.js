@@ -6,7 +6,13 @@ import {splitRecordConflicts} from './cloud-record-three-way-merge.js';
 import {PRODUCTION_RECORD_CONTROL_PATH,PRODUCTION_RECORD_SAFETY_PATH,productionRecordPath,productionRecordCollectionPath,productionRecordReceiptPath,productionConflictBackupPath,assertProductionRecordRuntimeControl,assertProductionRecordRuntimeSafety,advanceProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
-const valueOf=snapshot=>typeof snapshot?.exists==='function'?(snapshot.exists()?snapshot.data():null):(snapshot&&typeof snapshot==='object'&&('exists'in snapshot||'data'in snapshot)?(snapshot.exists===false?null:snapshot.data??null):snapshot??null);
+const valueOf=snapshot=>{
+ if(snapshot==null)return null;
+ if(typeof snapshot.exists==='function')return snapshot.exists()?(typeof snapshot.data==='function'?snapshot.data():snapshot.data??null):null;
+ if(typeof snapshot.exists==='boolean'&&typeof snapshot.data==='function'){if(!snapshot.exists)return null;const value=snapshot.data();return value===undefined?null:value}
+ if(typeof snapshot==='object'&&('exists'in snapshot||'data'in snapshot))return snapshot.exists===false?null:snapshot.data??null;
+ return snapshot;
+};
 const token=value=>typeof value==='string'&&value.trim()===value&&value.length>0&&value.length<=1500&&!/[\u0000-\u001f/]/.test(value);
 const stable=value=>Array.isArray(value)?value.map(stable):(value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value);
 const same=(left,right)=>JSON.stringify(stable(left))===JSON.stringify(stable(right));
