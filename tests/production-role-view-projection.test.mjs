@@ -29,3 +29,14 @@ test('三角色發布清單由有效權限唯一產生，AA 不會誤成一般�
 test('lessonMeta 使用台北日界線且簽章忽略更新時間',()=>{
  const meta=buildProductionLessonMeta(source);assert.equal(meta.length,2);const first=meta.find(row=>row.lessonId==='l1');assert.equal(first.payload.editableFrom.toISOString(),'2026-09-01T16:00:00.000Z');assert.equal(first.payload.editableUntil.toISOString(),'2026-09-02T15:59:59.999Z');assert.equal(productionLessonMetaSignature(first.payload),productionLessonMetaSignature({...first.payload,updatedAt:new Date()}));
 });
+
+test('重用時區格式器不快取日期：跨午夜與不同請求仍精確隔離未來回報',()=>{
+ const db=structuredClone(source);db.lessons[0].teacherReportUpdatedAt='2026-09-01T16:00:00Z';
+ for(const project of [()=>projectProductionTeacherDb,()=>((value,id,options)=>projectProductionBranchDb(value,['art_museum'],options))]){
+  const run=now=>project()(db,'t1',{now:Date.parse(now)}).lessons[0].teacherReportContent;
+  assert.equal(run('2026-09-01T15:59:59.999Z'),undefined);
+  assert.equal(run('2026-09-01T16:00:00.000Z'),'未到日期不得發布');
+  assert.equal(run('2026-09-01T15:59:59.999Z'),undefined);
+  assert.equal(run('2026-09-02T16:00:00.000Z'),'未到日期不得發布');
+ }
+});

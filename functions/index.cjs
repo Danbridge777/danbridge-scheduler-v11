@@ -153,13 +153,13 @@ exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PR
 });
 
 exports.productionPublishRoleViews=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:540,memory:'1GiB',concurrency:4,minInstances:1,maxInstances:10},async request=>{
- const startedAt=Date.now(),timingsMs={};let phaseAt=startedAt;
+ const startedAt=Date.now(),timingsMs={},inputReadTimingsMs={};let phaseAt=startedAt;
  const mark=phase=>{const now=Date.now();timingsMs[phase]=now-phaseAt;phaseAt=now};
  try{
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),firestore=runtimeValue.firestore,[projection,fullRecord,recordHash]=await Promise.all([import('../js/core/production-role-view-projection.js'),import('../js/core/cloud-full-record-shadow.js'),import('../js/core/cloud-record-data-hash.js')]),input=projection.assertProductionRoleViewPublishRequest(request.data),receiptRef=firestore.doc(`productionRoleViewPublishReceipts/${input.requestId}`),existingReceipt=await receiptRef.get();
   if(existingReceipt.exists){const saved=existingReceipt.data()||{};if(saved.sourceHash!==input.sourceHash||saved.createdByUid!==caller.uid)throw new Error('production 角色檢視發布 receipt identity 衝突');return{...saved,result:{...(saved.result||{}),kind:'duplicate'}}}
   mark('bootstrap');
-  const {safetySnapshot,accessSnapshot,teacherSnapshot,schedulerSnapshot,metaSnapshot,collectionSnapshots}=await readProductionRoleViewInputs(firestore,fullRecord.FULL_RECORD_COLLECTIONS),safety=safetySnapshot.exists?safetySnapshot.data():null;
+  const {safetySnapshot,accessSnapshot,teacherSnapshot,schedulerSnapshot,metaSnapshot,collectionSnapshots}=await readProductionRoleViewInputs(firestore,fullRecord.FULL_RECORD_COLLECTIONS,{onRead:(name,ms)=>{inputReadTimingsMs[name]=ms}}),safety=safetySnapshot.exists?safetySnapshot.data():null;
   mark('inputReads');
   if(!safety||safety.state!=='active'||safety.readAllowed!==true||safety.writeAllowed!==true||safety.recordDataHash!==input.sourceHash)throw new Error('production 角色檢視來源與目前權威 head 不一致');
   const documentsByCollection=Object.fromEntries(fullRecord.FULL_RECORD_COLLECTIONS.map((name,index)=>[name,collectionSnapshots[index].docs.map(row=>({id:row.id,data:row.data()}))])),rebuilt=fullRecord.rebuildFullRecordShadowDb(documentsByCollection,{environment:'production'}),computedSourceHash=recordHash.recordDataHash(rebuilt.db);
@@ -189,7 +189,7 @@ exports.productionPublishRoleViews=onCall({region:'asia-east1',serviceAccount:PR
   for(const meta of lessonMeta){const saved=metaAfterMap.get(meta.lessonId);if(!saved||projection.productionLessonMetaSignature(saved)!==projection.productionLessonMetaSignature(meta.payload))throw new Error(`production lessonMeta 讀回不一致：${meta.lessonId}`)}
   const result={state:'verified',kind:'published',sourceHash:input.sourceHash,release:input.release,roleViewCount:views.length,teacherViewCount:desiredTeachers.size,schedulerViewCount:desiredSchedulers.size,branchViewCount:views.filter(view=>view.kind==='branch_manager').length,lessonMetaCount:lessonMeta.length,formalRecordWrites:0,derivedWrites:committedWrites};
   const response={schema:projection.PRODUCTION_ROLE_VIEW_PUBLISH_RESPONSE_SCHEMA,requestId:input.requestId,sourceHash:input.sourceHash,createdByUid:caller.uid,createdByEmail:caller.email,verifiedAt:new Date().toISOString(),result};await receiptRef.create({...response,createdAt:FieldValue.serverTimestamp()});
-  mark('verifyAndReceipt');console.info('PRODUCTION_ROLE_VIEW_TIMING',JSON.stringify({release:input.release,timingsMs,totalMs:Date.now()-startedAt,derivedWrites:committedWrites}));return response;
+  mark('verifyAndReceipt');console.info('PRODUCTION_ROLE_VIEW_TIMING',JSON.stringify({release:input.release,timingsMs,inputReadTimingsMs,totalMs:Date.now()-startedAt,derivedWrites:committedWrites}));return response;
  }catch(error){if(error instanceof HttpsError)throw error;console.error('PRODUCTION_ROLE_VIEW_PUBLISH_BLOCKED',JSON.stringify({name:String(error?.name||'Error'),message:String(error?.message||'blocked')}));throw new HttpsError('failed-precondition',String(error?.message||'正式角色檢視發布已安全阻止。').slice(0,240))}
 });
 

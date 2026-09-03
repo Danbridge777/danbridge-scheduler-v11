@@ -47,7 +47,17 @@ export function createActiveRecordPageController({
    }
    // production trusted operation 已在同一交易中核對 base/target head、revision 與不可重送 receipt。
    // 直接採用已提交計畫可解除 UI 操作鎖；背景串流仍會獨立驗證正式資料，若不一致照常封鎖。
-   const readback=trustCommittedPlan?{db:clone(result.db)}:await readConvergedAuthority(result.plan?.targetHash||'',startedSnapshotVersion),currentLocal=clone(getLocalDb()),merged=mergeConcurrentRecordDb(base,currentLocal,readback.db);await savePostSyncConflicts(merged.conflicts,readback.db,merged.db);baselineDb=clone(readback.db);latestCloudDb=clone(readback.db);await apply(merged.db);
+   const readback=trustCommittedPlan?{db:clone(result.db)}:await readConvergedAuthority(result.plan?.targetHash||'',startedSnapshotVersion);
+   let merged,capturedVersion;
+   do{
+    capturedVersion=mutationVersion;const currentLocal=clone(getLocalDb());
+    // New edits are relative to the state submitted by this flush, not the old
+    // cloud baseline. Otherwise A→B→A (or create→delete) looks unchanged and the
+    // B/create receipt incorrectly resurrects the previous local action.
+    merged=mergeConcurrentRecordDb(capturedVersion===startedVersion?base:local,currentLocal,readback.db);
+    await savePostSyncConflicts(merged.conflicts,readback.db,merged.db);
+   }while(capturedVersion!==mutationVersion);
+   baselineDb=clone(readback.db);latestCloudDb=clone(readback.db);await apply(merged.db);
    const cloudHash=recordDataHash(readback.db),desiredHash=recordDataHash(merged.db),newerMutation=mutationVersion!==startedVersion;dirty=newerMutation||desiredHash!==cloudHash;queued=dirty;await publishRoleViews(clone(readback.db));const counts=await journal.counts();status({state:dirty?'queued':'complete',hash:cloudHash,counts,rebases:result.rebases});return{...result,state:dirty?'pending':'complete',readbackHash:cloudHash,readbackDb:clone(readback.db),desiredHash,dirty,counts};
   }catch(error){dirty=true;queued=false;retryPending=true;status({state:'blocked',error:String(error?.message||error)});return{state:'blocked',error,dirty:true,retryPending:true}}
   finally{inFlight=false;if(queued&&writeAllowed)schedule(0)}

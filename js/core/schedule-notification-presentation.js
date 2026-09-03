@@ -1,10 +1,15 @@
 // Notification delivery and acknowledgement stay unchanged. This controller
 // only prevents an incoming notice from stealing an active editor's focus.
-export function automaticScheduleNotifications(notifications,{uid='',email='',seen=new Set()}={}){
- const normalizedEmail=String(email).trim().toLowerCase();
- return notifications.filter(item=>item?.id&&!seen.has(item.id)&&
-  !(uid&&item.createdBy===uid)&&
-  !(normalizedEmail&&String(item.createdByEmail||'').trim().toLowerCase()===normalizedEmail));
+export function automaticScheduleNotifications(notifications,{uid='',email='',name='',seen=new Set()}={}){
+ const normalizedEmail=String(email).trim().toLowerCase(),normalizedName=String(name).trim();
+ return notifications.filter(item=>{
+  if(!item?.id||seen.has(item.id))return false;
+  const samePublisher=Boolean(uid&&item.createdBy===uid)||Boolean(normalizedEmail&&String(item.createdByEmail||'').trim().toLowerCase()===normalizedEmail);
+  // A scheduler's change may be published by the Owner worker. Its actor name
+  // differs, so it must still notify the Owner instead of being treated as self.
+  const actorName=String(item.createdByName||'').trim();
+  return !samePublisher||Boolean(actorName&&(!normalizedName||actorName!==normalizedName));
+ });
 }
 
 export function createScheduleNotificationPresenter({document,button,render,getActor,isBusy,

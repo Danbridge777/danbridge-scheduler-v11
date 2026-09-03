@@ -4,7 +4,7 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider, getLimitedUseToken } f
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocFromServer, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, getDocsFromServer, serverTimestamp, Timestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
 import {bootstrapDanbridgeFirebase} from './firebase-environment-bootstrap.js?v=20.26.118';
-import {createScheduleNotificationPresenter} from './schedule-notification-presentation.js?v=20.26.160';
+import {createScheduleNotificationPresenter} from './schedule-notification-presentation.js?v=20.26.162';
 import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.86';
 import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.86';
 import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.107';
@@ -25,7 +25,7 @@ import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.
 import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.106';
 import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.106';
 import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.106';
-import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.151';
+import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.162';
 import {createFirebaseActiveRecordStreamAdapter} from './firebase-active-record-stream-adapter.js?v=20.26.106';
 import {createFirebaseActiveRecordOperationAdapter} from './firebase-active-record-operation-adapter.js?v=20.26.106';
 import {createFirebaseRecordSyncConflictBackupAdapter} from './firebase-record-sync-conflict-backup-adapter.js?v=20.26.106';
@@ -62,7 +62,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.160';
+const APP_RELEASE='20.26.162';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -2025,7 +2025,7 @@ function subscribeScheduleNotifications(){
  let noticeButton=document.getElementById('cloudScheduleNotificationsBtn');
  if(!noticeButton){noticeButton=document.createElement('button');noticeButton.id='cloudScheduleNotificationsBtn';noticeButton.type='button';noticeButton.className='btn';noticeButton.hidden=true;document.getElementById('firebaseLogoutBtn')?.before(noticeButton)}
  scheduleNotificationPresenter=createScheduleNotificationPresenter({document,button:noticeButton,
-  getActor:()=>({uid:cloudUid,email:cloudEmailKey}),
+  getActor:()=>({uid:cloudUid,email:cloudEmailKey,name:document.body.dataset.cloudDisplayName||''}),
   isBusy:()=>Boolean(document.querySelector('#lessonModal.show,.modal.show')||!document.getElementById('scheduleNotificationModal')?.hidden||activeRecordPageController?.diagnostics?.().inFlight||schedulerRequestWorkerActive),
   render:sameType=>{
    const current=sameType[0],details=sameType.flatMap(n=>Array.isArray(n.details)?n.details:[]);

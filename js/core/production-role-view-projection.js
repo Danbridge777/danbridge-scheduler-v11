@@ -18,7 +18,10 @@ const canonical=value=>{
 const emptyDb=()=>Object.fromEntries(Object.entries(EMPTY_DB).map(([key])=>[key,[]]));
 const lessonTeacherIds=lesson=>[...new Set((Array.isArray(lesson?.teacherIds)&&lesson.teacherIds.length?lesson.teacherIds:[lesson?.teacherId]).filter(Boolean).map(String))];
 const reportTimestamp=lesson=>Number.isFinite(Date.parse(lesson?.teacherReportUpdatedAt||''))?Date.parse(lesson.teacherReportUpdatedAt):Number.NaN;
-const taipeiDate=now=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(now));
+// The formatter is immutable. Reuse it, but always format the supplied instant;
+// never cache today's date across midnight or reuse another request's clock.
+const taipeiDateFormatter=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'});
+const taipeiDate=now=>taipeiDateFormatter.format(new Date(now));
 const stripPrematureReport=(lesson,now)=>{
  const copy={...(lesson||{})},date=String(copy.date||''),reportedAt=reportTimestamp(copy),today=taipeiDate(now);
  let allowed=false;

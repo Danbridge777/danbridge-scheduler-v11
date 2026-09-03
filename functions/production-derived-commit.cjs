@@ -3,14 +3,15 @@
 // All inputs are read independently before any write. Starting the existing
 // view reads alongside the authority reads removes a serial network round trip;
 // the caller still validates all 16 collections and the transactional fence.
-async function readProductionRoleViewInputs(firestore,collectionNames){
+async function readProductionRoleViewInputs(firestore,collectionNames,{onRead=()=>{}}={}){
+ const read=async(name,promise)=>{const at=Date.now();const value=await promise;onRead(name,Date.now()-at);return value};
  const [safetySnapshot,accessSnapshot,teacherSnapshot,schedulerSnapshot,metaSnapshot,...collectionSnapshots]=await Promise.all([
-  firestore.doc('companies/danbridge/productionRecordRuntime/safety').get(),
-  firestore.collection('companyAccess').where('companyId','==','danbridge').get(),
-  firestore.collection('companies/danbridge/teacherViews').get(),
-  firestore.collection('companies/danbridge/schedulerViews').get(),
-  firestore.collection('companies/danbridge/lessonMeta').get(),
-  ...collectionNames.map(name=>firestore.collection(`productionFullRecordShadows/danbridge/collections/${name}/records`).get())
+  read('safety',firestore.doc('companies/danbridge/productionRecordRuntime/safety').get()),
+  read('access',firestore.collection('companyAccess').where('companyId','==','danbridge').get()),
+  read('teacherViews',firestore.collection('companies/danbridge/teacherViews').get()),
+  read('schedulerViews',firestore.collection('companies/danbridge/schedulerViews').get()),
+  read('lessonMeta',firestore.collection('companies/danbridge/lessonMeta').get()),
+  ...collectionNames.map(name=>read('source:'+name,firestore.collection(`productionFullRecordShadows/danbridge/collections/${name}/records`).get()))
  ]);
  return{safetySnapshot,accessSnapshot,teacherSnapshot,schedulerSnapshot,metaSnapshot,collectionSnapshots};
 }

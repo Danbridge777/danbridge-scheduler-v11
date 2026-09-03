@@ -20,6 +20,37 @@ test('production 可信交易回條可直接套用已提交計畫，不等待串
 test('重新整理前已有未入日誌的本機修改時，第一個雲端快照只建基準不覆蓋，後續可精確送出',async()=>{const source=cloudSource(),local=baseDb();local.lessons[0].room='Recovered local';const app=makeController({source,local});app.controller.queueLocalSave();await app.controller.acceptCloudSnapshot(snapshot(source));assert.equal(app.ui.lessons[0].room,'Recovered local');assert.equal(app.controller.diagnostics().hasBaseline,true);assert.equal((await app.controller.flush()).state,'complete');assert.equal(source.db().lessons[0].room,'Recovered local')});
 test('中央暫停仍可套用雲端讀取，但任何本機修改都不會送出',async()=>{const source=cloudSource();let sends=0;const app=makeController({source,send:async operation=>{sends++;return source.send(operation)}});await app.controller.acceptCloudSnapshot({...snapshot(source),writeAllowed:false});const local=app.ui;local.lessons[0].room='Paused';app.setUi(local);app.controller.queueLocalSave();assert.equal((await app.controller.flush()).state,'paused');assert.equal(sends,0);app.controller.setWriteAllowed(true);assert.equal((await app.controller.flush()).state,'complete');assert.equal(sends,1)});
 test('同步途中新增的第二筆本機修改不會被第一次讀回覆蓋，下一輪精確續傳',async()=>{const source=cloudSource();let app,sends=0;app=makeController({source,send:async operation=>{const result=await source.send(operation);sends++;if(sends===1){const newer=app.ui;newer.lessons[1].room='Newer';app.setUi(newer);app.controller.queueLocalSave()}return result}});await app.controller.acceptCloudSnapshot(snapshot(source));const local=app.ui;local.lessons[0].room='First';app.setUi(local);app.controller.queueLocalSave();const first=await app.controller.flush();assert.equal(first.state,'pending');assert.equal(app.ui.lessons[0].room,'First');assert.equal(app.ui.lessons[1].room,'Newer');const second=await app.controller.flush();assert.equal(second.state,'complete');assert.equal(source.db().lessons[0].room,'First');assert.equal(source.db().lessons[1].room,'Newer')});
+test('production A→B→A：第一筆提交途中拖回原位仍是新意圖，不能被 B 回條蓋掉',async()=>{
+ const source=cloudSource('production');let app,sends=0;
+ app=makeController({source,environment:'production',trustCommittedPlan:true,send:async operation=>{
+  const result=await source.send(operation);if(++sends===1){const next=app.ui;next.lessons[0].room='A';app.setUi(next);app.controller.queueLocalSave()}return result;
+ }});
+ await app.controller.acceptCloudSnapshot(snapshot(source));const next=app.ui;next.lessons[0].room='B';app.setUi(next);app.controller.queueLocalSave();
+ assert.equal((await app.controller.flush()).state,'pending');assert.equal(app.ui.lessons[0].room,'A');
+ assert.equal((await app.controller.flush()).state,'complete');assert.equal(source.db().lessons[0].room,'A');assert.equal(sends,2);
+});
+test('production 新增後立即刪除：新增回條不能把已刪除的本機課程復活',async()=>{
+ const source=cloudSource('production');let app,sends=0;
+ app=makeController({source,environment:'production',trustCommittedPlan:true,send:async operation=>{
+  const result=await source.send(operation);if(++sends===1){const next=app.ui;next.lessons=next.lessons.filter(row=>row.id!=='rapid-new');app.setUi(next);app.controller.queueLocalSave()}return result;
+ }});
+ await app.controller.acceptCloudSnapshot(snapshot(source));const next=app.ui;next.lessons.push({id:'rapid-new',room:'A'});app.setUi(next);app.controller.queueLocalSave();
+ assert.equal((await app.controller.flush()).state,'pending');assert.equal(app.ui.lessons.some(row=>row.id==='rapid-new'),false);
+ assert.equal((await app.controller.flush()).state,'complete');assert.equal(source.db().lessons.some(row=>row.id==='rapid-new'),false);assert.equal(sends,2);
+});
+test('連續移回仍保留另一位使用者同堂課的不同欄位修改',async()=>{
+ const source=cloudSource();let app,sends=0;
+ app=makeController({source,send:async operation=>{
+  const result=await source.send(operation);if(++sends===1){
+   const row=source.documents.lessons.find(value=>value.id==='lesson-1');
+   row.data={...row.data,record:{...row.data.record,note:'Remote note'},revision:row.data.revision+1,lastOperationId:'other-owner:9',deviceId:'other-owner',activationEpoch:epoch};
+   const next=app.ui;next.lessons[0].room='A';app.setUi(next);app.controller.queueLocalSave();
+  }return result;
+ }});
+ await app.controller.acceptCloudSnapshot(snapshot(source));const next=app.ui;next.lessons[0].room='B';app.setUi(next);app.controller.queueLocalSave();
+ assert.equal((await app.controller.flush()).state,'pending');assert.deepEqual(app.ui.lessons[0],{id:'lesson-1',room:'A',note:'Remote note'});
+ assert.equal((await app.controller.flush()).state,'complete');assert.deepEqual(source.db().lessons[0],{id:'lesson-1',room:'A',note:'Remote note'});
+});
 test('失敗操作留在永久日誌，重開控制器後由同一 operationId 繼續而不重複 revision',async()=>{const source=cloudSource(),storage={rows:null,time:1000},journal=memoryJournal(storage);let firstAttempt=true,ui=baseDb(),first=makeController({source,journal,local:ui,send:async operation=>{if(firstAttempt){firstAttempt=false;throw Object.assign(new Error('offline'),{code:'unavailable'})}return source.send(operation)}});await first.controller.acceptCloudSnapshot(snapshot(source));ui=first.ui;ui.lessons[0].room='Retry';first.setUi(ui);first.controller.queueLocalSave();assert.equal((await first.controller.flush()).state,'waiting');assert.equal((await journal.counts()).failed,1);storage.time+=2000;const second=makeController({source,journal,local:first.ui});await second.controller.acceptCloudSnapshot(snapshot(source));await second.controller.resume();assert.equal((await second.controller.flush()).state,'complete');assert.equal(source.db().lessons[0].room,'Retry');assert.equal(source.documents.lessons[0].data.revision,2);assert.equal((await journal.counts()).confirmed,1)});
 test('Daniel 與 Catherine 從相同基準改不同課程，兩邊資料自然合併且角色檢視拿到完整結果',async()=>{const source=cloudSource(),danielPublish=[],catherinePublish=[],daniel=makeController({source,deviceId:'daniel-123',publish:danielPublish}),catherine=makeController({source,deviceId:'catherine-123',publish:catherinePublish});await Promise.all([daniel.controller.acceptCloudSnapshot(snapshot(source)),catherine.controller.acceptCloudSnapshot(snapshot(source))]);const d=daniel.ui,c=catherine.ui;d.lessons[0].room='Daniel';c.lessons[1].room='Catherine';daniel.setUi(d);catherine.setUi(c);daniel.controller.queueLocalSave();catherine.controller.queueLocalSave();assert.equal((await daniel.controller.flush()).state,'complete');assert.equal((await catherine.controller.flush()).state,'complete');assert.deepEqual(source.db().lessons.map(row=>row.room),['Daniel','Catherine']);assert.deepEqual(catherinePublish.at(-1).lessons.map(row=>row.room),['Daniel','Catherine'])});
 test('同步後偵測同欄位較晚遠端變更時先備份，再保留本機意圖排入下一輪',async()=>{const source=cloudSource(),backups=[];let app,injected=false;app=makeController({source,backups,send:async operation=>{const result=await source.send(operation);if(!injected){injected=true;const row=source.documents.lessons.find(value=>value.id==='lesson-1');row.data={...row.data,record:{...row.data.record,room:'Later remote'},revision:row.data.revision+1,lastOperationId:'other-owner:9',deviceId:'other-owner',activationEpoch:epoch}}return result}});await app.controller.acceptCloudSnapshot(snapshot(source));const local=app.ui;local.lessons[0].room='Mine';app.setUi(local);app.controller.queueLocalSave();const result=await app.controller.flush();assert.equal(result.state,'pending');assert.equal(backups.length,1);assert.equal(backups[0].conflicts[0].path,'lessons.lesson-1.room');assert.equal(app.ui.lessons[0].room,'Mine')});
