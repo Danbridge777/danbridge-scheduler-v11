@@ -53,6 +53,9 @@ jobs:
       - name: Run Firestore Rules tests
         run: DANBRIDGE_JAVA_HOME="$JAVA_HOME" npm run test:rules
 
+      - name: Run production transaction integration against isolated emulators
+        run: npm run test:production-transactions
+
       - name: Install browser for end-to-end tests
         run: npx playwright install --with-deps chromium webkit
 

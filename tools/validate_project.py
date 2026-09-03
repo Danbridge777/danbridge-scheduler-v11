@@ -17,7 +17,7 @@ for ref in refs:
     if ref.startswith(('http://','https://','//','data:')): continue
     p=(ROOT/ref.split('?',1)[0].split('#',1)[0].lstrip('./')).resolve()
     if not p.exists(): errors.append(f'Missing referenced file: {ref}')
-js=sorted(p for pattern in ('*.js','*.mjs') for p in ROOT.rglob(pattern) if included(p))
+js=sorted(p for pattern in ('*.js','*.mjs','*.cjs') for p in ROOT.rglob(pattern) if included(p))
 for p in js:
     r=subprocess.run(['node','--check',str(p)],capture_output=True,text=True)
     if r.returncode: errors.append(f'JS syntax error: {p.relative_to(ROOT)}\n{r.stderr}')
