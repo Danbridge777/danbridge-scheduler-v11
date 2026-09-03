@@ -1,5 +1,5 @@
-const CACHE_NAME='danbridge-v11-scheduler-privacy-247';
-const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png?v=20.18.1','./icon-512.png?v=20.18.1','./icon-1024.png?v=20.18.1','./icon-maskable-192.png?v=20.18.1','./icon-maskable-512.png?v=20.18.1','./css/core/77-pwa-install-and-update.css?v=20.18.0','./js/core/pwa-installation.js?v=20.26.158'];
+const CACHE_NAME='danbridge-v11-scheduler-privacy-248';
+const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png?v=20.18.1','./icon-512.png?v=20.18.1','./icon-1024.png?v=20.18.1','./icon-maskable-192.png?v=20.18.1','./icon-maskable-512.png?v=20.18.1','./css/core/77-pwa-install-and-update.css?v=20.18.0','./js/core/pwa-installation.js?v=20.26.159'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(
@@ -22,6 +22,8 @@ self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET')return;
   const url=new URL(event.request.url);
   if(url.origin!==self.location.origin)return;
+  // Firebase 保留登入路徑由網路處理，不得快取、重播或套用首頁離線回退。
+  if(url.pathname==='/__'||url.pathname.startsWith('/__/'))return;
 
   // HTML 採網路優先，避免 GitHub 更新後仍卡在舊版。
   if(event.request.mode==='navigate'){
