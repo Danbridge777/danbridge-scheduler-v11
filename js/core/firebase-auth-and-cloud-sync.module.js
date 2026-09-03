@@ -61,7 +61,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.155';
+const APP_RELEASE='20.26.156';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1964,7 +1964,7 @@ function queueScheduleChangeNotifications(previousDb,currentDb,batchKey,actor={}
    }catch(e){job.attempts++;console.error('Schedule notification background delivery failed',e);cloudStatus('課表已同步；老師通知正在快速補送。','pending')}
    finally{job.inFlight=false;if(scheduleNotificationDeliveryJobs.has(key))schedule(job.attempts?[250,500,1000,2000][Math.min(job.attempts-1,3)]:0)}
  };
- schedule(120);
+ schedule(DANBRIDGE_ENVIRONMENT==='production'?0:120);
 }
 function installScheduleNotificationUI(){
  if(document.getElementById('scheduleNotificationModal'))return;
@@ -2794,8 +2794,8 @@ function ensureActiveOwnerPageController(activationEpoch){
   ensureCloudBackup:activeOwnerV2OperationSender?()=>confirmStagingV2DurablePrewriteBackup():confirmedDb=>createCloudSafetyBackup(false,confirmedDb),
   publishRoleViews:DANBRIDGE_ENVIRONMENT==='production'?async confirmedDb=>{
    const before=lastPublishedOwnerDB?deepCopy(lastPublishedOwnerDB):null;
-   await Promise.all([publishScopedViews(confirmedDb,{recordAuthority:true}),publishLessonMeta(confirmedDb)]);
    if(before)queueScheduleChangeNotifications(before,confirmedDb,recordDataHash(confirmedDb));
+   publishRoleViewsWithRetry(confirmedDb);
    lastPublishedOwnerDB=deepCopy(confirmedDb);ownerBaselineReady=true;
   }:activeOwnerV2OperationSender?async confirmedDb=>{lastPublishedOwnerDB=deepCopy(confirmedDb);ownerBaselineReady=true;activeRoleBootstrapSourceDb=deepCopy(confirmedDb);if(activeOwnerV2HeadState==='hn')await getActiveRoleRecordPublishQueue().enqueue({kind:'confirmed',sourceDb:deepCopy(confirmedDb)});}:async confirmedDb=>{
    const before=lastPublishedOwnerDB?deepCopy(lastPublishedOwnerDB):null;
@@ -2808,10 +2808,11 @@ function ensureActiveOwnerPageController(activationEpoch){
    ownerBaselineReady=true;
   },
   onStatus:status=>{setActiveRecordSyncFailureResumeDiagnostic({state:status?.state||'waiting',counts:status?.counts||{}});handleActiveOwnerControllerStatus(failureResume.wrapOnStatus(status));},
-  saveDelay:120,
+  saveDelay:DANBRIDGE_ENVIRONMENT==='production'?0:120,
   maxOperations:1000,
   maxRebases:5,
-  strictConvergence:DANBRIDGE_ENVIRONMENT==='production'
+  strictConvergence:DANBRIDGE_ENVIRONMENT==='production',
+  trustCommittedPlan:DANBRIDGE_ENVIRONMENT==='production'
  });
  return activeRecordPageController;
 }

@@ -26,7 +26,7 @@ test('連續貼上通知只保留單一最新工作並在 2 秒內快速重試',
  assert.match(source,/const key='latest'/);
  assert.match(source,/job\.currentDb=deepCopy\(currentDb\)/);
  assert.match(source,/job\.version\+\+/);
- assert.match(source,/schedule\(120\)/);
+ assert.match(source,/schedule\(DANBRIDGE_ENVIRONMENT==='production'\?0:120\)/);
  assert.match(source,/\[250,500,1000,2000\]/);
  assert.doesNotMatch(source,/30000/);
  assert.doesNotMatch(source,/持續補送中/);
