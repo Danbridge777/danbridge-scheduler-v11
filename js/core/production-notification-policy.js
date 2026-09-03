@@ -1,6 +1,6 @@
 const NOTIFICATION_ID=/^[A-Za-z0-9_-]{8,200}$/;
 const EMAIL=/^[^\s@]+@[^\s@]+$/;
-const SHA256=/^[a-f0-9]{64}$/;
+const RECORD_HASH=/^record-v1:[a-f0-9]{64}$/;
 const RELEASE=/^\d+\.\d+\.\d+$/;
 const PUBLISH_SCHEMA='danbridge-production-schedule-notification-publish-v1';
 const RECIPIENT_ROLES=new Set(['owner','scheduler','teacher','branch_manager']);
@@ -32,8 +32,8 @@ function normalizePublishNotification(value,index){
 }
 
 export function normalizeProductionScheduleNotificationPublishRequest(request={}){
- const row=exact(request,['schema','requestId','sourceHash','release','notifications'],'通知發布請求'),requestId=text(row.requestId,180),sourceHash=text(row.sourceHash,64),release=text(row.release,24),notifications=Array.isArray(row.notifications)?row.notifications.map(normalizePublishNotification):[];
- if(row.schema!==PUBLISH_SCHEMA||!NOTIFICATION_ID.test(requestId)||!SHA256.test(sourceHash)||!RELEASE.test(release)||notifications.length<1||notifications.length>200)throw new Error('通知發布請求 identity 無效');
+ const row=exact(request,['schema','requestId','sourceHash','release','notifications'],'通知發布請求'),requestId=text(row.requestId,180),sourceHash=text(row.sourceHash,74),release=text(row.release,24),notifications=Array.isArray(row.notifications)?row.notifications.map(normalizePublishNotification):[];
+ if(row.schema!==PUBLISH_SCHEMA||!NOTIFICATION_ID.test(requestId)||!RECORD_HASH.test(sourceHash)||!RELEASE.test(release)||notifications.length<1||notifications.length>200)throw new Error('通知發布請求 identity 無效');
  if(new Set(notifications.map(item=>item.id)).size!==notifications.length||new Set(notifications.map(item=>item.payload.recipientEmail)).size!==notifications.length)throw new Error('通知發布請求包含重複通知或收件者');
  return Object.freeze({schema:PUBLISH_SCHEMA,requestId,sourceHash,release,notifications:Object.freeze(notifications)});
 }

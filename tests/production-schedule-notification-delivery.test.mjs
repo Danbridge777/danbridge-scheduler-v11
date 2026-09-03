@@ -9,6 +9,7 @@ test('production 課表通知只走 App Check 後端且驗證目前權威 head',
  assert.match(client,/httpsCallable\(productionFunctions,'productionPublishScheduleNotifications',\{limitedUseAppCheckTokens:true\}\)/);
  assert.match(client,/DANBRIDGE_ENVIRONMENT==='production'\)notifications\.push/);
  assert.match(client,/productionScheduleNotificationPublishCall\(\{schema:'danbridge-production-schedule-notification-publish-v1'/);
+ assert.match(client,/previousHash\.replace\(\/\^record-v1:\/,''\)/);
  assert.match(functions,/exports\.productionPublishScheduleNotifications=onCall/);
  assert.match(functions,/enforceAppCheck:true,consumeAppCheckToken:true/);
  assert.match(functions,/safety\.recordDataHash!==input\.sourceHash/);

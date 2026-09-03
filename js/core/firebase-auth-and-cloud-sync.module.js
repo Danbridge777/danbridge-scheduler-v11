@@ -61,7 +61,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.154';
+const APP_RELEASE='20.26.155';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -1941,7 +1941,7 @@ async function publishScheduleChangeNotifications(previousDb,currentDb,batchKey,
  if(DANBRIDGE_ENVIRONMENT==='production'){
    if(!notifications.length)return;
    if(!productionScheduleNotificationPublishCall)throw new Error('正式課表通知後端尚未就緒');
-   const sourceHash=recordDataHash(currentDb),previousHash=recordDataHash(previousDb),requestId=`schedule_${previousHash.slice(0,32)}_${sourceHash.slice(0,32)}`,response=await withSyncTimeout(productionScheduleNotificationPublishCall({schema:'danbridge-production-schedule-notification-publish-v1',requestId,sourceHash,release:APP_RELEASE,notifications}),4500),data=response?.data||{};
+   const sourceHash=recordDataHash(currentDb),previousHash=recordDataHash(previousDb),previousDigest=previousHash.replace(/^record-v1:/,''),sourceDigest=sourceHash.replace(/^record-v1:/,''),requestId=`schedule_${previousDigest.slice(0,32)}_${sourceDigest.slice(0,32)}`,response=await withSyncTimeout(productionScheduleNotificationPublishCall({schema:'danbridge-production-schedule-notification-publish-v1',requestId,sourceHash,release:APP_RELEASE,notifications}),4500),data=response?.data||{};
    if(data.schema!=='danbridge-production-schedule-notification-publish-response-v1'||data.ok!==true||data.requestId!==requestId||data.sourceHash!==sourceHash||Number(data.notificationCount)!==notifications.length)throw new Error('正式課表通知後端回條無效');
    return data;
  }
