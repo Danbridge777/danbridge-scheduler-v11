@@ -32,24 +32,24 @@ const HOSTING_IGNORE = [
   'test-results/**'
 ];
 const FUNCTION_IGNORE = [
-  '.git/**',
-  '.firebase/**',
-  '.npm-cache/**',
-  'node_modules/**',
-  'tests/**',
-  'tools/**',
-  'docs/**',
-  'outputs/**',
-  'firebase/**',
-  'playwright-report/**',
-  'test-results/**',
+  '.git',
+  '.firebase',
+  '.npm-cache',
+  'node_modules',
+  'tests',
+  'tools',
+  'docs',
+  'outputs',
+  'firebase',
+  'playwright-report',
+  'test-results',
   'firebase-debug*.log',
   'firestore-debug*.log',
   '*.html',
   '*.png',
   '*.webmanifest',
   'sw.js',
-  'js/ui/**'
+  '**/js/ui/**'
 ];
 const STAGING_REWRITES = [{
   source: '/api/staging-v2/authority-save',

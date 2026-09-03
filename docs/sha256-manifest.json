@@ -108,7 +108,7 @@
   "docs/RELEASE_CHECKLIST.md": "dc8b9b8e2680fad9e57f896e787bc08806c4e2b9cb8830928ca71cfcfe888864",
   "docs/STAGING_ADMIN_D0_FACTORY_CONTRACT.md": "815f7c8dfd463f1662eb8de3113d077783bb0922d9bb855d337c4908c54bb8bb",
   "docs/STAGING_ENVIRONMENT.md": "22a10352da5e81ebea74552c80a1e7e8608d4c9899ac2712f7a4dda88fb00c02",
-  "firebase.json": "6aee6741eab907c9c19299f87bbd2b3ed37a18f34754dfd7e1c3b80ea47b2c52",
+  "firebase.json": "a7369145beb7bbf0f4dd85a8fc05a1af96e2622e1354e75900949e2836e4b148",
   "firebase.production.json": "1e58ab574eb3cb12d41f69ffbb9f86c4ad3f6e48e2a39bcddd8725205277fd41",
   "firebase/DEPLOY_RULES.md": "b86462e32615aa899e2644c424b5f501728af4bcd5fc1da6730fe4f0b11c5716",
   "firebase/firestore.rules": "878f96afb3a3488da29ed0107ef98bc84db34d003e26e49d91c7ca6a49b9d116",
@@ -496,6 +496,6 @@
   "tools/run_staging_v2_pre_atomic.mjs": "36ee1b281ed10b025bebe14ae0f3f52730732b97fbf638bc24e86f199c48163e",
   "tools/run_v2_capacity_tests.mjs": "6e6dae51c9870272fbf85d279d01fb9509195095d2fdae638701bb082529a836",
   "tools/validate_project.py": "f912fa1c3066bd9019b3352d990e2f235efc0c474b94567df89d6a2904007c2d",
-  "tools/validate_staging_deploy_target.mjs": "b34329cf746d97867cc3099d4eeb7c091d2f9399755b407e1bff06a88a6bd56e",
+  "tools/validate_staging_deploy_target.mjs": "a4d307fc16f52a4337263de53de64ba1a798b1ba3ee982a1565fa986f070ebd5",
   "tools/verify_dependency_audit.mjs": "22c95ab7d8f17115b7813f162d98c46c06b2b730eb22f881c96761f65dc52d1f"
 }
