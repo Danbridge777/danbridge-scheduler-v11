@@ -34,6 +34,7 @@ const HOSTING_IGNORE = [
 const FUNCTION_IGNORE = [
   '.git/**',
   '.firebase/**',
+  '.npm-cache/**',
   'node_modules/**',
   'tests/**',
   'tools/**',

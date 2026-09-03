@@ -95,3 +95,15 @@ export function buildProductionLessonMeta(source){
 export function productionLessonMetaSignature(value){
  return productionClientDataHash({companyId:String(value?.companyId||'danbridge'),lessonId:String(value?.lessonId||''),branchId:String(value?.branchId||''),lessonDate:String(value?.lessonDate||''),lessonStart:String(value?.lessonStart||''),lessonEnd:String(value?.lessonEnd||''),studentId:String(value?.studentId||''),teacherIds:(value?.teacherIds||[]).map(String).sort(),editableFrom:value?.editableFrom,editableUntil:value?.editableUntil,active:value?.active!==false});
 }
+
+export function productionRoleViewNeedsWrite(current,view){
+ if(!current||!view)return true;
+ const expectedEmail=String(view.email||'').trim().toLowerCase();
+ if(String(current.email||'').trim().toLowerCase()!==expectedEmail)return true;
+ if(view.kind==='teacher'&&String(current.teacherId||'')!==String(view.teacherId||''))return true;
+ return current.clientHash!==view.clientHash||JSON.stringify(canonical(current.db))!==JSON.stringify(canonical(view.db));
+}
+
+export function productionLessonMetaNeedsWrite(current,payload){
+ return !current||productionLessonMetaSignature(current)!==productionLessonMetaSignature(payload);
+}

@@ -20,6 +20,7 @@
     "ignore": [
       ".git/**",
       ".firebase/**",
+      ".npm-cache/**",
       "node_modules/**",
       "tests/**",
       "tools/**",
