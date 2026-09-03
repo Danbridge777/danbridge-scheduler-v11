@@ -4,6 +4,7 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider, getLimitedUseToken } f
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocFromServer, setDoc, deleteDoc, deleteField, onSnapshot, collection, query, where, getDocs, getDocsFromServer, serverTimestamp, Timestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
 import {bootstrapDanbridgeFirebase} from './firebase-environment-bootstrap.js?v=20.26.118';
+import {createScheduleNotificationPresenter} from './schedule-notification-presentation.js?v=20.26.160';
 import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.86';
 import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.86';
 import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.107';
@@ -61,7 +62,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.159';
+const APP_RELEASE='20.26.160';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -206,6 +207,7 @@ let unsubscribeReports=null;
 let unsubscribeScheduleNotifications=null;
 let unsubscribeOwnerHealth=null,lastOwnerHealthSignal='';
 let scheduleNotificationDocuments=[];
+let scheduleNotificationPresenter=null;
 let currentScheduleNotification=null;
 let unsubscribeTeacherLeaves=null;
 let teacherLeaveDocuments=[];
@@ -2017,18 +2019,26 @@ async function acknowledgeCurrentScheduleNotification(){
 }
 function subscribeScheduleNotifications(){
  unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;scheduleNotificationDocuments=[];
+ scheduleNotificationPresenter?.stop();scheduleNotificationPresenter=null;
  if(!['owner','teacher','branch_manager'].includes(cloudRole)||!cloudEmailKey)return;
  installScheduleNotificationUI();
+ let noticeButton=document.getElementById('cloudScheduleNotificationsBtn');
+ if(!noticeButton){noticeButton=document.createElement('button');noticeButton.id='cloudScheduleNotificationsBtn';noticeButton.type='button';noticeButton.className='btn';noticeButton.hidden=true;document.getElementById('firebaseLogoutBtn')?.before(noticeButton)}
+ scheduleNotificationPresenter=createScheduleNotificationPresenter({document,button:noticeButton,
+  getActor:()=>({uid:cloudUid,email:cloudEmailKey}),
+  isBusy:()=>Boolean(document.querySelector('#lessonModal.show,.modal.show')||!document.getElementById('scheduleNotificationModal')?.hidden||activeRecordPageController?.diagnostics?.().inFlight||schedulerRequestWorkerActive),
+  render:sameType=>{
+   const current=sameType[0],details=sameType.flatMap(n=>Array.isArray(n.details)?n.details:[]);
+   renderScheduleNotification({...current,notificationIds:sameType.map(n=>n.id),details,message:current.notificationType==='teacher-leave'?current.message:(current.recipientRole==='owner'?`公司課表共有 ${details.length} 個變更`:current.recipientRole==='scheduler'?`全老師課表共有 ${details.length} 個變更`:current.recipientRole==='branch_manager'?`您管理的校區課表共有 ${details.length} 個變更`:`您的課表共有 ${details.length} 個變更`)});
+  }
+ });
+ const presenter=scheduleNotificationPresenter;
  const q=query(collection(cloud,'companies',COMPANY_ID,'scheduleNotifications'),where('recipientEmail','==',cloudEmailKey));
  unsubscribeScheduleNotifications=onSnapshot(q,{includeMetadataChanges:true},snap=>{
+   if(scheduleNotificationPresenter!==presenter)return;
    if(snap.metadata.hasPendingWrites)return;
    scheduleNotificationDocuments=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.read!==true&&!scheduleNotificationExpired(x)).sort((a,b)=>{const priority=(b.notificationType==='teacher-leave')-(a.notificationType==='teacher-leave');if(priority)return priority;const at=a.createdAt?.toMillis?.()||0,bt=b.createdAt?.toMillis?.()||0;return bt-at});
-   const current=scheduleNotificationDocuments[0];
-   if(current&&!document.getElementById('scheduleNotificationModal')?.hidden)return;
-   if(current){
-     const sameType=scheduleNotificationDocuments.filter(n=>(n.notificationType||'schedule')===(current.notificationType||'schedule')),details=sameType.flatMap(n=>Array.isArray(n.details)?n.details:[]);
-     renderScheduleNotification({...current,notificationIds:sameType.map(n=>n.id),details,message:current.notificationType==='teacher-leave'?current.message:(current.recipientRole==='owner'?`公司課表共有 ${details.length} 個變更`:current.recipientRole==='scheduler'?`全老師課表共有 ${details.length} 個變更`:current.recipientRole==='branch_manager'?`您管理的校區課表共有 ${details.length} 個變更`:`您的課表共有 ${details.length} 個變更`)});
-   }
+   scheduleNotificationPresenter.update(scheduleNotificationDocuments);
  },e=>{console.error('Schedule notification listener failed',e);cloudStatus('課表通知讀取失敗：'+(e?.message||e),'error')});
 }
 
@@ -3422,6 +3432,7 @@ installClassFocusMode();
 installBranchManagerAccessEvents();
 installRoleInteractionGuards();
 onAuthStateChanged(auth,async user=>{
+ scheduleNotificationPresenter?.stop();scheduleNotificationPresenter=null;
  unsubscribeState?.();unsubscribeState=null;stopActiveRecordRuntimes();unsubscribeReports?.();unsubscribeReports=null;unsubscribeScheduleNotifications?.();unsubscribeScheduleNotifications=null;unsubscribeTeacherLeaves?.();unsubscribeTeacherLeaves=null;unsubscribeOwnerHealth?.();unsubscribeOwnerHealth=null;lastOwnerHealthSignal='';unsubscribeScheduleRequests?.();unsubscribeScheduleRequests=null;scheduleNotificationDocuments=[];teacherLeaveDocuments=[];window.__danbridgeSetTeacherLeaves?.([]);lessonReportDocuments=[];lessonMetaSignatureCache=new Map();lessonMetaCacheReady=false;scopedViewHashCache=new Map();roleViewPublishSourceDB=null;
  unsubscribeAccessGuard?.();unsubscribeAccessGuard=null;
  if(!user){clearTimeout(cloudBootstrapTimeout);cloudBootstrapTimeout=null;cloudBootstrapProgress=null;document.getElementById('cloudBootstrapProgress')?.remove();delete document.body.dataset.cloudBootstrapState;lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);clearTimeout(dailyBackupTimer);clearTimeout(schedulerRequestRetryTimer);clearTimeout(schedulerUploadRetryTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudCanManageSchedule=false;schedulerBaselineLessons=[];schedulerBaselineStudents=[];schedulerSaveChain=Promise.resolve();schedulerOptimisticLessons=new Map();schedulerOptimisticStudents=new Map();schedulerUploadRetryCount=0;schedulerStartupRecoveryChecked=false;schedulerRecoveryHold=false;schedulerRequestQueue=[];schedulerRequestQueueIds=new Set();schedulerQuarantinedRequestIds=new Set();schedulerAppliedRequestCount=0;schedulerRequestWorkerActive=false;cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';document.body.classList.remove('wendy-teacher-role');window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true,canManageSchedule:false});showCloudLogin();cloudStatus('尚未登入');return}

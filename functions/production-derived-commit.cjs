@@ -1,5 +1,20 @@
 'use strict';
 
+// All inputs are read independently before any write. Starting the existing
+// view reads alongside the authority reads removes a serial network round trip;
+// the caller still validates all 16 collections and the transactional fence.
+async function readProductionRoleViewInputs(firestore,collectionNames){
+ const [safetySnapshot,accessSnapshot,teacherSnapshot,schedulerSnapshot,metaSnapshot,...collectionSnapshots]=await Promise.all([
+  firestore.doc('companies/danbridge/productionRecordRuntime/safety').get(),
+  firestore.collection('companyAccess').where('companyId','==','danbridge').get(),
+  firestore.collection('companies/danbridge/teacherViews').get(),
+  firestore.collection('companies/danbridge/schedulerViews').get(),
+  firestore.collection('companies/danbridge/lessonMeta').get(),
+  ...collectionNames.map(name=>firestore.collection(`productionFullRecordShadows/danbridge/collections/${name}/records`).get())
+ ]);
+ return{safetySnapshot,accessSnapshot,teacherSnapshot,schedulerSnapshot,metaSnapshot,collectionSnapshots};
+}
+
 function accessIdentity(value){
  if(!value)return null;
  return JSON.stringify({email:value.email||'',companyId:value.companyId||'',role:value.role||'',active:value.active===true,teacherId:value.teacherId||'',branchIds:[...(value.branchIds||[])].map(String).sort(),canManageSchedule:value.canManageSchedule===true,readOnly:value.readOnly===true,revision:value.revision??null});
@@ -25,4 +40,4 @@ async function commitProductionDerivedWrites(firestore,writes,{sourceHash,access
  return writes.length;
 }
 
-module.exports={commitProductionDerivedWrites};
+module.exports={commitProductionDerivedWrites,readProductionRoleViewInputs};

@@ -8,7 +8,7 @@ const {getAppCheck}=require('firebase-admin/app-check');
 const {getFirestore,FieldValue,Timestamp}=require('firebase-admin/firestore');
 const {GoogleAuth}=require('google-auth-library');
 const {createHash}=require('node:crypto');
-const {commitProductionDerivedWrites}=require('./production-derived-commit.cjs');
+const {commitProductionDerivedWrites,readProductionRoleViewInputs}=require('./production-derived-commit.cjs');
 
 const PROJECT_ID='danbridge-d8877-staging';
 const SERVICE_ACCOUNT='danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com';
@@ -153,14 +153,18 @@ exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PR
 });
 
 exports.productionPublishRoleViews=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:540,memory:'1GiB',concurrency:4,minInstances:1,maxInstances:10},async request=>{
+ const startedAt=Date.now(),timingsMs={};let phaseAt=startedAt;
+ const mark=phase=>{const now=Date.now();timingsMs[phase]=now-phaseAt;phaseAt=now};
  try{
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),firestore=runtimeValue.firestore,[projection,fullRecord,recordHash]=await Promise.all([import('../js/core/production-role-view-projection.js'),import('../js/core/cloud-full-record-shadow.js'),import('../js/core/cloud-record-data-hash.js')]),input=projection.assertProductionRoleViewPublishRequest(request.data),receiptRef=firestore.doc(`productionRoleViewPublishReceipts/${input.requestId}`),existingReceipt=await receiptRef.get();
   if(existingReceipt.exists){const saved=existingReceipt.data()||{};if(saved.sourceHash!==input.sourceHash||saved.createdByUid!==caller.uid)throw new Error('production 角色檢視發布 receipt identity 衝突');return{...saved,result:{...(saved.result||{}),kind:'duplicate'}}}
-  const [safetySnapshot,accessSnapshot,...collectionSnapshots]=await Promise.all([firestore.doc('companies/danbridge/productionRecordRuntime/safety').get(),firestore.collection('companyAccess').where('companyId','==','danbridge').get(),...fullRecord.FULL_RECORD_COLLECTIONS.map(name=>firestore.collection(`productionFullRecordShadows/danbridge/collections/${name}/records`).get())]),safety=safetySnapshot.exists?safetySnapshot.data():null;
+  mark('bootstrap');
+  const {safetySnapshot,accessSnapshot,teacherSnapshot,schedulerSnapshot,metaSnapshot,collectionSnapshots}=await readProductionRoleViewInputs(firestore,fullRecord.FULL_RECORD_COLLECTIONS),safety=safetySnapshot.exists?safetySnapshot.data():null;
+  mark('inputReads');
   if(!safety||safety.state!=='active'||safety.readAllowed!==true||safety.writeAllowed!==true||safety.recordDataHash!==input.sourceHash)throw new Error('production 角色檢視來源與目前權威 head 不一致');
   const documentsByCollection=Object.fromEntries(fullRecord.FULL_RECORD_COLLECTIONS.map((name,index)=>[name,collectionSnapshots[index].docs.map(row=>({id:row.id,data:row.data()}))])),rebuilt=fullRecord.rebuildFullRecordShadowDb(documentsByCollection,{environment:'production'}),computedSourceHash=recordHash.recordDataHash(rebuilt.db);
   if(computedSourceHash!==input.sourceHash||rebuilt.documentCount!==safety.documentCount||rebuilt.activeCount!==safety.activeCount||rebuilt.tombstoneCount!==safety.tombstoneCount)throw new Error('production 角色檢視來源 16 集合讀回不一致');
-  const accessRows=accessSnapshot.docs.map(row=>({id:row.id,...(row.data()||{})})),now=Date.now(),views=projection.buildProductionRoleViews(rebuilt.db,accessRows,{now}),lessonMeta=projection.buildProductionLessonMeta(rebuilt.db),[teacherSnapshot,schedulerSnapshot,metaSnapshot]=await Promise.all([firestore.collection('companies/danbridge/teacherViews').get(),firestore.collection('companies/danbridge/schedulerViews').get(),firestore.collection('companies/danbridge/lessonMeta').get()]),teacherCurrent=new Map(teacherSnapshot.docs.map(row=>[row.id,row])),schedulerCurrent=new Map(schedulerSnapshot.docs.map(row=>[row.id,row])),metaCurrent=new Map(metaSnapshot.docs.map(row=>[row.id,row])),desiredTeachers=new Set(),desiredSchedulers=new Set(),writes=[];
+  const accessRows=accessSnapshot.docs.map(row=>({id:row.id,...(row.data()||{})})),now=Date.now(),views=projection.buildProductionRoleViews(rebuilt.db,accessRows,{now}),lessonMeta=projection.buildProductionLessonMeta(rebuilt.db),teacherCurrent=new Map(teacherSnapshot.docs.map(row=>[row.id,row])),schedulerCurrent=new Map(schedulerSnapshot.docs.map(row=>[row.id,row])),metaCurrent=new Map(metaSnapshot.docs.map(row=>[row.id,row])),desiredTeachers=new Set(),desiredSchedulers=new Set(),writes=[];
   for(const view of views){
    if(view.kind==='teacher'){desiredTeachers.add(view.email);const current=teacherCurrent.get(view.email)?.data();if(projection.productionRoleViewNeedsWrite(current,view))writes.push({type:'set',ref:firestore.doc(`companies/danbridge/teacherViews/${view.email}`),value:{db:view.db,updatedAt:FieldValue.serverTimestamp(),teacherId:view.teacherId,email:view.email,clientHash:view.clientHash,sourceRecordHash:input.sourceHash,release:input.release}})}
    else if(view.kind==='scheduler'){desiredSchedulers.add(view.email);const current=schedulerCurrent.get(view.email)?.data();if(projection.productionRoleViewNeedsWrite(current,view))writes.push({type:'set',ref:firestore.doc(`companies/danbridge/schedulerViews/${view.email}`),value:{db:view.db,updatedAt:FieldValue.serverTimestamp(),email:view.email,clientHash:view.clientHash,sourceRecordHash:input.sourceHash,release:input.release}})}
@@ -173,14 +177,19 @@ exports.productionPublishRoleViews=onCall({region:'asia-east1',serviceAccount:PR
   for(const [lessonId,row] of metaCurrent)if(!desiredMetaIds.has(lessonId))writes.push({type:'delete',ref:row.ref});
   const accessIds=new Set(accessSnapshot.docs.map(row=>row.id)),missingAccessEmails=[...new Set([...teacherCurrent.keys(),...schedulerCurrent.keys()])].filter(email=>!accessIds.has(email)),missingAccessSnapshots=missingAccessEmails.length?await firestore.getAll(...missingAccessEmails.map(email=>firestore.doc(`companyAccess/${email}`))):[];
   if(missingAccessSnapshots.some(row=>row.exists))throw new Error('production 角色成員清單已改變，請重新發布');
-  const committedWrites=await commitProductionDerivedWrites(firestore,writes,{sourceHash:input.sourceHash,accessSnapshots:[...accessSnapshot.docs,...missingAccessSnapshots]}),[safetyAfter,teacherAfter,schedulerAfter,metaAfter,accessAfter]=await Promise.all([firestore.doc('companies/danbridge/productionRecordRuntime/safety').get(),firestore.collection('companies/danbridge/teacherViews').get(),firestore.collection('companies/danbridge/schedulerViews').get(),firestore.collection('companies/danbridge/lessonMeta').get(),firestore.collection('companyAccess').where('companyId','==','danbridge').get()]);
+  mark('validateAndPlan');
+  const committedWrites=await commitProductionDerivedWrites(firestore,writes,{sourceHash:input.sourceHash,accessSnapshots:[...accessSnapshot.docs,...missingAccessSnapshots]});
+  mark('guardedCommit');
+  const [safetyAfter,teacherAfter,schedulerAfter,metaAfter,accessAfter]=await Promise.all([firestore.doc('companies/danbridge/productionRecordRuntime/safety').get(),firestore.collection('companies/danbridge/teacherViews').get(),firestore.collection('companies/danbridge/schedulerViews').get(),firestore.collection('companies/danbridge/lessonMeta').get(),firestore.collection('companyAccess').where('companyId','==','danbridge').get()]);
+  mark('readback');
   if(safetyAfter.data()?.recordDataHash!==input.sourceHash)throw new Error('production 權威 head 在角色檢視發布期間已改變');
   const teacherAfterMap=new Map(teacherAfter.docs.map(row=>[row.id,row.data()])),schedulerAfterMap=new Map(schedulerAfter.docs.map(row=>[row.id,row.data()])),metaAfterMap=new Map(metaAfter.docs.map(row=>[row.id,row.data()])),accessAfterMap=new Map(accessAfter.docs.map(row=>[row.id.toLowerCase(),row.data()]));
   if(teacherAfterMap.size!==desiredTeachers.size||schedulerAfterMap.size!==desiredSchedulers.size||metaAfterMap.size!==desiredMetaIds.size)throw new Error('production 角色檢視發布後文件數不一致');
   for(const view of views){const saved=view.kind==='teacher'?teacherAfterMap.get(view.email):view.kind==='scheduler'?schedulerAfterMap.get(view.email):accessAfterMap.get(view.email),savedDb=view.kind==='branch_manager'?saved?.scopedDb:saved?.db,savedHash=view.kind==='branch_manager'?saved?.scopedClientHash:saved?.clientHash;if(savedHash!==view.clientHash||projection.productionClientDataHash(savedDb)!==view.clientHash)throw new Error(`production ${view.kind} 檢視讀回不一致：${view.email}`)}
   for(const meta of lessonMeta){const saved=metaAfterMap.get(meta.lessonId);if(!saved||projection.productionLessonMetaSignature(saved)!==projection.productionLessonMetaSignature(meta.payload))throw new Error(`production lessonMeta 讀回不一致：${meta.lessonId}`)}
   const result={state:'verified',kind:'published',sourceHash:input.sourceHash,release:input.release,roleViewCount:views.length,teacherViewCount:desiredTeachers.size,schedulerViewCount:desiredSchedulers.size,branchViewCount:views.filter(view=>view.kind==='branch_manager').length,lessonMetaCount:lessonMeta.length,formalRecordWrites:0,derivedWrites:committedWrites};
-  const response={schema:projection.PRODUCTION_ROLE_VIEW_PUBLISH_RESPONSE_SCHEMA,requestId:input.requestId,sourceHash:input.sourceHash,createdByUid:caller.uid,createdByEmail:caller.email,verifiedAt:new Date().toISOString(),result};await receiptRef.create({...response,createdAt:FieldValue.serverTimestamp()});return response;
+  const response={schema:projection.PRODUCTION_ROLE_VIEW_PUBLISH_RESPONSE_SCHEMA,requestId:input.requestId,sourceHash:input.sourceHash,createdByUid:caller.uid,createdByEmail:caller.email,verifiedAt:new Date().toISOString(),result};await receiptRef.create({...response,createdAt:FieldValue.serverTimestamp()});
+  mark('verifyAndReceipt');console.info('PRODUCTION_ROLE_VIEW_TIMING',JSON.stringify({release:input.release,timingsMs,totalMs:Date.now()-startedAt,derivedWrites:committedWrites}));return response;
  }catch(error){if(error instanceof HttpsError)throw error;console.error('PRODUCTION_ROLE_VIEW_PUBLISH_BLOCKED',JSON.stringify({name:String(error?.name||'Error'),message:String(error?.message||'blocked')}));throw new HttpsError('failed-precondition',String(error?.message||'正式角色檢視發布已安全阻止。').slice(0,240))}
 });
 

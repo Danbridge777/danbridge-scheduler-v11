@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-const {commitProductionDerivedWrites}=createRequire(import.meta.url)('../functions/production-derived-commit.cjs');
+const {commitProductionDerivedWrites,readProductionRoleViewInputs}=createRequire(import.meta.url)('../functions/production-derived-commit.cjs');
 const sourceHash='record-v1:'+'a'.repeat(64);
 const safetyPath='companies/danbridge/productionRecordRuntime/safety';
 const accessPath='companyAccess/teacher@example.com';
@@ -27,3 +27,19 @@ test('延遲舊發布、中央暫停與撤銷角色都在任何寫入前拒絕',
  }
 });
 test('缺少來源版本不可啟動衍生資料交易',async()=>{const f=fixture();await assert.rejects(commitProductionDerivedWrites(f.firestore,writes(1)),/有效權威版本/);assert.equal(f.committed.length,0)});
+
+test('來源與既有視圖同步起讀，保留所有結果並拒絕任一讀取失敗',async()=>{
+ const pending=[];
+ const ref=path=>({where(field,operator,value){assert.deepEqual([field,operator,value],['companyId','==','danbridge']);return this},get:()=>new Promise((resolve,reject)=>pending.push({path,resolve,reject}))});
+ const firestore={doc:ref,collection:ref};
+ const result=readProductionRoleViewInputs(firestore,['lessons','students']);
+ assert.equal(pending.length,7);
+ pending.forEach(job=>job.resolve({path:job.path}));
+ const loaded=await result;assert.equal(loaded.collectionSnapshots.length,2);
+ assert.equal(loaded.teacherSnapshot.path,'companies/danbridge/teacherViews');
+ assert.equal(loaded.collectionSnapshots[0].path,'productionFullRecordShadows/danbridge/collections/lessons/records');
+ pending.length=0;
+ const failed=readProductionRoleViewInputs(firestore,['lessons']);
+ pending[0].reject(new Error('read unavailable'));pending.slice(1).forEach(job=>job.resolve({}));
+ await assert.rejects(failed,/read unavailable/);
+});
