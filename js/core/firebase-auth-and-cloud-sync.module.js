@@ -61,7 +61,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.156';
+const APP_RELEASE='20.26.157';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -2938,15 +2938,20 @@ async function startOwnerStagingV2Runtime(){
 function startOwnerProductionRecordRuntime(){
  if(DANBRIDGE_ENVIRONMENT!=='production'||cloudRole!=='owner')return false;
  try{
-  activeRecordStreamAdapter?.stop?.();activeRecordMode='checking';document.body.dataset.activeRecordMode=activeRecordMode;
+  activeRecordStreamAdapter?.stop?.();activeRecordMode='checking';document.body.dataset.activeRecordMode=activeRecordMode;let productionRuntimeReady=false;
   activeRecordStreamAdapter=createFirebaseProductionRecordStreamAdapter({
    subscribeDocument:activeFirestoreSubscribeDocument,
    subscribeCollection:activeFirestoreSubscribeCollection,
    onApply:acceptActiveOwnerSnapshot,
    onState:event=>{
-    document.body.dataset.activeRecordState=event.state;
-    if(event.state==='loading'){activeOwnerProductionReadDocuments=()=>activeRecordStreamAdapter.readDocuments();activeRecordMode='active-loading';document.body.dataset.activeRecordMode=activeRecordMode;activeRecordPageController?.setWriteAllowed(false);unsubscribeState?.();unsubscribeState=null;return}
-    if(event.state==='ready'||event.state==='paused'){activeOwnerProductionReadDocuments=()=>activeRecordStreamAdapter.readDocuments();activeRecordMode='active';document.body.dataset.activeRecordMode=activeRecordMode;document.body.dataset.activeRecordAuthority='production-records-authoritative';activeRecordPageController?.setWriteAllowed(event.state==='ready');unsubscribeState?.();unsubscribeState=null;cloudStatus(event.state==='ready'?'正式逐筆同步已就緒。':'正式逐筆同步已中央暫停；畫面資料已保留。',event.state==='ready'?'ok':'pending');return}
+    document.body.dataset.activeRecordStreamState=event.state;
+    if(event.state==='loading'){
+     activeOwnerProductionReadDocuments=()=>activeRecordStreamAdapter.readDocuments();unsubscribeState?.();unsubscribeState=null;
+     if(!productionRuntimeReady){document.body.dataset.activeRecordState=event.state;activeRecordMode='active-loading';document.body.dataset.activeRecordMode=activeRecordMode;activeRecordPageController?.setWriteAllowed(false)}
+     else{activeRecordMode='active';document.body.dataset.activeRecordMode=activeRecordMode;document.body.dataset.activeRecordAuthority='production-records-authoritative'}
+     return;
+    }
+    if(event.state==='ready'||event.state==='paused'){document.body.dataset.activeRecordState=event.state;productionRuntimeReady=event.state==='ready';activeOwnerProductionReadDocuments=()=>activeRecordStreamAdapter.readDocuments();activeRecordMode='active';document.body.dataset.activeRecordMode=activeRecordMode;document.body.dataset.activeRecordAuthority='production-records-authoritative';activeRecordPageController?.setWriteAllowed(event.state==='ready');unsubscribeState?.();unsubscribeState=null;cloudStatus(event.state==='ready'?'正式逐筆同步已就緒。':'正式逐筆同步已中央暫停；畫面資料已保留。',event.state==='ready'?'ok':'pending');return}
     if(event.state==='blocked'){activeRecordMode='active-blocked';document.body.dataset.activeRecordMode=activeRecordMode;unsubscribeState?.();unsubscribeState=null;persistOwnerSyncRecovery();cloudStatus('production 逐筆讀回驗證失敗，已封鎖寫入且未覆蓋資料：'+String(event.error||''),'error')}
    }
   });
