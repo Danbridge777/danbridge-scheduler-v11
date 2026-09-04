@@ -4,10 +4,12 @@ export function automaticScheduleNotifications(notifications,{uid='',email='',na
  const normalizedEmail=String(email).trim().toLowerCase(),normalizedName=String(name).trim();
  return notifications.filter(item=>{
   if(!item?.id||seen.has(item.id))return false;
-  const samePublisher=Boolean(uid&&item.createdBy===uid)||Boolean(normalizedEmail&&String(item.createdByEmail||'').trim().toLowerCase()===normalizedEmail);
+  const actorName=String(item.createdByName||'').trim(),actorEmail=actorName.toLowerCase();
+  const sameEmail=Boolean(normalizedEmail&&(String(item.createdByEmail||'').trim().toLowerCase()===normalizedEmail||actorEmail===normalizedEmail));
+  if(sameEmail)return false;
+  const samePublisher=Boolean(uid&&item.createdBy===uid);
   // A scheduler's change may be published by the Owner worker. Its actor name
   // differs, so it must still notify the Owner instead of being treated as self.
-  const actorName=String(item.createdByName||'').trim();
   return !samePublisher||Boolean(actorName&&(!normalizedName||actorName!==normalizedName));
  });
 }

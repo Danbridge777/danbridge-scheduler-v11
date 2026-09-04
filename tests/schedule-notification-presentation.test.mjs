@@ -10,6 +10,8 @@ test('自己的通知保留但不自動遮擋；其他人的未讀通知仍可�
  const delegated=[{id:'mine',createdBy:'owner',createdByName:'Daniel'},{id:'scheduler',createdBy:'owner',createdByName:'AA'}];
  assert.deepEqual(automaticScheduleNotifications(delegated,{uid:'owner',name:'Daniel'}).map(x=>x.id),['scheduler']);
  assert.equal(automaticScheduleNotifications(delegated,{uid:'owner'}).length,2);
+ const serverManaged=[{id:'self-by-email-name',createdBy:'staging-runtime',createdByName:' OWNER@EXAMPLE.COM '},{id:'other-by-email-name',createdBy:'staging-runtime',createdByName:'aa@example.com'}];
+ assert.deepEqual(automaticScheduleNotifications(serverManaged,{uid:'owner',email:'owner@example.com',name:'Daniel'}).map(x=>x.id),['other-by-email-name']);
 });
 
 test('編輯和連續操作期間不搶焦點，稍後查看不重複彈出，手動仍能看全部通知',()=>{
