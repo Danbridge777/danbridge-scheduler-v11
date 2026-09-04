@@ -21,7 +21,12 @@ export function createStagingV2AuthoritySaveBrowserClient(rawConfig){
   async save(rawPayload){
    const payload=exact(rawPayload,payloadFields,'authority browser payload'),identity=currentIdentity(cfg),save=plain(payload.save)?payload.save:null,requestId=save?.saveId;
    if(!actor(requestId)||save.actorUid!==identity.uid||String(save.actorEmail??'').trim().toLowerCase()!==identity.email)throw new Error('authority browser actor mismatch');
-   const [idToken,appCheckToken]=await Promise.all([cfg.getIdToken(identity.user,true),cfg.getLimitedUseAppCheckToken()]);
+   // Firebase already refreshes a cached ID token when it is near expiry. A
+   // forced refresh on every record (including the immediately-following
+   // immutable audit append) adds a network round trip without changing the
+   // server-side identity/role checks. App Check remains limited-use and is
+   // still acquired separately for every request, preserving replay defense.
+   const [idToken,appCheckToken]=await Promise.all([cfg.getIdToken(identity.user,false),cfg.getLimitedUseAppCheckToken()]);
    if(typeof idToken!=='string'||idToken.length<8||typeof appCheckToken!=='string'||appCheckToken.length<8)throw new Error('authority browser token missing');
    const beforeSend=currentIdentity(cfg);if(beforeSend.user!==identity.user||beforeSend.uid!==identity.uid||beforeSend.email!==identity.email)throw new Error('authority browser identity changed');
    const body=JSON.stringify({schema:STAGING_V2_AUTHORITY_SAVE_REQUEST_SCHEMA,projectId:cfg.projectId,requestId,payload}),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),cfg.timeoutMs);

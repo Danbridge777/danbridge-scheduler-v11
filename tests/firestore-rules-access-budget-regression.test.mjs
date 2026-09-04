@@ -62,7 +62,7 @@ test('hard-pause and U/V/Pair lineage artifacts remain create-only immutable',()
 });
 
 test('V2 Owner runtime read gate requires fence+active control+H1 and keeps every client write denied',()=>{
- const body=functionBody('v2OwnerRuntimeReadOpen','v2OwnerRuntimeH0HeadReadOpen');
+ const body=functionBody('v2OwnerRuntimeReadOpen','v2RoleRecordRuntimeOpen');
  assert.equal((body.match(/\bget\(/g)??[]).length,3);
  assert.equal((body.match(/\bexists\(/g)??[]).length,3);
  for(const clause of [

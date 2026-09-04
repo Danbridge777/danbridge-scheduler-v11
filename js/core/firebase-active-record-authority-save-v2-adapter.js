@@ -3,7 +3,7 @@ import {createStagingV2AdminBoundary} from './firebase-staging-v2-service-accoun
 import {createStagingV2CloudRuntimeBoundary} from './firebase-staging-v2-cloud-runtime-boundary.js';
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 import {FULL_RECORD_COLLECTIONS} from './cloud-full-record-shadow.js';
-import {activeRecordSaveEnvelopeHash,isActiveRecordSaveRecordId,preflightActiveRecordSaveLocalEnvelopes,strictCloneActiveRecordSaveValue} from './cloud-active-record-save-plan.js';
+import {activeRecordSaveEnvelopeHash,isActiveRecordSaveRecordId,preflightActiveRecordSaveChangedKeys,preflightActiveRecordSaveLocalEnvelopes,strictCloneActiveRecordSaveValue} from './cloud-active-record-save-plan.js';
 import {
  ACTIVE_RECORD_AUTHORITY_V2_DAILY_RECORD_SCHEMA,
  ACTIVE_RECORD_AUTHORITY_V2_HEAD_SCHEMA,

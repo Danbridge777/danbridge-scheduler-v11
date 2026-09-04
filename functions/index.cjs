@@ -9,6 +9,8 @@ const {getFirestore,FieldValue,Timestamp}=require('firebase-admin/firestore');
 const {GoogleAuth}=require('google-auth-library');
 const {createHash}=require('node:crypto');
 const {commitProductionDerivedWrites,readProductionRoleViewInputs}=require('./production-derived-commit.cjs');
+const {createProductionSchedulerRuntime,productionSchedulerErrorCode}=require('./production-scheduler-runtime.cjs');
+const {createStagingDerivedDeliveryRuntime}=require('./staging-derived-delivery-runtime.cjs');
 
 const PROJECT_ID='danbridge-d8877-staging';
 const SERVICE_ACCOUNT='danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com';
@@ -17,6 +19,7 @@ const PRODUCTION_SERVICE_ACCOUNT='danbridge-production-runtime@danbridge-d8877.i
 const PRIMARY_OWNER_EMAIL='a0965487920@gmail.com';
 let runtimePromise=null;
 let productionRuntimePromise=null;
+let productionSchedulerRuntimePromise=null;
 
 function reportRuntimeBlocked(error){
  const name=error instanceof Error&&typeof error.name==='string'?error.name:'UnknownError';
@@ -30,16 +33,42 @@ function reportSaveBlocked(error){
  console.error('STAGING_V2_SAVE_BLOCKED',JSON.stringify({name,message}));
 }
 
+function stagingMixedAuditSaveId(saveId,recordId){
+ return `mix:${createHash('sha256').update(`${saveId}:${recordId}`,'utf8').digest('hex').slice(0,48)}`;
+}
+
+async function executeStagingAuthorityPayload({payload,recordBinder,auditBinder,derivedDelivery}){
+ const keys=Array.isArray(payload?.changedKeys)?payload.changedKeys:[],baselines=Array.isArray(payload?.baselineRecords)?payload.baselineRecords:[],locals=Array.isArray(payload?.localRecords)?payload.localRecords:[];
+ if(!keys.length||keys.length!==baselines.length||keys.length!==locals.length)throw new Error('staging authority mixed payload count invalid');
+ const auditIndexes=[],recordIndexes=[];keys.forEach((key,index)=>(key?.collection==='changes'?auditIndexes:recordIndexes).push(index));
+ if(!recordIndexes.length&&auditIndexes.length===1){const completion=await auditBinder.execute(payload);await derivedDelivery.deliver(payload,completion);return completion}
+ if(!auditIndexes.length){const completion=await recordBinder.execute(payload);await derivedDelivery.deliver(payload,completion);return completion}
+ if(!recordIndexes.length)throw new Error('staging authority audit-only batch must remain singleton');
+ const select=(indexes,save)=>({save,changedKeys:indexes.map(index=>keys[index]),baselineRecords:indexes.map(index=>baselines[index]),localRecords:indexes.map(index=>locals[index])}),completions=[];
+ const recordPayload=select(recordIndexes,payload.save),recordCompletion=await recordBinder.execute(recordPayload);await derivedDelivery.deliver(recordPayload,recordCompletion);completions.push(recordCompletion);
+ for(const index of auditIndexes){const save={...payload.save,saveId:stagingMixedAuditSaveId(payload.save.saveId,keys[index].recordId)},auditPayload=select([index],save),auditCompletion=await auditBinder.execute(auditPayload);await derivedDelivery.deliver(auditPayload,auditCompletion);completions.push(auditCompletion)}
+ if(completions.some(row=>row.projectId!==PROJECT_ID||row.activationEpoch!==recordCompletion.activationEpoch))throw new Error('staging authority mixed completion identity invalid');
+ return Object.freeze({state:'complete-confirmed',transactionState:completions.every(row=>row.transactionState==='replayed')?'replayed':'created',projectId:PROJECT_ID,activationEpoch:recordCompletion.activationEpoch,resultHeadHash:recordCompletion.resultHeadHash,commitHash:recordCompletion.commitHash,saveId:payload.save.saveId,operationCount:keys.length,persistedAt:completions.at(-1).persistedAt,writeCount:completions.reduce((sum,row)=>sum+row.writeCount,0)});
+}
+
 async function runtime(){
  if(runtimePromise===null)runtimePromise=(async()=>{
-  const app=getApps()[0]??initializeApp({projectId:PROJECT_ID,credential:applicationDefault()}),auth=getAuth(app),appCheck=getAppCheck(app),firestore=getFirestore(app),[{createFirebaseActiveRecordAuthoritySaveChainV2CloudRuntimeBinder},{createStagingV2AuthoritySaveAdminCloudRuntime}]=await Promise.all([import('../js/core/firebase-active-record-authority-save-chain-v2-adapter.js'),import('../js/core/staging-v2-authority-save-cloud-runtime.js')]),binder=createFirebaseActiveRecordAuthoritySaveChainV2CloudRuntimeBinder({app,firestore,expectedProjectId:PROJECT_ID});
-  const reportingBinder=Object.freeze({scope:binder.scope,execute:async payload=>{try{return await binder.execute(payload)}catch(error){reportSaveBlocked(error);throw error}}});
+  const app=getApps()[0]??initializeApp({projectId:PROJECT_ID,credential:applicationDefault()}),auth=getAuth(app),appCheck=getAppCheck(app),firestore=getFirestore(app),[{createFirebaseActiveRecordAuthoritySaveChainV2CloudRuntimeBinder},{createFirebaseStagingV2AuditAppendCloudRuntimeBinder},{createStagingV2AuthoritySaveAdminCloudRuntime}]=await Promise.all([import('../js/core/firebase-active-record-authority-save-chain-v2-adapter.js'),import('../js/core/firebase-staging-v2-audit-append-adapter.js'),import('../js/core/staging-v2-authority-save-cloud-runtime.js')]),recordBinder=createFirebaseActiveRecordAuthoritySaveChainV2CloudRuntimeBinder({app,firestore,expectedProjectId:PROJECT_ID}),auditBinder=createFirebaseStagingV2AuditAppendCloudRuntimeBinder({app,firestore,expectedProjectId:PROJECT_ID});
+  const derivedDelivery=await createStagingDerivedDeliveryRuntime({firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),now:()=>Date.now(),expectedProjectId:PROJECT_ID});
+  await derivedDelivery.warm();
+  const reportingBinder=Object.freeze({scope:recordBinder.scope,execute:async payload=>{try{return await executeStagingAuthorityPayload({payload,recordBinder,auditBinder,derivedDelivery})}catch(error){reportSaveBlocked(error);throw error}}});
   return createStagingV2AuthoritySaveAdminCloudRuntime({app,auth,appCheck,firestore,binder:reportingBinder,now:()=>Date.now()})
  })().catch(error=>{runtimePromise=null;throw error});
  return runtimePromise
 }
 
-exports.stagingV2AuthoritySave=onRequest({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,invoker:'public',cors:false,timeoutSeconds:60,memory:'512MiB',concurrency:8,minInstances:0,maxInstances:10},async(request,response)=>{try{const handler=await runtime();await handler.handle(request,response)}catch(error){reportRuntimeBlocked(error);response.set('cache-control','no-store').set('content-type','application/json; charset=utf-8').status(500).send(JSON.stringify({schema:'danbridge-staging-v2-authority-save-response-v1',state:'blocked',code:'RUNTIME_BLOCKED'}))}});
+exports.stagingV2AuthoritySave=onRequest({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,invoker:'public',cors:false,timeoutSeconds:60,memory:'512MiB',concurrency:8,minInstances:1,maxInstances:10},async(request,response)=>{try{const handler=await runtime();await handler.handle(request,response)}catch(error){reportRuntimeBlocked(error);response.set('cache-control','no-store').set('content-type','application/json; charset=utf-8').status(500).send(JSON.stringify({schema:'danbridge-staging-v2-authority-save-response-v1',state:'blocked',code:'RUNTIME_BLOCKED'}))}});
+
+// The staging function keeps one instance available. Start its sealed runtime
+// while that instance boots so the first real timetable write does not pay the
+// dynamic module and Firebase Admin initialization cost. The exact service and
+// project guards prevent every production function from initializing staging.
+if(process.env.K_SERVICE==='stagingv2authoritysave'&&process.env.GCLOUD_PROJECT===PROJECT_ID)void runtime().catch(reportRuntimeBlocked);
 
 async function productionRuntime(){
  if(productionRuntimePromise===null)productionRuntimePromise=(async()=>{
@@ -57,6 +86,47 @@ async function verifiedProductionOwner(request,runtimeValue){
  if(email!==PRIMARY_OWNER_EMAIL){const snapshot=await runtimeValue.firestore.doc(`companyAccess/${email}`).get(),row=snapshot.exists?snapshot.data():null;access={uid,email,role:row?.role,active:row?.active,companyId:row?.companyId}}
  try{return runtimeValue.assertProductionTrustedCaller(access)}catch{throw new HttpsError('permission-denied','只有有效 Owner 可以執行正式寫入。')}
 }
+
+async function verifiedStagingOwner(request){
+ const uid=String(request.auth?.uid||''),email=String(request.auth?.token?.email||'').trim().toLowerCase();
+ if(!uid||!email||request.auth?.token?.email_verified!==true||!request.app)throw new HttpsError('unauthenticated','需要有效登入與 App Check。');
+ if(email===PRIMARY_OWNER_EMAIL)return Object.freeze({uid,email});
+ const app=getApps().find(row=>row.options?.projectId===PROJECT_ID)??initializeApp({projectId:PROJECT_ID,credential:applicationDefault()}),firestore=getFirestore(app),snapshot=await firestore.doc(`companyAccess/${email}`).get(),row=snapshot.exists?snapshot.data():null;
+ if(row?.active!==true||row?.companyId!=='danbridge'||row?.role!=='owner')throw new HttpsError('permission-denied','只有有效 Owner 可以保存 staging 衝突證據。');
+ return Object.freeze({uid,email});
+}
+
+exports.stagingAcknowledgeScheduleNotification=onCall({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:30,memory:'256MiB',concurrency:40,minInstances:1,maxInstances:10},async request=>{
+ try{
+  const [{normalizeProductionNotificationAcknowledgeRequest,normalizeProductionNotificationActor,assertProductionNotificationRecipient}]=await Promise.all([import('../js/core/production-notification-policy.js')]),actor=normalizeProductionNotificationActor({uid:request.auth?.uid,email:request.auth?.token?.email,emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)}),{notificationIds}=normalizeProductionNotificationAcknowledgeRequest(request.data),app=getApps().find(row=>row.options?.projectId===PROJECT_ID)??initializeApp({projectId:PROJECT_ID,credential:applicationDefault()}),firestore=getFirestore(app);
+  const result=await firestore.runTransaction(async transaction=>{
+   const refs=notificationIds.map(id=>firestore.doc(`companies/danbridge/scheduleNotifications/${id}`)),snapshots=await Promise.all(refs.map(ref=>transaction.get(ref)));let updatedCount=0,alreadyReadCount=0;
+   for(let index=0;index<snapshots.length;index++){
+    const snapshot=snapshots[index];
+    if(!snapshot.exists)throw new Error('找不到通知，請重新整理');
+    assertProductionNotificationRecipient(snapshot.data(),actor);
+    if(snapshot.data()?.read===true){alreadyReadCount++;continue}
+    transaction.update(refs[index],{read:true,acknowledgedAt:FieldValue.serverTimestamp(),acknowledgedBy:actor.uid});updatedCount++;
+   }
+   return{updatedCount,alreadyReadCount};
+  });
+  return{schema:'danbridge-staging-schedule-notification-acknowledge-response-v1',ok:true,...result};
+ }catch(error){if(error instanceof HttpsError)throw error;console.error('STAGING_NOTIFICATION_ACK_BLOCKED',JSON.stringify({name:String(error?.name||'Error'),message:String(error?.message||'blocked')}));throw new HttpsError('failed-precondition',String(error?.message||'通知確認已安全阻止。').slice(0,200))}
+});
+
+exports.stagingV2ConflictBackup=onCall({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:30,memory:'256MiB',concurrency:20,minInstances:0,maxInstances:10},async request=>{
+ const actor=await verifiedStagingOwner(request),input=request.data;
+ if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).sort().join(',')!=='activationEpoch,baseHash,conflicts,deviceId,targetHash')throw new HttpsError('invalid-argument','V2 衝突備份欄位無效。');
+ const {activationEpoch,deviceId,baseHash,targetHash,conflicts}=input,token=value=>typeof value==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(value),recordHash=value=>typeof value==='string'&&/^record-v1:[a-f0-9]{64}$/.test(value);
+ let serialized='';try{serialized=JSON.stringify(conflicts)}catch{}
+ if(!token(activationEpoch)||!token(deviceId)||!recordHash(baseHash)||!recordHash(targetHash)||!Array.isArray(conflicts)||!conflicts.length||serialized.length<2||serialized.length>500000)throw new HttpsError('invalid-argument','V2 衝突備份內容無效。');
+ const app=getApps().find(row=>row.options?.projectId===PROJECT_ID)??initializeApp({projectId:PROJECT_ID,credential:applicationDefault()}),firestore=getFirestore(app),[{splitRecordConflicts},{sha256Canonical}]=await Promise.all([import('../js/core/cloud-record-three-way-merge.js'),import('../js/core/cloud-immutable-migration-backup.js')]),conflictHash=sha256Canonical(conflicts),backupId=`conflict-${conflictHash.slice(0,24)}`,parts=splitRecordConflicts(conflicts,160000);
+ if(parts.length>4)throw new HttpsError('invalid-argument','V2 衝突備份超過安全上限。');
+ const headRef=firestore.doc(`stagingActiveRecordV2Heads/danbridge/epochs/${activationEpoch}`),documents=parts.map((payload,partIndex)=>{const partId=`${backupId}-${partIndex}`;return{ref:firestore.doc(`stagingActiveRecordV2ConflictBackups/danbridge/epochs/${activationEpoch}/parts/${partId}`),partId,payload:{schema:'danbridge-active-record-v2-conflict-backup-v1',environment:'staging',companyId:'danbridge',activationEpoch,backupId,partId,conflictHash,baseHash,targetHash,deviceId,partIndex,partCount:parts.length,encoding:'json-fragment',payload}}});
+ const result=await firestore.runTransaction(async transaction=>{const [headSnapshot,...snapshots]=await Promise.all([transaction.get(headRef),...documents.map(row=>transaction.get(row.ref))]),head=headSnapshot.exists?headSnapshot.data():null;if(!head||head.environment!=='staging'||head.companyId!=='danbridge'||head.activationEpoch!==activationEpoch||head.schema!=='danbridge-active-record-authority-head-v2'||!Number.isSafeInteger(head.revision)||head.revision<1)throw new HttpsError('failed-precondition','V2 權威 head 未啟用。');let writes=0,duplicates=0;for(let index=0;index<documents.length;index++){const current=snapshots[index].exists?snapshots[index].data():null,row=documents[index];if(current){if(current.conflictHash!==conflictHash||current.baseHash!==baseHash||current.targetHash!==targetHash||current.deviceId!==deviceId||current.partIndex!==index||current.partCount!==parts.length)throw new HttpsError('already-exists','V2 衝突備份 immutable 衝突。');duplicates++;continue}transaction.set(row.ref,{...row.payload,createdAt:FieldValue.serverTimestamp(),createdBy:actor.uid,createdByEmail:actor.email},{merge:false});writes++}return{writes,duplicates,headRevision:head.revision}});
+ const verified=await Promise.all(documents.map(row=>row.ref.get()));if(verified.some((snapshot,index)=>!snapshot.exists||snapshot.data()?.conflictHash!==conflictHash||snapshot.data()?.partIndex!==index))throw new HttpsError('internal','V2 衝突備份讀回不一致。');
+ return Object.freeze({schema:'danbridge-active-record-v2-conflict-backup-result-v1',environment:'staging',companyId:'danbridge',activationEpoch,backupId,conflictHash,baseHash,targetHash,partCount:parts.length,conflictCount:conflicts.length,writes:result.writes,duplicates:result.duplicates,headRevision:result.headRevision,paths:documents.map(row=>row.ref.path)});
+});
 
 async function verifiedProductionLeaveActor(request,runtimeValue){
  const uid=String(request.auth?.uid||''),email=String(request.auth?.token?.email||'').trim().toLowerCase();
@@ -138,6 +208,15 @@ exports.productionPublishScheduleNotifications=onCall({region:'asia-east1',servi
  }
 });
 
+exports.productionSchedulerOperation=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'1GiB',concurrency:4,minInstances:0,maxInstances:10},async request=>{
+ try{
+  const runtimeValue=await productionRuntime();
+  if(!productionSchedulerRuntimePromise)productionSchedulerRuntimePromise=createProductionSchedulerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL}).catch(error=>{productionSchedulerRuntimePromise=null;throw error});
+  const runtime=await productionSchedulerRuntimePromise;
+  return await runtime.execute(request.data,{uid:request.auth?.uid,email:String(request.auth?.token?.email||'').trim().toLowerCase(),emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)});
+ }catch(error){if(error instanceof HttpsError)throw error;console.error('PRODUCTION_SCHEDULER_BLOCKED',String(error?.message||'blocked'));throw new HttpsError(productionSchedulerErrorCode(error),String(error?.message||'排課操作未完成，資料已保留').slice(0,240))}
+});
+
 exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'512MiB',concurrency:8,minInstances:1,maxInstances:20},async request=>{
  try{
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),trusted=runtimeValue.assertProductionTrustedOperation(request.data);
@@ -169,6 +248,12 @@ exports.productionPublishRoleViews=onCall({region:'asia-east1',serviceAccount:PR
    if(view.kind==='teacher'){desiredTeachers.add(view.email);const current=teacherCurrent.get(view.email)?.data();if(projection.productionRoleViewNeedsWrite(current,view))writes.push({type:'set',ref:firestore.doc(`companies/danbridge/teacherViews/${view.email}`),value:{db:view.db,updatedAt:FieldValue.serverTimestamp(),teacherId:view.teacherId,email:view.email,clientHash:view.clientHash,sourceRecordHash:input.sourceHash,release:input.release}})}
    else if(view.kind==='scheduler'){desiredSchedulers.add(view.email);const current=schedulerCurrent.get(view.email)?.data();if(projection.productionRoleViewNeedsWrite(current,view))writes.push({type:'set',ref:firestore.doc(`companies/danbridge/schedulerViews/${view.email}`),value:{db:view.db,updatedAt:FieldValue.serverTimestamp(),email:view.email,clientHash:view.clientHash,sourceRecordHash:input.sourceHash,release:input.release}})}
    else {const accessRef=firestore.doc(`companyAccess/${view.email}`),current=accessRows.find(row=>String(row.id).toLowerCase()===view.email);if(current?.scopedClientHash!==view.clientHash||projection.productionClientDataHash(current?.scopedDb)!==view.clientHash)writes.push({type:'set',ref:accessRef,value:{scopedDb:view.db,scopedClientHash:view.clientHash,scopedSourceRecordHash:input.sourceHash,scopedUpdatedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},options:{merge:true}})}
+  }
+  for(const view of views){
+   const path=view.kind==='branch_manager'?`companyAccess/${view.email}`:`companies/danbridge/${view.kind==='teacher'?'teacherViews':'schedulerViews'}/${view.email}`;
+   const fence=view.kind==='branch_manager'?{scopedSourceRecordHash:input.sourceHash,scopedSourceRecordRevision:safety.recordRevision}:{sourceRecordHash:input.sourceHash,sourceRecordRevision:safety.recordRevision};
+   const planned=writes.find(write=>write.ref.path===path);
+   if(planned)Object.assign(planned.value,fence);else writes.push({type:'set',ref:firestore.doc(path),value:fence,options:{merge:true}});
   }
   for(const [email,row] of teacherCurrent)if(!desiredTeachers.has(email))writes.push({type:'delete',ref:row.ref});
   for(const [email,row] of schedulerCurrent)if(!desiredSchedulers.has(email))writes.push({type:'delete',ref:row.ref});

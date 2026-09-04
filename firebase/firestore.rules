@@ -72,6 +72,78 @@ service cloud.firestore {
         && head.sourceActiveControlHash == control.controlHash
         && head.sourceStructuralHeadHash == fence.activeHeadHash;
     }
+    // Role-specific projections are written only by an Owner, but they must
+    // remain writable and readable after the immutable V1 fence is installed.
+    // Bind that exception to the exact active V2 control and H1-or-later head;
+    // this does not reopen any V1 mutation surface.
+    function v2RoleRecordRuntimeOpen(companyId, targetV2Epoch) {
+      let fencePath = /databases/$(database)/documents/stagingRecordSyncV1PermanentFences/$(companyId);
+      let controlPath = /databases/$(database)/documents/stagingRecordSyncV2ActiveControls/$(companyId)/epochs/$(targetV2Epoch);
+      let headPath = /databases/$(database)/documents/stagingActiveRecordV2Heads/$(companyId)/epochs/$(targetV2Epoch);
+      let fence = get(fencePath).data;
+      let control = get(controlPath).data;
+      let head = get(headPath).data;
+      return companyId == 'danbridge'
+        && exists(fencePath) && exists(controlPath) && exists(headPath)
+        && fence.schema == 'danbridge-record-sync-v1-permanent-fence-v2'
+        && fence.state == 'permanently-fenced-after-atomic-v2-structural-activation'
+        && fence.environment == 'staging' && fence.companyId == companyId
+        && fence.projectId == 'danbridge-d8877-staging'
+        && fence.targetV2Epoch == targetV2Epoch
+        && fence.fencePolicy == 'v1-all-mutation-surfaces-permanently-denied-no-resume-or-unfence'
+        && nonzeroSha256(fence.fenceHash)
+        && control.schema == 'danbridge-record-sync-v2-structural-active-control-v2'
+        && control.state == 'structural-active-transition-awaiting-native-fixed-path-atomic-cutover'
+        && control.environment == 'staging' && control.companyId == companyId
+        && control.activationEpoch == targetV2Epoch
+        && control.writerProtocol == 'v2' && control.writerGeneration == 2
+        && control.readAllowed == true && control.writeAllowed == true
+        && control.readTakeoverEnabled == true && control.writeTakeoverEnabled == true
+        && control.acceptNewSessions == true && control.acceptNewMutations == true
+        && control.allowAuditAppends == true
+        && nonzeroSha256(control.controlHash)
+        && control.controlHash == fence.activeControlHash
+        && control.activeHeadHash == fence.activeHeadHash
+        && control.authorityRootHash == fence.authorityRootHash
+        && control.genesisAuthorityHash == fence.genesisAuthorityHash
+        && control.reservationAuthorityHash == fence.reservationAuthorityHash
+        && head.schema == 'danbridge-active-record-authority-head-v2'
+        && head.environment == 'staging' && head.companyId == companyId
+        && head.activationEpoch == targetV2Epoch
+        && head.revision is int && head.revision >= 1
+        && nonzeroSha256(head.headHash) && nonzeroSha256(head.commitHash)
+        && head.authorityRootHash == control.authorityRootHash
+        && head.genesisAuthorityHash == control.genesisAuthorityHash
+        && head.reservationAuthorityHash == control.reservationAuthorityHash
+        && head.sourceActiveControlHash == control.controlHash
+        && head.sourceStructuralHeadHash == fence.activeHeadHash;
+    }
+    // Role readers consume an already-published, immutable projection control.
+    // A compact two-anchor check keeps list queries below Firestore's 1000
+    // expression limit while still requiring the permanent fence and the exact
+    // active Hn head. The stronger three-anchor check above remains mandatory
+    // for every projection write.
+    function v2RoleRecordReadOpen(companyId, targetV2Epoch) {
+      let fencePath = /databases/$(database)/documents/stagingRecordSyncV1PermanentFences/$(companyId);
+      let headPath = /databases/$(database)/documents/stagingActiveRecordV2Heads/$(companyId)/epochs/$(targetV2Epoch);
+      let fence = get(fencePath).data;
+      let head = get(headPath).data;
+      return companyId == 'danbridge'
+        && exists(fencePath) && exists(headPath)
+        && fence.schema == 'danbridge-record-sync-v1-permanent-fence-v2'
+        && fence.state == 'permanently-fenced-after-atomic-v2-structural-activation'
+        && fence.environment == 'staging' && fence.companyId == companyId
+        && fence.projectId == 'danbridge-d8877-staging'
+        && fence.targetV2Epoch == targetV2Epoch
+        && fence.fencePolicy == 'v1-all-mutation-surfaces-permanently-denied-no-resume-or-unfence'
+        && nonzeroSha256(fence.fenceHash)
+        && head.schema == 'danbridge-active-record-authority-head-v2'
+        && head.environment == 'staging' && head.companyId == companyId
+        && head.activationEpoch == targetV2Epoch
+        && head.revision is int && head.revision >= 1
+        && nonzeroSha256(head.headHash) && nonzeroSha256(head.commitHash)
+        && head.sourceStructuralHeadHash == fence.activeHeadHash;
+    }
     // H0 is the one immutable structural head that must be visible before the
     // first native V2 save can create H1.  This gate is deliberately scoped to
     // the head document only: it does not open active controls, records,
@@ -618,7 +690,8 @@ service cloud.firestore {
         && control.state == 'active'
         && control.readTakeover == true
         && control.viewKey == viewKey
-        && control.activationEpoch == root.activationEpoch
+        && (control.activationEpoch == root.activationEpoch
+          || v2RoleRecordReadOpen(companyId, control.activationEpoch))
         && data.viewKey == control.viewKey
         && data.activationEpoch == control.activationEpoch
         && data.email == control.email
@@ -640,13 +713,14 @@ service cloud.firestore {
         && control.readTakeover == true
         && control.email == emailKey()
         && control.viewKey == viewKey
-        && control.activationEpoch == root.activationEpoch
-        && root.schema == 'danbridge-record-sync-control-v1'
-        && root.environment == 'staging'
-        && root.companyId == companyId
-        && root.state == 'active'
-        && root.readTakeover == true
-        && root.writeTakeover == true
+        && ((control.activationEpoch == root.activationEpoch
+            && root.schema == 'danbridge-record-sync-control-v1'
+            && root.environment == 'staging'
+            && root.companyId == companyId
+            && root.state == 'active'
+            && root.readTakeover == true
+            && root.writeTakeover == true)
+          || v2RoleRecordReadOpen(companyId, control.activationEpoch))
         && ownRoleRecordScopeMatches(companyId, emailKey(), control);
     }
     function roleRecordCollectionMapsValid(active, documents, tombstones) {
@@ -655,12 +729,28 @@ service cloud.firestore {
         && documents.keys().hasOnly(keys) && documents.keys().hasAll(keys)
         && tombstones.keys().hasOnly(keys) && tombstones.keys().hasAll(keys);
     }
-    function roleRecordControlWriteIsValid(companyId, email) {
-      let data = request.resource.data;
+    function roleRecordWriteRuntimeOpen(companyId, activationEpoch) {
       let root = get(/databases/$(database)/documents/stagingRecordSyncControls/$(companyId)).data;
       let safety = get(/databases/$(database)/documents/stagingRecordSyncSafetyControls/$(companyId)).data;
+      return (legacyV1WriteOpen(companyId)
+          && activationEpoch == root.activationEpoch
+          && root.schema == 'danbridge-record-sync-control-v1'
+          && root.environment == 'staging'
+          && root.companyId == companyId
+          && root.state == 'active'
+          && root.readTakeover == true
+          && root.writeTakeover == true
+          && safety.schema == 'danbridge-record-sync-safety-control-v1'
+          && safety.activationEpoch == activationEpoch
+          && safety.state == 'active'
+          && safety.readAllowed == true
+          && safety.writeAllowed == true)
+        || v2RoleRecordRuntimeOpen(companyId, activationEpoch);
+    }
+    function roleRecordControlWriteIsValid(companyId, email) {
+      let data = request.resource.data;
       return isOwner()
-        && legacyV1WriteOpen(companyId)
+        && roleRecordWriteRuntimeOpen(companyId, data.activationEpoch)
         && companyId == 'danbridge'
         && data.keys().hasOnly(['schema','environment','companyId','viewKey','email','kind','teacherId','branchIds','activationEpoch','state','revision','publishId','sourceRecordHash','viewHash','collectionCount','collectionActiveCounts','collectionDocumentCounts','collectionTombstoneCounts','documentCount','activeCount','tombstoneCount','publishedAt','readTakeover','persistedAt','persistedBy','persistedByEmail'])
         && data.schema == 'danbridge-role-record-view-control-v1'
@@ -670,7 +760,6 @@ service cloud.firestore {
         && data.viewKey.matches('[0-9a-f]{64}')
         && roleRecordTargetScopeMatches(companyId, email, data)
         && data.activationEpoch.matches('[A-Za-z0-9_.:-]{8,128}')
-        && data.activationEpoch == root.activationEpoch
         && data.state == 'active'
         && data.revision == (resource == null ? 1 : resource.data.revision + 1)
         && (resource == null || (resource.data.schema == data.schema && resource.data.environment == data.environment && resource.data.companyId == data.companyId && resource.data.email == data.email))
@@ -691,27 +780,14 @@ service cloud.firestore {
         && data.documentCount == data.activeCount + data.tombstoneCount
         && data.publishedAt is string
         && data.readTakeover == true
-        && root.schema == 'danbridge-record-sync-control-v1'
-        && root.environment == 'staging'
-        && root.companyId == companyId
-        && root.state == 'active'
-        && root.readTakeover == true
-        && root.writeTakeover == true
-        && safety.schema == 'danbridge-record-sync-safety-control-v1'
-        && safety.activationEpoch == data.activationEpoch
-        && safety.state == 'active'
-        && safety.readAllowed == true
-        && safety.writeAllowed == true
         && data.persistedAt == request.time
         && data.persistedBy == request.auth.uid
         && data.persistedByEmail == emailKey();
     }
     function roleRecordWriteIsValid(companyId, viewKey, collectionId, recordId) {
       let data = request.resource.data;
-      let root = get(/databases/$(database)/documents/stagingRecordSyncControls/$(companyId)).data;
-      let safety = get(/databases/$(database)/documents/stagingRecordSyncSafetyControls/$(companyId)).data;
       return isOwner()
-        && legacyV1WriteOpen(companyId)
+        && roleRecordWriteRuntimeOpen(companyId, data.activationEpoch)
         && companyId == 'danbridge'
         && collectionId in ['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches']
         && data.keys().hasOnly(['schema','environment','companyId','viewKey','email','kind','teacherId','branchIds','activationEpoch','collection','recordId','record','recordIndex','revision','deleted','lastPublishId','sourceRecordHash','updatedAt','updatedBy','updatedByEmail'])
@@ -721,7 +797,6 @@ service cloud.firestore {
         && data.viewKey == viewKey
         && viewKey.matches('[0-9a-f]{64}')
         && roleRecordTargetScopeMatches(companyId, data.email, data)
-        && data.activationEpoch == root.activationEpoch
         && data.collection == collectionId
         && data.recordId == recordId
         && data.record is map
@@ -731,17 +806,6 @@ service cloud.firestore {
         && data.deleted is bool
         && data.lastPublishId.matches('[A-Za-z0-9_.:-]{8,128}')
         && data.sourceRecordHash.matches('record-v1:[0-9a-f]{64}')
-        && root.schema == 'danbridge-record-sync-control-v1'
-        && root.environment == 'staging'
-        && root.companyId == companyId
-        && root.state == 'active'
-        && root.readTakeover == true
-        && root.writeTakeover == true
-        && safety.schema == 'danbridge-record-sync-safety-control-v1'
-        && safety.activationEpoch == data.activationEpoch
-        && safety.state == 'active'
-        && safety.readAllowed == true
-        && safety.writeAllowed == true
         && data.updatedAt == request.time
         && data.updatedBy == request.auth.uid
         && data.updatedByEmail == emailKey();
@@ -3352,8 +3416,10 @@ service cloud.firestore {
     }
     match /stagingActiveRecordV2Heads/{companyId}/epochs/{targetV2Epoch} {
       allow read: if isRecordSyncV2CutoverOperator(companyId)
-        || v2OwnerRuntimeH0HeadReadOpen(companyId, targetV2Epoch, resource.data)
-        || v2OwnerRuntimeReadOpen(companyId, targetV2Epoch);
+        || (resource.data.revision == 0
+          && v2OwnerRuntimeH0HeadReadOpen(companyId, targetV2Epoch, resource.data))
+        || (resource.data.revision >= 1
+          && v2OwnerRuntimeReadOpen(companyId, targetV2Epoch)); // DANBRIDGE_STAGING_V2_HEAD_REVISION_DISCRIMINATOR_V1
       allow create, update, delete: if false;
     }
 
@@ -3593,7 +3659,7 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
     match /stagingActiveRecordV2Baselines/{companyId}/epochs/{targetV2Epoch}/artifacts/manifest {
-      allow read: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch)
+      allow get: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch)
         && resource.data.schema == 'danbridge-active-record-v2-baseline-snapshot-manifest-v1'
         && resource.data.state == 'h1-complete-baseline-confirmed'
         && resource.data.environment == 'staging'
@@ -3606,7 +3672,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
     match /stagingActiveRecordV2Baselines/{companyId}/epochs/{targetV2Epoch}/collections/{collectionId}/records/{recordId} {
-      allow read: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch)
+      // Collection reads are authorized by the immutable active-epoch gate.
+      // Per-row integrity is checked by the authority read model; writes remain denied.
+      allow list: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch)
+        && isRecordSyncV2GenesisCollection(collectionId);
+      allow get: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch)
         && resource.data.schema == 'danbridge-active-record-v2-first-daily-union-row-v1'
         && resource.data.environment == 'staging'
         && resource.data.companyId == companyId
@@ -3616,7 +3686,9 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
     match /stagingActiveRecordV2Records/{companyId}/epochs/{targetV2Epoch}/collections/{collectionId}/records/{recordId} {
-      allow read: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch)
+      allow list: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch)
+        && isRecordSyncV2GenesisCollection(collectionId);
+      allow get: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch)
         && resource.data.schema == 'danbridge-active-record-authority-daily-record-v2'
         && resource.data.environment == 'staging'
         && resource.data.companyId == companyId
@@ -3635,12 +3707,31 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
     match /stagingActiveRecordV2SaveCommits/{companyId}/epochs/{targetV2Epoch}/saves/{saveId} {
+      allow list: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch);
       allow read: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch)
         && resource.data.schema == 'danbridge-active-record-authority-ledger-v2'
         && resource.data.environment == 'staging'
         && resource.data.companyId == companyId
         && resource.data.activationEpoch == targetV2Epoch
         && resource.data.saveId == saveId;
+      allow create, update, delete: if false;
+    }
+    match /stagingActiveRecordV2AuditAppends/{companyId}/epochs/{targetV2Epoch}/records/{recordId} {
+      allow list: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch);
+      allow get: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch)
+        && resource.data.keys().hasOnly(['schema', 'environment', 'companyId', 'activationEpoch', 'authorityHash', 'recordId', 'recordIndex', 'record', 'revision', 'deleted', 'operationId', 'actorUid', 'actorEmail', 'createdAt', 'requestHash', 'appendHash', 'persistedAt'])
+        && resource.data.schema == 'danbridge-staging-v2-audit-append-v1'
+        && resource.data.environment == 'staging'
+        && resource.data.companyId == companyId
+        && resource.data.activationEpoch == targetV2Epoch
+        && resource.data.recordId == recordId
+        && resource.data.recordIndex is int
+        && resource.data.recordIndex >= 0
+        && resource.data.record is map
+        && resource.data.revision == 1
+        && resource.data.deleted == false
+        && resource.data.requestHash is string
+        && resource.data.appendHash is string;
       allow create, update, delete: if false;
     }
 
@@ -3656,6 +3747,7 @@ service cloud.firestore {
     match /stagingActiveRecordV2Records/{document=**} { allow read, write: if false; }
     match /stagingActiveRecordV2OperationReceipts/{document=**} { allow read, write: if false; }
     match /stagingActiveRecordV2SaveCommits/{document=**} { allow read, write: if false; }
+    match /stagingActiveRecordV2AuditAppends/{document=**} { allow read, write: if false; }
     // G1.5 identity-index buckets, seals, and root are Admin/CI-only structural
     // artifacts. They are not client discovery, read, mutation, or runtime authority.
     match /stagingRecordSyncV2GenesisIdentityIndexes/{document=**} { allow read, write: if false; }

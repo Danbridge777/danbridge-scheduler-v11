@@ -15,7 +15,8 @@ import {
  consumeFirebaseActiveRecordAuthoritySaveRecoveryV2Completion,
  consumeFirebaseActiveRecordAuthoritySaveV2Completion,
  createFirebaseActiveRecordAuthoritySaveV2Adapter,
- createFirebaseActiveRecordAuthoritySaveV2AdminBinder
+ createFirebaseActiveRecordAuthoritySaveV2AdminBinder,
+ readFirebaseActiveRecordAuthoritySaveV2SealedGenesisBaselines
 } from '../js/core/firebase-active-record-authority-save-v2-adapter.js';
 
 const hex=n=>n.toString(16).repeat(64);
@@ -28,6 +29,16 @@ test('native authority-save-v2 paths/scopes固定且沒有browser/runtime wiring
  assert.equal(ACTIVE_RECORD_AUTHORITY_SAVE_V2_RECEIPT_PATH('epoch-v2-12345','save-native-h1-12345:01'),'stagingActiveRecordV2OperationReceipts/danbridge/epochs/epoch-v2-12345/operations/save-native-h1-12345:01');
  assert.match(ACTIVE_RECORD_AUTHORITY_SAVE_V2_ADAPTER_SCOPE,/structural-transaction-or-exact-replay/);assert.match(ACTIVE_RECORD_AUTHORITY_SAVE_V2_COMPLETION_SCOPE,/full-genesis-union-verification-only/);assert.match(ACTIVE_RECORD_AUTHORITY_SAVE_V2_RECOVERY_COMPLETION_SCOPE,/read-only-post-h1-recovery/);assert.match(ACTIVE_RECORD_AUTHORITY_SAVE_V2_LOCAL_SCOPE,/not-global-runtime/);assert.match(ACTIVE_RECORD_AUTHORITY_SAVE_V2_PRODUCTION_BLOCKER,/genesis-baseline.*iam-allowlist/);
  const source=await readFile(new URL('../js/core/firebase-active-record-authority-save-v2-adapter.js',import.meta.url),'utf8');for(const forbidden of ['firebase/auth','firebase/firestore','firebase-auth-and-cloud-sync','cloud-active-record-runtime','cloud-active-record-page-controller'])assert.equal(source.includes(forbidden),false,forbidden);assert.equal((source.match(/tx\.set\(/g)??[]).length,4);assert.match(source,/return\{\.\.\.envelope,recordHash\}/);
+});
+
+test('Hn sealed Genesis reader 的 changedKeys 驗證函式已實際綁定',async()=>{
+ await assert.rejects(()=>readFirebaseActiveRecordAuthoritySaveV2SealedGenesisBaselines({
+  reader:async()=>null,
+  authorizeDerivedReadPath:()=>{},
+  indexRoot:null,
+  sourceIdentity:{sourceV1ActivationEpoch:'source-epoch-v1',targetV2Epoch:'target-epoch-v2',seedId:'v2-genesis:'+hex(1),identityIndexRootHash:hex(2),identityIndexRootAuditHash:hex(3),identityIndexRootPersistedAt:'2026-08-17T23:59:59.000000001Z'},
+  keys:[{collection:'lessons',recordId:'lesson-native-hn-12345'}]
+ }),error=>error instanceof Error&&error.name!=='ReferenceError'&&/(?:Genesis|identity index) root/.test(error.message));
 });
 
 test('generic authority-save-v2 clone/fake recovery在任何I/O前拒且config getter0',async()=>{let reads=0,transactions=0,getters=0;const hostile={expectedProjectId:'danbridge-rules-test',getDocumentFromServer:async()=>{reads++;return null},runTransaction:async()=>{transactions++},serverTimestamp:()=>null};Object.defineProperty(hostile,'beforePersistence',{enumerable:true,get(){getters++;return async()=>{}}});assert.throws(()=>createFirebaseActiveRecordAuthoritySaveV2Adapter(hostile),/own enumerable data field/);assert.equal(getters,0);const adapter=createFirebaseActiveRecordAuthoritySaveV2Adapter({expectedProjectId:'danbridge-rules-test',getDocumentFromServer:async()=>{reads++;return null},runTransaction:async()=>{transactions++},serverTimestamp:()=>null});assert.equal(adapter.scope,ACTIVE_RECORD_AUTHORITY_SAVE_V2_ADAPTER_SCOPE);await assert.rejects(()=>adapter.execute(fakeRecovery(),request),/native post-cutover recovery completion invalid/);assert.equal(reads,0);assert.equal(transactions,0);assert.throws(()=>consumeFirebaseActiveRecordAuthoritySaveV2Completion(Object.freeze({}),{}),/native authority-save-v2 completion invalid/);assert.throws(()=>consumeFirebaseActiveRecordAuthoritySaveRecoveryV2Completion(Object.freeze({}),{}),/native authority-save-v2 recovery completion invalid/)});

@@ -18,7 +18,52 @@
     push('日期',old.date,date);push('時間',`${old.start}–${old.end}`,`${start}–${end}`);push('學生',student(old.studentId).name,student(sid).name);push('老師',lessonTeacherNames(old),teacherIds.map(id=>teacher(id).name).filter(Boolean).join('、'));push('校區',branchName(old.branchId),branchName(branchId));push('上課方式',old.deliveryMode||'onsite',mode);push('教室',old.room||'',room);push('課程狀態',old.status,status);push('付款狀態',old.paymentStatus||'unpaid',payment);return rows;
   }
   function showUndoBar(){let bar=$('#v181LessonUndoBar');if(!bar){bar=document.createElement('div');bar.id='v181LessonUndoBar';bar.className='v181-lesson-undo';bar.innerHTML='<span>課程已修改</span><button type="button">復原</button>';bar.querySelector('button').addEventListener('click',()=>{undoLast();bar.classList.remove('show')});document.body.append(bar)}bar.classList.add('show');clearTimeout(showUndoBar.timer);showUndoBar.timer=setTimeout(()=>bar.classList.remove('show'),8000)}
-  function installLessonDiff(){const original=window.saveLesson;if(typeof original!=='function'||original.__v1817)return;function wrapped(){const editing=!!$('#lessonId')?.value,diff=editing?lessonDiff():[];if(diff.length&&!confirm(`確定儲存以下課程修改？\n\n${diff.join('\n')}`))return;original();if(editing&&!$('#lessonModal')?.classList.contains('show'))setTimeout(showUndoBar,0)}wrapped.__v1817=true;window.saveLesson=wrapped}
+  function confirmLessonDiff(diff){
+    return new Promise(resolve=>{
+      $('#v181LessonDiffConfirm')?.remove();
+      const backdrop=document.createElement('div');
+      backdrop.id='v181LessonDiffConfirm';
+      backdrop.className='modal-backdrop show';
+      // #lessonModal is intentionally elevated to 5000 by the responsive
+      // layout guard.  The nested confirmation must be above that form or it
+      // remains visible to accessibility APIs while every pointer event lands
+      // on the lesson form underneath.
+      backdrop.style.zIndex='5200';
+      backdrop.setAttribute('role','dialog');
+      backdrop.setAttribute('aria-modal','true');
+      backdrop.setAttribute('aria-labelledby','v181LessonDiffConfirmTitle');
+      const modal=document.createElement('div');
+      modal.className='modal';
+      const head=document.createElement('div');
+      head.className='modal-head';
+      const title=document.createElement('h2');
+      title.id='v181LessonDiffConfirmTitle';
+      title.textContent='確認課程修改';
+      head.append(title);
+      const summary=document.createElement('p');
+      summary.textContent='請確認以下內容，確認後才會送往雲端。';
+      const list=document.createElement('div');
+      list.className='change-list';
+      diff.forEach(value=>{const row=document.createElement('div');row.className='change-item';row.textContent=value;list.append(row)});
+      const actions=document.createElement('div');
+      actions.className='row-actions';
+      actions.style.marginTop='18px';
+      const cancel=document.createElement('button');
+      cancel.type='button';cancel.className='btn';cancel.textContent='取消';
+      const approve=document.createElement('button');
+      approve.type='button';approve.className='btn primary';approve.textContent='確認儲存';
+      actions.append(cancel,approve);modal.append(head,summary,list,actions);backdrop.append(modal);document.body.append(backdrop);
+      let settled=false;
+      const finish=value=>{if(settled)return;settled=true;document.removeEventListener('keydown',onKey);backdrop.remove();resolve(value)};
+      const onKey=event=>{if(event.key==='Escape'){event.preventDefault();finish(false)}};
+      cancel.addEventListener('click',()=>finish(false));
+      approve.addEventListener('click',()=>finish(true));
+      backdrop.addEventListener('click',event=>{if(event.target===backdrop)finish(false)});
+      document.addEventListener('keydown',onKey);
+      queueMicrotask(()=>approve.focus());
+    });
+  }
+  function installLessonDiff(){const original=window.saveLesson;if(typeof original!=='function'||original.__v1817)return;async function wrapped(){if(wrapped.inFlight)return;const editing=!!$('#lessonId')?.value,diff=editing?lessonDiff():[];wrapped.inFlight=true;try{if(diff.length&&!await confirmLessonDiff(diff))return;original();if(editing&&!$('#lessonModal')?.classList.contains('show'))setTimeout(showUndoBar,0)}finally{wrapped.inFlight=false}}wrapped.__v1817=true;wrapped.inFlight=false;window.saveLesson=wrapped}
 
   function enhanceLinePreview(){const modal=$('#v181LineBillingPreview');if(!modal||modal.dataset.salutationReady==='1')return;modal.dataset.salutationReady='1';const row=document.createElement('div');row.className='v181-salutation-row';row.innerHTML='<label>家長稱謂<select class="v181-salutation-select"><option>媽咪</option><option>爸爸</option><option>家長</option><option value="custom">自訂</option></select></label><input class="v181-salutation-custom" type="text" placeholder="輸入自訂稱謂" hidden><button type="button" class="btn">儲存家庭稱謂</button><label>營隊季別<select class="v18211-line-season"><option value="summer">夏令營</option><option value="winter">冬令營</option></select></label><small class="v18211-line-season-note">只計所選季別，不會混合冬、夏令營</small>';modal.querySelector('textarea')?.before(row);const select=$('.v181-salutation-select',row),custom=$('.v181-salutation-custom',row),season=$('.v18211-line-season',row);select.addEventListener('change',()=>{custom.hidden=select.value!=='custom';if(!custom.hidden)custom.focus()});season.addEventListener('change',()=>{modal.dataset.campSeason=activeCampBillingSeason(season.value);modal.querySelector('textarea').value=studentLineBillingText(modal.dataset.studentId,modal.dataset.month,modal.dataset.scope,familyInfo(modal.dataset.studentId).ids,modal.dataset.campSeason)});$('button',row).addEventListener('click',()=>{const studentId=modal.dataset.studentId,value=(select.value==='custom'?custom.value:select.value).trim();if(!studentId||!value)return alert('請輸入稱謂');snapshot();familyInfo(studentId).family.forEach(s=>s.lineSalutation=value);saveDB();modal.querySelector('textarea').value=studentLineBillingText(studentId,modal.dataset.month,modal.dataset.scope,familyInfo(studentId).ids,modal.dataset.campSeason||activeCampBillingSeason());toast('家庭稱謂已儲存')});
   }

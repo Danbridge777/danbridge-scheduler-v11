@@ -1,0 +1,66 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from '../js/core/production-scheduler-queue.js';
+import {buildProductionSchedulerTarget,SCHEDULER_OPERATION_RESPONSE_SCHEMA} from '../js/core/production-scheduler-operation.js';
+import {FULL_RECORD_COLLECTIONS} from '../js/core/cloud-full-record-shadow.js';
+import {projectProductionSchedulerDb} from '../js/core/production-role-view-projection.js';
+import {recordDataHash} from '../js/core/cloud-record-data-hash.js';
+const clone=structuredClone;
+const base=()=>({...Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]])),branches:[{id:'art_museum',name:'Test'}],students:[{id:'student-1',name:'Test'}],teachers:[{id:'teacher-1',name:'Test'}]});
+const lesson={id:'queue-test-lesson',studentId:'student-1',teacherId:'teacher-1',teacherIds:['teacher-1'],date:'2026-10-01',start:'20:00',end:'20:30',branchId:'art_museum',status:'未上課'};
+const actor={uid:'scheduler-test-uid',email:'aa0966626336@gmail.com',role:'teacher',active:true,companyId:'danbridge',teacherId:'teacher-aa',canManageSchedule:true};
+const defer=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve}};
+function fixture(db=base()){
+ let server=clone(db),stored=null,ui=null,sequence=0,revision=0,lostOnce=false,gate=null;const calls=[],receipts=new Map(),states=[];
+ const storage={load:async()=>clone(stored),save:async value=>{stored=clone(value)}};
+ const send=async request=>{calls.push(clone(request));const pause=gate;gate=null;if(pause)await pause.promise;let response=receipts.get(request.requestId);if(!response){const result=buildProductionSchedulerTarget(server,request,actor,{nowIso:'2026-09-03T15:00:00Z'});server=result.db;response={schema:SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:request.requestId,state:'committed',sourceHash:recordDataHash(server),sourceRecordRevision:++revision,operationCount:result.events.length*2,schedulerDb:projectProductionSchedulerDb(server)};receipts.set(request.requestId,clone(response))}if(lostOnce){lostOnce=false;throw Error('lost reply')}return clone(response)};
+ const create=()=>createProductionSchedulerQueue({storage,send,release:'20.26.164',createRequestId:()=>`queue-request-${++sequence}`,onApply:db=>{ui=db},onState:value=>states.push(value)});
+ return{create,calls,states,get server(){return clone(server)},get stored(){return clone(stored)},get ui(){return clone(ui)},pause(){gate=defer();return gate},lose(){lostOnce=true}};
+}
+test('新增送出時馬上刪除：保留刪除意圖，先確認新增再刪，不復活',async()=>{
+ const f=fixture(),q=f.create();await q.start({baselineDb:base()});await q.queue({...base(),lessons:[lesson]});const gate=f.pause(),flight=q.flush();await new Promise(r=>setTimeout(r,0));await q.queue(base());gate.resolve();await flight;
+ assert.equal(f.calls.length,2);assert.equal(f.calls[0].changes[0].before,null);assert.equal(f.calls[1].changes[0].after,null);assert.equal(f.server.lessons.length,0);assert.equal(f.ui.lessons.length,0);assert.equal(q.diagnostics().dirty,false);
+});
+test('拖移 A→B→馬上 A 不被舊快照或先前回條吞掉',async()=>{
+ const db={...base(),lessons:[lesson]},f=fixture(db),q=f.create();await q.start({baselineDb:db});await q.queue({...db,lessons:[{...lesson,date:'2026-10-02'}]});const gate=f.pause(),flight=q.flush();await new Promise(r=>setTimeout(r,0));await q.queue(db);assert.equal(await q.acceptSnapshot(db,0),false);gate.resolve();await flight;
+ assert.equal(f.calls.length,2);assert.equal(f.server.lessons[0].date,lesson.date);assert.equal(f.ui.lessons[0].date,lesson.date);assert.equal(f.calls[1].changes[0].before.date,'2026-10-02');
+});
+test('新增→馬上移動→馬上刪除，最後意圖可合併但不倒序',async()=>{
+ const f=fixture(),q=f.create();await q.start({baselineDb:base()});await q.queue({...base(),lessons:[lesson]});const gate=f.pause(),flight=q.flush();await new Promise(r=>setTimeout(r,0));await q.queue({...base(),lessons:[{...lesson,date:'2026-10-02'}]});await q.queue(base());gate.resolve();await flight;assert.equal(f.server.lessons.length,0);assert.equal(f.calls.length,2);
+});
+test('後端成功但回條斷線，重開後沿用同一 requestId，不重複新增',async()=>{
+ const f=fixture(),first=f.create();await first.start({baselineDb:base()});await first.queue({...base(),lessons:[lesson]});f.lose();await assert.rejects(first.flush(),/lost reply/);assert.ok(f.stored.pending);first.stop();
+ const resumed=f.create();assert.equal((await resumed.start({baselineDb:base()})).restored,true);await resumed.flush();assert.equal(f.calls.length,2);assert.equal(f.calls[0].requestId,f.calls[1].requestId);assert.equal(f.server.lessons.length,1);assert.equal(f.server.changes.length,1);assert.equal(resumed.diagnostics().pending,false);
+});
+test('分批超過 30 筆時，未送出意圖保留，全部確認前不能顯示完成',async()=>{
+ const f=fixture(),q=f.create();await q.start({baselineDb:base()});const lessons=Array.from({length:31},(_,i)=>({...lesson,id:`many-${i}`,date:`2026-10-${String(i+1).padStart(2,'0')}`}));await q.queue({...base(),lessons});await q.flush();assert.equal(f.calls.length,2);assert.equal(f.calls[0].changes.length,30);assert.equal(f.calls[1].changes.length,1);assert.equal(f.server.lessons.length,31);assert.equal(f.states.filter(row=>row.state==='complete').length,1);
+});
+test('日誌未存妥或後端回條錯誤，不能宣告成功或清除待送資料',async()=>{
+ const broken=createProductionSchedulerQueue({storage:{load:async()=>null,save:async()=>{throw Error('disk full')}},send:()=>{throw Error('must not send')},createRequestId:()=>'',release:'20.26.164'});await assert.rejects(broken.start({baselineDb:base()}),/disk full/);
+ let saved;const q=createProductionSchedulerQueue({storage:{load:async()=>null,save:async v=>saved=clone(v)},send:async()=>({schema:SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:'wrong'}),createRequestId:()=>`invalid-request-123`,release:'20.26.164'});await q.start({baselineDb:base()});await q.queue({...base(),lessons:[lesson]});await assert.rejects(q.flush(),/回條驗證失敗/);assert.ok(saved.pending);assert.equal(q.diagnostics().pending,true);
+});
+test('同步收尾套用遠端快照時又新增操作，必須送妥才宣告完成',async()=>{
+ let stored=null,serial=0,revision=1,persistGate=null;const calls=[],states=[];
+ const storage={load:async()=>stored,save:async value=>{stored=clone(value);const gate=persistGate;persistGate=null;if(gate)await gate.promise}};
+ const sendGate=defer();let sends=0;
+ const q=createProductionSchedulerQueue({storage,release:'20.26.164',createRequestId:()=>`tail-race-request-${++serial}`,onState:event=>states.push(event.state),send:async request=>{
+  calls.push(clone(request));if(++sends===1)await sendGate.promise;
+  const next={...base(),lessons:[request.changes[0].after]};return{schema:SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:request.requestId,state:'committed',sourceHash:recordDataHash(next),sourceRecordRevision:++revision,operationCount:2,schedulerDb:projectProductionSchedulerDb(next)};
+ }});
+ await q.start({baselineDb:base(),sourceRecordRevision:1});await q.queue({...base(),lessons:[lesson]});const flight=q.flush();await new Promise(r=>setTimeout(r,0));
+ const newer={...base(),lessons:[{...lesson,note:'遠端已確認'}]};await q.acceptSnapshot(newer,3);
+ // Pause precisely the persisted acceptance of the buffered version.
+ const tailGate=defer();const originalSave=storage.save;storage.save=async value=>{if(value.sourceRecordRevision===3&&!value.pending){persistGate=tailGate;storage.save=originalSave}await originalSave(value)};
+ let flightError;flight.catch(error=>{flightError=error});sendGate.resolve();for(let poll=0;stored.sourceRecordRevision!==3&&poll<100;poll++){if(flightError)throw flightError;await new Promise(r=>setTimeout(r,1))}assert.equal(stored.sourceRecordRevision,3);
+ const desired={...base(),lessons:[{...newer.lessons[0],date:'2026-10-02'}]};const queued=q.queue(desired);revision=3;tailGate.resolve();await queued;await flight;
+ assert.equal(calls.length,2);assert.equal(calls[1].changes[0].after.date,'2026-10-02');assert.equal(q.diagnostics().dirty,false);assert.equal(states.filter(s=>s==='complete').length,1);
+});
+test('複製分頁不能同時接管同一日誌，原分頁釋放後才可恢復',async()=>{
+ const held=new Set();const locks={request:async(name,options,work)=>{if(held.has(name))return work(null);held.add(name);try{return await work({name})}finally{held.delete(name)}}};
+ const release=await acquireProductionSchedulerLease(locks,'account-tab');await assert.rejects(acquireProductionSchedulerLease(locks,'account-tab'),/另一分頁/);
+ const other=await acquireProductionSchedulerLease(locks,'another-tab');await other();await release();const reopened=await acquireProductionSchedulerLease(locks,'account-tab');await reopened();assert.equal(held.size,0);
+});
+test('登出後的在途回條只完成日誌，不再覆寫畫面或宣告同步完成',async()=>{
+ const f=fixture(),q=f.create();await q.start({baselineDb:base()});await q.queue({...base(),lessons:[lesson]});const gate=f.pause(),flight=q.flush();await new Promise(r=>setTimeout(r,0));let stopped=false;const stop=q.stop().then(()=>stopped=true);assert.equal(stopped,false);gate.resolve();await flight;await stop;
+ assert.equal(f.ui.lessons.length,0);assert.equal(f.stored.baseline.lessons.length,1);assert.equal(f.states.filter(s=>s.state==='complete').length,0);
+});

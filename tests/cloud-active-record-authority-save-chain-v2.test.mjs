@@ -29,9 +29,12 @@ import {
 import {
  ACTIVE_RECORD_AUTHORITY_CHAIN_V2_ADMIN_BINDER_SCOPE,
  ACTIVE_RECORD_AUTHORITY_CHAIN_V2_ADMIN_BLOCKER,
+ activeRecordAuthorityRequestSelectorKeys,
  createFirebaseActiveRecordAuthoritySaveChainV2Adapter,
  createFirebaseActiveRecordAuthoritySaveChainV2AdminBinder
 } from '../js/core/firebase-active-record-authority-save-chain-v2-adapter.js';
+
+test('request selector keys在單筆與多筆都精確補齊operationId供交易後fresh readback',()=>{assert.deepEqual(activeRecordAuthorityRequestSelectorKeys('save-selector-12345',[{collection:'lessons',recordId:'lesson-a-12345'}]),[{collection:'lessons',recordId:'lesson-a-12345',operationId:'save-selector-12345:01'}]);assert.deepEqual(activeRecordAuthorityRequestSelectorKeys('save-selector-12345',[{collection:'lessons',recordId:'lesson-a-12345'},{collection:'lessons',recordId:'lesson-b-12345'},{collection:'lessons',recordId:'lesson-c-12345'}]),[{collection:'lessons',recordId:'lesson-a-12345',operationId:'save-selector-12345:01'},{collection:'lessons',recordId:'lesson-b-12345',operationId:'save-selector-12345:02'},{collection:'lessons',recordId:'lesson-c-12345',operationId:'save-selector-12345:03'}]);assert.throws(()=>activeRecordAuthorityRequestSelectorKeys('short',[{collection:'lessons',recordId:'lesson-a-12345'}]),/saveId invalid/);assert.throws(()=>activeRecordAuthorityRequestSelectorKeys('save-selector-12345',[{collection:'changes',recordId:'seq_00000001_deadbeef'}]),/dedicated immutable audit\/append planner/)})
 
 const ZERO='0'.repeat(64),hex=value=>String(value).repeat(64),recordId='lesson-chain-v2-12345',activationEpoch='activation-chain-v2-12345';
 const binding={sourceV1ActivationEpoch:'source-epoch-v1-12345',sourceFreezeId:'source-freeze-v1-12345',activationEpoch,seedId:'v2-genesis:'+hex('1'),identityIndexRootHash:hex('2'),identityIndexRootAuditHash:hex('3'),identityIndexRootPersistedAt:'2026-08-30T10:00:00.000000001Z',authorityRootHash:hex('4'),genesisAuthorityHash:hex('5'),genesisAuthorityAuditHash:hex('6'),reservationAuthorityHash:hex('7'),reservationAuthorityAuditHash:hex('8'),sourceStructuralHeadHash:hex('9'),sourceActiveControlHash:hex('a'),sourceActivationReceiptHash:hex('b'),sourceTransitionAuditHash:hex('c'),sourceTransitionPersistedAt:'2026-08-30T10:01:00.000000001Z'};

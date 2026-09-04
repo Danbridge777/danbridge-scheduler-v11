@@ -4,10 +4,16 @@ import fs from 'node:fs';
 
 const source=fs.readFileSync(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');
 const prewriteVerifier=fs.readFileSync(new URL('../js/core/staging-v2-prewrite-backup-verifier.js',import.meta.url),'utf8');
+const chainAdapterSource=fs.readFileSync(new URL('../js/core/firebase-active-record-authority-save-chain-v2-adapter.js',import.meta.url),'utf8');
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const camps=fs.readFileSync(new URL('../js/modules/camps/camp-management.js',import.meta.url),'utf8');
 const block=(from,to)=>source.slice(source.indexOf(from),source.indexOf(to,source.indexOf(from)));
 const sourceBlock=(text,from,to)=>text.slice(text.indexOf(from),text.indexOf(to,text.indexOf(from)));
+
+test('staging auth uses the registered Firebase OAuth redirect origin',()=>{
+ assert.match(source,/staging:\{[^\n]*authDomain:"danbridge-d8877-staging\.firebaseapp\.com"/);
+ assert.doesNotMatch(source,/staging:\{[^\n]*authDomain:"danbridge-d8877-staging\.web\.app"/);
+});
 
 test('browser Firebase SDK鎖定12.17.1，V2 candidate factory只允許staging明確呼叫',()=>{
  const imports=[...source.matchAll(/https:\/\/www\.gstatic\.com\/firebasejs\/([^/]+)\/firebase-(?:app|auth|app-check|firestore)\.js/g)].map(match=>match[1]);
@@ -58,8 +64,9 @@ test('同帳號雙分頁登入權限初始化會串行化並使用有限權杖�
  assert.match(source,/const profile=await loadSignedInProfile\(user\)/);
 });
 
-test('頁面明確匯入 Owner 日常逐筆、角色發布、候選封存與原子啟用 adapter',()=>{
- for(const name of ['createActiveRecordPageController','createFirebaseActiveRecordStreamAdapter','createFirebaseActiveRecordOperationAdapter','createFirebaseRecordSyncConflictBackupAdapter','createFirebaseRoleRecordViewAdapter','createFirebaseRoleRecordStreamAdapter','createFirebaseRecordSyncCandidateAdapter','createFirebaseRecordSyncActivationAdapter'])assert.match(source,new RegExp(`import \\{${name}\\}`));
+test('頁面明確匯入 V2 Owner 日常逐筆、角色發布、候選封存與原子啟用 adapter',()=>{
+ for(const name of ['createActiveRecordPageController','createFirebaseActiveRecordStreamAdapter','createFirebaseRoleRecordViewAdapter','createFirebaseRoleRecordStreamAdapter','createFirebaseRecordSyncCandidateAdapter','createFirebaseRecordSyncActivationAdapter'])assert.match(source,new RegExp(`import \\{${name}\\}`));
+ assert.doesNotMatch(source,/createFirebaseActiveRecordOperationAdapter|createFirebaseRecordSyncConflictBackupAdapter/);
 });
 
 test('staging 候選依序核對備份、逐筆續傳、封存與第二次讀回，production 無入口',()=>{
@@ -206,9 +213,10 @@ test('營隊 render 不會建立或修改 backing student，只有明確 save/cr
  assert.match(create,/if\(!cls&&create\).+ensureCampBackingStudent\(cls,season\)/s);
 });
 
-test('永久 fence 存在後只走 V2；缺少 fence 才保留 legacy，任何 V2 錯誤都 fail closed',()=>{
+test('staging 僅允許永久 fence 後走 V2；缺少 fence 或任何 V2 錯誤都 fail closed',()=>{
  const runtime=block('async function startOwnerStagingV2Runtime','async function flushActiveOwnerState');
- assert.match(runtime,/if\(!fenceSnapshot\.exists\(\)\)return startOwnerLegacyActiveRecordRuntime\(\)/);
+ assert.doesNotMatch(runtime,/startOwnerLegacyActiveRecordRuntime\(\)/);
+ assert.match(runtime,/staging V2 permanent fence missing; legacy fallback forbidden/);
  assert.match(runtime,/assertStagingV2PermanentFence/);
  assert.match(runtime,/assertStagingV2RuntimeHead/);
  assert.match(runtime,/activeOwnerV2OperationSender=stagingV2BrowserOperationSender\(\)/);
@@ -226,11 +234,12 @@ test('角色逐筆發布重用現有 aa、老師、校區篩選且每個 scope �
  assert.match(publish,/adapter\.synchronize\(targetDb/);
 });
 
-test('V2 Hn 權威主資料完整 ready 才自動補送角色逐筆檢視，H0 不補送',()=>{
+test('V2 Hn 角色逐筆檢視由同一個受保護後端管理，瀏覽器不再補送',()=>{
  const bootstrap=block('function queueInitialActiveRoleRecordViews','async function publishScopedViews');
  assert.match(bootstrap,/DANBRIDGE_ENVIRONMENT!=='staging'/);
  assert.match(bootstrap,/cloudRole!=='owner'/);
  assert.match(bootstrap,/activeRecordMode!=='active'/);
+	 assert.match(bootstrap,/activeOwnerV2OperationSender.*state:'server-managed'/s);
 	 assert.match(bootstrap,/activeRoleBootstrapEpoch===activationEpoch/);
 	 assert.match(bootstrap,/!activeRoleBootstrapSourceDb/);
 	 assert.match(bootstrap,/deepCopy\(activeRoleBootstrapSourceDb\)/);
@@ -239,7 +248,8 @@ test('V2 Hn 權威主資料完整 ready 才自動補送角色逐筆檢視，H0 �
 	 assert.match(bootstrap,/setTimeout\(queueInitialActiveRoleRecordViews/);
 	 const ownerRuntime=block('async function startOwnerStagingV2Runtime','async function flushActiveOwnerState');
 	 assert.match(source,/(?:async )?function acceptActiveOwnerSnapshot\(snapshot\)\{\s*[^\n]*activeRoleBootstrapSourceDb=deepCopy\(snapshot\.db\)/);
-	 assert.match(ownerRuntime,/if\(activeOwnerV2HeadState==='hn'\)queueInitialActiveRoleRecordViews\(\)/);
+	 assert.match(ownerRuntime,/activeOwnerV2HeadState==='hn'.*state:'server-managed'/s);
+	 assert.doesNotMatch(ownerRuntime,/queueInitialActiveRoleRecordViews\(\)/);
 	 assert.match(ownerRuntime,/activeRoleBootstrapSourceDb=deepCopy\(rebuilt\.db\)/);
 	 assert.doesNotMatch(ownerRuntime,/activeOwnerV2HeadState==='h0'\)queueInitialActiveRoleRecordViews\(\)/);
 	});
@@ -260,27 +270,32 @@ test('App Check 與 H1 入口只存在 staging，limited-use token 送入固定 
  assert.match(h1,/result\?\.state!=='complete'/);
 });
 
-test('V2 寫入前 fresh-read 不可變 raw backup、Genesis、fence 與雙 head；legacy 才建立新 daily backup',()=>{
+test('V2 不可變備份與雙 head 驗證在受保護後端執行；瀏覽器不再重複讀取證據而阻塞操作',()=>{
  const verifier=block('async function confirmStagingV2DurablePrewriteBackup','async function startOwnerStagingV2Runtime');
- for(const required of ['getDocFromServer','stagingRecordSyncV1PermanentFences','stagingRecordSyncV1FrozenSourceProofs','stagingRecordSyncV1RawCutoverBackups','stagingRecordSyncV2Genesis','stagingRecordSyncV2GenesisAuthorities','headBefore','headAfter','verifyStagingV2PrewriteBackup'])assert.match(verifier,new RegExp(required));
- for(const forbidden of ['setDoc(','deleteDoc(','runTransaction('])assert.equal(verifier.includes(forbidden),false,forbidden);
+ for(const required of ['server-enforced','activeOwnerV2Fence.targetV2Epoch!==activeOwnerControllerEpoch','activeOwnerV2HeadState!==\'hn\''])assert.match(verifier,new RegExp(required));
+ for(const forbidden of ['getDocFromServer','stagingRecordSyncV1FrozenSourceProofs','stagingRecordSyncV1RawCutoverBackups','stagingRecordSyncV2Genesis','verifyStagingV2PrewriteBackup'])assert.equal(verifier.includes(forbidden),false,forbidden);
+ for(const required of ['verifyStagingV2PrewriteBackup','stagingRecordSyncV1FrozenSourceProofs','stagingRecordSyncV1RawCutoverBackups','stagingRecordSyncV2Genesis','stagingRecordSyncV2GenesisAuthorities','headBefore','headAfter','verifyDurablePrewrite'])assert.match(chainAdapterSource,new RegExp(required));
+ assert.match(chainAdapterSource,/await verifyDurablePrewrite\(fence,head\)/);
  for(const required of ['assertRecordSyncV1PermanentFenceV2Integrity','assertRecordSyncV1FrozenSourceProofIntegrity','assertRecordSyncV1RawCutoverBackupCompactMetadataLink','assertRecordSyncV2GenesisAuthorityIntegrity','active head changed during prewrite backup verification'])assert.match(prewriteVerifier,new RegExp(required));
  for(const forbidden of ['setDoc','deleteDoc','runTransaction','firebase-admin','production'])assert.equal(prewriteVerifier.includes(forbidden),false,forbidden);
 });
 
-	test('staging active 的 publishScopedViews 不可繞過 active role publish queue',()=>{
+	test('staging active 的角色檢視由 authority Function 同步提交，瀏覽器不直接寫',()=>{
 	 const legacyScoped=block('async function publishScopedViews','async function publishRoleViewsWithRetry');
-	 assert.match(legacyScoped,/DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy'.*getActiveRoleRecordPublishQueue\(\)\.enqueue\(\{kind:'confirmed'/s);
+	 assert.match(legacyScoped,/DANBRIDGE_ENVIRONMENT==='staging'&&activeRecordMode!=='legacy'.*state:'server-managed'/s);
+	 assert.doesNotMatch(legacyScoped,/activeRecordMode!=='legacy'.*getActiveRoleRecordPublishQueue\(\)\.enqueue/s);
 	 assert.doesNotMatch(legacyScoped,/publishActiveRoleRecordViews\(sourceDb\)/);
 	 const retryFlow=block('async function publishRoleViewsWithRetry','async function migrateLegacyLessonCloudDocuments');
-	 assert.match(retryFlow,/publishScopedViews\(roleSource\)/);
+	 assert.match(retryFlow,/activeOwnerV2OperationSender.*state:'server-managed'/s);
 	 assert.doesNotMatch(retryFlow,/publishActiveRoleRecordViews\(/);
 	});
 
-test('V2 H1/Hn主資料讀回後必須同步角色逐筆檢視，H0仍保持零角色寫入',()=>{
+test('V2 H1/Hn主資料讀回後只接受後端已完成的角色與通知交付',()=>{
  const controller=block('function ensureActiveOwnerPageController','async function acceptActiveOwnerSnapshot');
  assert.match(controller,/activeRoleBootstrapSourceDb=deepCopy\(confirmedDb\)/);
- assert.match(controller,/if\(activeOwnerV2HeadState==='hn'\)await getActiveRoleRecordPublishQueue\(\)\.enqueue\(\{kind:'confirmed',sourceDb:deepCopy\(confirmedDb\)\}\)/);
+	 assert.match(controller,/activeRoleRecordProgress='server-verified'/);
+	 assert.match(controller,/scheduleNotificationDelivery='server-verified'/);
+	 assert.doesNotMatch(controller,/activeOwnerV2OperationSender\?async confirmedDb=>[^}]+getActiveRoleRecordPublishQueue/s);
 });
 
 test('stopActiveRecordRuntimes 會 cancel pending queue 任務並保留 queue 實體，避免清空後建立新 queue',()=>{

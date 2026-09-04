@@ -5,7 +5,7 @@ const source=new URL('../firebase/firestore.rules',import.meta.url);
 const target=new URL('../firebase/firestore.rules.deploy',import.meta.url);
 const phaseArgument=process.argv.find(value=>value.startsWith('--phase='));
 const phase=phaseArgument?.slice('--phase='.length)??'all';
-const allowedPhases=new Set(['all','pause','proof','genesis','reservation']);
+const allowedPhases=new Set(['all','pause','proof','genesis','reservation','runtime']);
 if(!allowedPhases.has(phase))throw new Error(`FIRESTORE_RULES_PHASE_BLOCKED:${phase}`);
 const original=readFileSync(source,'utf8').replace(/\r\n/g,'\n');
 let deploy='';
@@ -96,7 +96,7 @@ const phasePaths={
     '/stagingRecordSyncV2DeploymentReceipts/',
   ],
 };
-if(phase!=='all'){
+if(phase!=='all'&&phase!=='runtime'){
   const phaseOrder=['pause','proof','genesis','reservation'];
   const selected=new Set(phaseOrder.slice(0,phaseOrder.indexOf(phase)+1).flatMap(name=>phasePaths[name]));
   const phasedPrefixes=new Set(Object.values(phasePaths).flat());
@@ -176,6 +176,63 @@ if(phase!=='all'){
     .map(match=>({start:match.index,end:match.index+match[0].length}))
     .filter(allow=>!protectedSpans.some(span=>span.start<allow.start&&allow.end<span.end));
   for(const allow of writeAllows.sort((a,b)=>b.start-a.start))deploy=deploy.slice(0,allow.start)+deploy.slice(allow.end);
+}
+// The atomic V2 activation artifacts remain immutable in Firestore, but their
+// one-time browser maintenance rules must not ship forever.  The live runtime
+// surface keeps only authentication/access, current V2 authority reads,
+// role-record projections, operational company data, backups and explicit
+// fail-closed namespace guards.  Removing the retired migration match graphs
+// also keeps the compiled ruleset below Firebase's 250 KiB activation limit.
+if(phase==='runtime'){
+  const retiredRuntimePrefixes=[
+    ...Object.values(phasePaths).flat().filter(prefix=>prefix!=='/stagingActiveRecordV2Heads/'),
+    '/stagingRecordShadows/',
+    '/stagingRecordSyncCandidateControls/',
+    '/stagingFullRecordShadows/',
+    '/stagingRecordSyncRoleEvidence/',
+    '/stagingRecordSyncActivationManifests/',
+    '/stagingRecordSyncControls/',
+    '/stagingRecordSyncV1WriterCurrents/',
+    '/stagingRecordSyncSafetyControls/',
+    '/stagingRecordSyncSafetyEvents/',
+    '/stagingRecordSyncRecoveryReceipts/',
+    '/stagingRecordSyncOperationReceipts/',
+    '/stagingRecordSyncConflictBackups/',
+    '/stagingLiveExecutionManifests/',
+    '/stagingLiveRecords/',
+    '/stagingLiveOperationReceipts/',
+    '/stagingLiveRecordControls/',
+    '/productionFullRecordShadows/',
+    '/stagingRoleViewCandidateManifests/',
+    '/stagingRoleViewVerificationReceipts/',
+    '/stagingRoleViewCandidates/',
+    '/productionRoleViewCandidates/',
+    '/stagingRecordCandidateManifests/',
+    '/stagingRecordActivationControls/',
+    '/stagingRecordShadowRuns/',
+    '/stagingRecordShadowControls/',
+    '/stagingMigrationBackups/',
+    '/stagingMigrationRestoreDrills/',
+    '/stagingRecordSyncV2TakeoverCandidateControls/',
+  ];
+  const removals=[];
+  for(const token of deploy.matchAll(/\bmatch\s*\//g)){
+    const pathStart=token.index+token[0].lastIndexOf('/');
+    let variableDepth=0;
+    let bodyStart=-1;
+    for(let i=pathStart;i<deploy.length;i+=1){
+      if(deploy[i]==='{'&&deploy[i-1]==='/'){variableDepth=1;continue;}
+      if(variableDepth&&deploy[i]==='}'){variableDepth=0;continue;}
+      if(deploy[i]==='{'&&!variableDepth){bodyStart=i;break;}
+    }
+    if(bodyStart<0)throw new Error('FIRESTORE_RULES_RUNTIME_MATCH_BODY_NOT_FOUND');
+    const path=deploy.slice(pathStart,bodyStart);
+    if(retiredRuntimePrefixes.some(prefix=>path.startsWith(prefix))){
+      removals.push({start:token.index,end:balancedBlockEnd(deploy,bodyStart,path)});
+    }
+  }
+  const outer=removals.filter((candidate,index)=>!removals.some((other,otherIndex)=>otherIndex!==index&&other.start<candidate.start&&candidate.end<=other.end));
+  for(const removal of outer.sort((a,b)=>b.start-a.start))deploy=deploy.slice(0,removal.start)+deploy.slice(removal.end);
 }
 // Retain only functions reachable from the selected match rules. This removes
 // whole inactive phase validator graphs rather than relying on a fragile list.
@@ -260,7 +317,7 @@ const structuralRemovals=[...removable,...emptyMatchSpans].sort((a,b)=>b.start-a
 for(const removal of structuralRemovals){
   deploy=deploy.slice(0,removal.start)+deploy.slice(removal.end);
 }
-const localDeclarations=phase==='all'?[...deploy.matchAll(/\bfunction\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*\{/g)]:[];
+const localDeclarations=['all','runtime'].includes(phase)?[...deploy.matchAll(/\bfunction\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*\{/g)]:[];
 for(const declaration of [...localDeclarations].reverse()){
   const start=declaration.index;
   const bodyStart=start+declaration[0].lastIndexOf('{');
@@ -326,7 +383,7 @@ if(new Set(functionNames).size!==functionNames.length){
   throw new Error('FIRESTORE_RULES_DUPLICATE_FUNCTION_NAME_BLOCKED');
 }
 const builtins=new Set(['debug','exists','existsAfter','get','getAfter','latlng','path','timestamp']);
-const safeFunctionNames=phase==='all'?functionNames.filter(name=>{
+const safeFunctionNames=['all','runtime'].includes(phase)?functionNames.filter(name=>{
   if(builtins.has(name))return false;
   const matches=[...deploy.matchAll(new RegExp(`\\b${name}\\b`,'g'))];
   return matches.every(match=>{
@@ -364,6 +421,24 @@ for(let i=0;i<deploy.length;){
   i+=1;
 }
 deploy=mangled;
+if(phase==='runtime'){
+  for(const path of [
+    'match/stagingActiveRecordV2Heads/',
+    'match/stagingRecordSyncV2ActiveControls/',
+    'match/stagingActiveRecordV2Records/',
+    'match/stagingActiveRecordV2AuditAppends/',
+    'match/stagingRoleRecordViewControls/',
+    'match/stagingRoleRecordViews/',
+    'match/companies/',
+  ])if(!deploy.includes(path))throw new Error(`FIRESTORE_RULES_RUNTIME_REQUIRED_PATH_MISSING:${path}`);
+  for(const path of [
+    'match/stagingRecordShadows/',
+    'match/stagingLiveRecords/',
+    'match/stagingMigrationBackups/',
+    'match/stagingRecordSyncV2Genesis/',
+    'match/stagingRecordSyncV2Reservations/',
+  ])if(deploy.includes(path))throw new Error(`FIRESTORE_RULES_RUNTIME_RETIRED_PATH_PRESENT:${path}`);
+}
 const bytes=Buffer.byteLength(deploy,'utf8');
 if(bytes>256*1024)throw new Error(`FIRESTORE_RULES_DEPLOY_SIZE_BLOCKED:${bytes}`);
 writeFileSync(target,deploy,'utf8');

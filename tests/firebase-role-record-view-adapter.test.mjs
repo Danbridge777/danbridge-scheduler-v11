@@ -42,4 +42,31 @@ test('每一輪完整角色讀回會並行取得 16 集合，避免逐集合網�
  assert.equal(maxActive,FULL_RECORD_COLLECTIONS.length);
 });
 
+test('後端單次讀回模式仍先核對全部文件再發布控制，且不重複查詢16集合',async()=>{
+ const network=memory(),originalRead=network.getCollectionDocuments;let calls=0;
+ network.getCollectionDocuments=async path=>{calls++;return originalRead(path)};
+ const db=empty();db.lessons=[{id:'lesson-1'}];const result=await createFirebaseRoleRecordViewAdapter({environment:'staging',role:'owner',actor:{uid:'owner-1',email:'owner@example.com'},...network,singleReadback:true}).synchronize(db,options(db));
+ assert.equal(result.verified,true);
+ assert.equal(result.controlWrite,'published');
+ assert.equal(calls,FULL_RECORD_COLLECTIONS.length*2);
+});
+
+test('真實 Admin Firestore 交易快照的 exists 布林值與 data() 可正確讀取',async()=>{
+ const network=memory(),originalBatch=network.runBatchTransaction,originalTransaction=network.runTransaction,wrap=callback=>transaction=>callback({...transaction,get:async path=>{const snapshot=await transaction.get(path);return{exists:snapshot.exists,data:()=>clone(snapshot.data)}}});network.runBatchTransaction=callback=>originalBatch(wrap(callback));network.runTransaction=callback=>originalTransaction(wrap(callback));
+ const db=empty();db.lessons=[{id:'lesson-1',room:'A'}];const first=await adapter(network).synchronize(db,options(db));assert.equal(first.verified,true);
+ const next=clone(db);next.lessons[0].room='B';const updated=await adapter(network).synchronize(next,options(next,{publishId:'publish-role-admin-snapshot',publishedAt:'2026-08-15T02:07:00+08:00'}));assert.equal(updated.writes,1);assert.equal(updated.verified,true);
+});
+
+test('已驗證基準可只用單筆交易完成新增、更新、刪除與復原，不重讀 16 集合',async()=>{
+ const network=memory(),originalRead=network.getCollectionDocuments;let collectionReads=0;network.getCollectionDocuments=async path=>{collectionReads++;return originalRead(path)};let previous=empty();previous.lessons=[{id:'lesson-1',room:'A'}];await adapter(network).synchronize(previous,options(previous));collectionReads=0;
+ const updated=clone(previous);updated.lessons[0].room='B';updated.lessons.push({id:'lesson-2',room:'C'});const first=await adapter(network).synchronizeIncremental(previous,updated,options(updated,{previousSourceRecordHash:recordDataHash(previous),publishId:'publish-incremental-12345',publishedAt:'2026-08-15T02:08:00+08:00'}));assert.equal(first.verified,true);assert.equal(first.incremental,true);assert.equal(first.writes,2);assert.equal(collectionReads,0);assert.equal(first.control.activeCount,2);
+ const removed=clone(updated);removed.lessons=removed.lessons.filter(row=>row.id!=='lesson-1');const second=await adapter(network).synchronizeIncremental(updated,removed,options(removed,{previousSourceRecordHash:recordDataHash(updated),publishId:'publish-incremental-12346',publishedAt:'2026-08-15T02:09:00+08:00'}));assert.equal(second.writes,1);assert.equal(second.control.activeCount,1);assert.equal(second.control.tombstoneCount,1);
+ const revived=clone(removed);revived.lessons.push({id:'lesson-1',room:'D'});const third=await adapter(network).synchronizeIncremental(removed,revived,options(revived,{previousSourceRecordHash:recordDataHash(removed),publishId:'publish-incremental-12347',publishedAt:'2026-08-15T02:10:00+08:00'}));assert.equal(third.writes,1);assert.equal(third.control.activeCount,2);assert.equal(third.control.tombstoneCount,0);const lesson=[...network.store.values()].find(value=>value?.collection==='lessons'&&value?.recordId==='lesson-1');assert.equal(lesson.revision,4);assert.equal(lesson.deleted,false);assert.equal(lesson.record.room,'D');
+});
+
+test('增量角色檢視允許已驗證但未投影的 audit append 推進來源 hash，仍須精確銜接投影內容',async()=>{
+ const network=memory(),previous=empty();previous.lessons=[{id:'lesson-1',room:'A'}];await adapter(network).synchronize(previous,options(previous));const next=clone(previous);next.lessons[0].room='B';const result=await adapter(network).synchronizeIncremental(previous,next,options(next,{previousSourceRecordHash:'record-v1:'+'f'.repeat(64),publishId:'publish-incremental-99999',publishedAt:'2026-08-15T02:11:00+08:00'}));assert.equal(result.incremental,true);assert.equal(result.control.viewHash,recordDataHash(next));
+ const stale=clone(previous);stale.lessons[0].room='stale';const latest=clone(next);latest.lessons[0].room='C';await assert.rejects(()=>adapter(network).synchronizeIncremental(stale,latest,options(latest,{previousSourceRecordHash:recordDataHash(stale),publishId:'publish-incremental-stale',publishedAt:'2026-08-15T02:12:00+08:00'})),/投影基準已改變/);const control=[...network.store.values()].find(value=>value?.schema==='danbridge-role-record-view-control-v1');assert.equal(control.viewHash,recordDataHash(next));
+});
+
 test('production、非 Owner 與不完整注入一律拒絕',async()=>{const network=memory(),db=empty();await assert.rejects(()=>createFirebaseRoleRecordViewAdapter({environment:'production',role:'owner',actor:{uid:'x',email:'x@example.com'},...network}).synchronize(db,options(db)),/staging Owner/);await assert.rejects(()=>createFirebaseRoleRecordViewAdapter({environment:'staging',role:'teacher',actor:{uid:'x',email:'x@example.com'},...network}).synchronize(db,options(db)),/staging Owner/);assert.throws(()=>createFirebaseRoleRecordViewAdapter({}),/注入介面/)});

@@ -23,10 +23,23 @@ export async function enqueueOperationPlan(journal,plan){
 
 export async function runOperationWorker({journal,send,recoverInterrupted=true,maxOperations=1000,onProgress=()=>{},classifyError=classifyOperationError}={}){
  if(!journal||typeof journal.claimNext!=='function'||typeof journal.confirm!=='function'||typeof journal.fail!=='function'||typeof journal.counts!=='function'||typeof journal.list!=='function'||typeof journal.recoverInterrupted!=='function')throw new Error('操作工作程序缺少日誌介面');
- if(typeof send!=='function'||typeof onProgress!=='function'||typeof classifyError!=='function'||!Number.isSafeInteger(maxOperations)||maxOperations<1)throw new Error('操作工作程序設定無效');
+ if(typeof send!=='function'||(send.batch!==undefined&&typeof send.batch!=='function')||typeof onProgress!=='function'||typeof classifyError!=='function'||!Number.isSafeInteger(maxOperations)||maxOperations<1)throw new Error('操作工作程序設定無效');
  const notify=async payload=>{try{await onProgress(payload)}catch{}};
  const recovery=recoverInterrupted?await journal.recoverInterrupted():{recovered:0};let processed=0;
  while(processed<maxOperations){
+  if(typeof send.batch==='function'&&typeof journal.claimNextMany==='function'&&typeof journal.confirmMany==='function'&&typeof journal.failMany==='function'&&maxOperations-processed>1){
+   const entries=await journal.claimNextMany({causal:true,max:Math.min(8,maxOperations-processed)});
+   if(!entries.length)break;
+   if(entries.length>1){
+    try{
+     const operations=entries.map(entry=>entry.operation),batchReceipt=await send.batch(operations);
+     if(!batchReceipt||!['batch','duplicate-batch'].includes(batchReceipt.kind)||batchReceipt.operationCount!==operations.length||batchReceipt.targetHash!==operations.at(-1).targetHash||batchReceipt.write!==(batchReceipt.kind==='batch'))throw new Error('批次操作雲端回應格式無效');
+     const receipts=operations.map(operation=>({kind:batchReceipt.kind==='duplicate-batch'?'duplicate':(operation.type==='delete'?'tombstone':operation.type),write:batchReceipt.kind==='batch',revision:operation.nextRevision}));receipts.forEach((receipt,index)=>validateReceipt(operations[index],receipt));
+     await journal.confirmMany(entries.map((entry,index)=>({operationId:entry.operationId,receipt:receipts[index]})));processed+=entries.length;await notify({kind:'confirmed-batch',entries,batchReceipt,processed});continue;
+    }catch(error){const policy=classifyError(error);await journal.failMany(entries.map(entry=>entry.operationId),error,policy);await notify({kind:policy.retryable?'failed':'quarantined',entries,error,processed});break}
+   }
+   const entry=entries[0];try{const receipt=validateReceipt(entry.operation,await send(entry.operation));await journal.confirm(entry.operationId,receipt);processed++;await notify({kind:'confirmed',entry,receipt,processed})}catch(error){const policy=classifyError(error);await journal.fail(entry.operationId,error,policy);await notify({kind:policy.retryable?'failed':'quarantined',entry,error,processed});break}continue;
+  }
   const entry=await journal.claimNext({causal:true});
   if(!entry)break;
   try{const receipt=validateReceipt(entry.operation,await send(entry.operation));await journal.confirm(entry.operationId,receipt);processed++;await notify({kind:'confirmed',entry,receipt,processed})}

@@ -1,5 +1,5 @@
 import {prepareActiveRecordSync} from './cloud-active-record-sync.js';
-import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js';
+import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.192';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
 const revisionConflict=value=>/revision\s*衝突|revision conflict/i.test(String(value||''));
@@ -8,7 +8,7 @@ export async function runActiveRecordSync({journal,readDocuments,send,persistCon
  if(!journal||typeof journal.replaceUnconfirmed!=='function'||typeof readDocuments!=='function'||typeof send!=='function'||typeof onProgress!=='function'||!Number.isSafeInteger(maxRebases)||maxRebases<0||maxRebases>20)throw new Error('日常逐筆執行器設定無效');
  let sequence=startSequence,rebases=0,lastPlan=null,conflictBackups=[];
  const prepare=async({replace=false,reason=''}={})=>{
-  const documents=await readDocuments(),plan=prepareActiveRecordSync({documentsByCollection:documents,baselineDb,localDb,environment,deviceId,activationEpoch,startSequence:sequence});sequence=plan.nextSequence;
+  const documents=await readDocuments({force:replace,preferCache:!replace,reason}),plan=prepareActiveRecordSync({documentsByCollection:documents,baselineDb,localDb,environment,deviceId,activationEpoch,startSequence:sequence});sequence=plan.nextSequence;
   let backup=null;if(plan.conflicts.length){if(typeof persistConflicts!=='function')throw new Error('偵測到同筆衝突但缺少不可變備份介面');backup=await persistConflicts(clone(plan.conflicts),{environment,activationEpoch,deviceId,baseHash:plan.baseHash,targetHash:plan.targetHash});if(!backup)throw new Error('同筆衝突備份未完成');conflictBackups.push(clone(backup))}
   if(replace)await journal.replaceUnconfirmed(plan.operations,{reason});else await enqueueOperationPlan(journal,plan);lastPlan=plan;await onProgress({kind:replace?'replanned':'planned',plan,backup});return plan;
  };

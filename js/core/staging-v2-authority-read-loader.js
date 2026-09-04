@@ -1,6 +1,6 @@
 import {FULL_RECORD_COLLECTIONS} from './cloud-full-record-shadow.js';
 import {normalizeStagingV2FirestoreValue} from './staging-v2-active-record-browser-bridge.js';
-import {buildStagingV2AuthorityReadModel} from './staging-v2-authority-read-model.js';
+import {buildStagingV2AuthorityReadModel} from './staging-v2-authority-read-model.js?v=20.26.179';
 
 export const STAGING_V2_AUTHORITY_READ_LOADER_SCOPE='staging-only-fresh-server-h1-baseline-dense-ledger-current-daily-double-head-read-loader';
 export const STAGING_V2_AUTHORITY_READ_LOADER_MAX_TOTAL_ROWS=50000;
@@ -28,6 +28,7 @@ const baselineCollectionPath=(epoch,name)=>`stagingActiveRecordV2Baselines/danbr
 const headPath=epoch=>`stagingActiveRecordV2Heads/danbridge/epochs/${epoch}`;
 const ledgerCollectionPath=epoch=>`stagingActiveRecordV2SaveCommits/danbridge/epochs/${epoch}/saves`;
 const dailyCollectionPath=(epoch,name)=>`stagingActiveRecordV2Records/danbridge/epochs/${epoch}/collections/${name}/records`;
+const auditAppendCollectionPath=epoch=>`stagingActiveRecordV2AuditAppends/danbridge/epochs/${epoch}/records`;
 
 function canonicalBaseline(collection,value){
  return [...value].sort((left,right)=>{
@@ -52,14 +53,15 @@ export function createStagingV2AuthorityReadLoader(raw){
    const baselineEntries=await Promise.all(FULL_RECORD_COLLECTIONS.map(async collection=>[collection,canonicalBaseline(collection,await getCollection(baselineCollectionPath(epoch,collection),'staging V2 baseline '+collection))]));
    const baselineRecordsByCollection=Object.fromEntries(baselineEntries);
    const headBefore=await getDocument(headPath(epoch),'staging V2 head before');
-   const [ledgers,dailyEntries]=await Promise.all([
+   const [ledgers,dailyEntries,auditRecords]=await Promise.all([
     getCollection(ledgerCollectionPath(epoch),'staging V2 ledgers'),
     Promise.all(FULL_RECORD_COLLECTIONS.map(async collection=>[collection,await getCollection(dailyCollectionPath(epoch,collection),'staging V2 daily '+collection)])),
+    getCollection(auditAppendCollectionPath(epoch),'staging V2 audit appends'),
    ]);
-   const dailyRecordsByCollection=Object.fromEntries(dailyEntries),totalRows=ledgers.length+FULL_RECORD_COLLECTIONS.reduce((sum,collection)=>sum+baselineRecordsByCollection[collection].length+dailyRecordsByCollection[collection].length,0);
+   const dailyRecordsByCollection=Object.fromEntries(dailyEntries),totalRows=ledgers.length+auditRecords.length+FULL_RECORD_COLLECTIONS.reduce((sum,collection)=>sum+baselineRecordsByCollection[collection].length+dailyRecordsByCollection[collection].length,0);
    if(totalRows>STAGING_V2_AUTHORITY_READ_LOADER_MAX_TOTAL_ROWS)throw new Error('staging V2 authority read loader row budget exceeded');
    const headAfter=await getDocument(headPath(epoch),'staging V2 head after');
-   return buildStagingV2AuthorityReadModel({baselineManifest,baselineRecordsByCollection,headBefore,headAfter,ledgers,dailyRecordsByCollection});
+   return buildStagingV2AuthorityReadModel({baselineManifest,baselineRecordsByCollection,headBefore,headAfter,ledgers,dailyRecordsByCollection,auditRecords});
   },
  });
 }

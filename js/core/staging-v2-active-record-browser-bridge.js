@@ -1,6 +1,7 @@
 import {FULL_RECORD_COLLECTIONS,FULL_RECORD_SHADOW_SCHEMA,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js';
 import {assertChangeRecordIdentity} from './cloud-change-record-identity.js';
-import {isStrictActiveRecordSaveTimestamp,preflightActiveRecordSaveLocalEnvelopes,strictCloneActiveRecordSaveValue} from './cloud-active-record-save-plan.js';
+import {activeRecordSaveEnvelopeHash,isStrictActiveRecordSaveTimestamp,preflightActiveRecordSaveLocalEnvelopes,strictCloneActiveRecordSaveValue} from './cloud-active-record-save-plan.js';
+import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 import {activeRecordAuthoritySaveV2DailyRecordEnvelope,assertActiveRecordAuthoritySaveCurrentV2Integrity} from './cloud-active-record-authority-save-chain-v2.js';
 import {normalizeRecordSyncV2ServerTimestamp} from './firebase-record-sync-v2-server-timestamp.js';
 
@@ -45,6 +46,14 @@ export function stagingV2H0GenesisBaselineDocuments(raw){
 function changeIndex(recordId,record){const match=/^seq_(\d{8,})_[0-9a-f]{8}$/.exec(recordId);if(!match)throw new Error('staging V2 changes recordId invalid');const index=Number(match[1]);assertChangeRecordIdentity({recordIndex:index,recordId,record});return index}
 function shadowFromEnvelope(envelope){const recordIndex=envelope.collection==='changes'?changeIndex(envelope.recordId,envelope.record):null;return{schema:FULL_RECORD_SHADOW_SCHEMA,companyId:'danbridge',collection:envelope.collection,recordId:envelope.recordId,record:strictCloneActiveRecordSaveValue(envelope.record),recordIndex,sourceHash:envelope.recordHash,revision:envelope.revision,deleted:envelope.deleted,environment:'staging'}}
 
+function auditAppendEnvelopes(raw){
+ const fields=['environment','companyId','activationEpoch','collection','recordId','exists','revision','deleted','record','recordHash'],baseline=exact(raw.baselineRecord,fields,'staging V2 audit baseline'),local=exact(raw.localRecord,fields,'staging V2 audit local');
+ for(const value of [baseline,local])if(value.environment!=='staging'||value.companyId!=='danbridge'||value.activationEpoch!==raw.activationEpoch||value.collection!=='changes'||value.recordId!==raw.recordId)throw new Error('staging V2 immutable audit envelope identity invalid');
+ const baselineCore={collection:baseline.collection,recordId:baseline.recordId,exists:baseline.exists,revision:baseline.revision,deleted:baseline.deleted,record:baseline.record},localCore={collection:local.collection,recordId:local.recordId,exists:local.exists,revision:local.revision,deleted:local.deleted,record:local.record};
+ if(baseline.recordHash!==activeRecordSaveEnvelopeHash(baselineCore)||local.recordHash!==activeRecordSaveEnvelopeHash(localCore)||sha256Canonical(strictCloneActiveRecordSaveValue(raw.payload.record))!==sha256Canonical(strictCloneActiveRecordSaveValue(local.record)))throw new Error('staging V2 immutable audit envelope hash invalid');
+ return{changedKeys:[{collection:'changes',recordId:raw.recordId}],baselineRecords:[baseline],localRecords:[local]};
+}
+
 export function stagingV2AuthoritySnapshotToFullRecordDocuments(raw){
  const input=exact(raw,['currentBundle','recordsByCollection'],'staging V2 authority snapshot'),normalizedBundle=normalizeStagingV2FirestoreValue(input.currentBundle),verified=assertActiveRecordAuthoritySaveCurrentV2Integrity(normalizedBundle),head=verified.resultHead,records=exact(input.recordsByCollection,FULL_RECORD_COLLECTIONS,'staging V2 record collections'),documents={};
  for(const collection of FULL_RECORD_COLLECTIONS){const rows=records[collection];if(!Array.isArray(rows)||Object.getPrototypeOf(rows)!==Array.prototype)throw new Error('staging V2 '+collection+' records invalid');const seen=new Set();documents[collection]=rows.map((rawRow,index)=>{const row=exact(rawRow,['id','data'],'staging V2 '+collection+' row '+index),id=String(row.id);if(seen.has(id))throw new Error('staging V2 duplicate record');seen.add(id);const envelope=activeRecordAuthoritySaveV2DailyRecordEnvelope(normalizeStagingV2FirestoreValue(row.data),head);if(envelope.collection!==collection||envelope.recordId!==id)throw new Error('staging V2 record path identity mismatch');return{id,data:shadowFromEnvelope(envelope)}})}
@@ -52,18 +61,30 @@ export function stagingV2AuthoritySnapshotToFullRecordDocuments(raw){
 }
 
 function operation(raw){
- if(!plain(raw)||raw.schema!=='danbridge-active-record-operation-v1'||raw.environment!=='staging'||raw.companyId!=='danbridge'||!token(raw.activationEpoch)||!token(raw.operationId,110)||!token(raw.deviceId)||!isStrictActiveRecordSaveTimestamp(raw.createdAt)||!collectionSet.has(raw.collection)||raw.collection==='changes'||typeof raw.recordId!=='string'||raw.recordId.length<1||raw.operationId!==raw.operationId.trim()||!Number.isSafeInteger(raw.baseRevision)||raw.baseRevision<0||raw.nextRevision!==raw.baseRevision+1||!plain(raw.payload)||raw.payload.recordId!==raw.recordId||raw.payload.collection!==raw.collection||raw.payload.revision!==raw.nextRevision||typeof raw.payload.deleted!=='boolean')throw new Error('staging V2 journal operation invalid');
- const prepared=preflightActiveRecordSaveLocalEnvelopes({activationEpoch:raw.activationEpoch,changedKeys:[{collection:raw.collection,recordId:raw.recordId}],baselineRecords:[raw.baselineRecord],localRecords:[raw.localRecord]});
+ if(!plain(raw)||raw.schema!=='danbridge-active-record-operation-v1'||raw.environment!=='staging'||raw.companyId!=='danbridge'||!token(raw.activationEpoch)||!token(raw.operationId,110)||!token(raw.deviceId)||!isStrictActiveRecordSaveTimestamp(raw.createdAt)||!collectionSet.has(raw.collection)||typeof raw.recordId!=='string'||raw.recordId.length<1||raw.operationId!==raw.operationId.trim()||!Number.isSafeInteger(raw.baseRevision)||raw.baseRevision<0||raw.nextRevision!==raw.baseRevision+1||!plain(raw.payload)||raw.payload.recordId!==raw.recordId||raw.payload.collection!==raw.collection||raw.payload.revision!==raw.nextRevision||typeof raw.payload.deleted!=='boolean')throw new Error('staging V2 journal operation invalid');
+ const prepared=raw.collection==='changes'?auditAppendEnvelopes(raw):preflightActiveRecordSaveLocalEnvelopes({activationEpoch:raw.activationEpoch,changedKeys:[{collection:raw.collection,recordId:raw.recordId}],baselineRecords:[raw.baselineRecord],localRecords:[raw.localRecord]});
  if(prepared.baselineRecords[0].revision!==raw.baseRevision||prepared.localRecords[0].revision!==raw.baseRevision||prepared.localRecords[0].deleted!==raw.payload.deleted)throw new Error('staging V2 journal envelope mismatch');
+ if(raw.collection==='changes'){
+  const baseline=prepared.baselineRecords[0],local=prepared.localRecords[0],recordIndex=changeIndex(raw.recordId,local.record);
+  if(raw.type!=='create'||raw.baseRevision!==0||raw.nextRevision!==1||baseline.exists!==false||baseline.deleted!==false||baseline.record!==null||local.exists!==true||local.revision!==0||local.deleted!==false||raw.payload.deleted!==false||raw.payload.revision!==1||recordIndex<0)throw new Error('staging V2 immutable audit append invalid');
+ }
  return{row:raw,prepared};
 }
 
 export function createStagingV2ActiveRecordOperationSender(raw){
  const input=exact(raw,['browserClient','getActor'],'staging V2 operation sender config');if(typeof input.browserClient?.save!=='function'||typeof input.getActor!=='function')throw new Error('staging V2 operation sender config invalid');
+ const identity=()=>{const actor=input.getActor(),uid=actor?.uid,emailValue=String(actor?.email??'').trim().toLowerCase();if(!token(uid)||!email(emailValue))throw new Error('staging V2 operation actor invalid');return{uid,emailValue}};
  return Object.freeze({scope:STAGING_V2_ACTIVE_RECORD_BROWSER_BRIDGE_SCOPE,async apply(rawOperation){
   const {row,prepared}=operation(rawOperation),actor=input.getActor(),uid=actor?.uid,emailValue=String(actor?.email??'').trim().toLowerCase();if(!token(uid)||!email(emailValue))throw new Error('staging V2 operation actor invalid');
   const response=await input.browserClient.save({save:{saveId:row.operationId,deviceId:row.deviceId,actorUid:uid,actorEmail:emailValue,createdAt:row.createdAt},changedKeys:prepared.changedKeys,baselineRecords:prepared.baselineRecords,localRecords:prepared.localRecords});
   if(!response||response.saveId!==row.operationId||response.activationEpoch!==row.activationEpoch||response.operationCount!==1||!['created','replayed'].includes(response.transactionState))throw new Error('staging V2 operation completion mismatch');
   return Object.freeze({kind:response.transactionState==='replayed'?'duplicate':(row.type==='delete'?'tombstone':row.type),write:response.transactionState==='created',revision:row.nextRevision,activationEpoch:response.activationEpoch,resultHeadHash:response.resultHeadHash,commitHash:response.commitHash,saveId:response.saveId,persistedAt:response.persistedAt});
+ },async applyBatch(rawOperations){
+  if(!Array.isArray(rawOperations)||rawOperations.length<2||rawOperations.length>8)throw new Error('staging V2 batch operation count invalid');
+  const values=rawOperations.map(operation),rows=values.map(value=>value.row),first=rows[0],seen=new Set();
+  for(let index=0;index<rows.length;index++){const row=rows[index],key=`${row.collection}/${row.recordId}`,prior=rows[index-1];if(seen.has(key)||row.activationEpoch!==first.activationEpoch||row.deviceId!==first.deviceId||row.createdAt!==first.createdAt||(prior&&row.baseHash!==prior.targetHash))throw new Error('staging V2 batch operation identity invalid');seen.add(key)}
+  const {uid,emailValue}=identity(),response=await input.browserClient.save({save:{saveId:first.operationId,deviceId:first.deviceId,actorUid:uid,actorEmail:emailValue,createdAt:first.createdAt},changedKeys:values.flatMap(value=>value.prepared.changedKeys),baselineRecords:values.flatMap(value=>value.prepared.baselineRecords),localRecords:values.flatMap(value=>value.prepared.localRecords)});
+  if(!response||response.saveId!==first.operationId||response.activationEpoch!==first.activationEpoch||response.operationCount!==rows.length||!['created','replayed'].includes(response.transactionState))throw new Error('staging V2 batch completion mismatch');
+  return Object.freeze({kind:response.transactionState==='replayed'?'duplicate-batch':'batch',write:response.transactionState==='created',operationCount:rows.length,targetHash:rows.at(-1).targetHash,activationEpoch:response.activationEpoch,resultHeadHash:response.resultHeadHash,commitHash:response.commitHash,saveId:response.saveId,persistedAt:response.persistedAt});
  }})
 }
