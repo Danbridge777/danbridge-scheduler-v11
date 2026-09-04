@@ -21,12 +21,12 @@ import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.
 import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.106';
 import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from './production-scheduler-queue.js?v=20.26.164';
 import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.106';
-import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.192';
-import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.192';
+import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.194';
+import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.194';
 import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.106';
 import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.106';
 import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.106';
-import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.192';
+import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.194';
 import {createFirebaseActiveRecordStreamAdapter} from './firebase-active-record-stream-adapter.js?v=20.26.106';
 import {createFirebaseRoleRecordViewAdapter} from './firebase-role-record-view-adapter.js?v=20.26.116';
 import {createFirebaseRoleRecordStreamAdapter} from './firebase-role-record-stream-adapter.js?v=20.26.106';
@@ -47,7 +47,7 @@ import {createStagingV2ActiveRecordOperationSender,normalizeStagingV2FirestoreVa
 import {createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.151';
 import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.146';
 import {CLOUD_BOOTSTRAP_STAGES,createCloudBootstrapProgress} from './cloud-bootstrap-progress.js?v=20.26.134';
-import {createProductionTrustedOperationClient} from './production-trusted-operation-client.js?v=20.26.134';
+import {createProductionTrustedOperationClient} from './production-trusted-operation-client.js?v=20.26.194';
 import {prepareActiveRecordSync} from './cloud-active-record-sync.js?v=20.26.134';
 
 const firebaseConfigs={
@@ -60,7 +60,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.193';
+const APP_RELEASE='20.26.194';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');

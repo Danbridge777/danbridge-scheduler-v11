@@ -11,10 +11,14 @@ export function createProductionTrustedOperationClient({call,getIdentity}={}){
   return data.result;
  };
  const requestId=prefix=>`${prefix}-${crypto.randomUUID()}`;
+ const dailyBatch=value=>{
+  if(!Array.isArray(value))return value;
+  return{activationEpoch:value[0]?.activationEpoch,reason:'daily-record-sync',operations:value};
+ };
  return Object.freeze({enabled:true,
   apply:operation=>execute({kind:'record.apply',requestId:operation?.operationId,operation}),
   previewBatch:batch=>execute({kind:'record.batch.preview',requestId:requestId('preview'),batch}),
-  applyBatch:batch=>execute({kind:'record.batch.apply',requestId:requestId('batch'),batch}),
+  applyBatch:value=>execute({kind:'record.batch.apply',requestId:requestId('batch'),batch:dailyBatch(value)}),
   mutateAccess:mutation=>execute({kind:'access.mutate',requestId:requestId('access'),mutation})
  });
 }

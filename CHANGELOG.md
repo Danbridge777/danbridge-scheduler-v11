@@ -1,5 +1,10 @@
 # Changelog
 
+## 20.26.194（production 多筆課表原子操作修正）
+
+- 修正 production 日常多筆操作傳入 trusted Function 前缺少 batch envelope，導致一次多選、複製或移動 2–8 堂時被「trusted batch 格式無效」阻擋。
+- 只自動恢復這個既知、尚未離開瀏覽器的舊版格式錯誤一次；其他權限、revision、hash 或身分錯誤仍維持封鎖，不會誤重送。
+
 ## 20.26.193（連續課表操作與通知不搶焦點）
 
 - staging／production 的本人課表異動通知仍保留在通知中心，但不再自動彈出遮住下一個新增、移動、貼上或刪除動作。

@@ -1,7 +1,7 @@
 import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js';
 import {recordDataHash} from './cloud-record-data-hash.js';
 import {mergeConcurrentRecordDb} from './cloud-record-three-way-merge.js';
-import {runActiveRecordSync} from './cloud-active-record-runtime.js?v=20.26.192';
+import {runActiveRecordSync} from './cloud-active-record-runtime.js?v=20.26.194';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
 const token=value=>typeof value==='string'&&value.trim()===value&&value.length>0&&value.length<=128&&!value.includes('/');
@@ -60,7 +60,7 @@ export function createActiveRecordPageController({
    status({state:'waiting-for-stream',hash,expectedHash});await sleep(50);
   }
  }
- async function resume(){if(stopped)return{state:'stopped'};if(environment==='staging'&&typeof journal.retryIdentityBlockedOnce==='function')await journal.retryIdentityBlockedOnce();const counts=await journal.counts(),outstanding=counts.pending+counts.sending+counts.failed+counts.quarantined;if(outstanding||dirty||retryPending){queued=counts.quarantined===0;dirty=true;if(writeAllowed&&queued)schedule(0)}status({state:counts.quarantined?'blocked':queued?'queued':writeAllowed?'ready':'paused',counts});return{state:lastState,counts}}
+ async function resume(){if(stopped)return{state:'stopped'};if(environment==='staging'&&typeof journal.retryIdentityBlockedOnce==='function')await journal.retryIdentityBlockedOnce();if(environment==='production'&&typeof journal.retryProductionTrustedBatchFormatOnce==='function')await journal.retryProductionTrustedBatchFormatOnce();const counts=await journal.counts(),outstanding=counts.pending+counts.sending+counts.failed+counts.quarantined;if(outstanding||dirty||retryPending){queued=counts.quarantined===0;dirty=true;if(writeAllowed&&queued)schedule(0)}status({state:counts.quarantined?'blocked':queued?'queued':writeAllowed?'ready':'paused',counts});return{state:lastState,counts}}
  async function flush(){
   if(stopped)return{state:'stopped'};if(inFlight)return{state:'busy'};if(!queued){const counts=await journal.counts();if(!(counts.pending+counts.sending+counts.failed)&&!retryPending)return{state:lastState,counts};queued=true;dirty=true}if(!activationEpoch||!baselineDb||!latestCloudDb){status({state:'waiting-for-stream'});return{state:lastState}}if(!writeAllowed){status({state:'paused'});return{state:'paused'}}
   inFlight=true;queued=false;retryPending=false;const startedVersion=mutationVersion,startedSnapshotVersion=acceptedSnapshotVersion,base=clone(baselineDb),local=clone(getLocalDb());status({state:'backing-up'});
@@ -72,7 +72,12 @@ export function createActiveRecordPageController({
    }
    // production trusted operation 已在同一交易中核對 base/target head、revision 與不可重送 receipt。
    // 直接採用已提交計畫可解除 UI 操作鎖；背景串流仍會獨立驗證正式資料，若不一致照常封鎖。
-   const readback=trustCommittedPlan?{db:clone(result.db)}:await readConvergedAuthority(result.plan?.targetHash||'',startedSnapshotVersion);
+   // A resumed journal has no in-memory plan. Rebuild that exact committed batch
+   // from verified receipts instead of treating newer, unsent local UI state as
+   // if it had already reached the cloud.
+   const readback=trustCommittedPlan
+    ?(result.plan?{db:clone(result.db)}:rebuildFullRecordShadowDb(await readConfirmedDocuments({preferCache:true}),{environment}))
+    :await readConvergedAuthority(result.plan?.targetHash||'',startedSnapshotVersion);
    let merged,capturedVersion;
    do{
     capturedVersion=mutationVersion;const currentLocal=clone(getLocalDb());
