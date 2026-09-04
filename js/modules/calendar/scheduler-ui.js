@@ -148,7 +148,7 @@ function copySelectedLessons(){
     if(keys.has(keyOf(candidate))||conflictDetail(candidate,'')){skipped++;continue}
     db.lessons.push(candidate);keys.add(keyOf(candidate));logChange('複製選取到下個月',candidate,old);added++;
   }
-  selectedLessonIds.clear();selectionMode=false;saveDB();
+  selectedLessonIds.clear();selectionMode=false;saveDB({scheduleAction:'lesson.copy'});
   alert(`已複製 ${added} 堂到 ${toMonth}${skipped?`，略過 ${skipped} 堂重複或撞課課程`:''}。`);
 }
 async function deleteSelectedLessons(){
@@ -156,17 +156,11 @@ async function deleteSelectedLessons(){
   const ids=[...selectedLessonIds];
   if(!ids.length)return alert('請先選取要刪除的課程。');
   if(!confirm(`確定刪除已選取的 ${ids.length} 堂課？`))return;
-  if(window.__DANBRIDGE_ENVIRONMENT__==='production'&&window.__danbridgeRunProductionHighRiskMutation){
-    try{
-      const idSet=new Set(ids),at=new Date().toISOString(),ctx=window.DanbridgeAccess?.getContext?.()||{},actorName=(document.body.dataset.cloudDisplayName||ctx.email||'目前使用者').trim();
-      const result=await window.__danbridgeRunProductionHighRiskMutation({reason:'batch-delete-lessons',mutate:target=>{target.lessons||=[];target.makeups||=[];target.changes||=[];const removed=target.lessons.filter(lesson=>idSet.has(lesson.id));if(removed.length!==idSet.size)throw new Error('雲端課程已變更，請重新選取後再試');for(const lesson of removed){if(lesson.status==='學生請假'){const makeup=target.makeups.find(item=>item.sourceLessonId===lesson.id&&!['done','cancelled'].includes(item.status));if(makeup){const scheduled=target.lessons.find(item=>item.id===makeup.scheduledLessonId);if(scheduled){scheduled.status='取消';scheduled.payTeacher='no';scheduled.chargeStudent='no';scheduled.cancelledBecauseSourceRestored=true}makeup.status='cancelled';makeup.cancelledAt=at}}const makeupId=lessonMakeupId(lesson);if(makeupId){const makeup=target.makeups.find(item=>item.id===makeupId||item.scheduledLessonId===lesson.id);if(makeup){makeup.status='pending';makeup.scheduledLessonId='';makeup.completedAt='';makeup.rescheduledAt=at}}target.changes.unshift({id:uid(),at,type:'刪除選取課程',lessonId:lesson.id||'',studentId:lesson.studentId||'',actorName,actorEmail:ctx.email||'',before:JSON.parse(JSON.stringify(lesson)),after:null})}target.lessons=target.lessons.filter(lesson=>!idSet.has(lesson.id));return{removed:removed.length}}});selectedLessonIds.clear();selectionMode=false;toast(`已由後端原子刪除 ${result.mutationResult.removed} 堂課`);return;
-    }catch(error){console.error(error);alert('批次刪課未執行：'+(error?.message||error));return}
-  }
   snapshot();
   const idSet=new Set(ids),removed=db.lessons.filter(l=>idSet.has(l.id));
   removed.forEach(l=>{window.syncMakeupForDeletedLesson?.(l);logChange('刪除選取課程',null,l)});
   db.lessons=db.lessons.filter(l=>!idSet.has(l.id));
-  selectedLessonIds.clear();selectionMode=false;saveDB();toast(`已刪除 ${removed.length} 堂課`);
+  selectedLessonIds.clear();selectionMode=false;saveDB({scheduleAction:'lesson.delete'});toast(`已刪除 ${removed.length} 堂課`);
 }
 function cancelSelectionAndPaste(clearClipboard=false){
   selectedLessonIds.clear();
@@ -297,7 +291,7 @@ function contextPasteLessons(){
     if(teacherConflictDetail(n,''))teacherWarnings++;
     db.lessons.push(n);keys.add(keyOf(n));logChange('依日期間距貼上課程',n,old);added++;
   }
-  hideCalendarContextMenu();exitSelectionAfterPaste();cancelPasteClickMode(true);saveDB();
+  hideCalendarContextMenu();exitSelectionAfterPaste();cancelPasteClickMode(true);saveDB({scheduleAction:'lesson.copy'});
   const targetLabel=targetTeacherId?`給 ${teacher(targetTeacherId).name||'目標老師'}`:'';
   toast(`已${targetLabel}貼上 ${added} 堂，略過 ${skipped} 堂${teacherWarnings?`，老師重疊 ${teacherWarnings} 堂已標紅`:''}`)
 }

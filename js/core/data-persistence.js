@@ -120,7 +120,7 @@ function saveDB(options={}){
   try{updateLastBackupInfo()}catch(error){console.error('Backup status update failed:',error)}
   try{updateUndoRedoButtons()}catch(error){console.error('Undo/redo status update failed:',error)}
   /* Every mutation path ends here. The cloud module installs this hook after authentication. */
-  try{window.__danbridgeQueueCloudSave?.()}catch(error){console.error('Cloud save scheduling failed:',error)}
+  try{window.__danbridgeQueueCloudSave?.(options)}catch(error){console.error('Cloud save scheduling failed:',error)}
  }
  if(saveError)throw saveError;
 }

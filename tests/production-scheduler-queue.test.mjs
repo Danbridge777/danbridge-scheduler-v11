@@ -21,6 +21,15 @@ test('新增送出時馬上刪除：保留刪除意圖，先確認新增再刪�
  const f=fixture(),q=f.create();await q.start({baselineDb:base()});await q.queue({...base(),lessons:[lesson]});const gate=f.pause(),flight=q.flush();await new Promise(r=>setTimeout(r,0));await q.queue(base());gate.resolve();await flight;
  assert.equal(f.calls.length,2);assert.equal(f.calls[0].changes[0].before,null);assert.equal(f.calls[1].changes[0].after,null);assert.equal(f.server.lessons.length,0);assert.equal(f.ui.lessons.length,0);assert.equal(q.diagnostics().dirty,false);
 });
+test('新增後在送出前立刻刪除：永久佇列合併成零次雲端請求',async()=>{
+ const f=fixture(),q=f.create();await q.start({baselineDb:base()});await q.queue({...base(),lessons:[lesson]},{scheduleAction:'lesson.create'});await q.queue(base(),{scheduleAction:'lesson.delete'});await q.flush();
+ assert.equal(f.calls.length,0);assert.equal(f.server.lessons.length,0);assert.equal(q.diagnostics().dirty,false);
+});
+test('永久待送項目保存明確操作命令，但後端線路仍只收到白名單 before/after',async()=>{
+ const f=fixture(),q=f.create();await q.start({baselineDb:base()});const moved={...lesson,date:'2026-10-02'};await q.queue({...base(),lessons:[lesson]},{scheduleAction:'lesson.create'});const gate=f.pause(),flight=q.flush();await new Promise(r=>setTimeout(r,0));
+ assert.equal(f.stored.pending.commands.length,1);assert.equal(f.stored.pending.commands[0].kind,'lesson.create');assert.equal(Object.hasOwn(f.calls[0],'commands'),false);
+ await q.queue({...base(),lessons:[moved]},{scheduleAction:'lesson.move'});gate.resolve();await flight;assert.equal(f.calls.length,2);assert.equal(f.server.lessons[0].date,'2026-10-02');
+});
 test('拖移 A→B→馬上 A 不被舊快照或先前回條吞掉',async()=>{
  const db={...base(),lessons:[lesson]},f=fixture(db),q=f.create();await q.start({baselineDb:db});await q.queue({...db,lessons:[{...lesson,date:'2026-10-02'}]});const gate=f.pause(),flight=q.flush();await new Promise(r=>setTimeout(r,0));await q.queue(db);assert.equal(await q.acceptSnapshot(db,0),false);gate.resolve();await flight;
  assert.equal(f.calls.length,2);assert.equal(f.server.lessons[0].date,lesson.date);assert.equal(f.ui.lessons[0].date,lesson.date);assert.equal(f.calls[1].changes[0].before.date,'2026-10-02');

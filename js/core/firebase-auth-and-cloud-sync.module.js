@@ -19,7 +19,7 @@ import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-re
 import {recordDataDigest,recordDataHash} from './cloud-record-data-hash.js?v=20.26.106';
 import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.106';
 import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.106';
-import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from './production-scheduler-queue.js?v=20.26.164';
+import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from './production-scheduler-queue.js?v=20.26.195';
 import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.106';
 import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.194';
 import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.194';
@@ -60,7 +60,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.194';
+const APP_RELEASE='20.26.195';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -3113,8 +3113,9 @@ async function uploadOwnerState(force=false){
    if(ownerUploadQueued&&navigator.onLine){clearTimeout(syncTimer);if(ownerRetryCount)scheduleOwnerRetry();else syncTimer=setTimeout(()=>uploadOwnerState(),80);}
  }
 }
-function queueOwnerCloudSave(){
+function queueOwnerCloudSave(options={}){
  if(cloudRole!=='owner')return;
+ if(typeof options?.scheduleAction==='string')document.body.dataset.scheduleAction=options.scheduleAction;
  const nextHash=dataHash(window.__danbridgeGetDB());
  if(['staging','production'].includes(DANBRIDGE_ENVIRONMENT)&&activeRecordMode!=='legacy'){
   const diagnostics=activeRecordPageController?.diagnostics?.()||null,intent=decideOwnerActiveSaveIntent({nextHash,localDirtyHash,lastUploadedHash,diagnostics,applyingCloud});
@@ -3209,11 +3210,11 @@ async function queueSchedulerChanges(){
  }
  schedulerUploadRetryCount=0;clearTimeout(schedulerUploadRetryTimer);window.renderAll?.();cloudStatus(`課表已立即更新，${sent} 筆異動正在同步給 Owner、校區管理者與老師`,'ok');
 }
-function scheduleSchedulerChanges(){
+function scheduleSchedulerChanges(options={}){
  if(DANBRIDGE_ENVIRONMENT==='production'){
   if(applyingCloud||!cloudCanManageSchedule)return Promise.resolve();
   if(!productionSchedulerQueue||schedulerRecoveryHold)return Promise.reject(new Error('排課永久佇列尚未就緒或仍在救援鎖定；本機操作已保留'));
-  return productionSchedulerQueue.queue(window.__danbridgeGetDB()).then(()=>flushProductionSchedulerQueue());
+  return productionSchedulerQueue.queue(window.__danbridgeGetDB(),options).then(()=>flushProductionSchedulerQueue());
  }
  const local=window.__danbridgeGetDB?.()||{},current=(local.lessons||[]).map(schedulerSafeLesson),before=lessonMap(schedulerBaselineLessons),after=lessonMap(current),beforeStudents=lessonMap(schedulerBaselineStudents),afterStudents=lessonMap((local.students||[]).map(schedulerSafeStudent));
  for(const id of new Set([...before.keys(),...after.keys()]))if(JSON.stringify(before.get(id))!==JSON.stringify(after.get(id)))schedulerOptimisticLessons.set(id,after.get(id)||null);
@@ -3274,7 +3275,7 @@ async function processSchedulerRequestQueue(){
 function installCloudSave(){
  window.__danbridgeQueueCloudSave=queueOwnerCloudSave;
  window.saveDB=function(options={}){
-   if(cloudRole==='teacher'&&cloudCanManageSchedule){const result=originalSaveDB?.(options);scheduleSchedulerChanges().catch(e=>{console.error(e);cloudStatus('aa 排課同步失敗：'+(e.message||e),'error')});return result}
+   if(cloudRole==='teacher'&&cloudCanManageSchedule){const result=originalSaveDB?.(options);scheduleSchedulerChanges(options).catch(e=>{console.error(e);cloudStatus('aa 排課同步失敗：'+(e.message||e),'error')});return result}
    if(cloudRole==='teacher'||cloudRole==='branch_manager'){alert(cloudRole==='teacher'?'老師帳號目前為唯讀，只能查看自己的課表。':'校區管理者目前為唯讀，只能查看指定校區資料。');return}
    return originalSaveDB?.(options);
  };

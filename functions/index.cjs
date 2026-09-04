@@ -208,7 +208,7 @@ exports.productionPublishScheduleNotifications=onCall({region:'asia-east1',servi
  }
 });
 
-exports.productionSchedulerOperation=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'1GiB',concurrency:4,minInstances:0,maxInstances:10},async request=>{
+exports.productionSchedulerOperation=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'1GiB',concurrency:4,minInstances:1,maxInstances:10},async request=>{
  try{
   const runtimeValue=await productionRuntime();
   if(!productionSchedulerRuntimePromise)productionSchedulerRuntimePromise=createProductionSchedulerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL}).catch(error=>{productionSchedulerRuntimePromise=null;throw error});

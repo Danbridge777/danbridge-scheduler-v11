@@ -2,6 +2,7 @@ import {projectProductionSchedulerDb} from './production-role-view-projection.js
 import {mergeConcurrentRecordDb} from './cloud-record-three-way-merge.js';
 import {SCHEDULER_OPERATION_SCHEMA,SCHEDULER_OPERATION_RESPONSE_SCHEMA,normalizeProductionSchedulerRequest} from './production-scheduler-operation.js';
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
+import {assertScheduleCommand,buildScheduleCommand} from './schedule-collaboration-command.js';
 
 const SCHEMA='danbridge-production-scheduler-queue-v1';
 const clone=value=>JSON.parse(JSON.stringify(value));
@@ -35,9 +36,9 @@ export function createProductionSchedulerQueue({storage,send,createRequestId,rel
   const before=map(state.baseline.lessons),after=map(state.desired.lessons),changes=[];
   for(const id of new Set([...before.keys(),...after.keys()])){const a=before.get(id),b=after.get(id);if(same(a,b))continue;const student=b?state.desired.students.find(row=>row.id===b.studentId):null;changes.push({lessonId:id,before:a||null,after:b||null,...(student?{student}:{})});if(changes.length===30)break}
   if(!changes.length)return null;
-  const request=normalizeProductionSchedulerRequest({schema:SCHEDULER_OPERATION_SCHEMA,requestId:createRequestId(),release,changes}),submitted=clone(state.baseline),submittedLessons=map(submitted.lessons);
+  const requestId=createRequestId(),request=normalizeProductionSchedulerRequest({schema:SCHEDULER_OPERATION_SCHEMA,requestId,release,changes}),createdAt=new Date().toISOString(),commands=changes.map((change,index)=>buildScheduleCommand({before:change.before,after:change.after,deviceId:'scheduler-queue',sequence:index+1,batchId:requestId,commandId:`${requestId}:${index+1}`,actionHint:state.actionHint||'',createdAt})),submitted=clone(state.baseline),submittedLessons=map(submitted.lessons);
   for(const change of changes){if(change.after)submittedLessons.set(change.lessonId,clone(change.after));else submittedLessons.delete(change.lessonId);if(change.student&&!submitted.students.some(row=>row.id===change.student.id))submitted.students.push(clone(change.student))}
-  submitted.lessons=[...submittedLessons.values()];return{request,submitted};
+  submitted.lessons=[...submittedLessons.values()];return{request,submitted,commands};
  };
  const accept=async(db,sourceRecordRevision)=>{
   if(!state||stopped)throw new Error('排課佇列尚未就緒');
@@ -51,11 +52,11 @@ export function createProductionSchedulerQueue({storage,send,createRequestId,rel
  return{
   async start({baselineDb,sourceRecordRevision=0}){
    if(state)throw new Error('排課佇列已啟動');const saved=await storage.load();
-   if(saved){if(saved.schema!==SCHEMA||!Number.isSafeInteger(saved.sourceRecordRevision)||saved.sourceRecordRevision<0||!same(saved.baseline,projectProductionSchedulerDb(saved.baseline))||!same(saved.desired,projectProductionSchedulerDb(saved.desired)))throw new Error('排課復原日誌無效，未覆蓋原資料');if(saved.pending){normalizeProductionSchedulerRequest(saved.pending.request);if(!same(saved.pending.submitted,projectProductionSchedulerDb(saved.pending.submitted)))throw new Error('排課待送快照無效，未覆蓋原資料')}state=clone(saved)}
-   else{const baseline=projectProductionSchedulerDb(baselineDb);state={schema:SCHEMA,sourceRecordRevision,baseline,desired:clone(baseline),pending:null};await persist()}
+   if(saved){if(saved.schema!==SCHEMA||!Number.isSafeInteger(saved.sourceRecordRevision)||saved.sourceRecordRevision<0||!same(saved.baseline,projectProductionSchedulerDb(saved.baseline))||!same(saved.desired,projectProductionSchedulerDb(saved.desired)))throw new Error('排課復原日誌無效，未覆蓋原資料');if(saved.pending){normalizeProductionSchedulerRequest(saved.pending.request);if(!same(saved.pending.submitted,projectProductionSchedulerDb(saved.pending.submitted)))throw new Error('排課待送快照無效，未覆蓋原資料');if(saved.pending.commands)for(const command of saved.pending.commands)assertScheduleCommand(command)}state=clone(saved)}
+   else{const baseline=projectProductionSchedulerDb(baselineDb);state={schema:SCHEMA,sourceRecordRevision,baseline,desired:clone(baseline),pending:null,actionHint:''};await persist()}
    apply();status(state.pending||dirty()?'pending':'ready');return{restored:Boolean(saved),pending:Boolean(state.pending)||Boolean(dirty())};
   },
-  queue(db){if(!state||stopped)throw new Error('排課佇列尚未就緒');state.desired=projectProductionSchedulerDb(db);status('pending');return persist()},
+  queue(db,{scheduleAction}={}){if(!state||stopped)throw new Error('排課佇列尚未就緒');state.desired=projectProductionSchedulerDb(db);state.actionHint=typeof scheduleAction==='string'?scheduleAction:'';status('pending');return persist()},
   acceptSnapshot:accept,
   flush(){
    if(flight)return flight;if(!state||stopped)return Promise.reject(new Error('排課佇列尚未就緒'));
@@ -71,7 +72,7 @@ export function createProductionSchedulerQueue({storage,send,createRequestId,rel
      if(response?.schema!==SCHEDULER_OPERATION_RESPONSE_SCHEMA||response.requestId!==pending.request.requestId||response.state!=='committed'||!/^record-v1:[a-f0-9]{64}$/.test(response.sourceHash||'')||!Number.isSafeInteger(response.sourceRecordRevision)||response.sourceRecordRevision<state.sourceRecordRevision||!Number.isSafeInteger(response.operationCount)||response.operationCount<0||!same(response.schedulerDb,projectProductionSchedulerDb(response.schedulerDb)))throw new Error('排課後端回條驗證失敗，保留待送操作');
      const rebased=mergeConcurrentRecordDb(pending.submitted,state.desired,response.schedulerDb);
      if(rebased.conflicts.length)throw new Error('排課連續操作發現衝突，保留日誌等待核對');
-     state.baseline=clone(response.schedulerDb);state.desired=projectProductionSchedulerDb(rebased.db);state.sourceRecordRevision=response.sourceRecordRevision;state.pending=null;
+     state.baseline=clone(response.schedulerDb);state.desired=projectProductionSchedulerDb(rebased.db);state.sourceRecordRevision=response.sourceRecordRevision;state.pending=null;state.actionHint='';
      await persist();if(!stopped)apply();
     }
     if(stopped)return{state:'stopped'};
@@ -80,6 +81,6 @@ export function createProductionSchedulerQueue({storage,send,createRequestId,rel
    return flight;
   },
   stop(){stopped=true;status('stopped');return (flight||persistence).catch(()=>{})},
-  diagnostics:()=>({ready:Boolean(state),inFlight:Boolean(flight),pending:Boolean(state?.pending),dirty:Boolean(dirty()),sourceRecordRevision:state?.sourceRecordRevision??0,error:lastError})
+  diagnostics:()=>({ready:Boolean(state),inFlight:Boolean(flight),pending:Boolean(state?.pending),dirty:Boolean(dirty()),sourceRecordRevision:state?.sourceRecordRevision??0,error:lastError,commandCount:state?.pending?.commands?.length||0,commandKinds:[...new Set((state?.pending?.commands||[]).map(command=>command.kind))]})
  };
 }

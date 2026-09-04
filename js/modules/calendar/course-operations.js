@@ -58,7 +58,7 @@ function conflictDetail(o,ignore=''){
 
 function hasConflict(o,ignore=''){const c=conflictDetail(o,ignore);return c?c.type:''}
 
-function deleteCurrentLesson(){const id=$('lessonId').value;if(id&&confirm('確定刪除這堂課？')){snapshot();const old=db.lessons.find(x=>x.id===id);window.syncMakeupForDeletedLesson?.(old);db.lessons=db.lessons.filter(x=>x.id!==id);if(old)logChange('刪除課程',null,old);closeLessonModal();saveDB()}}
+function deleteCurrentLesson(){const id=$('lessonId').value;if(id&&confirm('確定刪除這堂課？')){snapshot();const old=db.lessons.find(x=>x.id===id);window.syncMakeupForDeletedLesson?.(old);db.lessons=db.lessons.filter(x=>x.id!==id);if(old)logChange('刪除課程',null,old);closeLessonModal();saveDB({scheduleAction:'lesson.delete'})}}
 
 let activeCourseDrawerId='';
 
@@ -137,7 +137,7 @@ function commitCalendarMove(){
   /* Paint the new position first. Persistence must not replace the calendar a second time. */
   renderCalendar();
   clearTimeout(calendarMoveSaveTimer);
-  calendarMoveSaveTimer=setTimeout(()=>{calendarMoveSaveTimer=null;saveDB({skipRender:true})},0);
+  calendarMoveSaveTimer=setTimeout(()=>{calendarMoveSaveTimer=null;saveDB({skipRender:true,scheduleAction:'lesson.move'})},0);
 }
 
 function finishCalendarMoveInteraction(){clearCalendarSelectionState();cancelPasteClickMode(false)}
