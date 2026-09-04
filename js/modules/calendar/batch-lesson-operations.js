@@ -82,5 +82,5 @@ function applyBatch(){
     window.syncMakeupForLessonStatus?.(x.old,before.status);
     done++;
   }
-  clearCalendarSelectionState();cancelPasteClickMode(false);closeBatchModal();saveDB({scheduleAction:'lesson.update.fields'});toast(`已批次更新 ${done} 堂課`);
+  clearCalendarSelectionState();cancelPasteClickMode(false);closeBatchModal();commitScheduleMutation('lesson.update.fields');toast(`已批次更新 ${done} 堂課`);
 }

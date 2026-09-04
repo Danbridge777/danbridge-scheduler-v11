@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 const RELEASE = '20.15.7';
-const CLOUD_RELEASE = '20.26.195';
+const CLOUD_RELEASE = '20.26.197';
 const SCHEDULER_STUDENT_TOOLS_RELEASE = '20.26.139';
 const APP_SHELL_RELEASE = '20.26.139';
 const BUSINESS_RELEASE = '20.23.0';
@@ -10,15 +10,15 @@ const BRANCH_SCOPE_RELEASE = '20.22.0';
 const ROLE_UX_RELEASE = '20.26.139';
 const REPORT_STYLE_RELEASE = '20.26.139';
 const ROLE_UX_STYLE_RELEASE = '20.26.139';
-const PWA_RELEASE = '20.26.195';
+const PWA_RELEASE = '20.26.197';
 const PWA_STYLE_RELEASE = '20.18.0';
 const CLEAN_FIELD_RELEASE = '20.19.0';
 const LANGUAGE_RELEASE = '20.25.0';
 const INTERFACE_CLARITY_STYLE_RELEASE = '20.25.5';
-const SCHEDULER_UI_RELEASE = '20.26.8';
+const SCHEDULER_UI_RELEASE = '20.26.197';
 const PREMIUM_CONTROLS_RELEASE = '20.25.10';
 const PERMANENT_HISTORY_RELEASE = '20.26.98';
-const APPLICATION_FEATURES_RELEASE = '20.26.98';
+const APPLICATION_FEATURES_RELEASE = '20.26.197';
 const SCHEDULING_EFFICIENCY_RELEASE = '20.26.98';
 const CROSS_PLATFORM_LAYOUT_RELEASE = '20.26.153';
 
@@ -760,6 +760,37 @@ test('public entry has no horizontal viewport overflow', async ({ page }) => {
     scrollWidth: document.documentElement.scrollWidth
   }));
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+});
+
+test('課表連續八次操作只更新目前畫面，保存讓到下一幀且不觸發全站重畫', async ({ page }) => {
+  await page.route('https://www.gstatic.com/**', route => route.abort());
+  await page.route('https://*.googleapis.com/**', route => route.abort());
+  await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => typeof window.commitScheduleMutation === 'function');
+  const result = await page.evaluate(async () => {
+    const originalSave = window.saveDB;
+    const originalRenderAll = window.renderAll;
+    let saves = 0;
+    let fullRenders = 0;
+    const options = [];
+    window.saveDB = value => { saves += 1; options.push(value); };
+    window.renderAll = () => { fullRenders += 1; };
+    const durations = [];
+    for (let index = 0; index < 8; index += 1) {
+      const startedAt = performance.now();
+      window.commitScheduleMutation(index % 2 ? 'lesson.move' : 'lesson.copy');
+      durations.push(performance.now() - startedAt);
+    }
+    await new Promise(resolve => setTimeout(resolve, 180));
+    window.saveDB = originalSave;
+    window.renderAll = originalRenderAll;
+    return { saves, fullRenders, options, maxDuration: Math.max(...durations), totalDuration: durations.reduce((sum, value) => sum + value, 0) };
+  });
+  expect(result.saves).toBe(1);
+  expect(result.fullRenders).toBe(0);
+  expect(result.options).toEqual([{ skipRender: true, scheduleAction: 'lesson.update.fields' }]);
+  expect(result.maxDuration).toBeLessThan(50);
+  expect(result.totalDuration).toBeLessThan(200);
 });
 
 test('Wendy receives an orange interface while lesson room colors stay unchanged', async ({ page }) => {

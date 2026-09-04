@@ -76,6 +76,13 @@ vm.runInContext(fs.readFileSync(path.join(root, 'js/core/date-utils.js'), 'utf8'
 
 const schedulerSource = fs.readFileSync(path.join(root, 'js/modules/calendar/scheduler-ui.js'), 'utf8');
 vm.runInContext(schedulerSource.slice(0, schedulerSource.indexOf('function lessonHoverText')), context);
+// The production helper deliberately yields persistence until after the browser can
+// paint. This synchronous VM harness has no animation frame, so preserve the same
+// observable contract (paint first, persist once) without introducing timers.
+context.commitScheduleMutation = scheduleAction => {
+  context.renderCalendar({ deferAnalysis: true });
+  context.saveDB({ skipRender: true, scheduleAction });
+};
 const selectionStart = schedulerSource.indexOf('function updateSelectionCount');
 const selectionEnd = schedulerSource.indexOf('function copySelectedLessons');
 vm.runInContext(schedulerSource.slice(selectionStart, selectionEnd), context);

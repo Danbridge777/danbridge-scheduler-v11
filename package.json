@@ -6,7 +6,7 @@
     "node": "22"
   },
   "scripts": {
-    "test:first-priority": "node --test tests/production-first-priority-hardening.test.mjs tests/production-derived-commit.test.mjs tests/production-role-view-incremental-write.test.mjs",
+    "test:first-priority": "node --test tests/production-first-priority-hardening.test.mjs tests/production-derived-commit.test.mjs tests/production-role-view-incremental-write.test.mjs tests/schedule-render-performance.test.mjs",
     "posttest": "npm run test:first-priority && npm run test:notification-delivery && npm run test:scheduler-atomic",
     "test:scheduler-atomic": "node --test tests/production-scheduler-operation.test.mjs tests/production-scheduler-queue.test.mjs tests/production-scheduler-page.test.mjs",
     "test:scheduler-emulator": "firebase emulators:exec --only firestore --project demo-danbridge-scheduler-atomic \"node --test tests/production-scheduler-emulator.test.mjs\"",

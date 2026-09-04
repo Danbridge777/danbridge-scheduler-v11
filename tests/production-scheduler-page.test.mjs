@@ -19,7 +19,7 @@ function harness(){
   APP_RELEASE:'20.26.164',crypto:{randomUUID},navigator:{locks},sessionStorage:{getItem:k=>session.get(k),setItem:(k,v)=>session.set(k,v)},
   window:{indexedDB:{},__danbridgeGetDB:()=>clone(local),__danbridgeSetDB:db=>{local=clone(db);applied.push(clone(db))},renderAll:()=>{}},
   createBrowserOperationJournalStorage:()=>({load:async()=>{const pause=loadPause;loadPause=null;if(pause)await pause;return clone(stored)},save:async value=>{stored=clone(value)}}),
-  createProductionSchedulerQueue,acquireProductionSchedulerLease,filteredSchedulerDB:projectProductionSchedulerDb,emptyDB:base,dataHash:recordDataHash,deepCopy:clone,
+  createProductionSchedulerQueue,acquireProductionSchedulerLease,filteredSchedulerDB:projectProductionSchedulerDb,emptyDB:base,dataHash:recordDataHash,recordDataHash,deepCopy:clone,
   persistCurrentLocalView:()=>{},showSchedulerRecoveryInspector:()=>{},cloudStatus:(...args)=>statuses.push(args),setTimeout,clearTimeout,
   productionSchedulerOperationCall:async()=>{throw Object.assign(Error('offline'),{code:'functions/unavailable'})}
  });

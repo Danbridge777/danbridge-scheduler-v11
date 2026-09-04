@@ -111,7 +111,7 @@ function copyVisibleWeekToNextWeek(){
   snapshot();
   const existingKeys=new Set(db.lessons.map(keyOf));let added=0,duplicates=0,conflicts=0;const conflictRows=[];
   for(const lesson of source){const candidate=createFreshLessonCopy(lesson,{date:shiftDate(lesson.date,7),teacherIds:[...lessonTeacherIds(lesson)]});const key=keyOf(candidate);if(existingKeys.has(key)){duplicates++;continue}const conflict=conflictDetail(candidate,'');if(conflict){conflicts++;conflictRows.push(`${candidate.date} ${candidate.start}｜${student(candidate.studentId).name||candidate.title||'課程'}：${conflict.type}撞課 ${conflict.name||''}`);continue}const teacherWarning=teacherConflictDetail(candidate,'');if(teacherWarning)conflictRows.push(`${candidate.date} ${candidate.start}｜老師時間重複 ${teacherWarning.name}（已允許並標紅）`);db.lessons.push(candidate);existingKeys.add(key);logChange('複製目前顯示週到下一週',candidate,lesson);added++}
-  clearCalendarSelectionState();cancelPasteClickMode(false);saveDB();if(added>0){$('calendarMode').value='week';$('calendarDate').value=targetFrom;renderCalendar()}
+  clearCalendarSelectionState();cancelPasteClickMode(false);if(added>0){$('calendarMode').value='week';$('calendarDate').value=targetFrom}commitScheduleMutation('lesson.copy');
   let message=`已複製 ${added} 堂到下一週（${targetFrom}～${targetTo}）。${added>0?'\n畫面已自動切換，可再次複製到下下週。':''}`;if(duplicates)message+=`\n略過 ${duplicates} 堂完全重複課程。`;if(conflicts)message+=`\n略過 ${conflicts} 堂撞課。`;if(conflictRows.length)message+=`\n\n明細：\n${conflictRows.slice(0,10).join('\n')}${conflictRows.length>10?'\n……':''}`;alert(message)
 }
 
@@ -164,8 +164,8 @@ function copyVisibleMonth(){const base=new Date($('calendarDate').value+'T00:00:
     added++;
   }
 
-  saveDB();
-  alert(`已新增 ${added} 堂到 ${nextM}，跳過 ${skipped} 堂重複或無法對應的課程。`);
+  commitScheduleMutation('lesson.copy');
+  if(skipped)alert(`已新增 ${added} 堂到 ${nextM}，跳過 ${skipped} 堂重複或無法對應的課程。`);else toast(`已新增 ${added} 堂到 ${nextM}`);
 }
 
 

@@ -109,7 +109,7 @@ function saveDB(options={}){
   normalizeLessonStates();db=normalizeBranchData(db);
   try{window.__danbridgeReconcileLockedSettlements?.()}catch(error){console.error('Settlement adjustment reconciliation failed:',error)}
   localStorage.setItem(LS_KEY,JSON.stringify(db));
-  try{if(!options.skipRender)(options.calendarOnly?renderCalendar():renderAll())}
+  try{if(!options.skipRender)((options.calendarOnly||options.scheduleAction&&calendarSectionIsActive())?renderCalendar({deferAnalysis:true}):renderAll())}
   catch(error){
    console.error('Saved data, but a view renderer failed:',error);
    try{renderCalendar()}catch(calendarError){console.error('Calendar rerender failed after save:',calendarError)}

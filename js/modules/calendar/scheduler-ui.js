@@ -65,7 +65,27 @@ function ensureTeacherCalendarMonth(){
   $('calendarDate').value=todayStr();
   document.body.dataset.teacherWeekInitialized='1';
 }
-function renderCalendar(){ensureCalendarDefaults();ensureTeacherCalendarMonth();const mode=$('calendarMode').value,date=new Date($('calendarDate').value+'T00:00:00'),f=calendarFilterState();if(mode==='month')renderMonth(date,f);else renderWeek(date,f);renderCalendarAnalysis();setTimeout(enableDesktopMarquee,0)}
+let calendarAnalysisRenderHandle=null;
+function scheduleCalendarAnalysisRender(){
+  if(calendarAnalysisRenderHandle!==null){
+    if(typeof cancelIdleCallback==='function')cancelIdleCallback(calendarAnalysisRenderHandle);else clearTimeout(calendarAnalysisRenderHandle);
+  }
+  const run=()=>{calendarAnalysisRenderHandle=null;if(calendarSectionIsActive())renderCalendarAnalysis()};
+  calendarAnalysisRenderHandle=typeof requestIdleCallback==='function'?requestIdleCallback(run,{timeout:350}):setTimeout(run,90);
+}
+function renderCalendar(options={}){ensureCalendarDefaults();ensureTeacherCalendarMonth();const mode=$('calendarMode').value,date=new Date($('calendarDate').value+'T00:00:00'),f=calendarFilterState();if(mode==='month')renderMonth(date,f);else renderWeek(date,f);if(options.deferAnalysis)scheduleCalendarAnalysisRender();else renderCalendarAnalysis();setTimeout(enableDesktopMarquee,0)}
+let schedulePersistenceFrame=null,pendingScheduleAction='';
+function commitScheduleMutation(scheduleAction='lesson.update.fields'){
+  pendingScheduleAction=pendingScheduleAction&&pendingScheduleAction!==scheduleAction?'lesson.update.fields':scheduleAction;
+  const renderStarted=typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();
+  renderCalendar({deferAnalysis:true});
+  const renderFinished=typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();
+  if(document.body?.dataset){document.body.dataset.lastScheduleRenderMs=String(Math.max(0,renderFinished-renderStarted).toFixed(1));document.body.dataset.lastScheduleMutationQueuedAt=String(Date.now());document.body.dataset.lastScheduleAction=pendingScheduleAction}
+  if(schedulePersistenceFrame!==null)return;
+  const persist=()=>{schedulePersistenceFrame=null;const action=pendingScheduleAction||'lesson.update.fields';pendingScheduleAction='';saveDB({skipRender:true,scheduleAction:action})};
+  if(typeof requestAnimationFrame==='function')schedulePersistenceFrame=requestAnimationFrame(()=>setTimeout(persist,0));
+  else schedulePersistenceFrame=setTimeout(persist,0);
+}
 function updateSelectionCount(){
   const count=selectedLessonIds.size;
   const bar=$('selectionBar'),label=$('selectionCount'),btn=$('selectionModeBtn');
@@ -148,8 +168,8 @@ function copySelectedLessons(){
     if(keys.has(keyOf(candidate))||conflictDetail(candidate,'')){skipped++;continue}
     db.lessons.push(candidate);keys.add(keyOf(candidate));logChange('複製選取到下個月',candidate,old);added++;
   }
-  selectedLessonIds.clear();selectionMode=false;saveDB({scheduleAction:'lesson.copy'});
-  alert(`已複製 ${added} 堂到 ${toMonth}${skipped?`，略過 ${skipped} 堂重複或撞課課程`:''}。`);
+  selectedLessonIds.clear();selectionMode=false;commitScheduleMutation('lesson.copy');
+  toast(`已複製 ${added} 堂到 ${toMonth}${skipped?`，略過 ${skipped} 堂`:''}`);
 }
 async function deleteSelectedLessons(){
   if(!calendarOwnerCanEdit())return alert('目前帳號沒有修改課表的權限。');
@@ -160,7 +180,7 @@ async function deleteSelectedLessons(){
   const idSet=new Set(ids),removed=db.lessons.filter(l=>idSet.has(l.id));
   removed.forEach(l=>{window.syncMakeupForDeletedLesson?.(l);logChange('刪除選取課程',null,l)});
   db.lessons=db.lessons.filter(l=>!idSet.has(l.id));
-  selectedLessonIds.clear();selectionMode=false;saveDB({scheduleAction:'lesson.delete'});toast(`已刪除 ${removed.length} 堂課`);
+  selectedLessonIds.clear();selectionMode=false;commitScheduleMutation('lesson.delete');toast(`已刪除 ${removed.length} 堂課`);
 }
 function cancelSelectionAndPaste(clearClipboard=false){
   selectedLessonIds.clear();
@@ -291,7 +311,7 @@ function contextPasteLessons(){
     if(teacherConflictDetail(n,''))teacherWarnings++;
     db.lessons.push(n);keys.add(keyOf(n));logChange('依日期間距貼上課程',n,old);added++;
   }
-  hideCalendarContextMenu();exitSelectionAfterPaste();cancelPasteClickMode(true);saveDB({scheduleAction:'lesson.copy'});
+  hideCalendarContextMenu();exitSelectionAfterPaste();cancelPasteClickMode(true);commitScheduleMutation('lesson.copy');
   const targetLabel=targetTeacherId?`給 ${teacher(targetTeacherId).name||'目標老師'}`:'';
   toast(`已${targetLabel}貼上 ${added} 堂，略過 ${skipped} 堂${teacherWarnings?`，老師重疊 ${teacherWarnings} 堂已標紅`:''}`)
 }
