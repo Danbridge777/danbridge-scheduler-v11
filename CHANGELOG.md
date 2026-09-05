@@ -1,5 +1,12 @@
 # Changelog
 
+## 20.26.218（排課憑證預取直送）
+
+- staging 與 production 排課在使用者按下操作時即預取各自的單次 App Check 憑證；儲存時以 Firebase callable 官方 wire format 直送原本同一個 `onCall` Function，完整保留 Auth、App Check replay protection、角色與後端交易驗證。
+- 每枚 limited-use token 在交給一筆請求前即從預取槽原子取走，並立即背景補下一枚；連續動作不會重複使用同一憑證，也不必等按下儲存後才開始取得憑證。
+- callable client 只接受正式與 staging 的精確專案／Function 配對，傳送前後再次核對相同登入身分；錯誤維持原有 `functions/*` 分類供永久佇列安全重試。
+- 全部首頁資源與驗收指紋統一為 `20.26.218`；production 尚未部署，必須先通過 staging 真實 30 堂連續操作門檻。
+
 ## 20.26.217（權威回條即時呈現）
 
 - 排課後端已完成權威交易、fresh readback、不可變稽核、三角色視圖與通知後，瀏覽器一驗證完整 committed 回條便立即顯示雲端確認，不再等待 IndexedDB 日誌收尾才更新狀態。
