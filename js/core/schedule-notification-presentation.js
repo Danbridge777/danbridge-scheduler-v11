@@ -24,7 +24,11 @@ export function createScheduleNotificationPresenter({document,button,render,getA
  const show=items=>{
   if(!items.length)return;
   const type=items[0].notificationType||'schedule';
-  const batch=items.filter(item=>(item.notificationType||'schedule')===type);
+  // Render one immutable server batch at a time.  Flattening every unread
+  // notification used to create thousands of table rows and could freeze the
+  // scheduler after several rapid operations.  The badge still exposes the
+  // full unread count; acknowledgement advances to the next server batch.
+  const batch=items.filter(item=>(item.notificationType||'schedule')===type).slice(0,1);
   batch.forEach(item=>seen.add(item.id));
   render(batch);
  };

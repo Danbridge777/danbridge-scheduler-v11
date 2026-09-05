@@ -27,8 +27,23 @@ test('編輯和連續操作期間不搶焦點，稍後查看不重複彈出，�
  busy=false;listeners.get('pointerdown')();now=12000;run();assert.equal(shown.length,0);
  now=13000;run();assert.deepEqual(shown,[['external']]);
  presenter.update(rows);run();assert.equal(shown.length,1);
- buttonListeners.get('click')();assert.deepEqual(shown[1],['self','external']);
+ buttonListeners.get('click')();assert.deepEqual(shown[1],['self']);
  presenter.update([]);assert.equal(button.hidden,true);
  presenter.stop();assert.equal(timers.size,0);assert.equal(listeners.size,0);assert.equal(buttonListeners.size,0);
  presenter.update(rows);assert.equal(button.hidden,true);assert.equal(timers.size,0);assert.equal(shown.length,2);
+});
+
+test('大量未讀通知一次只渲染最新的單一伺服器批次',()=>{
+ const listeners=new Map(),buttonListeners=new Map(),shown=[];
+ const document={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
+ const button={hidden:true,textContent:'',setAttribute(){},addEventListener:(name,fn)=>buttonListeners.set(name,fn),removeEventListener:name=>buttonListeners.delete(name)};
+ const rows=Array.from({length:300},(_,index)=>({id:`notice-${index}`,createdBy:'other',details:Array.from({length:30},()=>({}))}));
+ const presenter=createScheduleNotificationPresenter({document,button,render:batch=>shown.push(batch),getActor:()=>({uid:'owner'}),isBusy:()=>true});
+ presenter.update(rows);
+ buttonListeners.get('click')();
+ assert.equal(button.textContent,'課表通知（300）');
+ assert.equal(shown.length,1);
+ assert.equal(shown[0].length,1);
+ assert.equal(shown[0][0].details.length,30);
+ presenter.stop();
 });

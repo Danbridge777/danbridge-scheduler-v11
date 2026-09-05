@@ -31,8 +31,8 @@ test('真實瀏覽器：新通知不打斷新增、移動、刪除，未讀內�
  await expect(page.getByRole('dialog')).not.toBeVisible();
  await page.getByRole('button',{name:'關閉編輯'}).click();
  await expect(page.getByRole('dialog')).toBeVisible();
- await expect(page.locator('#details')).toHaveText('teacher-fixture,scheduler-fixture');
+ await expect(page.locator('#details')).toHaveText('teacher-fixture');
  await page.getByRole('button',{name:'稍後查看'}).click();
  await page.getByRole('button',{name:'查看 3 則課表通知'}).click();
- await expect(page.locator('#details')).toHaveText('own-fixture,teacher-fixture,scheduler-fixture');
+ await expect(page.locator('#details')).toHaveText('own-fixture');
 });
