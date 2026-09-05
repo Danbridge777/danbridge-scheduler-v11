@@ -1,26 +1,26 @@
 const { test, expect } = require('@playwright/test');
 
-const RELEASE = '20.26.206';
-const CLOUD_RELEASE = '20.26.206';
-const SCHEDULER_STUDENT_TOOLS_RELEASE = '20.26.206';
-const APP_SHELL_RELEASE = '20.26.206';
-const BUSINESS_RELEASE = '20.26.206';
-const TEACHER_KPI_RELEASE = '20.26.206';
-const BRANCH_SCOPE_RELEASE = '20.26.206';
-const ROLE_UX_RELEASE = '20.26.206';
-const REPORT_STYLE_RELEASE = '20.26.206';
-const ROLE_UX_STYLE_RELEASE = '20.26.206';
-const PWA_RELEASE = '20.26.206';
-const PWA_STYLE_RELEASE = '20.26.206';
-const CLEAN_FIELD_RELEASE = '20.26.206';
-const LANGUAGE_RELEASE = '20.26.206';
-const INTERFACE_CLARITY_STYLE_RELEASE = '20.26.206';
-const SCHEDULER_UI_RELEASE = '20.26.206';
-const PREMIUM_CONTROLS_RELEASE = '20.26.206';
-const PERMANENT_HISTORY_RELEASE = '20.26.206';
-const APPLICATION_FEATURES_RELEASE = '20.26.206';
-const SCHEDULING_EFFICIENCY_RELEASE = '20.26.206';
-const CROSS_PLATFORM_LAYOUT_RELEASE = '20.26.206';
+const RELEASE = '20.26.207';
+const CLOUD_RELEASE = '20.26.207';
+const SCHEDULER_STUDENT_TOOLS_RELEASE = '20.26.207';
+const APP_SHELL_RELEASE = '20.26.207';
+const BUSINESS_RELEASE = '20.26.207';
+const TEACHER_KPI_RELEASE = '20.26.207';
+const BRANCH_SCOPE_RELEASE = '20.26.207';
+const ROLE_UX_RELEASE = '20.26.207';
+const REPORT_STYLE_RELEASE = '20.26.207';
+const ROLE_UX_STYLE_RELEASE = '20.26.207';
+const PWA_RELEASE = '20.26.207';
+const PWA_STYLE_RELEASE = '20.26.207';
+const CLEAN_FIELD_RELEASE = '20.26.207';
+const LANGUAGE_RELEASE = '20.26.207';
+const INTERFACE_CLARITY_STYLE_RELEASE = '20.26.207';
+const SCHEDULER_UI_RELEASE = '20.26.207';
+const PREMIUM_CONTROLS_RELEASE = '20.26.207';
+const PERMANENT_HISTORY_RELEASE = '20.26.207';
+const APPLICATION_FEATURES_RELEASE = '20.26.207';
+const SCHEDULING_EFFICIENCY_RELEASE = '20.26.207';
+const CROSS_PLATFORM_LAYOUT_RELEASE = '20.26.207';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
   await page.route('https://www.gstatic.com/**', route => route.abort());
@@ -36,9 +36,9 @@ test('signed-out entry keeps private application content isolated', async ({ pag
 test('永久操作日誌在重新整理後仍可從 IndexedDB 完整讀回',async({page},testInfo)=>{
   await page.goto('/index.html',{waitUntil:'domcontentloaded'});
   const key=`staging:e2e@example.com:${testInfo.project.name}-${Date.now()}`,rows=[{schema:'danbridge-operation-journal-v1',operationId:'device:1',status:'pending',attempts:0,operation:{operationId:'device:1',recordId:'lesson-1'}}];
-  await page.evaluate(async({key,rows})=>{const{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.206'),storage=createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key});await storage.save(rows);sessionStorage.setItem('e2eJournalKey',key)},{key,rows});
+  await page.evaluate(async({key,rows})=>{const{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.207'),storage=createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key});await storage.save(rows);sessionStorage.setItem('e2eJournalKey',key)},{key,rows});
   await page.reload({waitUntil:'domcontentloaded'});
-  const readback=await page.evaluate(async()=>{const key=sessionStorage.getItem('e2eJournalKey'),{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.206');return createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key}).load()});
+  const readback=await page.evaluate(async()=>{const key=sessionStorage.getItem('e2eJournalKey'),{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.207');return createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key}).load()});
   expect(readback).toEqual(rows);
 });
 
@@ -70,7 +70,7 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/app/scheduler-student-tools.js?v=${SCHEDULER_STUDENT_TOOLS_RELEASE}`);
   expect(sources).toContain(`./js/ui/clean-field-hints.js?v=${CLEAN_FIELD_RELEASE}`);
   expect(sources).toContain(`./js/modules/teachers/teacher-kpi.js?v=${TEACHER_KPI_RELEASE}`);
-  expect(sources).toContain('./js/modules/teachers/teacher-leave.js?v=20.26.206');
+  expect(sources).toContain('./js/modules/teachers/teacher-leave.js?v=20.26.207');
   expect(sources).toContain(`./js/core/branch-business-scope.js?v=${BRANCH_SCOPE_RELEASE}`);
   expect(sources).toContain(`./js/app/v20014-role-responsive-ux.js?v=${ROLE_UX_RELEASE}`);
   expect(sources).toContain(`./js/core/pwa-installation.js?v=${PWA_RELEASE}`);
@@ -81,7 +81,7 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/app/v20-scheduling-efficiency.js?v=${SCHEDULING_EFFICIENCY_RELEASE}`);
   const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(elements => elements.map(element => element.getAttribute('href')));
   expect(styles).toContain(`./css/core/73-v20014-role-responsive-ux.css?v=${ROLE_UX_STYLE_RELEASE}`);
-  expect(styles).toContain('./css/teachers/24-teacher-leave.css?v=20.26.206');
+  expect(styles).toContain('./css/teachers/24-teacher-leave.css?v=20.26.207');
   expect(styles).toContain(`./css/core/37-v15252-lesson-reporting-and-toolbar-fix.css?v=${REPORT_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/77-pwa-install-and-update.css?v=${PWA_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/67-v185-interface-clarity.css?v=${INTERFACE_CLARITY_STYLE_RELEASE}`);
@@ -90,7 +90,14 @@ test('critical teacher and finance resources load the current release', async ({
   const manifest = await page.locator('link[rel="manifest"]').getAttribute('href');
   expect(manifest).toBe('./manifest.webmanifest');
   const appleIcon = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
-  expect(appleIcon).toBe('./icon-192.png?v=20.26.206');
+  expect(appleIcon).toBe('./icon-192.png?v=20.26.207');
+});
+
+test('首頁啟用中的本機 CSS 與 JavaScript 全部使用同一發布指紋',async({page})=>{
+  await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+  const assets=await page.locator('link[rel="stylesheet"][href],script[src]').evaluateAll(elements=>elements.map(element=>element.getAttribute(element.tagName==='LINK'?'href':'src')).filter(value=>/^(?:\.\/)?(?:css|js)\//.test(value)));
+  expect(assets.length).toBeGreaterThan(100);
+  expect(assets.filter(value=>!value.endsWith(`?v=${RELEASE}`))).toEqual([]);
 });
 
 test('主選單在桌機、平板與手機都只顯示一致文字',async({page})=>{

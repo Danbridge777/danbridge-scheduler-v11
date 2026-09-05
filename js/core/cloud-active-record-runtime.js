@@ -1,5 +1,5 @@
 import {prepareActiveRecordSync} from './cloud-active-record-sync.js';
-import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.206';
+import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.207';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
 const revisionConflict=value=>/revision\s*衝突|revision conflict/i.test(String(value||''));
