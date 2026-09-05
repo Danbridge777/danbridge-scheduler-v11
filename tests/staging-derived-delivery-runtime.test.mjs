@@ -4,7 +4,7 @@ import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
 
 const require=createRequire(import.meta.url);
-const {createStagingDerivedDeliveryRuntime,restorePreviousLessons,lessonChanges,buildNotifications,applyPayloadToCachedDb,applyAuditPayloadToCachedDb,applyAuthorityPayloadToCachedDb,applyPayloadToCachedDocuments,advanceCachedSourceModel}=require('../functions/staging-derived-delivery-runtime.cjs');
+const {createStagingDerivedDeliveryRuntime,restorePreviousLessons,restorePreviousAuthorityDb,lessonChanges,buildNotifications,applyPayloadToCachedDb,applyAuditPayloadToCachedDb,applyAuthorityPayloadToCachedDb,applyPayloadToCachedDocuments,advanceCachedSourceModel}=require('../functions/staging-derived-delivery-runtime.cjs');
 const {buildChangeRecordId}=await import('../js/core/cloud-change-record-identity.js');
 
 const before={id:'lesson-1',date:'2026-09-05',start:'17:20',end:'17:50',studentId:'student-1',teacherIds:['teacher-1'],title:'測試課程',branchId:'art_museum'};
@@ -53,6 +53,17 @@ test('30 堂課與 30 筆稽核同一 authority payload 只前進一份快取，
  assert.equal(result.changes.length,30);
  assert.deepEqual(result.changes.map(row=>row.id),audits.toReversed().map(row=>row.id));
  assert.deepEqual(start,{lessons:[],changes:[]});
+});
+
+test('快取未命中時從已提交的 30 堂課與 30 筆稽核精確回推完整前一版',()=>{
+ const count=30,previous={lessons:Array.from({length:count},(_,index)=>({...before,id:`lesson-${index}`,start:`${String(8+Math.floor(index/2)).padStart(2,'0')}:${index%2?'30':'00'}`})),changes:[{id:'audit-old',kind:'seed'}],students:current.students},nextLessons=previous.lessons.map(row=>({...row,start:row.start.endsWith('30')?row.start.replace('30','35'):row.start.replace('00','05')})),events=Array.from({length:count},(_,index)=>({id:`audit-${index}`,kind:'move',lessonId:nextLessons[index].id})),changedKeys=[],baselineRecords=[],localRecords=[];
+ for(let index=0;index<count;index++){const recordId=nextLessons[index].id;changedKeys.push({collection:'lessons',recordId});baselineRecords.push({collection:'lessons',recordId,exists:true,deleted:false,record:previous.lessons[index]});localRecords.push({collection:'lessons',recordId,exists:true,deleted:false,record:nextLessons[index]})}
+ const previousChangeCount=previous.changes.length;
+ for(let index=0;index<count;index++){const recordId=buildChangeRecordId(previousChangeCount+index,events[index]);changedKeys.push({collection:'changes',recordId});baselineRecords.push({collection:'changes',recordId,exists:false,deleted:false,record:null});localRecords.push({collection:'changes',recordId,exists:true,deleted:false,record:events[index]})}
+ const authorityPayload={save:payload.save,changedKeys,baselineRecords,localRecords},committed=applyAuthorityPayloadToCachedDb(previous,authorityPayload,{buildRecordId:buildChangeRecordId});
+ assert.deepEqual(restorePreviousAuthorityDb(committed,authorityPayload,{buildRecordId:buildChangeRecordId}),previous);
+ const corrupted=structuredClone(committed);corrupted.changes[0].kind='tampered';
+ assert.throws(()=>restorePreviousAuthorityDb(corrupted,authorityPayload,{buildRecordId:buildChangeRecordId}),/current mismatch|identity invalid/);
 });
 
 test('常駐文件快照只依同一筆已提交 payload 前進，並保留 revision、tombstone 與 sourceHash',()=>{

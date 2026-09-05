@@ -322,7 +322,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.225'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.226'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -774,6 +774,8 @@ assert.match(cloudSource, /for\(const \[id,desired\] of \[\.\.\.schedulerOptimis
 assert.match(cloudSource, /cloudRole==='teacher'&&cloudCanManageSchedule[\s\S]*originalSaveDB[\s\S]*scheduleSchedulerChanges/, 'every shared calendar save path immediately queues Wendy synchronization');
 const roleUxSource=fs.readFileSync(path.join(root,'js/app/v20014-role-responsive-ux.js'),'utf8');
 assert.match(roleUxSource, /const scheduler=accessContext\(\)\.canManageSchedule===true[\s\S]*hidden=scheduler\?[\s\S]*if\(!scheduler\)\$\$\('\.floating-actions'\)/, 'responsive teacher UI preserves every Wendy editing entry point');
+assert.match(roleUxSource,/DOMContentLoaded',install,\{once:true\}/,'role projection installs as soon as the DOM is ready so iPad WebKit cannot lose the first calendar click to a delayed toolbar mutation');
+assert.doesNotMatch(roleUxSource,/setTimeout\(install,\s*350\)/,'role projection has no delayed startup mutation during the first user gesture');
 const schedulerUiSource=fs.readFileSync(path.join(root,'js/modules/calendar/scheduler-ui.js'),'utf8');
 const marqueeSource=fs.readFileSync(path.join(root,'js/modules/calendar/marquee-multi-selection.js'),'utf8');
 const schedulerCourseOperationsSource=fs.readFileSync(path.join(root,'js/modules/calendar/course-operations.js'),'utf8');

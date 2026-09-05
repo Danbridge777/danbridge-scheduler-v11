@@ -202,5 +202,12 @@
     /* 老師與校區管理者的課表修改權限由單一課表控制器處理，不再全頁攔截日期格點擊。 */
     apply();
   }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(install,350));else setTimeout(install,350);
+  /*
+   * Install as soon as the static DOM is ready.  Delaying this by 350 ms could
+   * land between pointer-down and pointer-up on iPad WebKit, mutate the
+   * calendar toolbar, and make the browser cancel the user's first click.
+   * Authentication applies the role projection again after it resolves, so
+   * the initial pass does not need to wait for the cloud identity.
+   */
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 })();
