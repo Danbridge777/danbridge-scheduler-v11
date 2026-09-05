@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.225（排課原生雜湊快路）
+
+- staging 排課後端的逐筆 envelope 與 operation-chain 改由 Node 原生 SHA-256 計算，移除 30 堂、60 筆原子操作規劃中的 JavaScript 雜湊瓶頸。
+- 原生快路仍以相同 canonical schema、完整 record 內容與前一筆 head 建立雜湊；新增對照測試逐欄確認產生的計畫與原安全實作完全一致。
+- production 保持未部署，必須先通過 staging 真實 30 堂連續操作、跨角色讀回與測試資料清理才發布。
+
 ## 20.26.224（排課權威規劃快路）
 
 - staging 排課後端只對已由權威快照證明、且仍沿用同一物件參照的未變紀錄略過重複複製與序列化；新增、修改、刪除、墓碑與 changes 審計仍逐筆完整驗證。
