@@ -24,8 +24,9 @@ function restorePreviousLessons(currentDb,payload){const previous=clone(currentD
 function lessonChanges(previous,current){const before=new Map((previous.lessons||[]).map(row=>[String(row.id),row])),after=new Map((current.lessons||[]).map(row=>[String(row.id),row])),rows=[];for(const[id,value]of after){const prior=before.get(id);if(!prior)rows.push({type:'added',lessonId:id,before:null,after:value});else if(notificationFingerprint(prior)!==notificationFingerprint(value))rows.push({type:'modified',lessonId:id,before:prior,after:value})}for(const[id,value]of before)if(!after.has(id))rows.push({type:'removed',lessonId:id,before:value,after:null});return rows}
 
 function applyPayloadToCachedDb(previousDb,payload){
- const next=clone(previousDb),keys=payload?.changedKeys||[],baselines=payload?.baselineRecords||[],locals=payload?.localRecords||[];
+ const keys=payload?.changedKeys||[],baselines=payload?.baselineRecords||[],locals=payload?.localRecords||[],touched=new Set(keys.map(key=>text(key?.collection))),next={...previousDb};
  if(!keys.length||keys.length!==baselines.length||keys.length!==locals.length)throw new Error('staging derived cache payload count invalid');
+ for(const collection of touched){if(!Array.isArray(previousDb?.[collection]))throw new Error(`staging derived cache collection invalid: ${collection}`);next[collection]=[...previousDb[collection]]}
  for(let index=0;index<keys.length;index++){
   const key=keys[index],baseline=baselines[index],local=locals[index],collection=text(key?.collection),recordId=text(key?.recordId);
   if(!Object.prototype.hasOwnProperty.call(next,collection)||!Array.isArray(next[collection])||!recordId||baseline?.collection!==collection||baseline?.recordId!==recordId||local?.collection!==collection||local?.recordId!==recordId)throw new Error('staging derived cache payload identity invalid');
@@ -38,7 +39,7 @@ function applyPayloadToCachedDb(previousDb,payload){
 }
 
 function applyAuditPayloadToCachedDb(previousDb,payload,{buildRecordId}={}){
- const next=clone(previousDb),keys=payload?.changedKeys||[],baselines=payload?.baselineRecords||[],locals=payload?.localRecords||[];
+ const next={...previousDb,changes:[...(previousDb?.changes||[])]},keys=payload?.changedKeys||[],baselines=payload?.baselineRecords||[],locals=payload?.localRecords||[];
  if(typeof buildRecordId!=='function'||keys.length!==1||baselines.length!==1||locals.length!==1)throw new Error('staging derived audit cache payload count invalid');
  const key=keys[0],baseline=baselines[0],local=locals[0],recordId=text(key?.recordId),rows=next?.changes;
  if(!Array.isArray(rows)||key?.collection!=='changes'||!recordId||baseline?.collection!=='changes'||baseline?.recordId!==recordId||baseline.exists!==false||baseline.deleted!==false||baseline.record!==null||local?.collection!=='changes'||local?.recordId!==recordId||local.exists!==true||local.deleted!==false||!local.record||typeof local.record!=='object'||Array.isArray(local.record))throw new Error('staging derived audit cache payload identity invalid');
@@ -50,12 +51,29 @@ function applyAuditPayloadToCachedDb(previousDb,payload,{buildRecordId}={}){
  return next
 }
 
+function applyAuditPayloadsToCachedDb(previousDb,payload,{buildRecordId}={}){
+ const next={...previousDb,changes:[...(previousDb?.changes||[])]},keys=payload?.changedKeys||[],baselines=payload?.baselineRecords||[],locals=payload?.localRecords||[];
+ if(typeof buildRecordId!=='function'||!keys.length||keys.length!==baselines.length||keys.length!==locals.length)throw new Error('staging derived audit batch cache payload count invalid');
+ const rows=next.changes;
+ for(let index=0;index<keys.length;index++){
+  const key=keys[index],baseline=baselines[index],local=locals[index],recordId=text(key?.recordId);
+  if(key?.collection!=='changes'||!recordId||baseline?.collection!=='changes'||baseline?.recordId!==recordId||baseline.exists!==false||baseline.deleted!==false||baseline.record!==null||local?.collection!=='changes'||local?.recordId!==recordId||local.exists!==true||local.deleted!==false||!local.record||typeof local.record!=='object'||Array.isArray(local.record))throw new Error('staging derived audit batch cache payload identity invalid');
+  const existingPosition=rows.findIndex((row,rowIndex)=>buildRecordId(rows.length-1-rowIndex,row)===recordId);
+  if(existingPosition>=0){if(!jsonRecordsEqual(rows[existingPosition],local.record))throw new Error(`staging derived audit batch cache replay mismatch: ${recordId}`);continue}
+  const recordIndex=rows.length;
+  if(buildRecordId(recordIndex,local.record)!==recordId)throw new Error(`staging derived audit batch cache append sequence invalid: ${recordId}`);
+  rows.unshift(clone(local.record));
+ }
+ return next
+}
+
 function selectPayload(payload,predicate){const indexes=[];for(let index=0;index<(payload?.changedKeys||[]).length;index++)if(predicate(payload.changedKeys[index],index))indexes.push(index);return{save:payload.save,changedKeys:indexes.map(index=>payload.changedKeys[index]),baselineRecords:indexes.map(index=>payload.baselineRecords[index]),localRecords:indexes.map(index=>payload.localRecords[index])}}
-function applyAuthorityPayloadToCachedDb(previousDb,payload,{buildRecordId}={}){let next=clone(previousDb);const records=selectPayload(payload,key=>key?.collection!=='changes');if(records.changedKeys.length)next=applyPayloadToCachedDb(next,records);const audits=selectPayload(payload,key=>key?.collection==='changes');for(let index=0;index<audits.changedKeys.length;index++)next=applyAuditPayloadToCachedDb(next,{save:payload.save,changedKeys:[audits.changedKeys[index]],baselineRecords:[audits.baselineRecords[index]],localRecords:[audits.localRecords[index]]},{buildRecordId});return next}
+function applyAuthorityPayloadToCachedDb(previousDb,payload,{buildRecordId}={}){let next={...previousDb};const records=selectPayload(payload,key=>key?.collection!=='changes');if(records.changedKeys.length)next=applyPayloadToCachedDb(next,records);const audits=selectPayload(payload,key=>key?.collection==='changes');if(audits.changedKeys.length)next=applyAuditPayloadsToCachedDb(next,audits,{buildRecordId});return next}
 
 function applyPayloadToCachedDocuments(previous,payload,sourceHash){
- const next=clone(previous),keys=payload?.changedKeys||[],baselines=payload?.baselineRecords||[],locals=payload?.localRecords||[];
- if(!next||typeof next!=='object'||Array.isArray(next)||!/^record-v1:[a-f0-9]{64}$/.test(sourceHash)||!keys.length||keys.length!==baselines.length||keys.length!==locals.length)throw new Error('staging derived document cache payload invalid');
+ const keys=payload?.changedKeys||[],baselines=payload?.baselineRecords||[],locals=payload?.localRecords||[],touched=new Set(keys.map(key=>text(key?.collection))),next={...previous};
+ if(!previous||typeof previous!=='object'||Array.isArray(previous)||!/^record-v1:[a-f0-9]{64}$/.test(sourceHash)||!keys.length||keys.length!==baselines.length||keys.length!==locals.length)throw new Error('staging derived document cache payload invalid');
+ for(const collection of touched){if(!Array.isArray(previous?.[collection]))throw new Error(`staging derived document cache collection invalid: ${collection}`);next[collection]=[...previous[collection]]}
  for(let index=0;index<keys.length;index++){
   const key=keys[index],baseline=baselines[index],local=locals[index],collection=text(key?.collection),recordId=text(key?.recordId),rows=next[collection];
   if(!Array.isArray(rows)||!recordId||baseline?.collection!==collection||baseline?.recordId!==recordId||local?.collection!==collection||local?.recordId!==recordId||local.exists!==true||!Number.isSafeInteger(baseline.revision)||baseline.revision<0||local.revision!==baseline.revision)throw new Error('staging derived document cache identity invalid');
@@ -102,11 +120,11 @@ async function createStagingDerivedDeliveryRuntime({firestore,serverTimestamp,no
   const cacheCurrent=cache?.activationEpoch===activationEpoch&&cache.headHash===completion.resultHeadHash,cachePrevious=cache?.activationEpoch===activationEpoch&&cache.headHash===liveHead.previousHeadHash,auditKeys=(payload.changedKeys||[]).filter(key=>key.collection==='changes'),recordPayload=selectPayload(payload,key=>key?.collection!=='changes');
   const lessonOnly=recordPayload.changedKeys.length>0&&recordPayload.changedKeys.every(key=>key.collection==='lessons');let sourceDb,sourceHash,previousDb,cacheHit=false,loadedCurrent=false;
   if(lessonOnly&&(cacheCurrent||cachePrevious)){
-   cacheHit=true;if(cacheCurrent){sourceDb=clone(cache.sourceDb);previousDb=restorePreviousLessons(sourceDb,recordPayload)}else{previousDb=clone(cache.sourceDb);sourceDb=applyAuthorityPayloadToCachedDb(previousDb,payload,{buildRecordId:buildChangeRecordId})}sourceHash=recordDataHash(sourceDb)
+   cacheHit=true;if(cacheCurrent){sourceDb=cache.sourceDb;previousDb=restorePreviousLessons(sourceDb,recordPayload)}else{previousDb=cache.sourceDb;sourceDb=applyAuthorityPayloadToCachedDb(previousDb,payload,{buildRecordId:buildChangeRecordId})}sourceHash=recordDataHash(sourceDb)
   }else{const loaded=await hydrate(activationEpoch);loadedCurrent=true;if(loaded.model.headHash!==completion.resultHeadHash)throw new Error('staging derived delivery loaded head mismatch');sourceDb=loaded.sourceDb;sourceHash=loaded.sourceHash;previousDb=lessonOnly?restorePreviousLessons(sourceDb,recordPayload):sourceDb}
   const previousSourceHash=lessonOnly?recordDataHash(previousDb):sourceHash,changedLessonIds=lessonOnly?recordPayload.changedKeys.map(key=>key.recordId):[],access=(await firestore.collection('companyAccess').get()).docs.map(row=>({id:row.id,...(row.data()||{})})),roleStarted=now(),rolePromise=publishRoleViews(sourceDb,previousDb,access,activationEpoch,sourceHash,previousSourceHash,payload.save,{incremental:lessonOnly}).then(value=>({value,ms:now()-roleStarted})),metaStarted=now(),metaPromise=publishLessonMeta(sourceDb,{changedLessonIds,incremental:lessonOnly}).then(value=>({value,ms:now()-metaStarted})),notificationStarted=now(),notificationPromise=publishNotifications(payload,sourceDb,access,sourceHash).then(value=>({value,ms:now()-notificationStarted})),[roleResult,metaResult,notificationResult]=await Promise.all([rolePromise,metaPromise,notificationPromise]),headAfter=await readDocument(headPath(activationEpoch));
-  if(headAfter?.headHash!==completion.resultHeadHash)throw new Error('staging derived delivery head changed during publication');const documentsByCollection=(cacheCurrent||loadedCurrent)?clone(cache.documentsByCollection):applyPayloadToCachedDocuments(cache.documentsByCollection,payload,sourceHash),auditRevision=cachePrevious&&!cacheCurrent&&!loadedCurrent?(Number(cache.auditRevision)||0)+auditKeys.length:Number(cache.auditRevision)||0,auditLastRecordId=cachePrevious&&!cacheCurrent&&!loadedCurrent&&auditKeys.length?text(auditKeys.at(-1).recordId):text(cache.auditLastRecordId);cache={...cache,activationEpoch,headHash:completion.resultHeadHash,sourceHash,sourceDb:clone(sourceDb),documentsByCollection,auditRevision,auditLastRecordId};const roleViews=roleResult.value,result=Object.freeze({state:'verified',sourceHash,cacheHit,roleViewCount:roleViews.length,incrementalRoleViews:roleViews.filter(row=>row.incremental).length,lessonMetaWrites:metaResult.value,notificationCount:notificationResult.value,roleMs:roleResult.ms,lessonMetaMs:metaResult.ms,notificationMs:notificationResult.ms,totalMs:now()-started});console.info('STAGING_V2_DERIVED_DELIVERY',JSON.stringify(result));return result
+  if(headAfter?.headHash!==completion.resultHeadHash)throw new Error('staging derived delivery head changed during publication');const documentsByCollection=(cacheCurrent||loadedCurrent)?cache.documentsByCollection:applyPayloadToCachedDocuments(cache.documentsByCollection,payload,sourceHash),auditRevision=cachePrevious&&!cacheCurrent&&!loadedCurrent?(Number(cache.auditRevision)||0)+auditKeys.length:Number(cache.auditRevision)||0,auditLastRecordId=cachePrevious&&!cacheCurrent&&!loadedCurrent&&auditKeys.length?text(auditKeys.at(-1).recordId):text(cache.auditLastRecordId);cache={...cache,activationEpoch,headHash:completion.resultHeadHash,sourceHash,sourceDb,documentsByCollection,auditRevision,auditLastRecordId};const roleViews=roleResult.value,result=Object.freeze({state:'verified',sourceHash,cacheHit,roleViewCount:roleViews.length,incrementalRoleViews:roleViews.filter(row=>row.incremental).length,lessonMetaWrites:metaResult.value,notificationCount:notificationResult.value,roleMs:roleResult.ms,lessonMetaMs:metaResult.ms,notificationMs:notificationResult.ms,totalMs:now()-started});console.info('STAGING_V2_DERIVED_DELIVERY',JSON.stringify(result));return result
  }})
 }
 
-module.exports={createStagingDerivedDeliveryRuntime,restorePreviousLessons,lessonChanges,buildNotifications,applyPayloadToCachedDb,applyAuditPayloadToCachedDb,applyAuthorityPayloadToCachedDb,applyPayloadToCachedDocuments};
+module.exports={createStagingDerivedDeliveryRuntime,restorePreviousLessons,lessonChanges,buildNotifications,applyPayloadToCachedDb,applyAuditPayloadToCachedDb,applyAuditPayloadsToCachedDb,applyAuthorityPayloadToCachedDb,applyPayloadToCachedDocuments};
