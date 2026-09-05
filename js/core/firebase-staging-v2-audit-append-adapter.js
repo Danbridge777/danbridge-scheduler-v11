@@ -40,7 +40,7 @@ export function createFirebaseStagingV2AuditAppendCloudRuntimeBinder(raw){
   for(const req of requests){const current=source(fence,authority,req);if(current.epoch!==src.epoch||current.authorityHash!==src.authorityHash)throw new Error('staging V2 audit batch source split')}
   const cursorPath=STAGING_V2_AUDIT_APPEND_CURSOR_PATH(src.epoch),recordPaths=requests.map(req=>`${STAGING_V2_AUDIT_APPEND_RECORDS_PATH(src.epoch)}/${req.key.recordId}`),receiptPaths=requests.map(req=>STAGING_V2_AUDIT_APPEND_RECEIPT_PATH(src.epoch,req.save.saveId));let phase='created';
   await input.firestore.runTransaction(async transaction=>{
-   const rows=await Promise.all([transaction.get(ref(FENCE_PATH)),transaction.get(ref(authorityPath(src.epoch,src.seedId))),transaction.get(ref(cursorPath)),...recordPaths.map(path=>transaction.get(ref(path))),...receiptPaths.map(path=>transaction.get(ref(path)))]),inside=source(normalized(rows[0],'staging V2 audit transaction fence'),normalized(rows[1],'staging V2 audit transaction authority'),first);
+   const transactionRefs=[ref(FENCE_PATH),ref(authorityPath(src.epoch,src.seedId)),ref(cursorPath),...recordPaths.map(ref),...receiptPaths.map(ref)],rows=await transaction.getAll(...transactionRefs),inside=source(normalized(rows[0],'staging V2 audit transaction fence'),normalized(rows[1],'staging V2 audit transaction authority'),first);
    if(inside.epoch!==src.epoch||inside.authorityHash!==src.authorityHash)throw new Error('staging V2 audit source changed');
    const records=rows.slice(3,3+requests.length).map((row,index)=>normalized(row,`staging V2 audit record ${index}`)),receipts=rows.slice(3+requests.length).map((row,index)=>normalized(row,`staging V2 audit receipt ${index}`)),existing=records.map((row,index)=>row!==null||receipts[index]!==null);
    if(existing.some(Boolean)){
@@ -56,7 +56,7 @@ export function createFirebaseStagingV2AuditAppendCloudRuntimeBinder(raw){
    }
    transaction.set(ref(cursorPath),{...lastPayload.cursor,persistedAt:stamp},{merge:false});
   });
-  const fresh=await Promise.all([...recordPaths.map(path=>ref(path).get()),...receiptPaths.map(path=>ref(path).get())]),confirmed=[];
+  const fresh=await input.firestore.getAll(...[...recordPaths,...receiptPaths].map(ref)),confirmed=[];
   for(let index=0;index<requests.length;index++)confirmed.push(verifyReplay(normalized(fresh[requests.length+index],`staging V2 audit fresh receipt ${index}`),normalized(fresh[index],`staging V2 audit fresh record ${index}`),requests[index],src));
   const last=confirmed.at(-1);return Object.freeze({state:'complete-confirmed',transactionState:phase,projectId:PROJECT_ID,activationEpoch:src.epoch,resultHeadHash:last.appendHash,commitHash:last.appendHash,saveId:first.save.saveId,operationCount:requests.length,persistedAt:last.persistedAt,writeCount:phase==='created'?requests.length*2+1:0});
  };
