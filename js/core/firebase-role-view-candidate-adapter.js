@@ -1,4 +1,4 @@
-import {buildRoleViewCandidatePlan,verifyRoleViewCandidateDocuments} from './cloud-role-view-candidate.js?v=20.26.214';
+import {buildRoleViewCandidatePlan,verifyRoleViewCandidateDocuments} from './cloud-role-view-candidate.js?v=20.26.215';
 
 const CORE_FIELDS=['schema','environment','companyId','runId','sourceHash','viewId','email','kind','viewHash','collection','recordId','record','recordIndex'];
 const clone=value=>JSON.parse(JSON.stringify(value));
