@@ -65,7 +65,28 @@ function ensureTeacherCalendarMonth(){
   $('calendarDate').value=todayStr();
   document.body.dataset.teacherWeekInitialized='1';
 }
-let calendarAnalysisRenderHandle=null;
+let calendarAnalysisRenderHandle=null,calendarTeacherConflictCache=null;
+function rebuildCalendarTeacherConflictCache(){
+  const cache=new Map(),byDate=new Map();
+  for(const lesson of db.lessons||[]){if(!lessonBlocksScheduling(lesson))continue;const rows=byDate.get(lesson.date)||[];rows.push(lesson);byDate.set(lesson.date,rows)}
+  for(const rows of byDate.values()){
+    rows.sort((a,b)=>a.start.localeCompare(b.start)||a.end.localeCompare(b.end));
+    for(let left=0;left<rows.length;left++){
+      const first=rows[left],firstTeachers=new Set(lessonTeacherIds(first));
+      for(let right=left+1;right<rows.length&&rows[right].start<first.end;right++){
+        const second=rows[right];if(second.end<=first.start)continue;
+        for(const teacherId of lessonTeacherIds(second))if(firstTeachers.has(teacherId)){
+          const name=teacher(teacherId).name||'未命名老師';
+          if(!cache.has(first.id))cache.set(first.id,new Set());
+          if(!cache.has(second.id))cache.set(second.id,new Set());
+          cache.get(first.id).add(name);cache.get(second.id).add(name);
+        }
+      }
+    }
+  }
+  calendarTeacherConflictCache=new Map([...cache].map(([id,names])=>[id,[...names]]));
+}
+function calendarTeacherConflictNames(lesson){return calendarTeacherConflictCache?.get(lesson?.id)||[]}
 function scheduleCalendarAnalysisRender(){
   if(calendarAnalysisRenderHandle!==null){
     if(typeof cancelIdleCallback==='function')cancelIdleCallback(calendarAnalysisRenderHandle);else clearTimeout(calendarAnalysisRenderHandle);
@@ -73,18 +94,23 @@ function scheduleCalendarAnalysisRender(){
   const run=()=>{calendarAnalysisRenderHandle=null;if(calendarSectionIsActive())renderCalendarAnalysis()};
   calendarAnalysisRenderHandle=typeof requestIdleCallback==='function'?requestIdleCallback(run,{timeout:350}):setTimeout(run,90);
 }
-function renderCalendar(options={}){ensureCalendarDefaults();ensureTeacherCalendarMonth();const mode=$('calendarMode').value,date=new Date($('calendarDate').value+'T00:00:00'),f=calendarFilterState();if(mode==='month')renderMonth(date,f);else renderWeek(date,f);if(options.deferAnalysis)scheduleCalendarAnalysisRender();else renderCalendarAnalysis();setTimeout(enableDesktopMarquee,0)}
-let schedulePersistenceFrame=null,pendingScheduleAction='';
+function renderCalendar(options={}){ensureCalendarDefaults();ensureTeacherCalendarMonth();rebuildCalendarTeacherConflictCache();const mode=$('calendarMode').value,date=new Date($('calendarDate').value+'T00:00:00'),f=calendarFilterState();if(mode==='month')renderMonth(date,f);else renderWeek(date,f);if(options.deferAnalysis)scheduleCalendarAnalysisRender();else renderCalendarAnalysis();setTimeout(enableDesktopMarquee,0)}
+let schedulePersistenceFrame=null,scheduleRenderFrame=null,pendingScheduleAction='';
 function commitScheduleMutation(scheduleAction='lesson.update.fields'){
+  calendarTeacherConflictCache=null;
   pendingScheduleAction=pendingScheduleAction&&pendingScheduleAction!==scheduleAction?'lesson.update.fields':scheduleAction;
-  const renderStarted=typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();
-  renderCalendar({deferAnalysis:true});
-  const renderFinished=typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();
-  if(document.body?.dataset){document.body.dataset.lastScheduleRenderMs=String(Math.max(0,renderFinished-renderStarted).toFixed(1));document.body.dataset.lastScheduleMutationQueuedAt=String(Date.now());document.body.dataset.lastScheduleAction=pendingScheduleAction}
-  if(schedulePersistenceFrame!==null)return;
-  const persist=()=>{schedulePersistenceFrame=null;const action=pendingScheduleAction||'lesson.update.fields';pendingScheduleAction='';saveDB({skipRender:true,scheduleAction:action})};
-  if(typeof requestAnimationFrame==='function')schedulePersistenceFrame=requestAnimationFrame(()=>setTimeout(persist,0));
-  else schedulePersistenceFrame=setTimeout(persist,0);
+  if(document.body?.dataset){document.body.dataset.lastScheduleMutationQueuedAt=String(Date.now());document.body.dataset.lastScheduleAction=pendingScheduleAction}
+  if(scheduleRenderFrame!==null)return;
+  const render=()=>{
+    scheduleRenderFrame=null;const renderStarted=typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();
+    renderCalendar({deferAnalysis:true});
+    const renderFinished=typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();
+    if(document.body?.dataset)document.body.dataset.lastScheduleRenderMs=String(Math.max(0,renderFinished-renderStarted).toFixed(1));
+    if(schedulePersistenceFrame!==null)return;
+    const persist=()=>{schedulePersistenceFrame=null;const action=pendingScheduleAction||'lesson.update.fields';pendingScheduleAction='';saveDB({skipRender:true,scheduleAction:action})};
+    schedulePersistenceFrame=setTimeout(persist,0);
+  };
+  if(typeof requestAnimationFrame==='function')scheduleRenderFrame=requestAnimationFrame(render);else scheduleRenderFrame=setTimeout(render,0);
 }
 function updateSelectionCount(){
   const count=selectedLessonIds.size;
@@ -161,13 +187,15 @@ function copySelectedLessons(){
   const fromMonth=monthKeys[0];
   const [y,m]=fromMonth.split('-').map(Number),toMonth=`${m===12?y+1:y}-${String(m===12?1:m+1).padStart(2,'0')}`;
   if(!confirm(`確定將已選取的 ${source.length} 堂課複製到 ${toMonth}？\n原課程會保留。`))return;
-  snapshot();
+  const history=beginScheduleHistory();
   const keys=new Set(db.lessons.map(keyOf));let added=0,skipped=0;
+  const createdIds=[];
   for(const old of source){
     const candidate=createFreshLessonCopy(old,{date:mapDateByCalendarWeek(old.date,fromMonth,toMonth),teacherIds:[...lessonTeacherIds(old)]});
     if(keys.has(keyOf(candidate))||conflictDetail(candidate,'')){skipped++;continue}
-    db.lessons.push(candidate);keys.add(keyOf(candidate));logChange('複製選取到下個月',candidate,old);added++;
+    db.lessons.push(candidate);createdIds.push(candidate.id);keys.add(keyOf(candidate));logChange('複製選取到下個月',candidate,old);added++;
   }
+  finishScheduleHistory(history,createdIds);
   selectedLessonIds.clear();selectionMode=false;commitScheduleMutation('lesson.copy');
   toast(`已複製 ${added} 堂到 ${toMonth}${skipped?`，略過 ${skipped} 堂`:''}`);
 }
@@ -176,10 +204,11 @@ async function deleteSelectedLessons(){
   const ids=[...selectedLessonIds];
   if(!ids.length)return alert('請先選取要刪除的課程。');
   if(!confirm(`確定刪除已選取的 ${ids.length} 堂課？`))return;
-  snapshot();
+  const history=beginScheduleHistory(ids);
   const idSet=new Set(ids),removed=db.lessons.filter(l=>idSet.has(l.id));
   removed.forEach(l=>{window.syncMakeupForDeletedLesson?.(l);logChange('刪除選取課程',null,l)});
   db.lessons=db.lessons.filter(l=>!idSet.has(l.id));
+  finishScheduleHistory(history,ids);
   selectedLessonIds.clear();selectionMode=false;commitScheduleMutation('lesson.delete');toast(`已刪除 ${removed.length} 堂課`);
 }
 function cancelSelectionAndPaste(clearClipboard=false){
@@ -297,10 +326,10 @@ function contextPasteLessons(){
     const toMin=t=>{const[h,m]=t.split(':').map(Number);return h*60+m};
     timeDelta=toMin(contextPasteTarget.time)-toMin(first.start);
   }
-  snapshot();
+  const history=beginScheduleHistory();
   const keys=new Set(db.lessons.map(keyOf));
   const targetTeacherId=$('calendarTeacherFilter')?.value||'';
-  let added=0,skipped=0,teacherWarnings=0;
+  let added=0,skipped=0,teacherWarnings=0;const createdIds=[];
   for(const old of rows){
     const targetDateStr=shiftDate(old.date,dateDelta);
     const ns=shiftTime(old.start,timeDelta),ne=shiftTime(old.end,timeDelta);
@@ -309,8 +338,9 @@ function contextPasteLessons(){
     const n=createFreshLessonCopy(old,{date:targetDateStr,start:ns,end:ne,teacherId:targetTeacherIds[0]||'',teacherIds:targetTeacherIds});
     if(keys.has(keyOf(n))||conflictDetail(n,'')){skipped++;continue}
     if(teacherConflictDetail(n,''))teacherWarnings++;
-    db.lessons.push(n);keys.add(keyOf(n));logChange('依日期間距貼上課程',n,old);added++;
+    db.lessons.push(n);createdIds.push(n.id);keys.add(keyOf(n));logChange('依日期間距貼上課程',n,old);added++;
   }
+  finishScheduleHistory(history,createdIds);
   hideCalendarContextMenu();exitSelectionAfterPaste();cancelPasteClickMode(true);commitScheduleMutation('lesson.copy');
   const targetLabel=targetTeacherId?`給 ${teacher(targetTeacherId).name||'目標老師'}`:'';
   toast(`已${targetLabel}貼上 ${added} 堂，略過 ${skipped} 堂${teacherWarnings?`，老師重疊 ${teacherWarnings} 堂已標紅`:''}`)

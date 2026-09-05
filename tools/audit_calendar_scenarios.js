@@ -54,6 +54,19 @@ const context = {
   alert: message => { context.alerts.push(message); },
   toast: message => { context.toasts.push(message); },
   snapshot: () => { context.snapshots += 1; },
+  beginScheduleHistory(ids = []) {
+    const wanted = new Set(ids.map(String));
+    const before = new Map();
+    context.db.lessons.forEach((row, index) => {
+      if (wanted.has(String(row.id))) before.set(String(row.id), { value: JSON.parse(JSON.stringify(row)), index });
+    });
+    context.snapshots += 1;
+    return { before };
+  },
+  finishScheduleHistory(history, ids = []) {
+    const affected = new Set([...history.before.keys(), ...ids.map(String)]);
+    context.scheduleHistory.push({ history, affected });
+  },
   saveDB: () => { context.saves += 1; },
   renderCalendar: () => { context.renders += 1; },
   clearCalendarSelectionState: () => { context.selectedLessonIds.clear(); context.selectionMode = false; },
@@ -62,7 +75,7 @@ const context = {
   logChange: () => {},
   updateSelectionCount: () => {},
   beginPasteClickMode: () => {},
-  alerts: [], toasts: [], snapshots: 0, saves: 0, renders: 0
+  alerts: [], toasts: [], snapshots: 0, saves: 0, renders: 0, scheduleHistory: []
 };
 context.lessonClipboard = [];
 context.contextPasteTarget = null;
@@ -311,12 +324,14 @@ context.makeupDeletes = 0;
 context.changeRows = [];
 context.logChange = (action, after, before) => context.changeRows.push({ action, after, before: before ? JSON.parse(JSON.stringify(before)) : before });
 context.closeLessonModal = () => elements.lessonModal.classList.remove('show');
-let deletionHistory = [];
-context.snapshot = () => { deletionHistory.push(JSON.stringify(context.db)); context.snapshots += 1; };
+context.scheduleHistory = [];
 context.undoLast = () => {
-  const previous = deletionHistory.pop();
-  if (!previous) return;
-  context.db = JSON.parse(previous);
+  const entry = context.scheduleHistory.pop();
+  if (!entry) return;
+  const unaffected = context.db.lessons.filter(row => !entry.affected.has(String(row.id)));
+  const insertions = [...entry.history.before.values()].sort((a, b) => a.index - b.index);
+  for (const row of insertions) unaffected.splice(Math.min(row.index, unaffected.length), 0, JSON.parse(JSON.stringify(row.value)));
+  context.db.lessons = unaffected;
   context.saveDB();
 };
 const deleteStart = courseSource.indexOf('function deleteCurrentLesson');
@@ -331,7 +346,7 @@ context.confirm = () => false;
 context.deleteCurrentLesson();
 assert.deepEqual(context.db.lessons.map(row => row.id), ['delete-target', 'delete-untouched'], 'cancelling deletion changes nothing');
 assert.equal(context.saves, savesBeforeDelete, 'cancelled deletion does not save');
-assert.equal(deletionHistory.length, 0, 'cancelled deletion creates no recovery snapshot');
+assert.equal(context.scheduleHistory.length, 0, 'cancelled deletion creates no recovery snapshot');
 context.confirm = () => true;
 context.deleteCurrentLesson();
 assert.deepEqual(context.db.lessons.map(row => row.id), ['delete-untouched'], 'confirmed deletion removes only the selected lesson');

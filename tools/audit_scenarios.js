@@ -322,7 +322,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.207'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.208'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -698,12 +698,14 @@ context.shiftDate = (date, delta) => { const value = new Date(`${date}T00:00:00`
 context.shiftTime = context.addMinutes;
 context.conflictDetail = () => null;
 context.teacherConflictDetail = () => null;
-context.snapshot = () => { context.moveSnapshots = (context.moveSnapshots || 0) + 1; };
+context.beginScheduleHistory = ids => { context.moveSnapshots = (context.moveSnapshots || 0) + 1; return { ids: [...ids] }; };
+context.finishScheduleHistory = (history, ids) => { context.finishedMoveHistory = { history, ids: [...ids] }; };
 context.clearCalendarSelectionState = () => {};
 context.cancelPasteClickMode = () => {};
 context.logChange = () => {};
 context.saveDB = options => { context.moveSaves = (context.moveSaves || 0) + 1; context.lastMoveSaveOptions = options; };
 context.renderCalendar = () => { context.moveRenders = (context.moveRenders || 0) + 1; };
+context.commitScheduleMutation = action => { context.moveRenders = (context.moveRenders || 0) + 1; context.saveDB({ skipRender: true, scheduleAction: action }); };
 context.setTimeout = callback => { callback(); return 1; };
 context.clearTimeout = () => {};
 context.toast = () => {};
@@ -780,7 +782,7 @@ const schedulingEfficiencySource=fs.readFileSync(path.join(root,'js/app/v20-sche
 assert.match(applicationSource,/function applyHistoryState\(serialized,action\)[\s\S]*lessonTransitions\(current\.lessons\|\|\[\],target\.lessons\|\|\[\]\)[\s\S]*db\.changes=history[\s\S]*logChange/, 'global undo and redo preserve permanent history and append exact lesson transitions');
 assert.match(applicationSource,/function logChange\(type,lesson,before=null,metadata=\{\}\)[\s\S]*db\.changes\.unshift\([\s\S]*\.\.\.extra/, 'schedule changes accept immutable relationship metadata and append without replacing prior rows');
 assert.doesNotMatch(applicationSource,/db\.changes=db\.changes\.slice\(0,500\)/, 'permanent schedule history is no longer truncated at 500 operations');
-assert.match(schedulingEfficiencySource,/function undoRecentChange\(id\)[\s\S]*undoOfChangeId:String\(c\.id\)[\s\S]*saveDB/, 'single-change restore appends a linked inverse operation');
+assert.match(schedulingEfficiencySource,/function undoRecentChange\(id\)[\s\S]*undoOfChangeId:String\(c\.id\)[\s\S]*finishScheduleHistory[\s\S]*commitScheduleMutation/, 'single-change restore appends a linked inverse operation and uses the nonblocking schedule pipeline');
 assert.doesNotMatch(schedulingEfficiencySource,/c\.undone\s*=|c\.undoneAt\s*=/, 'single-change restore never mutates the original permanent operation');
 assert.match(schedulerUiSource,/canMove=calendarOwnerCanEdit\(\)/,'Wendy and Owner use the same card drag permission');
 assert.match(marqueeSource,/canEdit=\(\)=>window\.calendarOwnerCanEdit/,'Wendy and Owner use the same marquee, click and context-menu controller');

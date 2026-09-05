@@ -68,7 +68,7 @@ test('staging 會把既有 30 筆待送要求安全重切為 8 筆批次並完�
   storage:firstStorage,
   maxChangesPerRequest:8,
   createRequestId:()=>`staging-eight-request-${++serial}`,
-  release:'20.26.207',
+  release:'20.26.208',
   send:async request=>{
    sizes.push(request.changes.length);
    for(const change of request.changes)server.lessons.push(clone(change.after));

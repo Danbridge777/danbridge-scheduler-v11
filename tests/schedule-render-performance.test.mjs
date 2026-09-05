@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 
 const source=path=>readFile(new URL(path,import.meta.url),'utf8');
 
-test('課表操作先畫目前課表，再於下一幀後保存且不重畫隱藏頁面',async()=>{
+test('課表操作先讓出目前輸入，再於下一畫面幀重畫並保存且不重畫隱藏頁面',async()=>{
   const [scheduler,persistence,orchestrator]=await Promise.all([
     source('../js/modules/calendar/scheduler-ui.js'),
     source('../js/core/data-persistence.js'),
@@ -12,7 +12,8 @@ test('課表操作先畫目前課表，再於下一幀後保存且不重畫隱�
   ]);
   assert.match(scheduler,/function commitScheduleMutation/);
   assert.match(scheduler,/renderCalendar\(\{deferAnalysis:true\}\)/);
-  assert.match(scheduler,/requestAnimationFrame\(\(\)=>setTimeout\(persist,0\)\)/);
+  assert.match(scheduler,/scheduleRenderFrame=requestAnimationFrame\(render\)/);
+  assert.match(scheduler,/schedulePersistenceFrame=setTimeout\(persist,0\)/);
   assert.match(scheduler,/lastScheduleRenderMs/);
   assert.match(scheduler,/lastScheduleMutationQueuedAt/);
   assert.match(persistence,/options\.scheduleAction&&calendarSectionIsActive\(\)/);
@@ -48,4 +49,20 @@ test('新增、複製、批次修改與刪除都走非阻塞課表提交',async(
   assert.match(course,/commitScheduleMutation\('lesson\.delete'\)/);
   assert.match(batch,/commitScheduleMutation\('lesson\.update\.fields'\)/);
   assert.match(features,/commitScheduleMutation\('lesson\.copy'\)/);
+  assert.match(features,/function beginScheduleHistory/);
+  assert.match(features,/function finishScheduleHistory/);
+  assert.doesNotMatch(course,/\bsnapshot\(\)/);
+  assert.doesNotMatch(scheduler,/\bsnapshot\(\)/);
+  assert.doesNotMatch(batch,/\bsnapshot\(\)/);
+});
+
+test('課表撞課顯示只建立一次日期索引，不對每張卡重掃全部課程',async()=>{
+  const [scheduler,features]=await Promise.all([
+    source('../js/modules/calendar/scheduler-ui.js'),
+    source('../js/modules/application-and-business-features.js')
+  ]);
+  assert.match(scheduler,/function rebuildCalendarTeacherConflictCache/);
+  assert.match(scheduler,/const cache=new Map\(\),byDate=new Map\(\)/);
+  assert.match(scheduler,/rebuildCalendarTeacherConflictCache\(\)/);
+  assert.match(features,/calendarTeacherConflictCache instanceof Map/);
 });

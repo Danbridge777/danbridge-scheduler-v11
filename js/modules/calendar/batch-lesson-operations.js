@@ -73,7 +73,7 @@ function previewBatch(){
 function applyBatch(){
   const rows=batchPreviewCache||buildBatchCandidates();
   if(rows.some(x=>x.error)&&!confirm('部分課程有衝突，系統將略過衝突課程，只套用其餘課程。繼續？'))return;
-  snapshot();let done=0;
+  const affectedIds=rows.filter(x=>!x.error).map(x=>x.old.id),history=beginScheduleHistory(affectedIds);let done=0;
   for(const x of rows){
     if(x.error)continue;
     const before={...x.old};
@@ -82,5 +82,5 @@ function applyBatch(){
     window.syncMakeupForLessonStatus?.(x.old,before.status);
     done++;
   }
-  clearCalendarSelectionState();cancelPasteClickMode(false);closeBatchModal();commitScheduleMutation('lesson.update.fields');toast(`已批次更新 ${done} 堂課`);
+  finishScheduleHistory(history,affectedIds);clearCalendarSelectionState();cancelPasteClickMode(false);closeBatchModal();commitScheduleMutation('lesson.update.fields');toast(`已批次更新 ${done} 堂課`);
 }
