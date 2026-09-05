@@ -1,7 +1,7 @@
-import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.220';
+import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.221';
 import {recordDataHash} from './cloud-record-data-hash.js';
 import {IMMUTABLE_MIGRATION_BACKUP_SCHEMA,sha256Canonical,verifyImmutableMigrationBackupManifest} from './cloud-immutable-migration-backup.js';
-import {verifyLiveOperationPlan} from './cloud-live-operation-plan.js?v=20.26.220';
+import {verifyLiveOperationPlan} from './cloud-live-operation-plan.js?v=20.26.221';
 
 const id=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{8,128}$/.test(value);
 const count=(value,label)=>{if(!Number.isSafeInteger(value)||value<0)throw new Error(`${label} 無效`);return value};
