@@ -38,7 +38,7 @@ function v2Envelope({environment,activationEpoch,collection,recordId,exists,revi
  return{environment,companyId:'danbridge',activationEpoch,...core,recordHash:activeRecordSaveEnvelopeHash(core)};
 }
 
-export function prepareActiveRecordSync({documentsByCollection,baselineDb,localDb,environment,deviceId,activationEpoch,startSequence=1,createdAt=new Date().toISOString(),authoritativeSourceHash,hashRecordDb=recordDataHash,verifiedRemote=null,compactResult=false}={}){
+export function prepareActiveRecordSync({documentsByCollection,baselineDb,localDb,environment,deviceId,activationEpoch,startSequence=1,createdAt=new Date().toISOString(),authoritativeSourceHash,hashRecordDb=recordDataHash,verifiedRemote=null,compactResult=false,changedCollections=null}={}){
  if(!allowedEnvironment.has(environment)||!validText(deviceId)||!validText(activationEpoch)||!Number.isSafeInteger(startSequence)||startSequence<1||!isStrictActiveRecordSaveTimestamp(createdAt)||typeof hashRecordDb!=='function')throw new Error('日常逐筆同步設定無效');
  if(typeof compactResult!=='boolean')throw new Error('日常逐筆同步精簡結果設定無效');
  const trusted=verifiedRemote!==null;
@@ -46,7 +46,12 @@ export function prepareActiveRecordSync({documentsByCollection,baselineDb,localD
  const remote=trusted?verifiedRemote:rebuildFullRecordShadowDb(documentsByCollection,{environment}),baseHash=trusted?verifiedRemote.hash:hashRecordDb(remote.db);
  if(!validRecordHash(baseHash))throw new Error('日常逐筆基準雜湊無效');
  if(authoritativeSourceHash!==undefined&&(!validRecordHash(authoritativeSourceHash)||authoritativeSourceHash!==baseHash))throw new Error('日常逐筆權威來源雜湊不符');
- const canonicalLocalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(baselineDb,localDb):(trusted?localDb:authoritativeTarget(remote.db,localDb)),merged=authoritativeSourceHash===undefined?mergeConcurrentRecordDb(baselineDb,canonicalLocalDb,remote.db):{db:canonicalLocalDb,conflicts:[]},canonicalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(remote.db,merged.db):canonicalLocalDb,targetHash=hashRecordDb(canonicalDb),raw=buildFullRecordShadowPlan(documentsByCollection,canonicalDb,{sourceHash:targetHash,batchSize:1,environment});
+ const scoped=changedCollections!==null;
+ if(scoped&&(!trusted||authoritativeSourceHash===undefined||!Array.isArray(changedCollections)||changedCollections.length<1))throw new Error('日常逐筆受信集合範圍無效');
+ const scope=scoped?[...changedCollections]:FULL_RECORD_COLLECTIONS,scopeSet=new Set(scope);
+ if(scoped&&(scopeSet.size!==scope.length||scope.some(collection=>!FULL_RECORD_COLLECTIONS.includes(collection))))throw new Error('日常逐筆受信集合範圍無效');
+ if(scoped)for(const collection of FULL_RECORD_COLLECTIONS)if(!scopeSet.has(collection)&&!same(baselineDb?.[collection],localDb?.[collection]))throw new Error(`日常逐筆未授權集合遭修改：${collection}`);
+ const canonicalLocalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(baselineDb,localDb):(trusted?localDb:authoritativeTarget(remote.db,localDb)),merged=authoritativeSourceHash===undefined?mergeConcurrentRecordDb(baselineDb,canonicalLocalDb,remote.db):{db:canonicalLocalDb,conflicts:[]},canonicalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(remote.db,merged.db):canonicalLocalDb,targetHash=hashRecordDb(canonicalDb),raw=buildFullRecordShadowPlan(documentsByCollection,canonicalDb,{sourceHash:targetHash,batchSize:1,environment,collections:scope});
  if(!validRecordHash(targetHash))throw new Error('日常逐筆目標雜湊無效');
  let incrementalHash=baseHash;
  let counts={documentCount:remote.documentCount,activeCount:remote.activeCount,tombstoneCount:remote.tombstoneCount};

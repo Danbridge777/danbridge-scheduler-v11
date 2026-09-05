@@ -22,25 +22,31 @@ function materialize(collection,rows){
 }
 export function materializeFullRecordDb(db){return Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,materialize(collection,db?.[collection])]))}
 
-function readCurrent(documentsByCollection,environment='staging'){
+function selectedCollections(raw){
+ if(!Array.isArray(raw)||raw.length<1)throw new Error('全資料影子集合範圍無效');
+ const result=raw.map(value=>String(value)),seen=new Set(result);
+ if(seen.size!==result.length||result.some(collection=>!FULL_RECORD_COLLECTIONS.includes(collection)))throw new Error('全資料影子集合範圍無效');
+ return result;
+}
+function readCurrent(documentsByCollection,environment='staging',collections=FULL_RECORD_COLLECTIONS){
  if(!['staging','production'].includes(environment))throw new Error('全資料影子環境無效');
  const active={},revisions={},tombstones={};
- for(const collection of FULL_RECORD_COLLECTIONS){active[collection]=new Map();revisions[collection]={};tombstones[collection]=new Map();const seen=new Set();
+ for(const collection of collections){active[collection]=new Map();revisions[collection]={};tombstones[collection]=new Map();const seen=new Set();
   for(const row of documentsByCollection?.[collection]??[]){const id=String(row?.id??''),data=row?.data;let changeValid=true;if(collection==='changes'){try{assertChangeRecordIdentity({recordIndex:data?.recordIndex,recordId:id,record:data?.record})}catch{changeValid=false}}const identified=collection==='changes'||String(data?.record?.id??'')===id;if(!(validId(id)&&!seen.has(id)&&data&&data.schema===FULL_RECORD_SHADOW_SCHEMA&&data.companyId==='danbridge'&&data.collection===collection&&data.recordId===id&&data.environment===environment&&Number.isSafeInteger(data.revision)&&data.revision>=1&&typeof data.deleted==='boolean'&&changeValid&&identified))throw new Error(`${collection}/${id} 全資料影子格式無效`);seen.add(id);revisions[collection][id]=data.revision;(data.deleted?tombstones[collection]:active[collection]).set(id,data)}
  }
  return{active,revisions,tombstones};
 }
 function payload(type,collection,item,revision,sourceHash,environment){return{schema:FULL_RECORD_SHADOW_SCHEMA,companyId:'danbridge',collection,recordId:item.recordId,record:item.record,recordIndex:item.recordIndex,sourceHash,revision,deleted:type==='delete',environment}}
-export function buildFullRecordShadowPlan(documentsByCollection,targetDb,{sourceHash,batchSize=400,environment='staging'}={}){
+export function buildFullRecordShadowPlan(documentsByCollection,targetDb,{sourceHash,batchSize=400,environment='staging',collections=FULL_RECORD_COLLECTIONS}={}){
  if(typeof sourceHash!=='string'||!sourceHash.trim())throw new Error('全資料影子缺少 sourceHash');if(!Number.isSafeInteger(batchSize)||batchSize<1||batchSize>400)throw new Error('全資料影子 batchSize 無效');
- const current=readCurrent(documentsByCollection,environment),target=materializeFullRecordDb(targetDb),operations=[];
- for(const collection of FULL_RECORD_COLLECTIONS){const next=new Map(target[collection].map(item=>[item.recordId,item]));
+ const scope=selectedCollections(collections),current=readCurrent(documentsByCollection,environment,scope),target=Object.fromEntries(scope.map(collection=>[collection,materialize(collection,targetDb?.[collection])])),operations=[];
+ for(const collection of scope){const next=new Map(target[collection].map(item=>[item.recordId,item]));
   const namespace=environment==='production'?'productionFullRecordShadows':'stagingFullRecordShadows';
   for(const item of target[collection]){const old=current.active[collection].get(item.recordId),tombstone=current.tombstones[collection].get(item.recordId);if(old&&fingerprint(old.record)===fingerprint(item.record)&&old.recordIndex===item.recordIndex)continue;const revision=(old||tombstone)?.revision+1||1;operations.push({type:old?'update':(tombstone?'revive':'create'),path:`${namespace}/danbridge/collections/${collection}/records/${item.recordId}`,payload:payload(old?'update':'create',collection,item,revision,sourceHash,environment)})}
   for(const [id,old] of current.active[collection])if(!next.has(id)){const item={recordId:id,record:clone(old.record),recordIndex:old.recordIndex??null};operations.push({type:'delete',path:`${namespace}/danbridge/collections/${collection}/records/${id}`,payload:payload('delete',collection,item,old.revision+1,sourceHash,environment)})}
  }
  const batches=[];for(let offset=0;offset<operations.length;offset+=batchSize)batches.push({index:batches.length,operations:operations.slice(offset,offset+batchSize)});
- return{schema:'danbridge-full-record-shadow-plan-v1',sourceHash,collectionCount:FULL_RECORD_COLLECTIONS.length,operations,batches,writes:operations.length};
+ return{schema:'danbridge-full-record-shadow-plan-v1',sourceHash,collectionCount:scope.length,operations,batches,writes:operations.length};
 }
 export function rebuildFullRecordShadowDb(documentsByCollection,{environment='staging'}={}){
  const current=readCurrent(documentsByCollection,environment),db={};let documentCount=0,activeCount=0,tombstoneCount=0;
