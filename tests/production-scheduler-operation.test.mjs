@@ -42,8 +42,9 @@ test('修改課程只改允許且實際變更的欄位，保留財務、回報�
  assert.equal(result.schedulerDb.lessons[0].paymentStatus,undefined);assert.equal(result.schedulerDb.students[0].parentContact,undefined);
 });
 test('排課目標只複製四個可變集合，其餘十二集合沿用權威參照且來源不被改寫',()=>{
- const source=seed(),before=structuredClone(source),result=run(source,[{lessonId:lesson.id,before:lesson,after:{...lesson,date:'2026-10-02'}}]),mutable=new Set(['lessons','students','makeups','changes']);
+ const source=seed();source.changes.push({id:'old-change',type:'old'});const before=structuredClone(source),result=run(source,[{lessonId:lesson.id,before:lesson,after:{...lesson,date:'2026-10-02'}}]),mutable=new Set(['lessons','students','makeups','changes']);
  for(const collection of FULL_RECORD_COLLECTIONS)assert.equal(result.db[collection]===source[collection],!mutable.has(collection),collection);
+ assert.notEqual(result.db.lessons[0],source.lessons[0]);assert.equal(result.db.students[0],source.students[0]);assert.equal(result.db.changes[1],source.changes[0]);
  assert.deepEqual(source,before);
 });
 test('同一欄位衝突、已刪除與 ID 碰撞都拒絕，不覆蓋或復活',()=>{
@@ -69,10 +70,10 @@ test('多人同時撞到同一學生或教室時拒絕整批；既有無關碰�
  const before=schedulerLesson(db.lessons[0]);assert.equal(run(db,[{lessonId:lesson.id,before,after:{...before,note:'only note'}}]).db.lessons[0].note,'only note');
 });
 test('學生請假建立補課；取消請假同步取消已安排補課，保留其他補課',()=>{
- const db=seed(),leave=run(db,[{lessonId:lesson.id,before:lesson,after:{...lesson,status:'學生請假'}}]);
+ const db=seed(),sourceBefore=structuredClone(db),leave=run(db,[{lessonId:lesson.id,before:lesson,after:{...lesson,status:'學生請假'}}]);assert.deepEqual(db,sourceBefore);
  assert.equal(leave.db.makeups.length,1);assert.equal(leave.db.makeups[0].hours,.5);
  leave.db.makeups[0].status='scheduled';leave.db.makeups[0].scheduledLessonId='makeup-lesson';leave.db.lessons.push({...lesson,id:'makeup-lesson',date:'2026-10-03'});
- const restored=run(leave.db,[{lessonId:lesson.id,before:{...lesson,status:'學生請假'},after:lesson}]);
+ const leaveBefore=structuredClone(leave.db),restored=run(leave.db,[{lessonId:lesson.id,before:{...lesson,status:'學生請假'},after:lesson}]);assert.deepEqual(leave.db,leaveBefore);
  assert.equal(restored.db.makeups[0].status,'cancelled');assert.equal(restored.db.lessons.find(row=>row.id==='makeup-lesson').payTeacher,'no');
  assert.equal(restored.db.lessons.find(row=>row.id==='makeup-lesson').status,'取消');
 });

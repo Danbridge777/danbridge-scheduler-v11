@@ -8,7 +8,6 @@ import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 const clone=value=>JSON.parse(JSON.stringify(value));
 const stable=value=>Array.isArray(value)?value.map(stable):(value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value);
 const same=(left,right)=>JSON.stringify(stable(left))===JSON.stringify(stable(right));
-const sameFast=(left,right)=>{const directLeft=JSON.stringify(left),directRight=JSON.stringify(right);return directLeft===directRight||same(left,right)};
 const validText=value=>typeof value==='string'&&value.trim()===value&&value.length>0&&value.length<=1500&&!/[\u0000-\u001f/]/.test(value);
 const validRecordHash=value=>typeof value==='string'&&/^record-v1:[a-f0-9]{64}$/.test(value);
 const allowedEnvironment=new Set(['staging','production']);
@@ -56,7 +55,7 @@ export function prepareActiveRecordSync({documentsByCollection,baselineDb,localD
  // reference; cloning or changing it fails closed before any plan is emitted.
  if(scoped)for(const collection of FULL_RECORD_COLLECTIONS)if(!scopeSet.has(collection)&&baselineDb?.[collection]!==localDb?.[collection])throw new Error(`日常逐筆未授權集合未沿用權威參照：${collection}`);
  if(!Number.isSafeInteger(appendOnlyChangesCount)||appendOnlyChangesCount<0||appendOnlyChangesCount>30||appendOnlyChangesCount&&(!trusted||!scoped||!scopeSet.has('changes')))throw new Error('日常逐筆 changes 追加提示無效');
- if(appendOnlyChangesCount){const before=baselineDb?.changes,after=localDb?.changes;if(!Array.isArray(before)||!Array.isArray(after)||after.length!==before.length+appendOnlyChangesCount)throw new Error('日常逐筆 changes 追加數量不符');for(let index=0;index<before.length;index++)if(!sameFast(before[index],after[index+appendOnlyChangesCount]))throw new Error('日常逐筆 changes 舊歷史遭到改寫')}
+ if(appendOnlyChangesCount){const before=baselineDb?.changes,after=localDb?.changes;if(!Array.isArray(before)||!Array.isArray(after)||after.length!==before.length+appendOnlyChangesCount)throw new Error('日常逐筆 changes 追加數量不符');for(let index=0;index<before.length;index++)if(before[index]!==after[index+appendOnlyChangesCount])throw new Error('日常逐筆 changes 舊歷史未沿用權威參照')}
  const canonicalLocalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(baselineDb,localDb):(trusted?localDb:authoritativeTarget(remote.db,localDb)),merged=authoritativeSourceHash===undefined?mergeConcurrentRecordDb(baselineDb,canonicalLocalDb,remote.db):{db:canonicalLocalDb,conflicts:[]},canonicalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(remote.db,merged.db):canonicalLocalDb,targetHash=hashRecordDb(canonicalDb),raw=buildFullRecordShadowPlan(documentsByCollection,canonicalDb,{sourceHash:targetHash,batchSize:1,environment,collections:scope,appendOnlyChangesCount});
  if(!validRecordHash(targetHash))throw new Error('日常逐筆目標雜湊無效');
  let incrementalHash=baseHash;

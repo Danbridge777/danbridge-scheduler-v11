@@ -1,4 +1,4 @@
-import {PRODUCTION_SCHEDULER_EMAILS,projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.222';
+import {PRODUCTION_SCHEDULER_EMAILS,projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.223';
 
 export const SCHEDULER_OPERATION_SCHEMA='danbridge-production-scheduler-operation-v1';
 export const SCHEDULER_OPERATION_RESPONSE_SCHEMA='danbridge-production-scheduler-operation-response-v1';
@@ -11,6 +11,7 @@ const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)
 const token=value=>typeof value==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(value)&&value!=='.'&&value!=='..';
 const exact=(value,keys,label)=>{if(!object(value)||Object.keys(value).some(key=>!keys.includes(key)))throw new Error(`${label} 包含未允許欄位或格式無效`)};
 const teacherIds=lesson=>[...new Set((lesson?.teacherIds?.length?lesson.teacherIds:[lesson?.teacherId]).filter(Boolean))];
+const mutableAt=(rows,index)=>{const next=clone(rows[index]);rows[index]=next;return next};
 export const schedulerLesson=value=>Object.fromEntries(SCHEDULER_LESSON_FIELDS.filter(key=>value?.[key]!==undefined).map(key=>[key,clone(value[key])]));
 export const schedulerStudent=value=>Object.fromEntries(SCHEDULER_STUDENT_FIELDS.filter(key=>value?.[key]!==undefined).map(key=>[key,clone(value[key])]));
 
@@ -50,7 +51,10 @@ export function normalizeProductionSchedulerRequest(input){
 // This function receives only safe timetable fields. Raw operation envelopes,
 // access changes, finance values and arbitrary document paths are not accepted.
 export function buildProductionSchedulerTarget(source,input,actor,{nowIso}={}){
- const caller=assertProductionSchedulerActor(actor),request=normalizeProductionSchedulerRequest(input),target={...source,lessons:clone(source.lessons),students:clone(source.students),makeups:clone(source.makeups),changes:clone(source.changes)};
+ // Copy the four mutable arrays, then clone only records that this request
+ // actually changes. Untouched authoritative rows keep identity so append-only
+ // history can be verified in O(n) without repeatedly serializing years of data.
+ const caller=assertProductionSchedulerActor(actor),request=normalizeProductionSchedulerRequest(input),target={...source,lessons:[...source.lessons],students:[...source.students],makeups:[...source.makeups],changes:[...source.changes]};
  if(!/^\d{4}-\d{2}-\d{2}T/.test(nowIso||'')||!Number.isFinite(Date.parse(nowIso)))throw new Error('伺服器時間無效');
  const events=[];
  for(const change of request.changes){
@@ -83,13 +87,13 @@ export function buildProductionSchedulerTarget(source,input,actor,{nowIso}={}){
   else{
    // Preserve the existing deletion side effects in the same atomic target.
    if(current.status==='學生請假'){
-    const makeup=target.makeups.find(row=>row.sourceLessonId===current.id&&!['done','cancelled'].includes(row.status));
-    if(makeup){const scheduled=target.lessons.find(row=>row.id===makeup.scheduledLessonId);if(scheduled){scheduled.status='取消';scheduled.payTeacher='no';scheduled.chargeStudent='no';scheduled.cancelledBecauseSourceRestored=true}makeup.status='cancelled';makeup.cancelledAt=nowIso}
+    const makeupIndex=target.makeups.findIndex(row=>row.sourceLessonId===current.id&&!['done','cancelled'].includes(row.status));
+    if(makeupIndex>=0){const makeup=mutableAt(target.makeups,makeupIndex),scheduledIndex=target.lessons.findIndex(row=>row.id===makeup.scheduledLessonId);if(scheduledIndex>=0){const scheduled=mutableAt(target.lessons,scheduledIndex);scheduled.status='取消';scheduled.payTeacher='no';scheduled.chargeStudent='no';scheduled.cancelledBecauseSourceRestored=true}makeup.status='cancelled';makeup.cancelledAt=nowIso}
    }
    // Notes are scheduler-editable. Never let a forged MAKEUP: token point at
    // an unrelated record; only the authoritative reverse link may be changed.
-   const makeup=target.makeups.find(row=>row.scheduledLessonId===current.id);
-   if(makeup){makeup.status='pending';makeup.scheduledLessonId='';makeup.completedAt='';makeup.rescheduledAt=nowIso}
+   const makeupIndex=target.makeups.findIndex(row=>row.scheduledLessonId===current.id);
+   if(makeupIndex>=0){const makeup=mutableAt(target.makeups,makeupIndex);makeup.status='pending';makeup.scheduledLessonId='';makeup.completedAt='';makeup.rescheduledAt=nowIso}
    target.lessons=target.lessons.filter(row=>row.id!==change.lessonId);
   }
   const event={id:`scheduler-${request.requestId}-${events.length}`,at:nowIso,type:next?(current?'修改課程':'新增課程'):'刪除選取課程',lessonId:change.lessonId,studentId:(next||current).studentId,actorName:caller.displayName,actorEmail:caller.email,before:clone(current),after:clone(next)};
@@ -97,12 +101,12 @@ export function buildProductionSchedulerTarget(source,input,actor,{nowIso}={}){
  }
  for(const event of events){const next=target.lessons.find(row=>row.id===event.lessonId);if(!next)continue;
   if(next.status==='學生請假'){
-   const existing=target.makeups.find(row=>row.sourceLessonId===next.id);
-   if(existing?.status==='cancelled')Object.assign(existing,{status:'pending',scheduledLessonId:'',teacherId:next.teacherId,branchId:next.branchId||existing.branchId,cancelledAt:'',reopenedAt:nowIso});
+   const existingIndex=target.makeups.findIndex(row=>row.sourceLessonId===next.id),existing=existingIndex<0?null:target.makeups[existingIndex];
+   if(existing?.status==='cancelled')Object.assign(mutableAt(target.makeups,existingIndex),{status:'pending',scheduledLessonId:'',teacherId:next.teacherId,branchId:next.branchId||existing.branchId,cancelledAt:'',reopenedAt:nowIso});
    else if(!existing){const minutes=time=>Number(time.slice(0,2))*60+Number(time.slice(3));target.makeups.push({id:`scheduler-makeup-${request.requestId}-${events.indexOf(event)}`,sourceLessonId:next.id,studentId:next.studentId,teacherId:next.teacherId,branchId:next.branchId||'',originalDate:next.date,originalStart:next.start,originalEnd:next.end,hours:(minutes(next.end)-minutes(next.start))/60,reason:'學生請假',status:'pending',scheduledLessonId:'',createdAt:nowIso})}
   }else if(event.before?.status==='學生請假'){
-   const makeup=target.makeups.find(row=>row.sourceLessonId===next.id&&!['done','cancelled'].includes(row.status));
-   if(makeup){const scheduled=target.lessons.find(row=>row.id===makeup.scheduledLessonId);if(scheduled)Object.assign(scheduled,{status:'取消',payTeacher:'no',chargeStudent:'no',cancelledBecauseSourceRestored:true});Object.assign(makeup,{status:'cancelled',cancelledAt:nowIso})}
+   const makeupIndex=target.makeups.findIndex(row=>row.sourceLessonId===next.id&&!['done','cancelled'].includes(row.status));
+   if(makeupIndex>=0){const makeup=mutableAt(target.makeups,makeupIndex),scheduledIndex=target.lessons.findIndex(row=>row.id===makeup.scheduledLessonId);if(scheduledIndex>=0)Object.assign(mutableAt(target.lessons,scheduledIndex),{status:'取消',payTeacher:'no',chargeStudent:'no',cancelledBecauseSourceRestored:true});Object.assign(makeup,{status:'cancelled',cancelledAt:nowIso})}
   }
  }
  // Check the final atomic target so moving two selected lessons together does
