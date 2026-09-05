@@ -124,7 +124,7 @@ async function stagingSchedulerRuntime(){
  return stagingSchedulerRuntimePromise
 }
 
-exports.stagingSchedulerOperation=onCall({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'1GiB',concurrency:4,minInstances:1,maxInstances:10},async request=>{
+exports.stagingSchedulerOperation=onCall({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'2GiB',cpu:2,concurrency:4,minInstances:1,maxInstances:10},async request=>{
  try{
   const scheduler=await stagingSchedulerRuntime();
   return await scheduler.execute(request.data,{uid:request.auth?.uid,email:String(request.auth?.token?.email||'').trim().toLowerCase(),emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)});
