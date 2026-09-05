@@ -57,7 +57,7 @@ test('Firestore 使用多分頁持久快取，不因第二分頁退回記憶體'
 });
 
 test('同帳號雙分頁登入權限初始化會串行化並使用有限權杖重試',()=>{
- assert.match(source,/import \{loadProfileAfterAuthReady\} from '\.\/cloud-auth-profile-bootstrap\.js\?v=20\.26\.227'/);
+ assert.match(source,/import \{loadProfileAfterAuthReady\} from '\.\/cloud-auth-profile-bootstrap\.js\?v=20\.26\.228'/);
  const auth=block('async function loadSignedInProfile','function loginTimeValue');
  assert.match(auth,/loadProfileAfterAuthReady\(\{user,loadProfile:\(\)=>ensureProfile\(user\)\}\)/);
  assert.match(auth,/navigator\.locks\?\.request\? navigator\.locks\.request\(lockName,load\):load\(\)/);
@@ -93,7 +93,7 @@ test('角色證據不能自動填通過，完整實測後才可在記憶體準�
 });
 
 test('角色候選 manifest 與每位本人收據不可變，URL 只顯示按鈕不會自動寫入',()=>{
- assert.match(source,/cloud-role-view-verification\.js\?v=20\.26\.227/);
+ assert.match(source,/cloud-role-view-verification\.js\?v=20\.26\.228/);
  assert.match(source,/stagingRoleViewCandidateManifests/);
  assert.match(source,/stagingRoleViewVerificationReceipts/);
  assert.match(source,/persistStagingRoleCandidateManifest/);
@@ -181,7 +181,7 @@ test('核心逐筆已完成但角色發布仍在執行時，串流快照不會�
 
 test('Owner active save 依資料 hash 合併相同意圖，但不同 hash 仍排入下一輪',()=>{
  const queue=block('function queueOwnerCloudSave','function lessonMap');
- assert.match(source,/import \{decideOwnerActiveSaveIntent\} from '\.\/cloud-owner-active-save-intent\.js\?v=20\.26\.227'/);
+ assert.match(source,/import \{decideOwnerActiveSaveIntent\} from '\.\/cloud-owner-active-save-intent\.js\?v=20\.26\.228'/);
  assert.match(queue,/decideOwnerActiveSaveIntent\(\{nextHash,localDirtyHash,lastUploadedHash,diagnostics,applyingCloud\}\)/);
  assert.match(queue,/intent\.action==='coalesce'.+return/s);
  assert.match(queue,/intent\.action==='recover'.+queueLocalSave\(\)/s);

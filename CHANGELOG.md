@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.228（可信歷史追加快路）
+
+- staging 排課規劃在同一個已驗證權威快取內追加 `changes` 時，不再對每一筆既有永久歷史重做深層 clone 與 ID 指紋；仍逐筆檢查文件 schema、環境、路徑、revision、重複 ID、墓碑狀態與連續 recordIndex。
+- 快路只在 `verifiedRemote`、受限四集合、權威物件參照及明確 append-only 數量同時成立時啟用；一般讀取、候選驗證與任何非追加路徑仍執行完整 changes identity 驗證。
+- 20.26.227 真實 30 堂冷啟動為 3.171 秒、熱操作端到端為 3.303 秒，未達 2.5 秒所以未部署 production；本版須重新通過完整測試與 staging 多輪實測才可發布。
+
 ## 20.26.227（連續排課 canonical 快取）
 
 - staging 常駐排課後端在啟動時以現行權威雜湊重新核對並預熱 immutable record canonical 快取；後續連續操作只重新序列化實際改變的課程與新增稽核，不再重複複製整份多年資料。
