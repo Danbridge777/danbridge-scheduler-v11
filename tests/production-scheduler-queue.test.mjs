@@ -49,6 +49,7 @@ test('舊版日誌只有陣列順序不同時安全正規化，不誤判內容�
 });
 test('分批超過 30 筆時，未送出意圖保留，全部確認前不能顯示完成',async()=>{
  const f=fixture(),q=f.create();await q.start({baselineDb:base()});const lessons=Array.from({length:31},(_,i)=>({...lesson,id:`many-${i}`,date:`2026-10-${String(i+1).padStart(2,'0')}`}));await q.queue({...base(),lessons});await q.flush();assert.equal(f.calls.length,2);assert.equal(f.calls[0].changes.length,30);assert.equal(f.calls[1].changes.length,1);assert.equal(f.server.lessons.length,31);assert.equal(f.states.filter(row=>row.state==='complete').length,1);
+ assert.equal(f.states.filter(row=>row.state==='confirmed').length,1);assert.ok(f.states.findIndex(row=>row.state==='confirmed')>f.states.map(row=>row.state).lastIndexOf('sending'));
 });
 test('三百筆連續意圖依 30 筆固定分批全部送達，批次之間不遺失、不倒序、不提前完成',async()=>{
  const f=fixture(),q=f.create();await q.start({baselineDb:base()});
@@ -68,7 +69,7 @@ test('staging 會把既有 30 筆待送要求保留成單一批次並完整續�
   storage:firstStorage,
   maxChangesPerRequest:30,
   createRequestId:()=>`staging-eight-request-${++serial}`,
-  release:'20.26.216',
+  release:'20.26.217',
   send:async request=>{
    sizes.push(request.changes.length);
    for(const change of request.changes)server.lessons.push(clone(change.after));
@@ -96,6 +97,18 @@ test('同步收尾套用遠端快照時又新增操作，必須送妥才宣告�
  let flightError;flight.catch(error=>{flightError=error});sendGate.resolve();for(let poll=0;stored.sourceRecordRevision!==3&&poll<100;poll++){if(flightError)throw flightError;await new Promise(r=>setTimeout(r,1))}assert.equal(stored.sourceRecordRevision,3);
  const desired={...base(),lessons:[{...newer.lessons[0],date:'2026-10-02'}]};const queued=q.queue(desired);revision=3;tailGate.resolve();await queued;await flight;
  assert.equal(calls.length,2);assert.equal(calls[1].changes[0].after.date,'2026-10-02');assert.equal(q.diagnostics().dirty,false);assert.equal(states.filter(s=>s==='complete').length,1);
+ assert.equal(states.filter(s=>s==='confirmed').length,1);assert.ok(states.findIndex(s=>s==='confirmed')>states.map((s,index)=>s==='sending'?index:-1).filter(index=>index>=0).at(-1));
+});
+test('後端完整回條驗證後先顯示雲端確認，IndexedDB 收尾仍保持永久日誌',async()=>{
+ let stored=null,saveCount=0;const finalSave=defer(),states=[];
+ const storage={load:async()=>null,save:async value=>{if(++saveCount===4)await finalSave.promise;stored=clone(value)}};
+ const q=createProductionSchedulerQueue({storage,release:'20.26.217',createRequestId:()=>`confirmed-boundary-request`,onState:event=>states.push(event.state),send:async request=>{
+  const server={...base(),lessons:[lesson]};return{schema:SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:request.requestId,state:'committed',sourceHash:recordDataHash(server),sourceRecordRevision:1,operationCount:2,schedulerDb:projectProductionSchedulerDb(server)};
+ }});
+ await q.start({baselineDb:base()});await q.queue({...base(),lessons:[lesson]});const flight=q.flush();
+ for(let poll=0;!states.includes('confirmed')&&poll<100;poll++)await new Promise(r=>setTimeout(r,1));
+ assert.ok(states.includes('confirmed'));assert.equal(states.includes('complete'),false);assert.ok(stored.pending);assert.equal(stored.baseline.lessons.length,0);
+ finalSave.resolve();await flight;assert.equal(states.at(-1),'complete');assert.equal(stored.pending,null);assert.equal(stored.baseline.lessons.length,1);
 });
 test('複製分頁不能同時接管同一日誌，原分頁釋放後才可恢復',async()=>{
  const held=new Set();const locks={request:async(name,options,work)=>{if(held.has(name))return work(null);held.add(name);try{return await work({name})}finally{held.delete(name)}}};
