@@ -27,25 +27,35 @@ async function createStagingSchedulerRuntime({firestore,serverTimestamp,executeA
  const responseFor=async({request,db,operationCount=0,evidence=null})=>{let revision=Number(evidence?.sourceRecordRevision),sourceHash=String(evidence?.sourceHash||''),notificationCount=Number(evidence?.notificationCount)||0;if(!Number.isSafeInteger(revision)||revision<1||!/^record-v1:[a-f0-9]{64}$/.test(sourceHash)){const control=await readDocument('stagingRoleRecordViewControls/danbridge/views/aa0966626336@gmail.com');revision=Number(control?.revision);sourceHash=String(control?.sourceRecordHash||'')}if(!Number.isSafeInteger(revision)||revision<1||!/^record-v1:[a-f0-9]{64}$/.test(sourceHash))throw new Error('staging AA 角色檢視尚未完成新版讀回');return{schema:policy.SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:request.requestId,state:'committed',sourceHash,sourceRecordRevision:revision,operationCount,notificationCount,schedulerDb:projection.projectProductionSchedulerDb(db)}};
  return Object.freeze({async execute(input,identity){
   if(!identity||identity.emailVerified!==true||identity.appVerified!==true||!projection.PRODUCTION_SCHEDULER_EMAILS.includes(identity.email))throw new Error('排課專員登入驗證無效');
-  const request=policy.normalizeProductionSchedulerRequest(input),fingerprint=sha256Canonical(request),receiptRef=firestore.doc(`companies/danbridge/stagingSchedulerReceipts/${request.requestId}`);
-  return executeInOrder(async()=>{
+	 const request=policy.normalizeProductionSchedulerRequest(input),fingerprint=sha256Canonical(request),receiptRef=firestore.doc(`companies/danbridge/stagingSchedulerReceipts/${request.requestId}`);
+	 return executeInOrder(async()=>{
    const started=now(),cachedBefore=getCachedAuthoritySnapshot(),cachedEpoch=String(cachedBefore?.activationEpoch||''),initialReads=[receiptRef.get(),readDocument('stagingRecordSyncV1PermanentFences/danbridge'),readDocument(`companyAccess/${identity.email}`)];
    if(cachedEpoch)initialReads.push(readDocument(`stagingActiveRecordV2Heads/danbridge/epochs/${cachedEpoch}`),readDocument(`stagingActiveRecordV2AuditCursors/danbridge/epochs/${cachedEpoch}`));
    const [existing,fence,member,cachedHead=null,cachedAuditCursor=null]=await Promise.all(initialReads);
-   if(existing.exists){const saved=existing.data();if(saved.fingerprint!==fingerprint||saved.uid!==identity.uid||saved.email!==identity.email)throw new Error('排課回條識別衝突');return saved.response}
-   const caller=policy.assertProductionSchedulerActor({...member,uid:identity.uid,email:identity.email}),activationEpoch=String(fence?.targetV2Epoch||'');
-   if(!activationEpoch)throw new Error('staging V2 永久柵欄未就緒');
+	   let reservationPromise=null;
+	   if(existing.exists){const saved=existing.data();if(saved.fingerprint!==fingerprint||saved.uid!==identity.uid||saved.email!==identity.email)throw new Error('排課回條識別衝突');if(saved.response)return saved.response;if(saved.schema!=='danbridge-staging-scheduler-reservation-v1'||saved.state!=='reserved')throw new Error('排課回條狀態無效')}
+	   const caller=policy.assertProductionSchedulerActor({...member,uid:identity.uid,email:identity.email}),activationEpoch=String(fence?.targetV2Epoch||'');
+	   if(!activationEpoch)throw new Error('staging V2 永久柵欄未就緒');
+	   if(!existing.exists){
+	    const reservation={schema:'danbridge-staging-scheduler-reservation-v1',state:'reserved',fingerprint,uid:caller.uid,email:caller.email,createdAt:serverTimestamp()};
+	    // Reserve the request identity while the same request performs its
+	    // deterministic target planning.  The authority ledger remains the
+	    // source of completion truth; a reserved request is therefore safe to
+	    // resume after response loss without a second post-success write.
+	    reservationPromise=receiptRef.create(reservation).catch(async error=>{if(Number(error?.code)!==6&&String(error?.code)!=='6')throw error;const raced=await receiptRef.get(),saved=raced.data();if(!raced.exists||saved?.schema!=='danbridge-staging-scheduler-reservation-v1'||saved?.state!=='reserved'||saved?.fingerprint!==fingerprint||saved?.uid!==caller.uid||saved?.email!==caller.email)throw new Error('排課回條競態衝突')}).then(()=>null,error=>error);
+	   }
    const [liveHead,auditCursor]=cachedEpoch===activationEpoch?[cachedHead,cachedAuditCursor]:await Promise.all([readDocument(`stagingActiveRecordV2Heads/danbridge/epochs/${activationEpoch}`),readDocument(`stagingActiveRecordV2AuditCursors/danbridge/epochs/${activationEpoch}`)]),cached=getCachedAuthoritySnapshot(),cachedValid=cached?.activationEpoch===activationEpoch&&cached?.headHash===liveHead?.headHash&&(Number(cached?.auditRevision)||0)===(Number(auditCursor?.revision)||0)&&String(cached?.auditLastRecordId||'')===String(auditCursor?.lastRecordId||'')&&cached.documentsByCollection&&cached.sourceDb;
    let documents,source,sourceHash;
    if(cachedValid){documents=cached.documentsByCollection;source=cached.sourceModel;sourceHash=String(cached.sourceHash||'');if(!source||source.db!==cached.sourceDb||source.hash!==sourceHash||!/^record-v1:[a-f0-9]{64}$/.test(sourceHash))throw new Error('staging 排課快取雜湊不一致')}
    else{const model=await loader.load({activationEpoch});documents=model.documentsByCollection;source=rebuildFullRecordShadowDb(documents,{environment:'staging'});sourceHash=recordDataHash(source.db)}
    console.info('STAGING_SCHEDULER_PREPARED',JSON.stringify({cacheHit:Boolean(cachedValid),elapsedMs:now()-started}));
-   let response;
-   if(requestAlreadyApplied(source.db,request))response=await responseFor({request,db:source.db});
-   else{
+	   let response;
+	   if(requestAlreadyApplied(source.db,request)){const reservationError=await reservationPromise;if(reservationError)throw reservationError;response=await responseFor({request,db:source.db})}
+	   else{
     const planningStarted=now(),nowIso=new Date(planningStarted).toISOString(),target=policy.buildProductionSchedulerTarget(source.db,request,caller,{nowIso}),targetBuilt=now(),deviceId=`scheduler-${createHash('sha256').update(`${identity.uid}:${request.requestId}`,'utf8').digest('hex').slice(0,48)}`,plan=prepareActiveRecordSync({documentsByCollection:documents,baselineDb:source.db,localDb:target.db,environment:'staging',deviceId,activationEpoch,createdAt:nowIso,authoritativeSourceHash:sourceHash,hashRecordDb:recordDataHash,verifiedRemote:{...source,hash:sourceHash},compactResult:true,changedCollections:['lessons','students','makeups','changes']});
-    console.info('STAGING_SCHEDULER_PLANNED',JSON.stringify({targetMs:targetBuilt-planningStarted,planMs:now()-targetBuilt,operationCount:plan.operationCount}));
-    if(plan.conflicts.length)throw new Error('staging 排課發現資料衝突，整批未執行');
+	    console.info('STAGING_SCHEDULER_PLANNED',JSON.stringify({targetMs:targetBuilt-planningStarted,planMs:now()-targetBuilt,operationCount:plan.operationCount}));
+	    const reservationError=await reservationPromise;if(reservationError)throw reservationError;
+	    if(plan.conflicts.length)throw new Error('staging 排課發現資料衝突，整批未執行');
     const records=plan.operations.filter(row=>row.collection!=='changes'),audits=plan.operations.filter(row=>row.collection==='changes');
     if(records.length>90||audits.length>30||plan.operations.length>120||!records.length)throw new Error('staging 排課交易超過安全範圍');
     // The fence and head were read from Firestore in this same serialized
@@ -55,11 +65,10 @@ async function createStagingSchedulerRuntime({firestore,serverTimestamp,executeA
     // pre-transaction head.
     const trustedHashes=Object.freeze({sourceHash:plan.targetHash,previousSourceHash:sourceHash,sourceDb:target.db,previousDb:source.db,authorityFence:fence,authorityHead:liveHead});let schedulerEvidence=null;const sender=createStagingV2ActiveRecordOperationSender({browserClient:{save:async payload=>{const completion=await executeAuthorityPayload(payload,trustedHashes);schedulerEvidence=completion?.schedulerEvidence||null;return completion}},getActor:()=>({uid:caller.uid,email:caller.email})});
     if(plan.operations.length===1)await sender.apply(plan.operations[0]);else await sender.applyBatch(plan.operations);
-    response=await responseFor({request,db:target.db,operationCount:plan.operationCount,evidence:schedulerEvidence});
-   }
-   const value={fingerprint,uid:caller.uid,email:caller.email,response,createdAt:serverTimestamp()};
-   try{await receiptRef.create(value)}catch(error){if(Number(error?.code)!==6&&String(error?.code)!=='6')throw error;const raced=await receiptRef.get(),saved=raced.data();if(!raced.exists||saved?.fingerprint!==fingerprint||saved?.uid!==caller.uid||saved?.email!==caller.email)throw new Error('排課回條競態衝突');response=saved.response}
-   return response;
+	    response=await responseFor({request,db:target.db,operationCount:plan.operationCount,evidence:schedulerEvidence});
+	   }
+	   console.info('STAGING_SCHEDULER_COMPLETE',JSON.stringify({elapsedMs:now()-started,operationCount:response.operationCount,notificationCount:response.notificationCount}));
+	   return response;
   });
  }});
 }
