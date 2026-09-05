@@ -68,7 +68,7 @@ test('staging 會把既有 30 筆待送要求保留成單一批次並完整續�
   storage:firstStorage,
   maxChangesPerRequest:30,
   createRequestId:()=>`staging-eight-request-${++serial}`,
-  release:'20.26.210',
+  release:'20.26.211',
   send:async request=>{
    sizes.push(request.changes.length);
    for(const change of request.changes)server.lessons.push(clone(change.after));
