@@ -103,12 +103,29 @@ function normalizeBranchData(x){
 
 function loadDB(){try{const raw=localStorage.getItem(LS_KEY);const x=JSON.parse(raw||'{"students":[],"teachers":[],"lessons":[],"makeups":[],"changes":[],"teacherGroups":[],"winterTeacherGroups":[],"summerCampClasses":[],"summerCampRegistrations":[],"winterCampClasses":[],"settlementRecords":[],"fixedExpenses":[],"oneTimeExpenses":[]}');x.students||=[];x.teachers||=[];x.lessons||=[];x.makeups||=[];x.changes||=[];x.teacherGroups||=[];x.winterTeacherGroups||=[];x.summerCampClasses||=[];x.summerCampRegistrations||=[];x.winterCampClasses||=[];x.settlementRecords||=[];x.fixedExpenses||=[];x.oneTimeExpenses||=[];x.students=x.students.map(st=>({...st,homeAddress:st.homeAddress||''}));x.teachers=x.teachers.map(t=>({...t,minWeeklyHours:+t.minWeeklyHours||0,workDays:Array.isArray(t.workDays)&&t.workDays.length?[...new Set(t.workDays.map(Number))]:[1,2,3,4,5]}));x.lessons=x.lessons.map(l=>({...l,room:l.room||'',paymentStatus:l.paymentStatus||'unpaid',chargeStudent:l.chargeStudent||'yes',payTeacher:l.payTeacher||'yes',seriesId:l.seriesId||'',location:l.location||'美術東四路',address:l.address||'',campId:normalizeCampCode(l.campId||''),teacherIds:Array.isArray(l.teacherIds)&&l.teacherIds.length?[...new Set(l.teacherIds)]:[l.teacherId].filter(Boolean),lessonState:(l.lessonState||(l.isDraft?'draft':'active')),isDraft:(l.lessonState?l.lessonState==='draft':!!l.isDraft),draftOriginal:null}));return normalizeBranchData(x)}catch{return normalizeBranchData({students:[],teachers:[],lessons:[],makeups:[],changes:[],teacherGroups:[],winterTeacherGroups:[],summerCampClasses:[],summerCampRegistrations:[],winterCampClasses:[],settlementRecords:[],fixedExpenses:[],oneTimeExpenses:[]})}}
 function normalizeLessonStates(){db.lessons=(db.lessons||[]).map(l=>{const state=l.lessonState||(l.isDraft?'draft':'active');return{...l,lessonState:state,isDraft:state==='draft',draftOriginal:null}})}
+let scheduleLocalSaveTimer=null,scheduleLocalSaveIdle=null;
+function flushScheduleLocalSnapshot(){
+ if(scheduleLocalSaveTimer!==null){clearTimeout(scheduleLocalSaveTimer);scheduleLocalSaveTimer=null}
+ if(scheduleLocalSaveIdle!==null&&typeof cancelIdleCallback==='function'){cancelIdleCallback(scheduleLocalSaveIdle);scheduleLocalSaveIdle=null}
+ try{localStorage.setItem(LS_KEY,JSON.stringify(db));updateLastBackupInfo()}catch(error){console.error('Deferred schedule snapshot failed:',error)}
+}
+function scheduleLocalSnapshot(){
+ if(scheduleLocalSaveTimer!==null)clearTimeout(scheduleLocalSaveTimer);
+ if(scheduleLocalSaveIdle!==null&&typeof cancelIdleCallback==='function'){cancelIdleCallback(scheduleLocalSaveIdle);scheduleLocalSaveIdle=null}
+ scheduleLocalSaveTimer=setTimeout(()=>{
+  scheduleLocalSaveTimer=null;
+  if(typeof requestIdleCallback==='function')scheduleLocalSaveIdle=requestIdleCallback(()=>{scheduleLocalSaveIdle=null;flushScheduleLocalSnapshot()},{timeout:2500});
+  else flushScheduleLocalSnapshot();
+ },700);
+}
+window.addEventListener('pagehide',flushScheduleLocalSnapshot);
 function saveDB(options={}){
  let saveError=null;
+ const scheduleMutation=typeof options.scheduleAction==='string'&&options.scheduleAction.length>0;
  try{
   normalizeLessonStates();db=normalizeBranchData(db);
-  try{window.__danbridgeReconcileLockedSettlements?.()}catch(error){console.error('Settlement adjustment reconciliation failed:',error)}
-  localStorage.setItem(LS_KEY,JSON.stringify(db));
+  if(!scheduleMutation){try{window.__danbridgeReconcileLockedSettlements?.()}catch(error){console.error('Settlement adjustment reconciliation failed:',error)}flushScheduleLocalSnapshot()}
+  else scheduleLocalSnapshot();
   try{if(!options.skipRender)((options.calendarOnly||options.scheduleAction&&calendarSectionIsActive())?renderCalendar({deferAnalysis:true}):renderAll())}
   catch(error){
    console.error('Saved data, but a view renderer failed:',error);
@@ -117,7 +134,7 @@ function saveDB(options={}){
  }
  catch(error){saveError=error;console.error('Local save failed:',error)}
  finally{
-  try{updateLastBackupInfo()}catch(error){console.error('Backup status update failed:',error)}
+  if(!scheduleMutation)try{updateLastBackupInfo()}catch(error){console.error('Backup status update failed:',error)}
   try{updateUndoRedoButtons()}catch(error){console.error('Undo/redo status update failed:',error)}
   /* Every mutation path ends here. The cloud module installs this hook after authentication. */
   try{window.__danbridgeQueueCloudSave?.(options)}catch(error){console.error('Cloud save scheduling failed:',error)}

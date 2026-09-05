@@ -50,6 +50,15 @@ test('舊版日誌只有陣列順序不同時安全正規化，不誤判內容�
 test('分批超過 30 筆時，未送出意圖保留，全部確認前不能顯示完成',async()=>{
  const f=fixture(),q=f.create();await q.start({baselineDb:base()});const lessons=Array.from({length:31},(_,i)=>({...lesson,id:`many-${i}`,date:`2026-10-${String(i+1).padStart(2,'0')}`}));await q.queue({...base(),lessons});await q.flush();assert.equal(f.calls.length,2);assert.equal(f.calls[0].changes.length,30);assert.equal(f.calls[1].changes.length,1);assert.equal(f.server.lessons.length,31);assert.equal(f.states.filter(row=>row.state==='complete').length,1);
 });
+test('三百筆連續意圖依 30 筆固定分批全部送達，批次之間不遺失、不倒序、不提前完成',async()=>{
+ const f=fixture(),q=f.create();await q.start({baselineDb:base()});
+ const lessons=Array.from({length:300},(_,index)=>({...lesson,id:`capacity-${String(index).padStart(4,'0')}`,date:new Date(Date.UTC(2027,0,1+index)).toISOString().slice(0,10),note:`sequence-${index}`}));
+ await q.queue({...base(),lessons},{scheduleAction:'lesson.create'});await q.flush();
+ assert.equal(f.calls.length,10);assert.deepEqual(f.calls.map(call=>call.changes.length),Array(10).fill(30));
+ assert.equal(f.server.lessons.length,300);assert.equal(new Set(f.server.lessons.map(row=>row.id)).size,300);
+ assert.deepEqual(f.server.lessons.map(row=>row.note).sort(),lessons.map(row=>row.note).sort());
+ assert.equal(f.states.filter(row=>row.state==='complete').length,1);assert.equal(q.diagnostics().dirty,false);
+});
 test('日誌未存妥或後端回條錯誤，不能宣告成功或清除待送資料',async()=>{
  const broken=createProductionSchedulerQueue({storage:{load:async()=>null,save:async()=>{throw Error('disk full')}},send:()=>{throw Error('must not send')},createRequestId:()=>'',release:'20.26.164'});await assert.rejects(broken.start({baselineDb:base()}),/disk full/);
  let saved;const q=createProductionSchedulerQueue({storage:{load:async()=>null,save:async v=>saved=clone(v)},send:async()=>({schema:SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:'wrong'}),createRequestId:()=>`invalid-request-123`,release:'20.26.164'});await q.start({baselineDb:base()});await q.queue({...base(),lessons:[lesson]});await assert.rejects(q.flush(),/回條驗證失敗/);assert.ok(saved.pending);assert.equal(q.diagnostics().pending,true);
@@ -78,4 +87,10 @@ test('複製分頁不能同時接管同一日誌，原分頁釋放後才可恢�
 test('登出後的在途回條只完成日誌，不再覆寫畫面或宣告同步完成',async()=>{
  const f=fixture(),q=f.create();await q.start({baselineDb:base()});await q.queue({...base(),lessons:[lesson]});const gate=f.pause(),flight=q.flush();await new Promise(r=>setTimeout(r,0));let stopped=false;const stop=q.stop().then(()=>stopped=true);assert.equal(stopped,false);gate.resolve();await flight;await stop;
  assert.equal(f.ui.lessons.length,0);assert.equal(f.stored.baseline.lessons.length,1);assert.equal(f.states.filter(s=>s.state==='complete').length,0);
+});
+test('連續二十次操作合併耐久快照，不把二十次完整序列化排在輸入前面',async()=>{
+ let stored=null,saves=0,serial=0;const storage={load:async()=>stored,save:async value=>{saves++;stored=clone(value)}};
+ const q=createProductionSchedulerQueue({storage,send:async()=>{throw new Error('此測試不送雲端')},release:'20.26.205',createRequestId:()=>`coalesced-${++serial}`});await q.start({baselineDb:base()});
+ const pending=[];for(let index=0;index<20;index++){const next={...base(),lessons:[{...lesson,note:String(index)}]};pending.push(q.queue(next,{scheduleAction:'lesson.update.fields'}))}await Promise.all(pending);
+ assert.ok(saves<=3,`預期啟動一次加最多兩次合併保存，實際 ${saves}`);assert.equal(stored.desired.lessons[0].note,'19');assert.equal(q.diagnostics().dirty,true);
 });

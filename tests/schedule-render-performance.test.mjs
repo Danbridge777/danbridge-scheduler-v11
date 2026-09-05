@@ -30,7 +30,8 @@ test('背景分析、健康檢查與相同雲端回條不搶主畫面',async()=>
   assert.match(cloud,/function scheduleSyncRecoveryCenterRefresh\(delay=700\)/);
   assert.match(cloud,/visualChange=recordDataHash\(current\)!==recordDataHash\(nextDb\)/);
   assert.match(cloud,/lastScheduleSyncMs/);
-  assert.match(cloud,/if\(visualChange\)\{if\(typeof window\.renderVisibleWorkspace/);
+ assert.match(cloud,/if\(!visualChange\)\{if\(document\.body\?\.dataset\)document\.body\.dataset\.lastScheduleAckRenderSkipped='true';return\}/);
+  assert.match(cloud,/persistCurrentLocalView\(\{defer:true\}\)/);
   assert.doesNotMatch(cloud,/scheduleDailyCloudBackup\(\);renderSyncRecoveryCenter\(\);cloudStatus\('逐筆雲端已確認/);
 });
 

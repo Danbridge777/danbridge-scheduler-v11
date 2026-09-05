@@ -68,7 +68,10 @@ export function createActiveRecordPageController({
    if(await ensureCloudBackup(clone(base))!==true)throw new Error('逐筆寫入前的雲端分片備份尚未完成');status({state:'syncing'});
    const result=await runActiveRecordSync({journal,readDocuments:readConfirmedDocuments,send:sendWithReceipt,persistConflicts,baselineDb:base,localDb:local,environment,deviceId,activationEpoch,startSequence:await loadSequence(),maxOperations,maxRebases,onProgress:progress=>status({state:progress.kind,counts:progress.counts})});nextSequence=Math.max(nextSequence,result.nextSequence||nextSequence);
    if(result.state!=='complete'){
-    dirty=true;const counts=result.worker?.counts||await journal.counts();lastCounts=counts;if(result.state==='waiting'){queued=true;const retryAt=Number(result.worker?.head?.nextRetryAt)||Date.now()+1000;schedule(Math.max(0,retryAt-Date.now()))}status({state:result.state,error:result.reason||result.worker?.head?.lastError||'',counts});return{...result,dirty:true};
+    dirty=true;const counts=result.worker?.counts||await journal.counts();lastCounts=counts;
+    if(result.state==='waiting'){queued=true;const retryAt=Number(result.worker?.head?.nextRetryAt)||Date.now()+1000;schedule(Math.max(0,retryAt-Date.now()))}
+    else if(result.state==='paused'&&counts.pending>0){queued=true;schedule(0)}
+    status({state:result.state,error:result.reason||result.worker?.head?.lastError||'',counts});return{...result,dirty:true};
    }
    // production trusted operation 已在同一交易中核對 base/target head、revision 與不可重送 receipt。
    // 直接採用已提交計畫可解除 UI 操作鎖；背景串流仍會獨立驗證正式資料，若不一致照常封鎖。

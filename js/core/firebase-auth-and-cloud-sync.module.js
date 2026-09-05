@@ -19,14 +19,14 @@ import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-re
 import {recordDataDigest,recordDataHash} from './cloud-record-data-hash.js?v=20.26.106';
 import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.106';
 import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.106';
-import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from './production-scheduler-queue.js?v=20.26.203';
+import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from './production-scheduler-queue.js?v=20.26.205';
 import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.106';
 import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.194';
 import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.194';
 import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.106';
 import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.106';
 import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.106';
-import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.194';
+import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.205';
 import {createFirebaseActiveRecordStreamAdapter} from './firebase-active-record-stream-adapter.js?v=20.26.106';
 import {createFirebaseRoleRecordViewAdapter} from './firebase-role-record-view-adapter.js?v=20.26.116';
 import {createFirebaseRoleRecordStreamAdapter} from './firebase-role-record-stream-adapter.js?v=20.26.204';
@@ -60,7 +60,7 @@ window.__DANBRIDGE_ENVIRONMENT__=DANBRIDGE_ENVIRONMENT;
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.204';
+const APP_RELEASE='20.26.205';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -363,7 +363,19 @@ function localRoleCacheKey(){
  const identity=(cloudEmailKey||cloudUid||'unknown').replace(/[^a-z0-9@._-]/gi,'_');
  return `danbridge_scheduler_view_${cloudRole||'signed_out'}_${identity}`;
 }
-function persistCurrentLocalView(){try{localStorage.setItem(localRoleCacheKey(),JSON.stringify(window.__danbridgeGetDB()))}catch{}}
+let localViewPersistenceTimer=null,localViewPersistenceIdle=null;
+function flushCurrentLocalView(){
+ if(localViewPersistenceTimer!==null){clearTimeout(localViewPersistenceTimer);localViewPersistenceTimer=null}
+ if(localViewPersistenceIdle!==null&&typeof cancelIdleCallback==='function'){cancelIdleCallback(localViewPersistenceIdle);localViewPersistenceIdle=null}
+ try{localStorage.setItem(localRoleCacheKey(),JSON.stringify(window.__danbridgeGetDB()))}catch{}
+}
+function persistCurrentLocalView({defer=false}={}){
+ if(!defer)return flushCurrentLocalView();
+ if(localViewPersistenceTimer!==null)clearTimeout(localViewPersistenceTimer);
+ if(localViewPersistenceIdle!==null&&typeof cancelIdleCallback==='function'){cancelIdleCallback(localViewPersistenceIdle);localViewPersistenceIdle=null}
+ localViewPersistenceTimer=setTimeout(()=>{localViewPersistenceTimer=null;if(typeof requestIdleCallback==='function')localViewPersistenceIdle=requestIdleCallback(()=>{localViewPersistenceIdle=null;flushCurrentLocalView()},{timeout:2500});else flushCurrentLocalView()},700);
+}
+window.addEventListener('pagehide',flushCurrentLocalView);
 function persistOwnerSyncRecovery(){
  if(cloudRole!=='owner'||!localDirtyHash)return;
  try{localStorage.setItem(OWNER_SYNC_RECOVERY_KEY,JSON.stringify({hash:localDirtyHash,mutationVersion:localMutationVersion,baseDb:ownerRecoveryBaseDB||lastPublishedOwnerDB||null,updatedAt:new Date().toISOString()}))}catch{}
@@ -2824,7 +2836,8 @@ if(DANBRIDGE_ENVIRONMENT==='staging'){
 
 async function applyActiveOwnerCloudDb(nextDb){
  const current=window.__danbridgeGetDB?.()||emptyDB(),visualChange=recordDataHash(current)!==recordDataHash(nextDb);
- applyingCloud=true;try{window.__danbridgeSetDB(deepCopy(nextDb));applyCachedLessonReportsToCurrentDB();persistCurrentLocalView();if(visualChange){if(typeof window.renderVisibleWorkspace==='function')window.renderVisibleWorkspace();else window.renderAll?.()}}finally{applyingCloud=false}
+ if(!visualChange){if(document.body?.dataset)document.body.dataset.lastScheduleAckRenderSkipped='true';return}
+ applyingCloud=true;try{window.__danbridgeSetDB(deepCopy(nextDb));applyCachedLessonReportsToCurrentDB();persistCurrentLocalView({defer:true});if(typeof window.renderVisibleWorkspace==='function')window.renderVisibleWorkspace();else window.renderAll?.()}finally{applyingCloud=false}
 }
 function handleActiveOwnerControllerStatus(status){
  setActiveRecordSyncFailureResumeDiagnostic(status);
@@ -3144,8 +3157,9 @@ function queueOwnerCloudSave(options={}){
 function lessonMap(rows=[]){return new Map(rows.map(row=>[String(row.id),row]))}
 function applyProductionSchedulerQueueDb(value){
  if(cloudRole!=='teacher'||!cloudCanManageSchedule)return;
- const current=window.__danbridgeGetDB?.()||emptyDB(),visualChange=recordDataHash(current)!==recordDataHash(value);
- applyingCloud=true;try{window.__danbridgeSetDB(deepCopy(value));persistCurrentLocalView();if(visualChange){if(typeof window.renderVisibleWorkspace==='function')window.renderVisibleWorkspace();else window.renderAll?.()}}finally{applyingCloud=false}
+ const current=filteredSchedulerDB(window.__danbridgeGetDB?.()||emptyDB()),incoming=filteredSchedulerDB(value),visualChange=recordDataHash(current)!==recordDataHash(incoming);
+ if(!visualChange){if(document.body?.dataset)document.body.dataset.lastScheduleAckRenderSkipped='true';return}
+ applyingCloud=true;try{window.__danbridgeSetDB(deepCopy(incoming));persistCurrentLocalView({defer:true});if(typeof window.renderVisibleWorkspace==='function')window.renderVisibleWorkspace();else window.renderAll?.()}finally{applyingCloud=false}
 }
 function stopProductionSchedulerQueue(){
  productionSchedulerGeneration++;clearTimeout(schedulerUploadRetryTimer);schedulerUploadRetryCount=0;
