@@ -8,6 +8,7 @@ import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 const clone=value=>JSON.parse(JSON.stringify(value));
 const stable=value=>Array.isArray(value)?value.map(stable):(value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value);
 const same=(left,right)=>JSON.stringify(stable(left))===JSON.stringify(stable(right));
+const sameFast=(left,right)=>{const directLeft=JSON.stringify(left),directRight=JSON.stringify(right);return directLeft===directRight||same(left,right)};
 const validText=value=>typeof value==='string'&&value.trim()===value&&value.length>0&&value.length<=1500&&!/[\u0000-\u001f/]/.test(value);
 const validRecordHash=value=>typeof value==='string'&&/^record-v1:[a-f0-9]{64}$/.test(value);
 const allowedEnvironment=new Set(['staging','production']);
@@ -38,7 +39,7 @@ function v2Envelope({environment,activationEpoch,collection,recordId,exists,revi
  return{environment,companyId:'danbridge',activationEpoch,...core,recordHash:activeRecordSaveEnvelopeHash(core)};
 }
 
-export function prepareActiveRecordSync({documentsByCollection,baselineDb,localDb,environment,deviceId,activationEpoch,startSequence=1,createdAt=new Date().toISOString(),authoritativeSourceHash,hashRecordDb=recordDataHash,verifiedRemote=null,compactResult=false,changedCollections=null}={}){
+export function prepareActiveRecordSync({documentsByCollection,baselineDb,localDb,environment,deviceId,activationEpoch,startSequence=1,createdAt=new Date().toISOString(),authoritativeSourceHash,hashRecordDb=recordDataHash,verifiedRemote=null,compactResult=false,changedCollections=null,appendOnlyChangesCount=0}={}){
  if(!allowedEnvironment.has(environment)||!validText(deviceId)||!validText(activationEpoch)||!Number.isSafeInteger(startSequence)||startSequence<1||!isStrictActiveRecordSaveTimestamp(createdAt)||typeof hashRecordDb!=='function')throw new Error('日常逐筆同步設定無效');
  if(typeof compactResult!=='boolean')throw new Error('日常逐筆同步精簡結果設定無效');
  const trusted=verifiedRemote!==null;
@@ -54,7 +55,9 @@ export function prepareActiveRecordSync({documentsByCollection,baselineDb,localD
  // excluded collection is accepted only when it is the exact immutable source
  // reference; cloning or changing it fails closed before any plan is emitted.
  if(scoped)for(const collection of FULL_RECORD_COLLECTIONS)if(!scopeSet.has(collection)&&baselineDb?.[collection]!==localDb?.[collection])throw new Error(`日常逐筆未授權集合未沿用權威參照：${collection}`);
- const canonicalLocalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(baselineDb,localDb):(trusted?localDb:authoritativeTarget(remote.db,localDb)),merged=authoritativeSourceHash===undefined?mergeConcurrentRecordDb(baselineDb,canonicalLocalDb,remote.db):{db:canonicalLocalDb,conflicts:[]},canonicalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(remote.db,merged.db):canonicalLocalDb,targetHash=hashRecordDb(canonicalDb),raw=buildFullRecordShadowPlan(documentsByCollection,canonicalDb,{sourceHash:targetHash,batchSize:1,environment,collections:scope});
+ if(!Number.isSafeInteger(appendOnlyChangesCount)||appendOnlyChangesCount<0||appendOnlyChangesCount>30||appendOnlyChangesCount&&(!trusted||!scoped||!scopeSet.has('changes')))throw new Error('日常逐筆 changes 追加提示無效');
+ if(appendOnlyChangesCount){const before=baselineDb?.changes,after=localDb?.changes;if(!Array.isArray(before)||!Array.isArray(after)||after.length!==before.length+appendOnlyChangesCount)throw new Error('日常逐筆 changes 追加數量不符');for(let index=0;index<before.length;index++)if(!sameFast(before[index],after[index+appendOnlyChangesCount]))throw new Error('日常逐筆 changes 舊歷史遭到改寫')}
+ const canonicalLocalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(baselineDb,localDb):(trusted?localDb:authoritativeTarget(remote.db,localDb)),merged=authoritativeSourceHash===undefined?mergeConcurrentRecordDb(baselineDb,canonicalLocalDb,remote.db):{db:canonicalLocalDb,conflicts:[]},canonicalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(remote.db,merged.db):canonicalLocalDb,targetHash=hashRecordDb(canonicalDb),raw=buildFullRecordShadowPlan(documentsByCollection,canonicalDb,{sourceHash:targetHash,batchSize:1,environment,collections:scope,appendOnlyChangesCount});
  if(!validRecordHash(targetHash))throw new Error('日常逐筆目標雜湊無效');
  let incrementalHash=baseHash;
  let counts={documentCount:remote.documentCount,activeCount:remote.activeCount,tombstoneCount:remote.tombstoneCount};
