@@ -700,28 +700,62 @@ service cloud.firestore {
         && data.branchIds == control.branchIds;
     }
     function ownRoleRecordViewListIsAllowed(companyId, viewKey) {
+      let member = get(/databases/$(database)/documents/companyAccess/$(emailKey())).data;
       let control = get(/databases/$(database)/documents/stagingRoleRecordViewControls/$(companyId)/views/$(emailKey())).data;
-      let root = get(/databases/$(database)/documents/stagingRecordSyncControls/$(companyId)).data;
       return signedIn()
-        && activeMember(companyId)
-        && control != null
-        && root != null
-        && control.environment == 'staging'
-        && control.companyId == companyId
+        && member.active == true
+        && member.companyId == companyId
         && control.schema == 'danbridge-role-record-view-control-v1'
         && control.state == 'active'
         && control.readTakeover == true
         && control.email == emailKey()
         && control.viewKey == viewKey
-        && ((control.activationEpoch == root.activationEpoch
-            && root.schema == 'danbridge-record-sync-control-v1'
-            && root.environment == 'staging'
-            && root.companyId == companyId
-            && root.state == 'active'
-            && root.readTakeover == true
-            && root.writeTakeover == true)
-          || v2RoleRecordReadOpen(companyId, control.activationEpoch))
-        && ownRoleRecordScopeMatches(companyId, emailKey(), control);
+        && ((control.kind == 'scheduler'
+            && emailKey() == 'aa0966626336@gmail.com'
+            && member.role == 'teacher'
+            && member.canManageSchedule == true
+            && control.teacherId == member.teacherId
+            && control.branchIds == [])
+          || (control.kind == 'teacher'
+            && member.role == 'teacher'
+            && (!('canManageSchedule' in member) || member.canManageSchedule != true)
+            && control.teacherId == member.teacherId
+            && control.branchIds == [])
+          || (control.kind == 'branch_manager'
+            && member.role == 'branch_manager'
+            && member.branchIds is list
+            && member.branchIds.size() > 0
+            && control.teacherId == member.teacherId
+            && control.branchIds is list
+            && control.branchIds.hasOnly(member.branchIds)
+            && member.branchIds.hasOnly(control.branchIds)));
+    }
+    function ownRoleV2RuntimeControlIsAllowed(companyId, targetV2Epoch, data) {
+      let member = get(/databases/$(database)/documents/companyAccess/$(emailKey())).data;
+      let roleControl = get(/databases/$(database)/documents/stagingRoleRecordViewControls/$(companyId)/views/$(emailKey())).data;
+      return signedIn()
+        && member.active == true
+        && member.companyId == companyId
+        && roleControl.schema == 'danbridge-role-record-view-control-v1'
+        && roleControl.state == 'active'
+        && roleControl.readTakeover == true
+        && roleControl.email == emailKey()
+        && roleControl.activationEpoch == targetV2Epoch
+        && data.schema == 'danbridge-record-sync-v2-structural-active-control-v2'
+        && data.environment == 'staging'
+        && data.companyId == companyId
+        && data.activationEpoch == targetV2Epoch
+        && data.state == 'structural-active-transition-awaiting-native-fixed-path-atomic-cutover'
+        && data.writerProtocol == 'v2'
+        && data.writerGeneration == 2
+        && data.readAllowed == true
+        && data.writeAllowed is bool
+        && data.readTakeoverEnabled == true
+        && data.writeTakeoverEnabled is bool
+        && data.acceptNewSessions is bool
+        && data.acceptNewMutations is bool
+        && data.allowAuditAppends is bool
+        && nonzeroSha256(data.controlHash);
     }
     function roleRecordCollectionMapsValid(active, documents, tombstones) {
       let keys = ['students','teachers','lessons','makeups','changes','teacherGroups','winterTeacherGroups','summerCampClasses','summerCampRegistrations','winterCampRegistrations','winterCampClasses','settlementRecords','fixedExpenses','oneTimeExpenses','collectionRecords','branches'];
@@ -2081,7 +2115,11 @@ service cloud.firestore {
       allow get: if isOwner() || (companyId == 'danbridge'
         && ownRoleRecordScopeMatches(companyId, resource.data.email, resource.data)
         && activeRoleRecordViewMatches(companyId, resource.data.email, viewKey, resource.data));
-      allow list: if isOwner() || (signedIn()
+      // V2 fence/head/scope are fully checked on every immutable projection write and
+      // control publication. Repeating that lineage for every returned record makes
+      // a normal 58-row lessons query exceed Firestore's expression budget. Runtime
+      // list access therefore checks the current member and exact active control only.
+      allow list: if isPrimaryOwner() || (signedIn()
         && companyId == 'danbridge'
         && ownRoleRecordViewListIsAllowed(companyId, viewKey));
       allow create, update: if roleRecordWriteIsValid(companyId, viewKey, collectionId, recordId);
@@ -3655,7 +3693,8 @@ service cloud.firestore {
     // authenticated Owners may read only the exact active V2 epoch.  Every
     // client write remains denied; the Gen2 runtime is the sole write boundary.
     match /stagingRecordSyncV2ActiveControls/{companyId}/epochs/{targetV2Epoch} {
-      allow read: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch);
+      allow read: if v2OwnerRuntimeReadOpen(companyId, targetV2Epoch)
+        || ownRoleV2RuntimeControlIsAllowed(companyId, targetV2Epoch, resource.data);
       allow create, update, delete: if false;
     }
     match /stagingActiveRecordV2Baselines/{companyId}/epochs/{targetV2Epoch}/artifacts/manifest {

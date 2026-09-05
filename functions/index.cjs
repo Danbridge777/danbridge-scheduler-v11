@@ -18,6 +18,7 @@ const PRODUCTION_PROJECT_ID='danbridge-d8877';
 const PRODUCTION_SERVICE_ACCOUNT='danbridge-production-runtime@danbridge-d8877.iam.gserviceaccount.com';
 const PRIMARY_OWNER_EMAIL='a0965487920@gmail.com';
 let runtimePromise=null;
+let stagingSchedulerRuntimePromise=null;
 let productionRuntimePromise=null;
 let productionSchedulerRuntimePromise=null;
 
@@ -113,6 +114,27 @@ exports.stagingAcknowledgeScheduleNotification=onCall({region:'asia-east1',servi
   return{schema:'danbridge-staging-schedule-notification-acknowledge-response-v1',ok:true,...result};
  }catch(error){if(error instanceof HttpsError)throw error;console.error('STAGING_NOTIFICATION_ACK_BLOCKED',JSON.stringify({name:String(error?.name||'Error'),message:String(error?.message||'blocked')}));throw new HttpsError('failed-precondition',String(error?.message||'通知確認已安全阻止。').slice(0,200))}
 });
+
+async function stagingSchedulerRuntime(){
+ if(!stagingSchedulerRuntimePromise)stagingSchedulerRuntimePromise=(async()=>{
+   const app=getApps().find(row=>row.options?.projectId===PROJECT_ID)??initializeApp({projectId:PROJECT_ID,credential:applicationDefault()}),firestore=getFirestore(app),[{createFirebaseActiveRecordAuthoritySaveChainV2CloudRuntimeBinder},{createFirebaseStagingV2AuditAppendCloudRuntimeBinder},{createStagingDerivedDeliveryRuntime},{createStagingSchedulerRuntime}]=await Promise.all([import('../js/core/firebase-active-record-authority-save-chain-v2-adapter.js'),import('../js/core/firebase-staging-v2-audit-append-adapter.js'),Promise.resolve(require('./staging-derived-delivery-runtime.cjs')),Promise.resolve(require('./staging-scheduler-runtime.cjs'))]),recordBinder=createFirebaseActiveRecordAuthoritySaveChainV2CloudRuntimeBinder({app,firestore,expectedProjectId:PROJECT_ID}),auditBinder=createFirebaseStagingV2AuditAppendCloudRuntimeBinder({app,firestore,expectedProjectId:PROJECT_ID}),derivedDelivery=await createStagingDerivedDeliveryRuntime({firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),now:()=>Date.now(),expectedProjectId:PROJECT_ID}),executeAuthorityPayload=async payload=>executeStagingAuthorityPayload({payload,recordBinder,auditBinder,derivedDelivery});
+   await derivedDelivery.warm();
+   return createStagingSchedulerRuntime({firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),executeAuthorityPayload,getCachedAuthoritySnapshot:()=>derivedDelivery.snapshot(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL});
+  })().catch(error=>{stagingSchedulerRuntimePromise=null;throw error});
+ return stagingSchedulerRuntimePromise
+}
+
+exports.stagingSchedulerOperation=onCall({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'1GiB',concurrency:4,minInstances:1,maxInstances:10},async request=>{
+ try{
+  const scheduler=await stagingSchedulerRuntime();
+  return await scheduler.execute(request.data,{uid:request.auth?.uid,email:String(request.auth?.token?.email||'').trim().toLowerCase(),emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)});
+ }catch(error){if(error instanceof HttpsError)throw error;console.error('STAGING_SCHEDULER_BLOCKED',String(error?.message||'blocked'));const {stagingSchedulerErrorCode}=require('./staging-scheduler-runtime.cjs');throw new HttpsError(stagingSchedulerErrorCode(error),String(error?.message||'排課操作未完成，資料已保留').slice(0,240))}
+});
+
+// The callable has a minimum instance. Hydrate and hash-check the complete
+// authority snapshot while that instance boots so the first real operation
+// gets the same verified hot path as subsequent operations.
+if(process.env.K_SERVICE==='stagingscheduleroperation'&&process.env.GCLOUD_PROJECT===PROJECT_ID)void stagingSchedulerRuntime().catch(reportRuntimeBlocked);
 
 exports.stagingV2ConflictBackup=onCall({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:30,memory:'256MiB',concurrency:20,minInstances:0,maxInstances:10},async request=>{
  const actor=await verifiedStagingOwner(request),input=request.data;

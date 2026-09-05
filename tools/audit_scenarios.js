@@ -300,7 +300,7 @@ const appShellSource = fs.readFileSync(path.join(root, 'js/app/app-shell.js'), '
 assert.match(appShellSource, /if\(id==='calendar'\)[\s\S]*mode\.value='month'[\s\S]*date\.value=todayStr\(\)/, 'opening the schedule always starts on the current month');
 assert.match(appShellSource, /function installNavigationHandlers\(\)[\s\S]*tabHandlerInstalled[\s\S]*addEventListener\('click'[\s\S]*closest\('button\[data-tab\]'\)[\s\S]*switchTab\(button\.dataset\.tab\)/, 'navigation uses one stable delegated handler that survives account and role switching');
 assert.match(cloudSource, /function applyRoleUI\(profile,user\)[\s\S]*window\.installNavigationHandlers\?\.\(\);\s*\}/, 'every authenticated role reapplies navigation handlers after role-specific UI restrictions');
-assert.match(cloudSource, /function acknowledgeCurrentScheduleNotification\(\)[\s\S]*if\(modal\)modal\.hidden=true;[\s\S]*scheduleNotificationAcknowledgeCall\(\{notificationIds:ids\}\)/, 'acknowledging grouped schedule notifications releases the interface before the environment-specific protected backend transaction');
+assert.match(cloudSource, /function acknowledgeCurrentScheduleNotification\(\)[\s\S]*if\(modal\)modal\.hidden=true;[\s\S]*for\(let offset=0;offset<ids\.length;offset\+=20\)[\s\S]*scheduleNotificationAcknowledgeCall\(\{notificationIds:ids\.slice\(offset,offset\+20\)\}\)/, 'acknowledging grouped schedule notifications releases the interface and safely batches every protected backend transaction');
 assert.doesNotMatch(cloudSource, /scheduleNotifications',id\),\{read:true,acknowledgedAt:/, 'notification acknowledgement must not write Firestore directly from the browser');
 assert.match(cloudSource, /function subscribeLessonReports\(\)\{\s*unsubscribeReports\?\.\(\);unsubscribeReports=null;\s*if\(cloudRole==='teacher'\)return;/, 'teachers use their isolated teacher view and never open a redundant company-wide report collection listener');
 assert.match(cloudSource, /function applyCalendarLocationRoleScope\(\)[\s\S]*cloudRole!=='branch_manager'[\s\S]*allowedBranches[\s\S]*option\.remove\(\)[\s\S]*applyCalendarLocationRoleScope\(\);/, 'branch managers only receive authorized branch locations while owner options remain restorable');
@@ -322,7 +322,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.197'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.204'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');

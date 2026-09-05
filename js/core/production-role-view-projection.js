@@ -58,10 +58,11 @@ export function projectProductionTeacherDb(source,teacherId,{now=Date.now()}={})
 
 const schedulerSafeLesson=(lesson={})=>Object.fromEntries(['id','date','start','end','studentId','teacherId','teacherIds','title','campId','room','location','branchId','deliveryMode','address','onlinePlatform','meetingUrl','status','note','seriesId','lessonState','isDraft'].filter(key=>lesson[key]!==undefined).map(key=>[key,clone(lesson[key])]));
 const schedulerSafeStudent=(student={})=>Object.fromEntries(['id','name','status','school','grade','level','preferredTeacherId','courseType','branchIds'].filter(key=>student[key]!==undefined).map(key=>[key,clone(student[key])]));
+const schedulerCanonicalRows=rows=>rows.sort((left,right)=>String(left?.id||'').localeCompare(String(right?.id||'')));
 
 export function projectProductionSchedulerDb(source){
- const branches=(source?.branches||[]).map(branch=>({id:branch.id,name:branch.name||'',rooms:Array.isArray(branch.rooms)?branch.rooms.map(String):[]}));
- return{...emptyDb(),branches,students:(source?.students||[]).filter(student=>!student.archivedAt).map(schedulerSafeStudent),teachers:(source?.teachers||[]).filter(teacher=>!teacher.archivedAt).map(teacher=>({id:teacher.id,name:teacher.name||'',displayName:teacher.displayName||'',color:teacher.color||'',subjects:teacher.subjects||''})),lessons:(source?.lessons||[]).filter(lesson=>!lesson.isDraft).map(schedulerSafeLesson)};
+ const branches=schedulerCanonicalRows((source?.branches||[]).map(branch=>({id:branch.id,name:branch.name||'',rooms:Array.isArray(branch.rooms)?branch.rooms.map(String):[]})));
+ return{...emptyDb(),branches,students:schedulerCanonicalRows((source?.students||[]).filter(student=>!student.archivedAt).map(schedulerSafeStudent)),teachers:schedulerCanonicalRows((source?.teachers||[]).filter(teacher=>!teacher.archivedAt).map(teacher=>({id:teacher.id,name:teacher.name||'',displayName:teacher.displayName||'',color:teacher.color||'',subjects:teacher.subjects||''}))),lessons:schedulerCanonicalRows((source?.lessons||[]).filter(lesson=>!lesson.isDraft).map(schedulerSafeLesson))};
 }
 
 export function projectProductionBranchDb(source,branchIds,{now=Date.now()}={}){

@@ -4,7 +4,7 @@ import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
 
 const require=createRequire(import.meta.url);
-const {createStagingDerivedDeliveryRuntime,restorePreviousLessons,lessonChanges,buildNotifications,applyPayloadToCachedDb,applyAuditPayloadToCachedDb}=require('../functions/staging-derived-delivery-runtime.cjs');
+const {createStagingDerivedDeliveryRuntime,restorePreviousLessons,lessonChanges,buildNotifications,applyPayloadToCachedDb,applyAuditPayloadToCachedDb,applyPayloadToCachedDocuments}=require('../functions/staging-derived-delivery-runtime.cjs');
 const {buildChangeRecordId}=await import('../js/core/cloud-change-record-identity.js');
 
 const before={id:'lesson-1',date:'2026-09-05',start:'17:20',end:'17:50',studentId:'student-1',teacherIds:['teacher-1'],title:'測試課程',branchId:'art_museum'};
@@ -41,6 +41,21 @@ test('稽核 append 保持 changes 新到舊順序，同筆回條可重送但不
  const replayed=applyAuditPayloadToCachedDb(appended,auditPayload,{buildRecordId:buildChangeRecordId});
  assert.deepEqual(replayed,appended);
  assert.throws(()=>applyAuditPayloadToCachedDb(appended,{...auditPayload,localRecords:[{...auditPayload.localRecords[0],record:{...next,kind:'tampered'}}]},{buildRecordId:buildChangeRecordId}),/replay mismatch|append sequence invalid/);
+});
+
+test('常駐文件快照只依同一筆已提交 payload 前進，並保留 revision、tombstone 與 sourceHash',()=>{
+ const oldHash='record-v1:'+'1'.repeat(64),nextHash='record-v1:'+'2'.repeat(64),documents={lessons:[{id:'lesson-1',data:{schema:'danbridge-full-record-shadow-v1',companyId:'danbridge',collection:'lessons',recordId:'lesson-1',record:before,recordIndex:null,sourceHash:oldHash,revision:7,deleted:false,environment:'staging'}}]},versioned={...payload,baselineRecords:[{...payload.baselineRecords[0],revision:7}],localRecords:[{...payload.localRecords[0],revision:7}]},updated=applyPayloadToCachedDocuments(documents,versioned,nextHash);
+ assert.equal(updated.lessons[0].data.revision,8);
+ assert.equal(updated.lessons[0].data.sourceHash,nextHash);
+ assert.deepEqual(updated.lessons[0].data.record,after);
+ assert.deepEqual(documents.lessons[0].data.record,before);
+ const deletedHash='record-v1:'+'3'.repeat(64),removed=applyPayloadToCachedDocuments(updated,{...versioned,baselineRecords:[{...versioned.baselineRecords[0],revision:8,record:after}],localRecords:[{...versioned.localRecords[0],revision:8,record:after,deleted:true}]},deletedHash);
+ assert.equal(removed.lessons.length,1);
+ assert.equal(removed.lessons[0].data.deleted,true);
+ assert.equal(removed.lessons[0].data.revision,9);
+ assert.equal(removed.lessons[0].data.sourceHash,deletedHash);
+ assert.throws(()=>applyPayloadToCachedDocuments(documents,versioned,'record-v1:invalid'),/document cache payload invalid/);
+ assert.throws(()=>applyPayloadToCachedDocuments(documents,{...versioned,localRecords:[{...versioned.localRecords[0],revision:6}]},nextHash),/document cache identity invalid/);
 });
 
 test('同一筆課表異動為 Daniel、AA 與指定老師建立穩定且可讀回核對的通知',()=>{

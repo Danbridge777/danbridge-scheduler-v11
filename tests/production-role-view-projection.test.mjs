@@ -16,6 +16,7 @@ test('老師投影只含本人課程並排除費用、家長與未到期回報',
 
 test('AA 投影保留全老師排課欄位但不包含家長或費用資料',()=>{
  const db=projectProductionSchedulerDb(source);assert.deepEqual(db.lessons.map(row=>row.id),['l1','l2']);assert.equal(db.students[0].parentName,undefined);assert.equal(db.lessons[0].paymentStatus,undefined);assert.equal(db.teachers[0].rate,undefined);
+ const reversed=projectProductionSchedulerDb({...source,branches:[...source.branches].reverse(),students:[...source.students].reverse(),teachers:[...source.teachers].reverse(),lessons:[...source.lessons].reverse()});assert.deepEqual(reversed,db,'AA 回條與角色檢視不受 Firestore 文件讀取順序影響');
 });
 
 test('校區投影嚴格隔離另一校區，雜湊可重現',()=>{

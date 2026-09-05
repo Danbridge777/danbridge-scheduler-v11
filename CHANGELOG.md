@@ -1,5 +1,36 @@
 # Changelog
 
+## 20.26.204（角色串流拒絕舊快取控制）
+
+- aa、老師與校區角色的控制、V2 runtime 及 16 集合初次載入必須取得 Firestore server 快照；舊 IndexedDB 快取只能保留當前畫面，不得啟動舊 epoch、覆蓋新資料或開放寫入。
+- 新增回歸測試，重現舊 `viewKey` 導向無效 runtime 的問題，確認只有新 server 控制與完整集合快照能進入 ready。
+
+## 20.26.203（排課驗證快照與常駐實例預熱）
+
+- 排課後端常駐一份由完整 16 集合重建、並以 authority head 雜湊與 immutable audit 游標雙重驗證的快照；每次操作只有在兩個雲端識別都完全一致時才走快速路徑，任一不符就重新讀取全量權威資料並拒絕不一致雜湊。
+- 新增、移動、複製與刪除完成後，以同一筆已讀回確認的 payload 精確前進資料、文件 revision、tombstone、source hash 與 audit cursor，不會從舊畫面猜測雲端狀態。
+- `stagingSchedulerOperation` 的最低常駐實例在啟動期間即完成模組載入、完整資料重建與雜湊核對，避免第一筆真實操作承擔冷啟動及 16 集合掃描時間。
+
+## 20.26.202（排課回條與角色檢視固定排序）
+
+- 將排課專員可見的校區、學生、老師與課程固定依 ID 排序，使後端提交回條與 Firestore 角色集合讀回在同一版號下逐位元一致，不再因文件回傳順序不同而安全停止。
+- 將 staging V2 伺服器邊界精確擴充為兩個合法 Gen2 target/service 配對：authority save 與受 App Check 保護的 scheduler operation；其他 target、交叉配對與非 keyless ADC 仍全部拒絕。
+
+## 20.26.201（AA V2 後端排課與通知分批確認）
+
+- staging AA 排課已從被永久柵欄封鎖的舊 `scheduleRequests` 瀏覽器寫入，改為受 App Check 保護的 `stagingSchedulerOperation` 後端入口。
+- 每次新增、移動、編輯或刪除先在後端重建完整 V2 權威基準，驗證 AA 角色、before/after、資料衝突、學生、老師與校區，再透過同一 V2 authority 儲存與讀回回條完成。
+- staging 與 production AA 共用永久操作日誌；斷線、重載或連續操作時保留固定 request ID，不再回退到舊寫入通道。
+- staging 舊本機快取與經驗證雲端不一致時，先在本機封存可復原快照，再以新權威基準啟動，不把舊 ID 或舊課表倒灌回測試雲端。
+- 通知確認改為每 20 筆分批送入受保護後端，解決 82 筆未讀通知一次確認時被上限阻擋的實際問題。
+
+## 20.26.200（角色 V2 唯一讀取路徑）
+
+- AA 與老師角色的逐筆資料串流改為只訂閱目前角色控制指定的 V2 runtime control，不再訂閱已退役的 V1 safety control。
+- 精簡角色 16 集合的 list 權限判斷，使 58 筆以上課程查詢不會超出 Firestore 規則運算預算；跨角色與跨檢視仍拒絕。
+- V2 runtime control 支援安全唯讀狀態，寫入關閉時保留已驗證畫面但不允許新操作。
+- 提升模組與 Service Worker 快取版本，避免同版 URL 混載修正前後的角色串流程式。
+
 ## 20.26.197（課表 120Hz 體感與背景同步隔離）
 
 - 課表新增、複製、拖曳、批次修改與刪除後只重畫目前可見課表，不再同時重畫學生、老師、財務、結算、營隊、備份等隱藏頁面。

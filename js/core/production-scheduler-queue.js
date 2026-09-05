@@ -1,4 +1,4 @@
-import {projectProductionSchedulerDb} from './production-role-view-projection.js';
+import {projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.203';
 import {mergeConcurrentRecordDb} from './cloud-record-three-way-merge.js';
 import {SCHEDULER_OPERATION_SCHEMA,SCHEDULER_OPERATION_RESPONSE_SCHEMA,normalizeProductionSchedulerRequest} from './production-scheduler-operation.js';
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
@@ -8,6 +8,14 @@ const SCHEMA='danbridge-production-scheduler-queue-v1';
 const clone=value=>JSON.parse(JSON.stringify(value));
 const same=(a,b)=>sha256Canonical(a??null)===sha256Canonical(b??null);
 const map=rows=>new Map(rows.map(row=>[row.id,row]));
+const normalizedSavedDb=(raw,label)=>{
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error(`${label}格式無效`);
+ const normalized=projectProductionSchedulerDb(raw),keys=Object.keys(normalized).sort();
+ if(JSON.stringify(Object.keys(raw).sort())!==JSON.stringify(keys)||keys.some(key=>!Array.isArray(raw[key])))throw new Error(`${label}集合無效`);
+ const ordered=Object.fromEntries(keys.map(key=>[key,[...raw[key]].sort((left,right)=>String(left?.id||'').localeCompare(String(right?.id||'')))]));
+ if(!same(ordered,normalized))throw new Error(`${label}含非排課欄位`);
+ return normalized;
+};
 
 // Duplicating a tab also duplicates sessionStorage. Hold one lease for the
 // entire journal lifetime, not just individual reads, so two tabs cannot replay
@@ -52,7 +60,7 @@ export function createProductionSchedulerQueue({storage,send,createRequestId,rel
  return{
   async start({baselineDb,sourceRecordRevision=0}){
    if(state)throw new Error('排課佇列已啟動');const saved=await storage.load();
-   if(saved){if(saved.schema!==SCHEMA||!Number.isSafeInteger(saved.sourceRecordRevision)||saved.sourceRecordRevision<0||!same(saved.baseline,projectProductionSchedulerDb(saved.baseline))||!same(saved.desired,projectProductionSchedulerDb(saved.desired)))throw new Error('排課復原日誌無效，未覆蓋原資料');if(saved.pending){normalizeProductionSchedulerRequest(saved.pending.request);if(!same(saved.pending.submitted,projectProductionSchedulerDb(saved.pending.submitted)))throw new Error('排課待送快照無效，未覆蓋原資料');if(saved.pending.commands)for(const command of saved.pending.commands)assertScheduleCommand(command)}state=clone(saved)}
+   if(saved){if(saved.schema!==SCHEMA||!Number.isSafeInteger(saved.sourceRecordRevision)||saved.sourceRecordRevision<0)throw new Error('排課復原日誌無效，未覆蓋原資料');saved.baseline=normalizedSavedDb(saved.baseline,'排課復原基準');saved.desired=normalizedSavedDb(saved.desired,'排課復原內容');if(saved.pending){normalizeProductionSchedulerRequest(saved.pending.request);saved.pending.submitted=normalizedSavedDb(saved.pending.submitted,'排課待送快照');if(saved.pending.commands)for(const command of saved.pending.commands)assertScheduleCommand(command)}state=clone(saved);await persist()}
    else{const baseline=projectProductionSchedulerDb(baselineDb);state={schema:SCHEMA,sourceRecordRevision,baseline,desired:clone(baseline),pending:null,actionHint:''};await persist()}
    apply();status(state.pending||dirty()?'pending':'ready');return{restored:Boolean(saved),pending:Boolean(state.pending)||Boolean(dirty())};
   },

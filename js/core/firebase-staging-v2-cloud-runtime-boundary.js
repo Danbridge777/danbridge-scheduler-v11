@@ -3,8 +3,15 @@ import {STAGING_V2_PROJECT_ID,STAGING_V2_SERVICE_ACCOUNT_EMAIL} from './firebase
 
 export const STAGING_V2_CLOUD_RUNTIME_SERVICE='stagingv2authoritysave';
 export const STAGING_V2_CLOUD_RUNTIME_TARGET='stagingV2AuthoritySave';
+export const STAGING_V2_SCHEDULER_RUNTIME_SERVICE='stagingscheduleroperation';
+export const STAGING_V2_SCHEDULER_RUNTIME_TARGET='stagingSchedulerOperation';
 export const STAGING_V2_CLOUD_RUNTIME_REGION='asia-east1';
 export const STAGING_V2_CLOUD_RUNTIME_BLOCKER='exact-staging-gen2-runtime-service-account-and-keyless-adc-required';
+
+const runtimeProfiles=Object.freeze([
+ Object.freeze({service:STAGING_V2_CLOUD_RUNTIME_SERVICE,target:STAGING_V2_CLOUD_RUNTIME_TARGET}),
+ Object.freeze({service:STAGING_V2_SCHEDULER_RUNTIME_SERVICE,target:STAGING_V2_SCHEDULER_RUNTIME_TARGET})
+]);
 
 const keys=['GOOGLE_CLOUD_PROJECT','GCLOUD_PROJECT','FUNCTION_TARGET','FUNCTION_REGION','K_SERVICE','K_REVISION','FIRESTORE_EMULATOR_HOST','FIREBASE_AUTH_EMULATOR_HOST','GOOGLE_APPLICATION_CREDENTIALS','GITHUB_ACTIONS'];
 function blocked(reason='unspecified'){throw new Error(`${STAGING_V2_CLOUD_RUNTIME_BLOCKER}:${reason}`)}
@@ -19,10 +26,11 @@ export async function attestStagingV2CloudRuntime({
  if(env.GOOGLE_CLOUD_PROJECT===undefined&&env.GCLOUD_PROJECT===undefined)blocked('project-missing');
  if(env.GOOGLE_CLOUD_PROJECT!==undefined&&env.GOOGLE_CLOUD_PROJECT!==STAGING_V2_PROJECT_ID)blocked('google-cloud-project');
  if(env.GCLOUD_PROJECT!==undefined&&env.GCLOUD_PROJECT!==STAGING_V2_PROJECT_ID)blocked('gcloud-project');
- if(env.FUNCTION_TARGET!==STAGING_V2_CLOUD_RUNTIME_TARGET)blocked('function-target');
+ const profile=runtimeProfiles.find(row=>row.target===env.FUNCTION_TARGET&&row.service===env.K_SERVICE);
+ if(!runtimeProfiles.some(row=>row.target===env.FUNCTION_TARGET))blocked('function-target');
  if(env.FUNCTION_REGION!==STAGING_V2_CLOUD_RUNTIME_REGION)blocked('function-region');
- if(env.K_SERVICE!==STAGING_V2_CLOUD_RUNTIME_SERVICE)blocked('service');
- if(typeof env.K_REVISION!=='string'||!env.K_REVISION.startsWith(STAGING_V2_CLOUD_RUNTIME_SERVICE+'-'))blocked('revision');
+ if(!profile)blocked('service');
+ if(typeof env.K_REVISION!=='string'||!env.K_REVISION.startsWith(profile.service+'-'))blocked('revision');
  if(env.FIRESTORE_EMULATOR_HOST||env.FIREBASE_AUTH_EMULATOR_HOST)blocked('emulator');
  if(env.GOOGLE_APPLICATION_CREDENTIALS)blocked('credential-file');
  if(env.GITHUB_ACTIONS)blocked('github-actions');
@@ -35,7 +43,7 @@ export async function attestStagingV2CloudRuntime({
  if(credentials.client_email!==STAGING_V2_SERVICE_ACCOUNT_EMAIL)blocked('service-account');
  if(credentials.private_key!==undefined)blocked('private-key');
  if(typeof accessToken!=='string'||accessToken.length<32)blocked('access-token-shape');
- return Object.freeze({projectId:STAGING_V2_PROJECT_ID,serviceAccountEmail:STAGING_V2_SERVICE_ACCOUNT_EMAIL,service:STAGING_V2_CLOUD_RUNTIME_SERVICE,region:STAGING_V2_CLOUD_RUNTIME_REGION,credentialType:'metadata-adc',shortLivedAccessTokenConfirmed:true,userManagedKeyUsed:false})
+ return Object.freeze({projectId:STAGING_V2_PROJECT_ID,serviceAccountEmail:STAGING_V2_SERVICE_ACCOUNT_EMAIL,service:profile.service,target:profile.target,region:STAGING_V2_CLOUD_RUNTIME_REGION,credentialType:'metadata-adc',shortLivedAccessTokenConfirmed:true,userManagedKeyUsed:false})
 }
 
 export function createStagingV2CloudRuntimeBoundary(expectedProjectId,{env=process.env,authFactory}={}){

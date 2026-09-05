@@ -9,6 +9,7 @@ import {createFirebaseRoleRecordViewAdapter} from '../js/core/firebase-role-reco
 const PROJECT_ID='danbridge-rules-test';
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
+const SCHEDULER_EMAIL='aa0966626336@gmail.com';
 const TEACHER_EMAIL='yamiiii8549@gmail.com';
 const OTHER_EMAIL='other@example.com';
 const EPOCH='v2-role-runtime-epoch-20260904';
@@ -42,6 +43,7 @@ before(async()=>{
     const roots={authorityRootHash:h('a'),genesisAuthorityHash:h('b'),reservationAuthorityHash:h('c')};
     const rows=[
       [`companyAccess/${TEACHER_EMAIL}`,{active:true,companyId:COMPANY_ID,role:'teacher',teacherId:'teacher-1'}],
+      [`companyAccess/${SCHEDULER_EMAIL}`,{active:true,companyId:COMPANY_ID,role:'teacher',teacherId:'scheduler-1',canManageSchedule:true}],
       [`companyAccess/${OTHER_EMAIL}`,{active:true,companyId:COMPANY_ID,role:'teacher',teacherId:'teacher-2'}],
       [`stagingRecordSyncControls/${COMPANY_ID}`,{schema:'danbridge-record-sync-control-v1',environment:'staging',companyId:COMPANY_ID,state:'active',activationEpoch:'retired-v1-epoch',readTakeover:true,writeTakeover:true}],
       [`stagingRecordSyncSafetyControls/${COMPANY_ID}`,{schema:'danbridge-record-sync-safety-control-v1',environment:'staging',companyId:COMPANY_ID,activationEpoch:'retired-v1-epoch',state:'paused',revision:2,lastEventId:'retired-v1',lastEventHash:h('9'),readAllowed:true,writeAllowed:false}],
@@ -55,7 +57,7 @@ before(async()=>{
 
 after(async()=>env?.cleanup());
 
-test('V2 Hn 後 Owner 可發布角色逐筆檢視，老師只能 list/get 自己的 16 集合',async()=>{
+test('V2 Hn 後 Owner 可發布角色逐筆檢視，角色可 list 大量本人資料且不可跨 scope',async()=>{
   const owner=auth('owner-uid',OWNER_EMAIL),teacher=auth('teacher-uid',TEACHER_EMAIL),other=auth('other-uid',OTHER_EMAIL);
   const target=emptyDb();
   target.lessons=[{id:'role-v2-lesson',teacherId:'teacher-1',title:'V2 role projection'}];
@@ -69,6 +71,16 @@ test('V2 Hn 後 Owner 可發布角色逐筆檢視，老師只能 list/get 自己
   }
   await assertSucceeds(getDoc(doc(teacher,`${base}/lessons/records/role-v2-lesson`)));
   await assertFails(getDoc(doc(other,`${base}/lessons/records/role-v2-lesson`)));
+
+  const scheduler=auth('scheduler-uid',SCHEDULER_EMAIL),schedulerTarget=emptyDb();
+  schedulerTarget.lessons=Array.from({length:60},(_,index)=>({id:`role-v2-scheduler-lesson-${String(index).padStart(2,'0')}`,teacherId:'teacher-1',title:`V2 scheduler projection ${index}`}));
+  const schedulerResult=await roleAdapter(owner,'owner-uid',OWNER_EMAIL).synchronize(schedulerTarget,{identity:{email:SCHEDULER_EMAIL,kind:'scheduler',teacherId:'scheduler-1',branchIds:[]},activationEpoch:EPOCH,sourceRecordHash:recordDataHash(schedulerTarget),publishId:'publish-v2-scheduler-20260905',publishedAt:'2026-09-05T10:20:00+08:00',batchSize:100});
+  const schedulerBase=`stagingRoleRecordViews/${COMPANY_ID}/views/${schedulerResult.viewKey}/collections`;
+  await assertSucceeds(getDoc(doc(scheduler,`stagingRecordSyncV2ActiveControls/${COMPANY_ID}/epochs/${EPOCH}`)));
+  for(const collectionName of FULL_RECORD_COLLECTIONS){
+    await assertSucceeds(getDocs(collection(scheduler,`${schedulerBase}/${collectionName}/records`)));
+    await assertFails(getDocs(collection(teacher,`${schedulerBase}/${collectionName}/records`)));
+  }
 });
 
 test('V1 永久 fence 仍拒絕舊主資料寫入；V2 head 被竄改後角色更新立即 fail closed',async()=>{

@@ -41,6 +41,12 @@ test('後端成功但回條斷線，重開後沿用同一 requestId，不重複�
  const f=fixture(),first=f.create();await first.start({baselineDb:base()});await first.queue({...base(),lessons:[lesson]});f.lose();await assert.rejects(first.flush(),/lost reply/);assert.ok(f.stored.pending);first.stop();
  const resumed=f.create();assert.equal((await resumed.start({baselineDb:base()})).restored,true);await resumed.flush();assert.equal(f.calls.length,2);assert.equal(f.calls[0].requestId,f.calls[1].requestId);assert.equal(f.server.lessons.length,1);assert.equal(f.server.changes.length,1);assert.equal(resumed.diagnostics().pending,false);
 });
+
+test('舊版日誌只有陣列順序不同時安全正規化，不誤判內容衝突',async()=>{
+ const seed=base(),projected=projectProductionSchedulerDb(seed),reversed={...projected,students:[...projected.students].reverse(),teachers:[...projected.teachers].reverse(),lessons:[...projected.lessons].reverse()},saved={schema:'danbridge-production-scheduler-queue-v1',sourceRecordRevision:9,baseline:reversed,desired:reversed,pending:null,actionHint:''},storage={value:clone(saved),async load(){return clone(this.value)},async save(value){this.value=clone(value)}};
+ const queue=createProductionSchedulerQueue({storage,send:async()=>{throw new Error('不應送出')},createRequestId:()=> 'scheduler-order-only',release:'20.26.203'}),result=await queue.start({baselineDb:seed,sourceRecordRevision:9});
+ assert.equal(result.restored,true);assert.deepEqual(storage.value.baseline,projectProductionSchedulerDb(seed));assert.equal(queue.diagnostics().error,'');
+});
 test('分批超過 30 筆時，未送出意圖保留，全部確認前不能顯示完成',async()=>{
  const f=fixture(),q=f.create();await q.start({baselineDb:base()});const lessons=Array.from({length:31},(_,i)=>({...lesson,id:`many-${i}`,date:`2026-10-${String(i+1).padStart(2,'0')}`}));await q.queue({...base(),lessons});await q.flush();assert.equal(f.calls.length,2);assert.equal(f.calls[0].changes.length,30);assert.equal(f.calls[1].changes.length,1);assert.equal(f.server.lessons.length,31);assert.equal(f.states.filter(row=>row.state==='complete').length,1);
 });
