@@ -59,6 +59,24 @@ test('三百筆連續意圖依 30 筆固定分批全部送達，批次之間不�
  assert.deepEqual(f.server.lessons.map(row=>row.note).sort(),lessons.map(row=>row.note).sort());
  assert.equal(f.states.filter(row=>row.state==='complete').length,1);assert.equal(q.diagnostics().dirty,false);
 });
+test('staging 會把既有 30 筆待送要求安全重切為 8 筆批次並完整續傳',async()=>{
+ const firstStorage={value:null,async load(){return clone(this.value)},async save(value){this.value=clone(value)}},desired={...base(),lessons:Array.from({length:30},(_,index)=>({...lesson,id:`staging-${index}`}))};
+ const first=createProductionSchedulerQueue({storage:firstStorage,send:async()=>{throw new Error('staging 排課交易超過安全範圍')},createRequestId:()=> 'old-thirty-request',release:'20.26.205'});
+ await first.start({baselineDb:base(),sourceRecordRevision:1});await first.queue(desired);await assert.rejects(first.flush(),/安全範圍/);await first.stop();
+ const sizes=[],server=base();let revision=1,serial=0;
+ const recovered=createProductionSchedulerQueue({
+  storage:firstStorage,
+  maxChangesPerRequest:8,
+  createRequestId:()=>`staging-eight-request-${++serial}`,
+  release:'20.26.206',
+  send:async request=>{
+   sizes.push(request.changes.length);
+   for(const change of request.changes)server.lessons.push(clone(change.after));
+   return{schema:SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:request.requestId,state:'committed',sourceHash:recordDataHash(server),sourceRecordRevision:++revision,operationCount:request.changes.length*2,schedulerDb:projectProductionSchedulerDb(server)};
+  }
+ });
+ assert.equal((await recovered.start({baselineDb:base(),sourceRecordRevision:1})).pending,true);await recovered.flush();assert.deepEqual(sizes,[8,8,8,6]);assert.equal(server.lessons.length,30);assert.deepEqual(firstStorage.value.rechunkedRequestIds,['old-thirty-request']);
+});
 test('日誌未存妥或後端回條錯誤，不能宣告成功或清除待送資料',async()=>{
  const broken=createProductionSchedulerQueue({storage:{load:async()=>null,save:async()=>{throw Error('disk full')}},send:()=>{throw Error('must not send')},createRequestId:()=>'',release:'20.26.164'});await assert.rejects(broken.start({baselineDb:base()}),/disk full/);
  let saved;const q=createProductionSchedulerQueue({storage:{load:async()=>null,save:async v=>saved=clone(v)},send:async()=>({schema:SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:'wrong'}),createRequestId:()=>`invalid-request-123`,release:'20.26.164'});await q.start({baselineDb:base()});await q.queue({...base(),lessons:[lesson]});await assert.rejects(q.flush(),/回條驗證失敗/);assert.ok(saved.pending);assert.equal(q.diagnostics().pending,true);
