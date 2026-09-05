@@ -2,6 +2,7 @@
 
 const {onRequest,onCall,HttpsError}=require('firebase-functions/v2/https');
 const {onSchedule}=require('firebase-functions/v2/scheduler');
+const {onInit}=require('firebase-functions/v2/core');
 const {applicationDefault,getApps,initializeApp}=require('firebase-admin/app');
 const {getAuth}=require('firebase-admin/auth');
 const {getAppCheck}=require('firebase-admin/app-check');
@@ -37,12 +38,6 @@ function reportSaveBlocked(error){
 function shouldEagerWarmStagingService(service){
  const gcloudProject=String(process.env.GCLOUD_PROJECT||''),googleProject=String(process.env.GOOGLE_CLOUD_PROJECT||'');
  return process.env.K_SERVICE===service&&(!gcloudProject||gcloudProject===PROJECT_ID)&&(!googleProject||googleProject===PROJECT_ID)&&(gcloudProject===PROJECT_ID||googleProject===PROJECT_ID);
-}
-
-function eagerWarmStagingService(service,initialize){
- if(!shouldEagerWarmStagingService(service))return;
- console.info('STAGING_RUNTIME_EAGER_WARM',JSON.stringify({state:'started',service}));
- void initialize().catch(reportRuntimeBlocked);
 }
 
 function stagingMixedAuditSaveId(saveId,recordId){
@@ -81,8 +76,6 @@ exports.stagingV2AuthoritySave=onRequest({region:'asia-east1',serviceAccount:SER
 // while that instance boots so the first real timetable write does not pay the
 // dynamic module and Firebase Admin initialization cost. The exact service and
 // project guards prevent every production function from initializing staging.
-eagerWarmStagingService('stagingv2authoritysave',runtime);
-
 async function productionRuntime(){
  if(productionRuntimePromise===null)productionRuntimePromise=(async()=>{
   const app=getApps().find(row=>row.name==='production-trusted')??initializeApp({projectId:PRODUCTION_PROJECT_ID,credential:applicationDefault()},'production-trusted'),firestore=getFirestore(app),[{createFirebaseProductionRecordOperationAdapter,createFirebaseProductionRecordBatchAdapter,createFirebaseProductionAccessMutationAdapter},{assertProductionTrustedCaller,assertProductionTrustedOperation,buildProductionTrustedResponse}]=await Promise.all([import('../js/core/firebase-production-record-runtime-adapter.js'),import('../js/core/production-trusted-operation-contract.js')]);
@@ -146,7 +139,19 @@ exports.stagingSchedulerOperation=onCall({region:'asia-east1',serviceAccount:SER
 // The callable has a minimum instance. Hydrate and hash-check the complete
 // authority snapshot while that instance boots so the first real operation
 // gets the same verified hot path as subsequent operations.
-eagerWarmStagingService('stagingscheduleroperation',stagingSchedulerRuntime);
+onInit(async()=>{
+ if(shouldEagerWarmStagingService('stagingv2authoritysave')){
+  console.info('STAGING_RUNTIME_EAGER_WARM',JSON.stringify({state:'started',service:'stagingv2authoritysave'}));
+  await runtime();
+  console.info('STAGING_RUNTIME_EAGER_WARM',JSON.stringify({state:'complete',service:'stagingv2authoritysave'}));
+  return;
+ }
+ if(shouldEagerWarmStagingService('stagingscheduleroperation')){
+  console.info('STAGING_RUNTIME_EAGER_WARM',JSON.stringify({state:'started',service:'stagingscheduleroperation'}));
+  await stagingSchedulerRuntime();
+  console.info('STAGING_RUNTIME_EAGER_WARM',JSON.stringify({state:'complete',service:'stagingscheduleroperation'}));
+ }
+});
 
 exports.stagingV2ConflictBackup=onCall({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:30,memory:'256MiB',concurrency:20,minInstances:0,maxInstances:10},async request=>{
  const actor=await verifiedStagingOwner(request),input=request.data;

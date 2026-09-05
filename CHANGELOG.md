@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.230（預熱完成前不接流量）
+
+- 將 staging 常駐後端預熱改為 Firebase Gen2 官方 `onInit()` 初始化掛鉤；完整權威資料讀回、雜湊核對與衍生快取完成前，實例不接受第一個使用者請求。
+- 啟動日誌明確分成 `started` 與 `complete`，正式驗收必須看到同一個排課服務先完成 `complete`，再送出第一筆 30 堂操作。
+- 20.26.229 已證實環境鍵修正會觸發 `started`，但背景 Promise 在實例可服務後未保證持續取得 CPU，因此未進 production。
+
 ## 20.26.229（常駐排課啟動預熱）
 
 - 修正 Gen2 常駐排課實例只辨識 `GCLOUD_PROJECT`，導致實際 Cloud Run 以 `GOOGLE_CLOUD_PROJECT` 提供專案時沒有在啟動階段預熱、第一位使用者多等約 9 秒的問題。
