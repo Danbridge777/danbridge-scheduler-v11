@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {activeRecordSaveEnvelopeHash} from '../js/core/cloud-active-record-save-plan.js';
 import {buildChangeRecordId} from '../js/core/cloud-change-record-identity.js';
-import {planStagingV2AuditAppend} from '../js/core/firebase-staging-v2-audit-append-adapter.js';
+import {planStagingV2AuditAppend,planStagingV2AuditAppendBatch} from '../js/core/firebase-staging-v2-audit-append-adapter.js';
 
 const epoch='v2:6ef2009d94faa7acb3b4560cec39dd00',seedId='seed-audit-append-12345',authorityHash='a'.repeat(64),cursorHash='b'.repeat(64),createdAt='2026-09-04T01:00:00.000000001Z';
 const fence={schema:'danbridge-record-sync-v1-permanent-fence-v2',state:'permanently-fenced-after-atomic-v2-structural-activation',projectId:'danbridge-d8877-staging',targetV2Epoch:epoch,seedId,reservationAuthorityHash:authorityHash};
@@ -23,3 +23,5 @@ test('immutable changes append拒絕gap、錯epoch、tamper與非create envelope
  update.baselineRecords[0]={...update.localRecords[0],exists:true};
  assert.throws(()=>planStagingV2AuditAppend({fence,authority,cursor:null,request:update}),/new immutable change/);
 });
+
+test('30 筆 immutable changes 以單一連續 cursor 計畫且每筆保留獨立回條',()=>{const requests=Array.from({length:30},(_,index)=>request(16+index)),plan=planStagingV2AuditAppendBatch({fence,authority,cursor:null,requests});assert.equal(plan.payloads.length,30);assert.deepEqual(plan.payloads.map(row=>row.record.recordIndex),Array.from({length:30},(_,index)=>16+index));assert.equal(plan.payloads.at(-1).cursor.revision,30);assert.equal(plan.payloads.at(-1).cursor.nextIndex,46);assert.equal(new Set(plan.payloads.map(row=>row.receipt.operationId)).size,30);assert.throws(()=>planStagingV2AuditAppendBatch({fence,authority,cursor:null,requests:[request(16),request(18)]}),/identity or sequence/)});

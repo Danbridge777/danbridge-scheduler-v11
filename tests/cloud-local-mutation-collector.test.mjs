@@ -54,14 +54,14 @@ test('changes 只允許 newest-first prefix append，修改、刪除、重排與
  for(const changed of [[{type:'changed'},{type:'older'}],[{type:'newer'}],[{type:'older'},{type:'newer'}]]){const pre=clone(legacyDistinct);pre.changes=changed;assert.throws(()=>collectLocalMutationProof(input({before:legacyDistinct,pre,after:pre})),/changes 只允許/)}
 });
 
-test('M8 走 daily；M9 與任何 requested bulk intent 都只能 blocked/bulk-required',()=>{
+test('M90 走 daily；M91 與任何 requested bulk intent 都只能 blocked/bulk-required',()=>{
  const fixture=count=>{const before=empty(),pre=empty(),declared=[];for(let index=0;index<count;index++){const id=`student-${index}`;before.students.push({id,value:0});pre.students.push({id,value:1});declared.push(key('students',id))}return{before,pre,declared}};
- const eight=fixture(8),nine=fixture(9);
- assert.equal(collectLocalMutationProof(input({...eight,after:eight.pre})).route,'daily');
- const blocked=collectLocalMutationProof(input({...nine,after:nine.pre}));assert.equal(blocked.state,'blocked');assert.equal(blocked.route,'bulk-required');assert.equal(blocked.M,9);
- const bulk=collectLocalMutationProof(input({...nine,after:nine.pre,bulkReason:'batch-edit'}));assert.equal(bulk.state,'blocked');assert.equal(bulk.route,'bulk-required');assert.equal(bulk.M,9);assert.equal(bulk.requestedBulkReason,'batch-edit');assert.deepEqual(bulk.detectedBulkReasons,['daily-limit-exceeded']);
+ const atLimit=fixture(90),overLimit=fixture(91);
+ assert.equal(collectLocalMutationProof(input({...atLimit,after:atLimit.pre})).route,'daily');
+ const blocked=collectLocalMutationProof(input({...overLimit,after:overLimit.pre}));assert.equal(blocked.state,'blocked');assert.equal(blocked.route,'bulk-required');assert.equal(blocked.M,91);
+ const bulk=collectLocalMutationProof(input({...overLimit,after:overLimit.pre,bulkReason:'batch-edit'}));assert.equal(bulk.state,'blocked');assert.equal(bulk.route,'bulk-required');assert.equal(bulk.M,91);assert.equal(bulk.requestedBulkReason,'batch-edit');assert.deepEqual(bulk.detectedBulkReasons,['daily-limit-exceeded']);
  const two=fixture(2),requestedSmall=collectLocalMutationProof(input({...two,after:two.pre,bulkReason:'batch-edit'}));assert.equal(requestedSmall.state,'blocked');assert.equal(requestedSmall.route,'bulk-required');assert.equal(requestedSmall.requestedBulkReason,'batch-edit');
- assert.throws(()=>collectLocalMutationProof(input({...nine,after:nine.pre,bulkReason:'anything'})),/bulkReason 無效/);assert.ok(LOCAL_MUTATION_BULK_REASONS.includes('normalization-migration'));
+ assert.throws(()=>collectLocalMutationProof(input({...overLimit,after:overLimit.pre,bulkReason:'anything'})),/bulkReason 無效/);assert.ok(LOCAL_MUTATION_BULK_REASONS.includes('normalization-migration'));
  assert.throws(()=>collectLocalMutationProof({...input(),maxChanges:99}),/欄位無效/);
 });
 

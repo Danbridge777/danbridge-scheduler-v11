@@ -9,23 +9,23 @@ const roleCandidateAdapterSource=fs.readFileSync(new URL('../js/core/firebase-ro
 const pwaSource=fs.readFileSync(new URL('../js/core/pwa-installation.js',import.meta.url),'utf8');
 
 test('頁面匯入獨立 record-shadow adapter 且只公開專屬手動入口',()=>{
- assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.208'/);
+ assert.match(source,/import \{createFirebaseRecordShadowAdapter\} from '\.\/firebase-record-shadow-adapter\.js\?v=20\.26\.209'/);
  assert.match(source,/window\.__danbridgeRunStagingRecordShadow/);
  assert.match(source,/window\.__danbridgeGetStagingRecordShadowDiagnostic/);
  assert.doesNotMatch(source,/queueStagingRecordShadow[^\n]*uploadOwnerState|uploadOwnerState[^\n]*queueStagingRecordShadow/);
 });
 
 test('Checkpoint B 以版本化 service worker 解除舊 staging 快取',()=>{
- assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.208'/);
+ assert.match(pwaSource,/register\('\.\/sw\.js\?v=20\.26\.209'/);
 });
 
 test('候選驗證主模組與內層 adapter 必須載入同一版歷史來源語意',()=>{
- assert.match(source,/createFirebaseFullRecordShadowAdapter\} from '\.\/firebase-full-record-shadow-adapter\.js\?v=20\.26\.208'/);
- assert.match(source,/FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb\} from '\.\/cloud-full-record-shadow\.js\?v=20\.26\.208'/);
- assert.match(fullAdapterSource,/verifyFullRecordShadowCandidate\} from '\.\/cloud-full-record-shadow\.js\?v=20\.26\.208'/);
- assert.match(source,/createFirebaseRoleViewCandidateAdapter\} from '\.\/firebase-role-view-candidate-adapter\.js\?v=20\.26\.208'/);
- assert.match(source,/verifyOwnRoleViewCandidateReadback\} from '\.\/cloud-role-view-candidate\.js\?v=20\.26\.208'/);
- assert.match(roleCandidateAdapterSource,/verifyRoleViewCandidateDocuments\} from '\.\/cloud-role-view-candidate\.js\?v=20\.26\.208'/);
+ assert.match(source,/createFirebaseFullRecordShadowAdapter\} from '\.\/firebase-full-record-shadow-adapter\.js\?v=20\.26\.209'/);
+ assert.match(source,/FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb\} from '\.\/cloud-full-record-shadow\.js\?v=20\.26\.209'/);
+ assert.match(fullAdapterSource,/verifyFullRecordShadowCandidate\} from '\.\/cloud-full-record-shadow\.js\?v=20\.26\.209'/);
+ assert.match(source,/createFirebaseRoleViewCandidateAdapter\} from '\.\/firebase-role-view-candidate-adapter\.js\?v=20\.26\.209'/);
+ assert.match(source,/verifyOwnRoleViewCandidateReadback\} from '\.\/cloud-role-view-candidate\.js\?v=20\.26\.209'/);
+ assert.match(roleCandidateAdapterSource,/verifyRoleViewCandidateDocuments\} from '\.\/cloud-role-view-candidate\.js\?v=20\.26\.209'/);
 });
 
 test('staging Owner URL 測試入口只操作專用 ID 並保留既有影子狀態',()=>{
@@ -170,7 +170,7 @@ test('staging 手動逐筆讀取演練核對控制、manifest、legacy hash 與�
 });
 
 test('staging live 預檢只讀取證據與逐筆現況，不寫入、不接管且不掛入既有同步',()=>{
- assert.match(source,/import \{buildStagingLivePreflight\} from '\.\/cloud-staging-live-preflight\.js\?v=20\.26\.208'/);
+ assert.match(source,/import \{buildStagingLivePreflight\} from '\.\/cloud-staging-live-preflight\.js\?v=20\.26\.209'/);
  assert.match(source,/stagingLivePreflightGuard/);assert.match(source,/firebaseConfig\.projectId!=='danbridge-d8877-staging'/);
  assert.match(source,/readStagingLiveRecordSource/);assert.match(source,/stagingLiveRecords/);assert.match(source,/verifyStagingMigrationRestoreReceipt/);
  assert.match(source,/get\('stagingLivePreflight'\)/);assert.match(source,/button\.id='stagingLiveOperationPreflightButton'/);assert.match(source,/button\.onclick=async\(\)=>/);

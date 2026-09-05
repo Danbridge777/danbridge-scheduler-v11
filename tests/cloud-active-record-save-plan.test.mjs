@@ -159,13 +159,13 @@ test('saveCommit 只列受影響 collection 的 deterministic count deltas 並�
  const reversed=buildActiveRecordSavePlan(input({changedKeys:[...keys].reverse(),baselineRecords:[...baseline].reverse(),localRecords:[...local].reverse(),remoteRecords:[...baseline].reverse()}));assert.equal(plan.saveCommit.commitHash,reversed.saveCommit.commitHash);assert.deepEqual(plan.saveCommit.collectionCountDeltas,reversed.saveCommit.collectionCountDeltas);
 });
 
-test('M=8 有固定工作量；M=9 在檢查 envelopes 前零副作用拒絕並要求 bulk',()=>{
+test('M=90 有固定工作量；M=91 在檢查 envelopes 前零副作用拒絕並要求 bulk',()=>{
  const changedKeys=Array.from({length:ACTIVE_RECORD_SAVE_MAX_CHANGES},(_,index)=>key(`lesson-${index}`)),baselineRecords=changedKeys.map(value=>envelope({...value,record:{id:value.recordId,value:0}})),localRecords=changedKeys.map(value=>envelope({...value,record:{id:value.recordId,value:1}}));
  const accepted=buildActiveRecordSavePlan(input({changedKeys,baselineRecords,localRecords,remoteRecords:baselineRecords}));
- assert.equal(accepted.operationCount,8);assert.deepEqual(accepted.workUnits,{changedKeys:8,envelopesValidated:24,operationsBuilt:8});
+ assert.equal(accepted.operationCount,ACTIVE_RECORD_SAVE_MAX_CHANGES);assert.deepEqual(accepted.workUnits,{changedKeys:ACTIVE_RECORD_SAVE_MAX_CHANGES,envelopesValidated:ACTIVE_RECORD_SAVE_MAX_CHANGES*3,operationsBuilt:ACTIVE_RECORD_SAVE_MAX_CHANGES});
 
- const nineKeys=[...changedKeys,key('lesson-8')],sentinel={touched:false},badRows=new Proxy([],{get(target,property,receiver){if(property==='length')sentinel.touched=true;return Reflect.get(target,property,receiver)}}),oversized=input({changedKeys:nineKeys,baselineRecords:badRows,localRecords:badRows,remoteRecords:badRows}),before=clone(oversized.changedKeys);
- assert.throws(()=>buildActiveRecordSavePlan(oversized),/最多 8 筆|bulk/);assert.equal(sentinel.touched,false);assert.deepEqual(oversized.changedKeys,before);
+ const oversizedKeys=[...changedKeys,key('lesson-90')],sentinel={touched:false},badRows=new Proxy([],{get(target,property,receiver){if(property==='length')sentinel.touched=true;return Reflect.get(target,property,receiver)}}),oversized=input({changedKeys:oversizedKeys,baselineRecords:badRows,localRecords:badRows,remoteRecords:badRows}),before=clone(oversized.changedKeys);
+ assert.throws(()=>buildActiveRecordSavePlan(oversized),/最多 90 筆|bulk/);assert.equal(sentinel.touched,false);assert.deepEqual(oversized.changedKeys,before);
 });
 
 test('commit hash 與 operation 次序完全 deterministic，不受 changedKeys 或 envelopes 輸入順序影響',()=>{

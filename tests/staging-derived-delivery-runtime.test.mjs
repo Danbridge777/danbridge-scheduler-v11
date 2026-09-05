@@ -4,7 +4,7 @@ import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
 
 const require=createRequire(import.meta.url);
-const {createStagingDerivedDeliveryRuntime,restorePreviousLessons,lessonChanges,buildNotifications,applyPayloadToCachedDb,applyAuditPayloadToCachedDb,applyPayloadToCachedDocuments}=require('../functions/staging-derived-delivery-runtime.cjs');
+const {createStagingDerivedDeliveryRuntime,restorePreviousLessons,lessonChanges,buildNotifications,applyPayloadToCachedDb,applyAuditPayloadToCachedDb,applyAuthorityPayloadToCachedDb,applyPayloadToCachedDocuments}=require('../functions/staging-derived-delivery-runtime.cjs');
 const {buildChangeRecordId}=await import('../js/core/cloud-change-record-identity.js');
 
 const before={id:'lesson-1',date:'2026-09-05',start:'17:20',end:'17:50',studentId:'student-1',teacherIds:['teacher-1'],title:'測試課程',branchId:'art_museum'};
@@ -41,6 +41,18 @@ test('稽核 append 保持 changes 新到舊順序，同筆回條可重送但不
  const replayed=applyAuditPayloadToCachedDb(appended,auditPayload,{buildRecordId:buildChangeRecordId});
  assert.deepEqual(replayed,appended);
  assert.throws(()=>applyAuditPayloadToCachedDb(appended,{...auditPayload,localRecords:[{...auditPayload.localRecords[0],record:{...next,kind:'tampered'}}]},{buildRecordId:buildChangeRecordId}),/replay mismatch|append sequence invalid/);
+});
+
+test('30 堂課與 30 筆稽核同一 authority payload 只前進一份快取，順序與資料均不分叉',()=>{
+ const count=30,lessons=Array.from({length:count},(_,index)=>({...before,id:`lesson-${index}`,start:`${String(8+Math.floor(index/2)).padStart(2,'0')}:${index%2?'30':'00'}`})),start={lessons:[],changes:[]},audits=Array.from({length:count},(_,index)=>({id:`audit-${index}`,kind:'create',lessonId:lessons[index].id})),changedKeys=[],baselineRecords=[],localRecords=[];
+ for(const lesson of lessons){changedKeys.push({collection:'lessons',recordId:lesson.id});baselineRecords.push({collection:'lessons',recordId:lesson.id,exists:false,deleted:false,record:null});localRecords.push({collection:'lessons',recordId:lesson.id,exists:true,deleted:false,record:lesson})}
+ for(const audit of audits){const recordId=buildChangeRecordId(changedKeys.length-count,audit);changedKeys.push({collection:'changes',recordId});baselineRecords.push({collection:'changes',recordId,exists:false,deleted:false,record:null});localRecords.push({collection:'changes',recordId,exists:true,deleted:false,record:audit})}
+ const result=applyAuthorityPayloadToCachedDb(start,{save:payload.save,changedKeys,baselineRecords,localRecords},{buildRecordId:buildChangeRecordId});
+ assert.equal(result.lessons.length,30);
+ assert.deepEqual(result.lessons.map(row=>row.id),lessons.map(row=>row.id));
+ assert.equal(result.changes.length,30);
+ assert.deepEqual(result.changes.map(row=>row.id),audits.toReversed().map(row=>row.id));
+ assert.deepEqual(start,{lessons:[],changes:[]});
 });
 
 test('常駐文件快照只依同一筆已提交 payload 前進，並保留 revision、tombstone 與 sourceHash',()=>{

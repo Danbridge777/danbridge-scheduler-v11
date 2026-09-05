@@ -6,7 +6,10 @@ export const ACTIVE_RECORD_SAVE_OPERATION_SCHEMA='danbridge-active-record-save-o
 export const ACTIVE_RECORD_SAVE_COMMIT_SCHEMA='danbridge-active-record-save-commit-v1';
 export const ACTIVE_RECORD_SYNC_HEAD_SCHEMA='danbridge-active-record-sync-head-v1';
 export const ACTIVE_RECORD_SAVE_RECORD_HASH_SCHEMA='danbridge-active-record-save-record-hash-v1';
-export const ACTIVE_RECORD_SAVE_MAX_CHANGES=8;
+// One scheduler intent may touch the requested 30 lessons plus bounded
+// dependent records (for example makeups).  Ninety remains well below the
+// Firestore 500-write transaction ceiling even with the per-record receipt.
+export const ACTIVE_RECORD_SAVE_MAX_CHANGES=90;
 export const ACTIVE_RECORD_SAVE_ZERO_HASH='0'.repeat(64);
 
 const collections=new Set(FULL_RECORD_COLLECTIONS);

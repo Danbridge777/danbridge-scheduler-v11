@@ -322,7 +322,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.208'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.209'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -678,7 +678,7 @@ assert.match(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\
 assert.doesNotMatch(branchBusinessSource, /expenseTotalAmount'\)\.textContent=money\(d\.totalExpenses\)/, 'expense management total excludes teacher payroll');
 assert.match(branchBusinessSource, /expenseTotalScope'\)\.textContent=scopeLabel\(scope\)/, 'expense total identifies the selected branch scope');
 
-const moveOperationsStart = courseOperationsSource.indexOf('let calendarMoveSaveTimer');
+const moveOperationsStart = courseOperationsSource.indexOf('function moveLessonTo(id,date,time)');
 assert.ok(moveOperationsStart >= 0, 'calendar move operations are available');
 assert.match(courseOperationsSource, /function editLesson\(id\)\{[\s\S]*const restricted=role==='teacher'\|\|role==='branch_manager'[\s\S]*if\(!restricted\)return openLessonModal\(todayStr\(\),'16:00',id\)/, 'owner single-click opens the existing lesson directly in the edit modal even while role state is synchronizing');
 assert.doesNotMatch(courseOperationsSource.slice(courseOperationsSource.indexOf('function openLessonModal'),courseOperationsSource.indexOf('function saveLesson')), /disabled|readOnly/, 'owner lesson editor does not lock any schedule field');

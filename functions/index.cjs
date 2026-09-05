@@ -42,14 +42,14 @@ async function executeStagingAuthorityPayload({payload,recordBinder,auditBinder,
  const keys=Array.isArray(payload?.changedKeys)?payload.changedKeys:[],baselines=Array.isArray(payload?.baselineRecords)?payload.baselineRecords:[],locals=Array.isArray(payload?.localRecords)?payload.localRecords:[];
  if(!keys.length||keys.length!==baselines.length||keys.length!==locals.length)throw new Error('staging authority mixed payload count invalid');
  const auditIndexes=[],recordIndexes=[];keys.forEach((key,index)=>(key?.collection==='changes'?auditIndexes:recordIndexes).push(index));
- if(!recordIndexes.length&&auditIndexes.length===1){const completion=await auditBinder.execute(payload);await derivedDelivery.deliver(payload,completion);return completion}
+ const select=(indexes,save)=>({save,changedKeys:indexes.map(index=>keys[index]),baselineRecords:indexes.map(index=>baselines[index]),localRecords:indexes.map(index=>locals[index])});
+ const publicCompletion=(recordCompletion,auditCompletion)=>Object.freeze({state:'complete-confirmed',transactionState:[recordCompletion,auditCompletion].filter(Boolean).every(row=>row.transactionState==='replayed')?'replayed':'created',projectId:PROJECT_ID,activationEpoch:(recordCompletion||auditCompletion).activationEpoch,resultHeadHash:(recordCompletion||auditCompletion).resultHeadHash,commitHash:(recordCompletion||auditCompletion).commitHash,saveId:payload.save.saveId,operationCount:keys.length,persistedAt:(auditCompletion||recordCompletion).persistedAt,writeCount:[recordCompletion,auditCompletion].filter(Boolean).reduce((sum,row)=>sum+row.writeCount,0)});
+ const auditPayloads=auditIndexes.map((index,position)=>select([index],!recordIndexes.length&&position===0?payload.save:{...payload.save,saveId:stagingMixedAuditSaveId(payload.save.saveId,keys[index].recordId)}));
+ if(!recordIndexes.length){const auditCompletion=auditPayloads.length===1?await auditBinder.execute(auditPayloads[0]):await auditBinder.executeBatch(auditPayloads),completion=publicCompletion(null,auditCompletion);await derivedDelivery.deliver(payload,completion);return completion}
  if(!auditIndexes.length){const completion=await recordBinder.execute(payload);await derivedDelivery.deliver(payload,completion);return completion}
- if(!recordIndexes.length)throw new Error('staging authority audit-only batch must remain singleton');
- const select=(indexes,save)=>({save,changedKeys:indexes.map(index=>keys[index]),baselineRecords:indexes.map(index=>baselines[index]),localRecords:indexes.map(index=>locals[index])}),completions=[];
- const recordPayload=select(recordIndexes,payload.save),recordCompletion=await recordBinder.execute(recordPayload);await derivedDelivery.deliver(recordPayload,recordCompletion);completions.push(recordCompletion);
- for(const index of auditIndexes){const save={...payload.save,saveId:stagingMixedAuditSaveId(payload.save.saveId,keys[index].recordId)},auditPayload=select([index],save),auditCompletion=await auditBinder.execute(auditPayload);await derivedDelivery.deliver(auditPayload,auditCompletion);completions.push(auditCompletion)}
- if(completions.some(row=>row.projectId!==PROJECT_ID||row.activationEpoch!==recordCompletion.activationEpoch))throw new Error('staging authority mixed completion identity invalid');
- return Object.freeze({state:'complete-confirmed',transactionState:completions.every(row=>row.transactionState==='replayed')?'replayed':'created',projectId:PROJECT_ID,activationEpoch:recordCompletion.activationEpoch,resultHeadHash:recordCompletion.resultHeadHash,commitHash:recordCompletion.commitHash,saveId:payload.save.saveId,operationCount:keys.length,persistedAt:completions.at(-1).persistedAt,writeCount:completions.reduce((sum,row)=>sum+row.writeCount,0)});
+ const recordPayload=select(recordIndexes,payload.save),recordCompletion=await recordBinder.execute(recordPayload),auditCompletion=await auditBinder.executeBatch(auditPayloads);
+ if(auditCompletion.projectId!==PROJECT_ID||auditCompletion.activationEpoch!==recordCompletion.activationEpoch)throw new Error('staging authority mixed completion identity invalid');
+ const completion=publicCompletion(recordCompletion,auditCompletion);await derivedDelivery.deliver(payload,completion);return completion;
 }
 
 async function runtime(){

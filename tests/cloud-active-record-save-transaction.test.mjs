@@ -124,14 +124,14 @@ test('revision0 首筆與後續新 save 精確成本：M1 6→7 reads、M8 20→
  const keysA=Array.from({length:8},(_,index)=>key(`lesson-a-${index}`)),keysB=Array.from({length:8},(_,index)=>key(`lesson-b-${index}`)),makeRows=keys=>({baselineRecords:keys.map(value=>absent(value.recordId)),localRecords:keys.map(value=>envelope({recordId:value.recordId,revision:0,record:{id:value.recordId,value:1}}))}),eight=fakeStore(),eightAdapter=eight.adapter(),firstEight=request({saveIdentity:save('save-count-eight-first-12345'),changedKeys:keysA,...makeRows(keysA)}),secondEight=request({saveIdentity:{...save('save-count-eight-second-12345'),createdAt:'2026-08-17T12:02:00+08:00'},changedKeys:keysB,...makeRows(keysB)}),firstEightResult=await eightAdapter.execute(firstEight),secondEightResult=await eightAdapter.execute(secondEight);assert.deepEqual(counts(eight.events[0]),{reads:20,writes:18});assert.deepEqual(counts(eight.events[1]),{reads:21,writes:18});assert.equal(firstEightResult.readCount,20);assert.equal(secondEightResult.readCount,21);
 });
 
-test('M=9、duplicate、invalid 與 changes 都在 runTransaction 前 0 I/O fail closed',async()=>{
- const fake=fakeStore(),adapter=fake.adapter(),nine=Array.from({length:9},(_,index)=>key(`lesson-${index}`)),cases=[
-  request({changedKeys:nine,baselineRecords:[],localRecords:[]}),
+test('M=91、duplicate、invalid 與 changes 都在 runTransaction 前 0 I/O fail closed',async()=>{
+ const fake=fakeStore(),adapter=fake.adapter(),overLimit=Array.from({length:91},(_,index)=>key(`lesson-${index}`)),cases=[
+  request({changedKeys:overLimit,baselineRecords:[],localRecords:[]}),
   request({changedKeys:[key('lesson-1'),key('lesson-1')],baselineRecords:[],localRecords:[]}),
   request({changedKeys:[key('bad/id')],baselineRecords:[],localRecords:[]}),
   request({changedKeys:[key('seq_00000001_deadbeef','changes')],baselineRecords:[],localRecords:[]})
  ];
- for(const value of cases)await assert.rejects(()=>adapter.execute(value),/最多 8 筆|duplicate|identity|dedicated immutable audit\/append planner/);
+ for(const value of cases)await assert.rejects(()=>adapter.execute(value),/最多 90 筆|duplicate|identity|dedicated immutable audit\/append planner/);
  assert.equal(fake.events.length,0);
 });
 

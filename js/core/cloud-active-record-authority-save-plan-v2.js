@@ -23,7 +23,7 @@ export const ACTIVE_RECORD_AUTHORITY_V2_STATE='root-preserving-first-daily-save-
 export const ACTIVE_RECORD_AUTHORITY_V2_SCOPE='pure-structural-h0-to-h1-root-preserving-bundle-not-native-persistence-rules-runtime-session-or-write-authority';
 export const ACTIVE_RECORD_AUTHORITY_V2_TRUST_BOUNDARY='full-audited-atomic-transition-and-exact-source-expected-required-no-global-completion-minted';
 export const ACTIVE_RECORD_AUTHORITY_V2_PLAN_SCOPE='ephemeral-pure-h0-to-h1-create-or-full-bundle-replay-plan-not-persistence-runtime-or-write-authority';
-export const ACTIVE_RECORD_AUTHORITY_V2_MAX_CHANGES=8;
+export const ACTIVE_RECORD_AUTHORITY_V2_MAX_CHANGES=90;
 export const ACTIVE_RECORD_AUTHORITY_V2_MAX_ARTIFACT_BYTES=900*1024;
 
 const ZERO='0'.repeat(64),auditFields=['persistedAt','persistedBy','persistedByEmail'],plans=new WeakMap(),encoder=new TextEncoder();

@@ -4,7 +4,7 @@ export const STAGING_V2_AUTHORITY_SAVE_PROJECT_ID='danbridge-d8877-staging';
 export const STAGING_V2_AUTHORITY_SAVE_PROJECT_NUMBER='883029466360';
 export const STAGING_V2_AUTHORITY_SAVE_APP_ID='1:883029466360:web:c45a0a2164d4c897aaef0d';
 export const STAGING_V2_AUTHORITY_SAVE_ORIGINS=Object.freeze(['https://danbridge-d8877-staging.web.app','https://danbridge-d8877-staging.firebaseapp.com']);
-export const STAGING_V2_AUTHORITY_SAVE_MAX_REQUEST_BYTES=256*1024;
+export const STAGING_V2_AUTHORITY_SAVE_MAX_REQUEST_BYTES=1024*1024;
 
 const requestFields=['schema','projectId','requestId','payload'];
 const payloadFields=['save','changedKeys','baselineRecords','localRecords'];
@@ -26,7 +26,7 @@ function cors(origin){return Object.freeze({'access-control-allow-origin':origin
 function response(status,origin,body){return Object.freeze({status,headers:cors(origin),body:JSON.stringify(body)})}
 function failure(error,origin){const status=error instanceof GatewayError?error.status:500,code=error instanceof GatewayError?error.code:'INTERNAL';return response(status,origin,{schema:STAGING_V2_AUTHORITY_SAVE_RESPONSE_SCHEMA,state:'blocked',code})}
 function config(raw){const row=exact(raw,configFields,'gateway config');if(row.expectedProjectId!==STAGING_V2_AUTHORITY_SAVE_PROJECT_ID||row.expectedAppId!==STAGING_V2_AUTHORITY_SAVE_APP_ID||!Array.isArray(row.allowedOrigins)||row.allowedOrigins.length!==STAGING_V2_AUTHORITY_SAVE_ORIGINS.length||row.allowedOrigins.some((value,index)=>value!==STAGING_V2_AUTHORITY_SAVE_ORIGINS[index])||![row.verifyIdToken,row.verifyAppCheckToken,row.authorizeOwner,row.executeAuthoritySave,row.now].every(value=>typeof value==='function'))throw new Error('staging-v2 authority gateway config invalid');return Object.freeze({...row,allowedOrigins:Object.freeze([...row.allowedOrigins])})}
-function verifiedCompletion(raw,requestId){const row=exact(raw,completionFields,'gateway completion');if(row.state!=='complete-confirmed'||!['created','replayed'].includes(row.transactionState)||row.projectId!==STAGING_V2_AUTHORITY_SAVE_PROJECT_ID||!actor(row.activationEpoch)||!digest(row.resultHeadHash)||!digest(row.commitHash)||row.saveId!==requestId||!Number.isSafeInteger(row.operationCount)||row.operationCount<1||row.operationCount>8||typeof row.persistedAt!=='string'||!Number.isSafeInteger(row.writeCount)||row.writeCount<0)throw new Error('staging-v2 authority completion invalid');return row}
+function verifiedCompletion(raw,requestId){const row=exact(raw,completionFields,'gateway completion');if(row.state!=='complete-confirmed'||!['created','replayed'].includes(row.transactionState)||row.projectId!==STAGING_V2_AUTHORITY_SAVE_PROJECT_ID||!actor(row.activationEpoch)||!digest(row.resultHeadHash)||!digest(row.commitHash)||row.saveId!==requestId||!Number.isSafeInteger(row.operationCount)||row.operationCount<1||row.operationCount>120||typeof row.persistedAt!=='string'||!Number.isSafeInteger(row.writeCount)||row.writeCount<0)throw new Error('staging-v2 authority completion invalid');return row}
 
 export function createStagingV2AuthoritySaveHttpGateway(rawConfig){
  const cfg=config(rawConfig);
