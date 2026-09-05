@@ -48,7 +48,7 @@ async function createStagingSchedulerRuntime({firestore,serverTimestamp,executeA
     if(plan.conflicts.length)throw new Error('staging 排課發現資料衝突，整批未執行');
     const records=plan.operations.filter(row=>row.collection!=='changes'),audits=plan.operations.filter(row=>row.collection==='changes');
     if(records.length>90||audits.length>30||plan.operations.length>120||!records.length)throw new Error('staging 排課交易超過安全範圍');
-    const sender=createStagingV2ActiveRecordOperationSender({browserClient:{save:executeAuthorityPayload},getActor:()=>({uid:caller.uid,email:caller.email})});
+    const trustedHashes=Object.freeze({sourceHash:plan.targetHash,previousSourceHash:sourceHash}),sender=createStagingV2ActiveRecordOperationSender({browserClient:{save:payload=>executeAuthorityPayload(payload,trustedHashes)},getActor:()=>({uid:caller.uid,email:caller.email})});
     if(plan.operations.length===1)await sender.apply(plan.operations[0]);else await sender.applyBatch(plan.operations);
     response=await responseFor({request,db:target.db,operationCount:plan.operationCount});
    }
