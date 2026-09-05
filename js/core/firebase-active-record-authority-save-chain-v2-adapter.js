@@ -136,7 +136,7 @@ export function createFirebaseActiveRecordAuthoritySaveChainV2CloudRuntimeBinder
   const immutable=await immutableBackup(fence),headAfter=normalized(await ref(RECORD_SYNC_V2_TAKEOVER_CANDIDATE_V2_HEAD_PATH(fence.targetV2Epoch)).get(),'authority runtime post-backup head');
   return verifyStagingV2PrewriteBackup({fence,...immutable,headBefore,headAfter});
  };
- return Object.freeze({scope:ACTIVE_RECORD_AUTHORITY_CHAIN_V2_CLOUD_BINDER_SCOPE,async execute(requestValue,...optional){
+ return Object.freeze({scope:ACTIVE_RECORD_AUTHORITY_CHAIN_V2_CLOUD_BINDER_SCOPE,warmBaselines:rawKeys=>chain.warmBaselines(rawKeys),async execute(requestValue,...optional){
   const trustedContext=optional[0]??null;
   const suppliedFence=trustedContext?.authorityFence,suppliedHead=trustedContext?.authorityHead,hasTrustedBootstrap=suppliedFence!==undefined||suppliedHead!==undefined;if(hasTrustedBootstrap&&(!suppliedFence||!suppliedHead))throw new Error('authority runtime trusted bootstrap incomplete');const fence=hasTrustedBootstrap?fenceIdentity(suppliedFence,input.projectId):fenceIdentity(await ref(RECORD_SYNC_V1_PERMANENT_FENCE_V2_PATH).get(),input.projectId),head=hasTrustedBootstrap?selectorHead(suppliedHead,fence):normalized(await ref(RECORD_SYNC_V2_TAKEOVER_CANDIDATE_V2_HEAD_PATH(fence.targetV2Epoch)).get(),'authority runtime head selector'),revision=own(head,'revision','authority runtime head selector'),schema=own(head,'schema','authority runtime head selector');
   await verifyDurablePrewrite(fence,head);

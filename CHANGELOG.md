@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.232（staging 預熱方法接線修正）
+
+- 修正 Cloud Runtime Binder 未將內部 `warmBaselines` 暴露給 `onInit` 的接線缺口；啟動預熱現在可實際逐批填入 Genesis 單筆驗證快取。
+- 新增外層方法存在性的靜態防退化測試，避免本機只驗到內層實作、部署後才發現介面缺失。
+- 20.26.231 在 staging 啟動時明確拋出 `TypeError`，未進 production；本版重新執行完整測試與 staging 真實驗收。
+
 ## 20.26.231（首筆排課基準同步預熱）
 
 - `onInit()` 完整資料預熱後，再以最多 30 筆一批驗證目前課表會使用的 lessons、students 與 makeups Genesis 基準；第一個實際排課請求不再重做同一批不可變證明。
