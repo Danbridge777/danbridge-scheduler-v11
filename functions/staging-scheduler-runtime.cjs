@@ -18,7 +18,14 @@ async function createStagingSchedulerRuntime({firestore,serverTimestamp,executeA
  const [{FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb},{normalizeRecordDb},{sha256Canonical},{prepareActiveRecordSync},{createStagingV2AuthorityReadLoader},{createStagingV2ActiveRecordOperationSender},policy,projection]=await Promise.all([
   import('../js/core/cloud-full-record-shadow.js'),import('../js/core/cloud-record-data-hash.js'),import('../js/core/cloud-immutable-migration-backup.js'),import('../js/core/cloud-active-record-sync.js'),import('../js/core/staging-v2-authority-read-loader.js'),import('../js/core/staging-v2-active-record-browser-bridge.js'),import('../js/core/production-scheduler-operation.js'),import('../js/core/production-role-view-projection.js')
  ]);
- const recordDataHash=db=>`record-v1:${nativeCanonicalSha256(normalizeRecordDb(db,{cloneRecords:false}))}`;
+ // This memo is private to the warm scheduler runtime. Authority snapshots and
+ // scheduler targets never mutate retained records; changed rows are cloned.
+ // Reusing canonical strings for the untouched records removes the full-DB
+ // serialization pause from the second and later rapid timetable actions.
+ const canonicalRecordMemo=new WeakMap();
+ const recordDataHash=db=>`record-v1:${nativeCanonicalSha256(normalizeRecordDb(db,{cloneRecords:false}),{memo:canonicalRecordMemo})}`;
+ const initialAuthority=getCachedAuthoritySnapshot();
+ if(initialAuthority?.sourceDb&&initialAuthority?.sourceHash&&recordDataHash(initialAuthority.sourceDb)!==initialAuthority.sourceHash)throw new Error('staging 排課啟動雜湊與權威快取不一致');
  const readDocument=async path=>{const snapshot=await firestore.doc(path).get();return snapshot.exists?snapshot.data():null};
  const readCollection=async path=>(await firestore.collection(path).get()).docs.map(row=>({id:row.id,data:row.data()}));
  const loader=createStagingV2AuthorityReadLoader({expectedProjectId:'danbridge-d8877-staging',getDocumentFromServer:readDocument,getCollectionFromServer:readCollection});
