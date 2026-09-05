@@ -48,7 +48,12 @@ async function createStagingSchedulerRuntime({firestore,serverTimestamp,executeA
     if(plan.conflicts.length)throw new Error('staging 排課發現資料衝突，整批未執行');
     const records=plan.operations.filter(row=>row.collection!=='changes'),audits=plan.operations.filter(row=>row.collection==='changes');
     if(records.length>90||audits.length>30||plan.operations.length>120||!records.length)throw new Error('staging 排課交易超過安全範圍');
-    const trustedHashes=Object.freeze({sourceHash:plan.targetHash,previousSourceHash:sourceHash,sourceDb:target.db,previousDb:source.db});let schedulerEvidence=null;const sender=createStagingV2ActiveRecordOperationSender({browserClient:{save:async payload=>{const completion=await executeAuthorityPayload(payload,trustedHashes);schedulerEvidence=completion?.schedulerEvidence||null;return completion}},getActor:()=>({uid:caller.uid,email:caller.email})});
+    // The fence and head were read from Firestore in this same serialized
+    // request and are still revalidated by the authority binder immediately
+    // before its transaction. Pass them through so the binder does not spend
+    // four additional network reads rediscovering the same immutable fence and
+    // pre-transaction head.
+    const trustedHashes=Object.freeze({sourceHash:plan.targetHash,previousSourceHash:sourceHash,sourceDb:target.db,previousDb:source.db,authorityFence:fence,authorityHead:liveHead});let schedulerEvidence=null;const sender=createStagingV2ActiveRecordOperationSender({browserClient:{save:async payload=>{const completion=await executeAuthorityPayload(payload,trustedHashes);schedulerEvidence=completion?.schedulerEvidence||null;return completion}},getActor:()=>({uid:caller.uid,email:caller.email})});
     if(plan.operations.length===1)await sender.apply(plan.operations[0]);else await sender.applyBatch(plan.operations);
     response=await responseFor({request,db:target.db,operationCount:plan.operationCount,evidence:schedulerEvidence});
    }
