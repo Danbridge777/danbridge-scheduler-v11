@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.222（新提交精確讀回）
+
+- staging 新提交完成後的 fresh read 只重新讀取永久 fence、新 head、本次 ledger、本次 1–30 筆 record／receipt 與 Genesis index；不再重讀交易前上一版的 30 筆 bundle。
+- 交易內完整快照、Genesis 基準、最終 30 筆 record／receipt、角色視圖、通知與 immutable audit 驗證全部保留；若 head 在讀回前再被其他請求推進，會安全拒絕而不宣告成功。
+- 首頁、Service Worker 與主動模組指紋統一為 `20.26.222`；production 仍維持未部署狀態，必須先通過 staging 全新 30 堂與連續操作實測。
+
 ## 20.26.221（排課歷史墓碑相容）
 
 - staging 真實 30 堂驗收發現既有 `changes` 墓碑時，20.26.220 的快速路徑會安全拒絕；正式資料未被覆蓋。
