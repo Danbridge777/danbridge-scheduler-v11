@@ -38,12 +38,15 @@ function v2Envelope({environment,activationEpoch,collection,recordId,exists,revi
  return{environment,companyId:'danbridge',activationEpoch,...core,recordHash:activeRecordSaveEnvelopeHash(core)};
 }
 
-export function prepareActiveRecordSync({documentsByCollection,baselineDb,localDb,environment,deviceId,activationEpoch,startSequence=1,createdAt=new Date().toISOString(),authoritativeSourceHash,hashRecordDb=recordDataHash}={}){
+export function prepareActiveRecordSync({documentsByCollection,baselineDb,localDb,environment,deviceId,activationEpoch,startSequence=1,createdAt=new Date().toISOString(),authoritativeSourceHash,hashRecordDb=recordDataHash,verifiedRemote=null,compactResult=false}={}){
  if(!allowedEnvironment.has(environment)||!validText(deviceId)||!validText(activationEpoch)||!Number.isSafeInteger(startSequence)||startSequence<1||!isStrictActiveRecordSaveTimestamp(createdAt)||typeof hashRecordDb!=='function')throw new Error('日常逐筆同步設定無效');
- const remote=rebuildFullRecordShadowDb(documentsByCollection,{environment}),baseHash=hashRecordDb(remote.db);
+ if(typeof compactResult!=='boolean')throw new Error('日常逐筆同步精簡結果設定無效');
+ const trusted=verifiedRemote!==null;
+ if(trusted&&(!verifiedRemote||typeof verifiedRemote!=='object'||Array.isArray(verifiedRemote)||verifiedRemote.db!==baselineDb||verifiedRemote.hash!==authoritativeSourceHash||!validRecordHash(verifiedRemote.hash)||!Number.isSafeInteger(verifiedRemote.documentCount)||verifiedRemote.documentCount<0||!Number.isSafeInteger(verifiedRemote.activeCount)||verifiedRemote.activeCount<0||!Number.isSafeInteger(verifiedRemote.tombstoneCount)||verifiedRemote.tombstoneCount<0||verifiedRemote.documentCount!==verifiedRemote.activeCount+verifiedRemote.tombstoneCount||!verifiedRemote.revisions||typeof verifiedRemote.revisions!=='object'))throw new Error('日常逐筆已驗證遠端快照無效');
+ const remote=trusted?verifiedRemote:rebuildFullRecordShadowDb(documentsByCollection,{environment}),baseHash=trusted?verifiedRemote.hash:hashRecordDb(remote.db);
  if(!validRecordHash(baseHash))throw new Error('日常逐筆基準雜湊無效');
  if(authoritativeSourceHash!==undefined&&(!validRecordHash(authoritativeSourceHash)||authoritativeSourceHash!==baseHash))throw new Error('日常逐筆權威來源雜湊不符');
- const canonicalLocalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(baselineDb,localDb):authoritativeTarget(remote.db,localDb),merged=authoritativeSourceHash===undefined?mergeConcurrentRecordDb(baselineDb,canonicalLocalDb,remote.db):{db:canonicalLocalDb,conflicts:[]},canonicalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(remote.db,merged.db):canonicalLocalDb,targetHash=hashRecordDb(canonicalDb),raw=buildFullRecordShadowPlan(documentsByCollection,canonicalDb,{sourceHash:targetHash,batchSize:1,environment});
+ const canonicalLocalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(baselineDb,localDb):(trusted?localDb:authoritativeTarget(remote.db,localDb)),merged=authoritativeSourceHash===undefined?mergeConcurrentRecordDb(baselineDb,canonicalLocalDb,remote.db):{db:canonicalLocalDb,conflicts:[]},canonicalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(remote.db,merged.db):canonicalLocalDb,targetHash=hashRecordDb(canonicalDb),raw=buildFullRecordShadowPlan(documentsByCollection,canonicalDb,{sourceHash:targetHash,batchSize:1,environment});
  if(!validRecordHash(targetHash))throw new Error('日常逐筆目標雜湊無效');
  let incrementalHash=baseHash;
  let counts={documentCount:remote.documentCount,activeCount:remote.activeCount,tombstoneCount:remote.tombstoneCount};
@@ -58,7 +61,7 @@ export function prepareActiveRecordSync({documentsByCollection,baselineDb,localD
   return{...operation,baseHash,targetHash:incrementalHash,targetDocumentCount:counts.documentCount,targetActiveCount:counts.activeCount,targetTombstoneCount:counts.tombstoneCount,baselineRecord,localRecord,payload:clone(row.payload),path:row.path};
  });
  if(incrementalHash!==targetHash)throw new Error('日常逐筆逐操作 head 與目標雜湊不一致');
- return{schema:'danbridge-active-record-plan-v1',environment,companyId:'danbridge',activationEpoch,deviceId,startSequence,nextSequence:sequence,baseHash,targetHash,operationCount:operations.length,operations,conflicts:clone(merged.conflicts),db:clone(canonicalDb),remoteDb:clone(remote.db),revisions:clone(remote.revisions)};
+ return{schema:'danbridge-active-record-plan-v1',environment,companyId:'danbridge',activationEpoch,deviceId,startSequence,nextSequence:sequence,baseHash,targetHash,operationCount:operations.length,operations,conflicts:clone(merged.conflicts),db:compactResult?canonicalDb:clone(canonicalDb),remoteDb:compactResult?remote.db:clone(remote.db),revisions:compactResult?remote.revisions:clone(remote.revisions)};
 }
 
 export function applyActiveRecordOperation(current,operation){

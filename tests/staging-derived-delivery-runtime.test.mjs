@@ -4,7 +4,7 @@ import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
 
 const require=createRequire(import.meta.url);
-const {createStagingDerivedDeliveryRuntime,restorePreviousLessons,lessonChanges,buildNotifications,applyPayloadToCachedDb,applyAuditPayloadToCachedDb,applyAuthorityPayloadToCachedDb,applyPayloadToCachedDocuments}=require('../functions/staging-derived-delivery-runtime.cjs');
+const {createStagingDerivedDeliveryRuntime,restorePreviousLessons,lessonChanges,buildNotifications,applyPayloadToCachedDb,applyAuditPayloadToCachedDb,applyAuthorityPayloadToCachedDb,applyPayloadToCachedDocuments,advanceCachedSourceModel}=require('../functions/staging-derived-delivery-runtime.cjs');
 const {buildChangeRecordId}=await import('../js/core/cloud-change-record-identity.js');
 
 const before={id:'lesson-1',date:'2026-09-05',start:'17:20',end:'17:50',studentId:'student-1',teacherIds:['teacher-1'],title:'測試課程',branchId:'art_museum'};
@@ -69,6 +69,8 @@ test('常駐文件快照只依同一筆已提交 payload 前進，並保留 revi
  assert.throws(()=>applyPayloadToCachedDocuments(documents,versioned,'record-v1:invalid'),/document cache payload invalid/);
  assert.throws(()=>applyPayloadToCachedDocuments(documents,{...versioned,localRecords:[{...versioned.localRecords[0],revision:6}]},nextHash),/document cache identity invalid/);
 });
+
+test('已驗證來源模型以同一 payload 精確前進新增、更新、刪除、復原與 revision',()=>{const oldHash='record-v1:'+'4'.repeat(64),newHash='record-v1:'+'5'.repeat(64),sourceDb={lessons:[before],changes:[]},model={db:sourceDb,hash:oldHash,documentCount:1,activeCount:1,tombstoneCount:0,revisions:{lessons:{'lesson-1':7},changes:{}}},versioned={...payload,baselineRecords:[{...payload.baselineRecords[0],revision:7}],localRecords:[{...payload.localRecords[0],revision:7}]},updatedDb={lessons:[after],changes:[]},updated=advanceCachedSourceModel(model,versioned,updatedDb,newHash);assert.equal(updated.db,updatedDb);assert.deepEqual([updated.documentCount,updated.activeCount,updated.tombstoneCount],[1,1,0]);assert.equal(updated.revisions.lessons['lesson-1'],8);const removed=advanceCachedSourceModel(updated,{...versioned,baselineRecords:[{...versioned.baselineRecords[0],revision:8,record:after}],localRecords:[{...versioned.localRecords[0],revision:8,record:after,deleted:true}]},{lessons:[],changes:[]},oldHash);assert.deepEqual([removed.documentCount,removed.activeCount,removed.tombstoneCount],[1,0,1]);assert.equal(removed.revisions.lessons['lesson-1'],9);const revived=advanceCachedSourceModel(removed,{...versioned,baselineRecords:[{...versioned.baselineRecords[0],revision:9,record:after,deleted:true}],localRecords:[{...versioned.localRecords[0],revision:9,record:after,deleted:false}]},updatedDb,newHash);assert.deepEqual([revived.documentCount,revived.activeCount,revived.tombstoneCount],[1,1,0]);const created=advanceCachedSourceModel({db:{lessons:[],changes:[]},hash:oldHash,documentCount:0,activeCount:0,tombstoneCount:0,revisions:{lessons:{},changes:{}}},{...versioned,baselineRecords:[{...versioned.baselineRecords[0],exists:false,revision:0,record:null}],localRecords:[{...versioned.localRecords[0],revision:0}]},sourceDb,newHash);assert.deepEqual([created.documentCount,created.activeCount,created.tombstoneCount],[1,1,0]);assert.throws(()=>advanceCachedSourceModel(model,{...versioned,localRecords:[]},updatedDb,newHash),/payload invalid/)});
 
 test('同一筆課表異動為 Daniel、AA 與指定老師建立穩定且可讀回核對的通知',()=>{
  const rows=buildNotifications({payload,currentDb:current,accessRows:[
