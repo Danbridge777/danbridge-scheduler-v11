@@ -41,6 +41,11 @@ test('修改課程只改允許且實際變更的欄位，保留財務、回報�
  assert.deepEqual(result.db.students,before.students);assert.deepEqual(result.db.fixedExpenses,before.fixedExpenses);assert.equal(result.events.length,1);
  assert.equal(result.schedulerDb.lessons[0].paymentStatus,undefined);assert.equal(result.schedulerDb.students[0].parentContact,undefined);
 });
+test('排課目標只複製四個可變集合，其餘十二集合沿用權威參照且來源不被改寫',()=>{
+ const source=seed(),before=structuredClone(source),result=run(source,[{lessonId:lesson.id,before:lesson,after:{...lesson,date:'2026-10-02'}}]),mutable=new Set(['lessons','students','makeups','changes']);
+ for(const collection of FULL_RECORD_COLLECTIONS)assert.equal(result.db[collection]===source[collection],!mutable.has(collection),collection);
+ assert.deepEqual(source,before);
+});
 test('同一欄位衝突、已刪除與 ID 碰撞都拒絕，不覆蓋或復活',()=>{
  const db=seed();db.lessons[0].date='2026-10-03';
  assert.throws(()=>run(db,[{lessonId:lesson.id,before:lesson,after:{...lesson,date:'2026-10-02'}}]),/其他人更新/);

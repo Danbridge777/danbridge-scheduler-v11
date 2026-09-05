@@ -50,7 +50,10 @@ export function prepareActiveRecordSync({documentsByCollection,baselineDb,localD
  if(scoped&&(!trusted||authoritativeSourceHash===undefined||!Array.isArray(changedCollections)||changedCollections.length<1))throw new Error('日常逐筆受信集合範圍無效');
  const scope=scoped?[...changedCollections]:FULL_RECORD_COLLECTIONS,scopeSet=new Set(scope);
  if(scoped&&(scopeSet.size!==scope.length||scope.some(collection=>!FULL_RECORD_COLLECTIONS.includes(collection))))throw new Error('日常逐筆受信集合範圍無效');
- if(scoped)for(const collection of FULL_RECORD_COLLECTIONS)if(!scopeSet.has(collection)&&!same(baselineDb?.[collection],localDb?.[collection]))throw new Error(`日常逐筆未授權集合遭修改：${collection}`);
+ // Scoped callers must construct their target with structural sharing. An
+ // excluded collection is accepted only when it is the exact immutable source
+ // reference; cloning or changing it fails closed before any plan is emitted.
+ if(scoped)for(const collection of FULL_RECORD_COLLECTIONS)if(!scopeSet.has(collection)&&baselineDb?.[collection]!==localDb?.[collection])throw new Error(`日常逐筆未授權集合未沿用權威參照：${collection}`);
  const canonicalLocalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(baselineDb,localDb):(trusted?localDb:authoritativeTarget(remote.db,localDb)),merged=authoritativeSourceHash===undefined?mergeConcurrentRecordDb(baselineDb,canonicalLocalDb,remote.db):{db:canonicalLocalDb,conflicts:[]},canonicalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(remote.db,merged.db):canonicalLocalDb,targetHash=hashRecordDb(canonicalDb),raw=buildFullRecordShadowPlan(documentsByCollection,canonicalDb,{sourceHash:targetHash,batchSize:1,environment,collections:scope});
  if(!validRecordHash(targetHash))throw new Error('日常逐筆目標雜湊無效');
  let incrementalHash=baseHash;

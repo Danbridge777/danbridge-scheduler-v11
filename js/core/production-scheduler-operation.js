@@ -1,4 +1,4 @@
-import {PRODUCTION_SCHEDULER_EMAILS,projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.213';
+import {PRODUCTION_SCHEDULER_EMAILS,projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.214';
 
 export const SCHEDULER_OPERATION_SCHEMA='danbridge-production-scheduler-operation-v1';
 export const SCHEDULER_OPERATION_RESPONSE_SCHEMA='danbridge-production-scheduler-operation-response-v1';
@@ -50,7 +50,7 @@ export function normalizeProductionSchedulerRequest(input){
 // This function receives only safe timetable fields. Raw operation envelopes,
 // access changes, finance values and arbitrary document paths are not accepted.
 export function buildProductionSchedulerTarget(source,input,actor,{nowIso}={}){
- const caller=assertProductionSchedulerActor(actor),request=normalizeProductionSchedulerRequest(input),target=clone(source);
+ const caller=assertProductionSchedulerActor(actor),request=normalizeProductionSchedulerRequest(input),target={...source,lessons:clone(source.lessons),students:clone(source.students),makeups:clone(source.makeups),changes:clone(source.changes)};
  if(!/^\d{4}-\d{2}-\d{2}T/.test(nowIso||'')||!Number.isFinite(Date.parse(nowIso)))throw new Error('伺服器時間無效');
  const events=[];
  for(const change of request.changes){
