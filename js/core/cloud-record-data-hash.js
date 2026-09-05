@@ -1,4 +1,4 @@
-import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.218';
+import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.219';
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));

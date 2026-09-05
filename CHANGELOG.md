@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.219（30 堂規劃熱路徑）
+
+- staging 排課規劃對未變更的權威紀錄先使用無配置的精確序列比對，僅在 map 鍵順序不同時才退回 canonical 比對；仍保留「鍵順序等價、陣列順序嚴格」的既有資料語意。
+- 產生 30 堂操作封套時先建立集合索引，移除每筆操作重掃整個課程／異動集合的二次方路徑；操作內容、revision、墓碑、hash chain 與後端交易均未放寬。
+- 發布指紋升至 `20.26.219`；production 仍待 staging 真實連續操作全部達標後才部署。
+
 ## 20.26.218（排課憑證預取直送）
 
 - staging 與 production 排課在使用者按下操作時即預取各自的單次 App Check 憑證；儲存時以 Firebase callable 官方 wire format 直送原本同一個 `onCall` Function，完整保留 Auth、App Check replay protection、角色與後端交易驗證。

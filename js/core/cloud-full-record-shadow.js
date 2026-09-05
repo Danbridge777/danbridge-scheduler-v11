@@ -7,6 +7,11 @@ export const FULL_RECORD_SHADOW_SCHEMA='danbridge-full-record-shadow-v1';
 const clone=value=>JSON.parse(JSON.stringify(value));
 const stable=value=>Array.isArray(value)?value.map(stable):(value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value);
 const fingerprint=value=>JSON.stringify(stable(value));
+// Rebuilt authority records and the scheduler target preserve insertion order
+// for untouched maps.  The direct comparison makes that overwhelmingly common
+// path allocation-free; the canonical fallback keeps Firestore map key order
+// semantically irrelevant.
+const sameRecord=(left,right)=>{const directLeft=JSON.stringify(left),directRight=JSON.stringify(right);return directLeft===directRight||fingerprint(left)===fingerprint(right)};
 const validId=value=>{const id=String(value??'');return id&&id.trim()===id&&!id.includes('/')&&id!=='.'&&id!=='..'&&!/^__.*__$/.test(id)&&new TextEncoder().encode(id).length<=1500};
 function materialize(collection,rows){
  if(!Array.isArray(rows))throw new Error(`${collection} 必須是陣列`);
@@ -42,7 +47,7 @@ export function buildFullRecordShadowPlan(documentsByCollection,targetDb,{source
  const scope=selectedCollections(collections),current=readCurrent(documentsByCollection,environment,scope),target=Object.fromEntries(scope.map(collection=>[collection,materialize(collection,targetDb?.[collection])])),operations=[];
  for(const collection of scope){const next=new Map(target[collection].map(item=>[item.recordId,item]));
   const namespace=environment==='production'?'productionFullRecordShadows':'stagingFullRecordShadows';
-  for(const item of target[collection]){const old=current.active[collection].get(item.recordId),tombstone=current.tombstones[collection].get(item.recordId);if(old&&fingerprint(old.record)===fingerprint(item.record)&&old.recordIndex===item.recordIndex)continue;const revision=(old||tombstone)?.revision+1||1;operations.push({type:old?'update':(tombstone?'revive':'create'),path:`${namespace}/danbridge/collections/${collection}/records/${item.recordId}`,payload:payload(old?'update':'create',collection,item,revision,sourceHash,environment)})}
+  for(const item of target[collection]){const old=current.active[collection].get(item.recordId),tombstone=current.tombstones[collection].get(item.recordId);if(old&&sameRecord(old.record,item.record)&&old.recordIndex===item.recordIndex)continue;const revision=(old||tombstone)?.revision+1||1;operations.push({type:old?'update':(tombstone?'revive':'create'),path:`${namespace}/danbridge/collections/${collection}/records/${item.recordId}`,payload:payload(old?'update':'create',collection,item,revision,sourceHash,environment)})}
   for(const [id,old] of current.active[collection])if(!next.has(id)){const item={recordId:id,record:clone(old.record),recordIndex:old.recordIndex??null};operations.push({type:'delete',path:`${namespace}/danbridge/collections/${collection}/records/${id}`,payload:payload('delete',collection,item,old.revision+1,sourceHash,environment)})}
  }
  const batches=[];for(let offset=0;offset<operations.length;offset+=batchSize)batches.push({index:batches.length,operations:operations.slice(offset,offset+batchSize)});

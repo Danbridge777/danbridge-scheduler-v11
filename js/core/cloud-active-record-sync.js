@@ -59,10 +59,11 @@ export function prepareActiveRecordSync({documentsByCollection,baselineDb,localD
  let incrementalHash=baseHash;
  let counts={documentCount:remote.documentCount,activeCount:remote.activeCount,tombstoneCount:remote.tombstoneCount};
  let sequence=startSequence;
+ const currentByCollection=Object.fromEntries(scope.map(collection=>[collection,new Map((documentsByCollection?.[collection]??[]).map(item=>[String(item?.id??''),item?.data??null]))]));
  const operations=raw.operations.map((row,index)=>{
   const collection=operationCollection(row.path),recordId=operationRecordId(row.path),operationId=`${deviceId}:${sequence++}`;
   if(!FULL_RECORD_COLLECTIONS.includes(collection)||!validText(recordId)||!validText(operationId))throw new Error('日常逐筆操作路徑無效');
-  const current=(documentsByCollection?.[collection]??[]).find(item=>String(item?.id??'')===recordId)?.data??null,baseRevision=row.payload.revision-1,baselineRecord=v2Envelope({environment,activationEpoch,collection,recordId,exists:current!==null,revision:current?.revision??0,deleted:current?.deleted??false,record:current?.record??null}),localRecord=v2Envelope({environment,activationEpoch,collection,recordId,exists:true,revision:baseRevision,deleted:row.payload.deleted,record:row.payload.record});
+  const current=currentByCollection[collection].get(recordId)??null,baseRevision=row.payload.revision-1,baselineRecord=v2Envelope({environment,activationEpoch,collection,recordId,exists:current!==null,revision:current?.revision??0,deleted:current?.deleted??false,record:current?.record??null}),localRecord=v2Envelope({environment,activationEpoch,collection,recordId,exists:true,revision:baseRevision,deleted:row.payload.deleted,record:row.payload.record});
   if(baselineRecord.revision!==baseRevision)throw new Error('日常逐筆 V2 基準 revision 不符');
   const operation={schema:'danbridge-active-record-operation-v1',environment,companyId:'danbridge',activationEpoch,operationId,deviceId,createdAt,collection,recordId,type:row.type,baseRevision,nextRevision:row.payload.revision};
   const baseHash=incrementalHash;counts=advanceCounts(counts,row.type);incrementalHash=index===raw.operations.length-1?targetHash:operationChainHash(baseHash,operation);
