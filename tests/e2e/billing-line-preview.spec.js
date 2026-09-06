@@ -1,4 +1,7 @@
 const { test, expect } = require('@playwright/test');
+const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
+
+test.beforeEach(async({page})=>isolateApplicationAuth(page));
 
 test('LINE 計費預覽只綁家長姓名、合併手足、列出時數公式且可修改後複製',async({page})=>{
   await page.goto('/index.html',{waitUntil:'domcontentloaded'});

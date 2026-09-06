@@ -134,7 +134,32 @@ function monthDateRange(m){const[y,mo]=m.split('-').map(Number);return{start:new
 
 function countTeacherWorkDaysInRange(t,start,end){const set=new Set((t.workDays||[]).map(Number));let count=0;for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1))if(set.has(d.getDay()))count++;return count}
 
-function teacherExpectedHours(t,m){const days=(t.workDays||[]).length,weekly=+t.minWeeklyHours||0;if(!days||!weekly)return 0;const r=monthDateRange(m),count=countTeacherWorkDaysInRange(t,r.start,r.end);return weekly/days*count}
+function teacherMonthlyWorkDays(t,m){const r=monthDateRange(m);return countTeacherWorkDaysInRange(t,r.start,r.end)}
+function teacherDailyExpectedHours(t){const days=(t.workDays||[]).length,weekly=+t.minWeeklyHours||0;return days&&weekly?weekly/days:0}
+function teacherExpectedHours(t,m){return teacherDailyExpectedHours(t)*teacherMonthlyWorkDays(t,m)}
+
+function teacherPayrollLeaveSource(){
+  const live=typeof window!=='undefined'&&typeof window.__danbridgeGetTeacherLeaves==='function'?window.__danbridgeGetTeacherLeaves():null;
+  return Array.isArray(live)?live:(Array.isArray(db.teacherLeaveRecords)?db.teacherLeaveRecords:[]);
+}
+function teacherPayrollLeaveHours(t,m,source=teacherPayrollLeaveSource()){
+  const workDays=new Set((t.workDays||[]).map(Number)),byDate=new Map();
+  for(const row of source||[]){
+    const date=String(row?.date||''),start=String(row?.start||''),end=String(row?.end||'');
+    if(String(row?.teacherId)!==String(t.id)||row?.status==='cancelled'||!date.startsWith(`${m}-`)||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end))continue;
+    const day=new Date(`${date}T12:00:00`).getDay();if(!workDays.has(day))continue;
+    const minutes=value=>Number(value.slice(0,2))*60+Number(value.slice(3)),from=minutes(start),to=minutes(end);
+    if(!Number.isFinite(from)||!Number.isFinite(to)||to<=from)continue;
+    const intervals=byDate.get(date)||[];intervals.push([from,to]);byDate.set(date,intervals);
+  }
+  let totalMinutes=0;
+  for(const intervals of byDate.values()){
+    intervals.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);let current=null;
+    for(const interval of intervals){if(!current){current=[...interval];continue}if(interval[0]<=current[1])current[1]=Math.max(current[1],interval[1]);else{totalMinutes+=current[1]-current[0];current=[...interval]}}
+    if(current)totalMinutes+=current[1]-current[0];
+  }
+  return totalMinutes/60;
+}
 
 function teacherPaidLessons(t,m){return db.lessons.filter(l=>l.date.startsWith(m)&&lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherHours(l))}
 
@@ -164,33 +189,39 @@ function teacherPayrollMode(t){
   if(t?.payrollMode==='fixed'||t?.payrollMode==='hourly')return t.payrollMode;
   return teacherBaseSalary(t)!==null?'fixed':'hourly';
 }
-const TEACHER_PAYROLL_FORMULA_VERSION='teacher-payroll-v1-formal-timetable';
+const TEACHER_PAYROLL_FORMULA_VERSION='teacher-payroll-v2-workday-leave';
 function calculateTeacherPayroll(t,m,paid){
   const rows=paid||teacherPaidLessons(t,m);
   const hourRows=teacherPayableHourLessons(t,rows);
   const actualHours=hourRows.reduce((a,l)=>a+hours(l.start,l.end),0);
   const paidHours=hourRows.filter(lessonCountsForTeacherPay).reduce((a,l)=>a+hours(l.start,l.end),0);
   const mode=teacherPayrollMode(t);
-  const expectedHours=teacherExpectedHours(t,m);
+  const expectedHours=teacherExpectedHours(t,m),monthlyWorkDays=teacherMonthlyWorkDays(t,m),dailyExpectedHours=teacherDailyExpectedHours(t);
   const diff=actualHours-expectedHours;
   if(mode==='hourly'){
     const hourlyRate=payrollNumber(t?.rate)??0;
     const amount=rows.reduce((a,l)=>a+lessonTeacherPay(l,t.id),0);
-    return{teacher:t,month:m,formulaVersion:TEACHER_PAYROLL_FORMULA_VERSION,mode,rows,actualHours,paidHours,expectedHours:0,diff:actualHours,baseSalary:null,overtimeHours:0,shortHours:0,overtimeRate:null,deductionRate:null,hourlyRate,addition:amount,deduction:0,amount,configured:hourlyRate>0};
+    return{teacher:t,month:m,formulaVersion:TEACHER_PAYROLL_FORMULA_VERSION,mode,rows,actualHours,paidHours,expectedHours:0,diff:actualHours,monthlyWorkDays,dailyExpectedHours,leaveHours:0,leaveHourlyRate:0,leaveDeduction:0,baseSalary:null,overtimeHours:0,shortHours:0,overtimeRate:null,deductionRate:null,hourlyRate,addition:amount,shortageDeduction:0,deduction:0,amount,configured:hourlyRate>0};
   }
   const baseSalary=teacherBaseSalary(t),overtimeRate=teacherOvertimeRate(t),deductionRate=teacherDeductionRate(t);
-  const overtimeHours=Math.max(0,diff),shortHours=Math.max(0,-diff);
-  const addition=overtimeHours*(overtimeRate??0),deduction=shortHours*(deductionRate??0);
+  const leaveHours=Math.min(expectedHours,teacherPayrollLeaveHours(t,m)),leaveHourlyRate=expectedHours>0&&baseSalary!==null?baseSalary/expectedHours:0;
+  /* Active leave is credited against missing timetable hours so one absence cannot be
+   * deducted once as a shortage and again as leave. Leave itself is prorated from
+   * base salary by this month's exact workday count and daily expected hours. */
+  const overtimeHours=Math.max(0,diff),shortHours=Math.max(0,expectedHours-actualHours-leaveHours);
+  const addition=overtimeHours*(overtimeRate??0),shortageDeduction=shortHours*(deductionRate??0),leaveDeduction=leaveHours*leaveHourlyRate,deduction=shortageDeduction+leaveDeduction;
   const configured=baseSalary!==null&&overtimeRate!==null&&deductionRate!==null;
   const amount=configured?Math.max(0,baseSalary+addition-deduction):0;
-  return{teacher:t,month:m,formulaVersion:TEACHER_PAYROLL_FORMULA_VERSION,mode,rows,actualHours,paidHours,expectedHours,diff,baseSalary,overtimeHours,shortHours,overtimeRate,deductionRate,hourlyRate:null,addition,deduction,amount,configured};
+  return{teacher:t,month:m,formulaVersion:TEACHER_PAYROLL_FORMULA_VERSION,mode,rows,actualHours,paidHours,expectedHours,diff,monthlyWorkDays,dailyExpectedHours,leaveHours,leaveHourlyRate,leaveDeduction,baseSalary,overtimeHours,shortHours,overtimeRate,deductionRate,hourlyRate:null,addition,shortageDeduction,deduction,amount,configured};
 }
 function teacherPayrollFormulaText(result){
   if(result.mode==='hourly')return result.paidHours===result.actualHours?`純時薪：${fmtHours(result.paidHours)} hr × ${money(result.hourlyRate||0)}`:`純時薪：計薪 ${fmtHours(result.paidHours)} hr × ${money(result.hourlyRate||0)}（課表 ${fmtHours(result.actualHours)} hr）`;
   if(!result.configured)return '薪資設定未完成：請填固定底薪、超時時薪與不足扣款時薪';
-  if(result.diff>0)return `底薪 ${money(result.baseSalary)}＋超時 ${fmtHours(result.overtimeHours)} hr × ${money(result.overtimeRate)}`;
-  if(result.diff<0)return `底薪 ${money(result.baseSalary)}－不足 ${fmtHours(result.shortHours)} hr × ${money(result.deductionRate)}`;
-  return `固定底薪 ${money(result.baseSalary)}`;
+  const parts=[`底薪 ${money(result.baseSalary)}`,`本月 ${result.monthlyWorkDays} 個工作日／最低 ${fmtHours(result.expectedHours)} hr`];
+  if(result.overtimeHours>0)parts.push(`＋超時 ${fmtHours(result.overtimeHours)} hr × ${money(result.overtimeRate)}`);
+  if(result.shortHours>0)parts.push(`－不足 ${fmtHours(result.shortHours)} hr × ${money(result.deductionRate)}`);
+  if(result.leaveHours>0)parts.push(`－請假 ${fmtHours(result.leaveHours)} hr × ${money(result.leaveHourlyRate)}（底薪 ÷ 本月最低時數）`);
+  return parts.join('；');
 }
 
 function teacherWeekBreakdown(t,m){const r=monthDateRange(m),daily=(+t.minWeeklyHours||0)/Math.max(1,(t.workDays||[]).length),paid=teacherPayableHourLessons(t,teacherPaidLessons(t,m)),rows=[];let cursor=new Date(r.start);cursor.setDate(cursor.getDate()-((cursor.getDay()+6)%7));while(cursor<=r.end){const ws=new Date(cursor),we=new Date(cursor);we.setDate(we.getDate()+6);const from=ws<r.start?r.start:ws,to=we>r.end?r.end:we,workCount=countTeacherWorkDaysInRange(t,from,to),expected=daily*workCount;const actual=paid.filter(l=>{const d=new Date(l.date+'T00:00:00');return d>=from&&d<=to}).reduce((a,l)=>a+hours(l.start,l.end),0);rows.push({from:localDate(from),to:localDate(to),expected,actual,diff:actual-expected});cursor.setDate(cursor.getDate()+7)}return rows}
@@ -211,7 +242,7 @@ function settlementSnapshotPayload(data){
   const source={
     lessons:lessons.map(l=>{const id=l.id||'',financialFields=[l.date||'',l.start||'',l.end||'',l.studentId||'',lessonTeacherIds(l).slice().sort(),l.status||'',l.teacherReportStatus||'',l.chargeStudent||'',l.payTeacher||'',+l.price||0,+l.rate||0,!!l.isDraft];return{id,fingerprint:settlementSourceHash(financialFields)}}).sort((a,b)=>a.id.localeCompare(b.id)),
     students:sr.map(x=>({id:x.s?.id||'',total:+x.total||0,charged:+x.charged||0,h:+x.h||0,abs:+x.abs||0,lessonAmount:+x.lessonAmount||0,campAmount:+x.campAmount||0,amount:+x.amount||0})).sort((a,b)=>a.id.localeCompare(b.id)),
-    teachers:tr.map(x=>({id:x.t?.id||'',count:+x.count||0,h:+x.h||0,expected:+x.expected||0,amount:+x.amount||0,revenue:+x.revenue||0,payrollMode:x.payroll?.mode||'',baseSalary:x.payroll?.baseSalary??null,hourlyRate:x.payroll?.hourlyRate??null,overtimeRate:x.payroll?.overtimeRate??null,deductionRate:x.payroll?.deductionRate??null})).sort((a,b)=>a.id.localeCompare(b.id))
+    teachers:tr.map(x=>({id:x.t?.id||'',count:+x.count||0,h:+x.h||0,expected:+x.expected||0,amount:+x.amount||0,revenue:+x.revenue||0,payrollMode:x.payroll?.mode||'',baseSalary:x.payroll?.baseSalary??null,hourlyRate:x.payroll?.hourlyRate??null,overtimeRate:x.payroll?.overtimeRate??null,deductionRate:x.payroll?.deductionRate??null,monthlyWorkDays:+x.payroll?.monthlyWorkDays||0,leaveHours:+x.payroll?.leaveHours||0,leaveHourlyRate:+x.payroll?.leaveHourlyRate||0,leaveDeduction:+x.payroll?.leaveDeduction||0,shortageDeduction:+x.payroll?.shortageDeduction||0})).sort((a,b)=>a.id.localeCompare(b.id))
   };
   return{totals,source,sourceHash:settlementSourceHash({totals,source})};
 }

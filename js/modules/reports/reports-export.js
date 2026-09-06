@@ -5,10 +5,10 @@
  */
 
 function settlementMonthList(){
-  const months=[];
-  for(let year=2026;year<=2028;year++){
-    const startMonth=year===2026?7:1;
-    for(let month=startMonth;month<=12;month++){
+  const months=[],dataYears=(db?.lessons||[]).map(row=>Number(String(row?.date||'').slice(0,4))).filter(Number.isInteger);
+  const currentYear=new Date().getFullYear(),lastYear=Math.max(2036,currentYear+10,...dataYears);
+  for(let year=2026;year<=lastYear;year++){
+    for(let month=1;month<=12;month++){
       months.push(`${year}-${String(month).padStart(2,'0')}`);
     }
   }
@@ -55,7 +55,35 @@ function renderSettlementHistory(){
 
 function copySettlementText(){$('settlementText').select();navigator.clipboard?.writeText($('settlementText').value).then(()=>alert('已複製')).catch(()=>document.execCommand('copy'))}
 
-function excelSafe(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function excelSafe(v){const text=String(v??''),safe=/^[=+\-@]/.test(text)?`'${text}`:text;return safe.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+function annualSettlementData(year){
+  const normalized=String(year||'').match(/^\d{4}$/)?.[0]||String(($('settleMonth')?.value||monthNow())).slice(0,4);
+  const monthSelect=$('settleMonth'),originalMonth=monthSelect?.value||'';
+  const months=[];
+  try{
+    for(let number=1;number<=12;number++){
+      const month=`${normalized}-${String(number).padStart(2,'0')}`;
+      if(monthSelect)monthSelect.value=month;
+      const data=settleData(),lessons=Array.isArray(data.lessons)?data.lessons:(db.lessons||[]).filter(row=>!row.isDraft&&String(row.date||'').startsWith(month));
+      months.push({month,...data,lessons});
+    }
+  }finally{if(monthSelect)monthSelect.value=originalMonth}
+  const lessonMap=new Map();
+  months.flatMap(row=>row.lessons||[]).forEach(row=>lessonMap.set(row.id||`${row.date}|${row.start}|${row.studentId}|${lessonMap.size}`,row));
+  return{year:normalized,months,lessons:[...lessonMap.values()].sort((a,b)=>`${a.date||''}${a.start||''}${a.id||''}`.localeCompare(`${b.date||''}${b.start||''}${b.id||''}`))};
+}
+
+function downloadAnnualSettlementExcel(){
+  const year=String(($('settleMonth')?.value||monthNow())).slice(0,4),annual=annualSettlementData(year);
+  const monthRows=annual.months.map(row=>{const receivable=row.sr.reduce((sum,item)=>sum+item.amount,0),payroll=row.tr.reduce((sum,item)=>sum+item.amount,0),hoursTotal=row.tr.reduce((sum,item)=>sum+item.h,0);return`<tr><td>${row.month}</td><td>${row.lessons.length}</td><td>${hoursTotal}</td><td>${Math.round(receivable)}</td><td>${Math.round(payroll)}</td><td>${Math.round(receivable-payroll)}</td></tr>`}).join('');
+  const studentRows=annual.months.flatMap(row=>row.sr.map(item=>`<tr><td>${row.month}</td><td>${excelSafe(item.s.name)}</td><td>${excelSafe(item.s.parent||'')}</td><td>${item.total}</td><td>${item.charged}</td><td>${item.h}</td><td>${item.abs}</td><td>${item.rate.toFixed(1)}%</td><td>${Math.round(item.amount)}</td></tr>`)).join('');
+  const teacherRows=annual.months.flatMap(row=>row.tr.map(item=>{const payroll=item.payroll;return`<tr><td>${row.month}</td><td>${excelSafe(item.t.name)}</td><td>${excelSafe(workDayNames(item.t.workDays))}</td><td>${payroll.monthlyWorkDays||0}</td><td>${payroll.expectedHours||0}</td><td>${payroll.actualHours||0}</td><td>${payroll.overtimeHours||0}</td><td>${payroll.shortHours||0}</td><td>${payroll.leaveHours||0}</td><td>${payroll.baseSalary??''}</td><td>${payroll.overtimeRate??payroll.hourlyRate??''}</td><td>${payroll.deductionRate??''}</td><td>${Math.round(payroll.leaveDeduction||0)}</td><td>${Math.round(payroll.shortageDeduction||0)}</td><td>${Math.round(payroll.amount||0)}</td></tr>`})).join('');
+  const lessonRows=annual.lessons.map(row=>`<tr><td>${excelSafe(row.id||'')}</td><td>${excelSafe(row.date||'')}</td><td>${excelSafe(row.start||'')}</td><td>${excelSafe(row.end||'')}</td><td>${excelSafe(student(row.studentId).name||row.title||'')}</td><td>${excelSafe(student(row.studentId).parent||'')}</td><td>${excelSafe(lessonTeacherNames(row))}</td><td>${excelSafe(row.title||'')}</td><td>${excelSafe(locationLabel(row))}</td><td>${excelSafe(row.room||row.address||'')}</td><td>${excelSafe(row.status||'')}</td><td>${excelSafe(row.paymentStatus==='paid'?'已繳':row.paymentStatus==='waived'?'免收':'未繳')}</td><td>${hours(row.start,row.end)}</td><td>${Math.round(lessonCharge(row))}</td></tr>`).join('');
+  const totals=annual.months.reduce((sum,row)=>{sum.receivable+=row.sr.reduce((n,item)=>n+item.amount,0);sum.payroll+=row.tr.reduce((n,item)=>n+item.amount,0);return sum},{receivable:0,payroll:0});
+  const html=`<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,"Noto Sans TC",sans-serif;color:#172033}table{border-collapse:collapse;width:100%;margin:12px 0 28px}th,td{border:1px solid #cbd5e1;padding:7px;text-align:left;white-space:nowrap}th{background:#f1f5f9;font-weight:700}.money{font-weight:700;color:#8a641d}h1,h2{color:#172033}</style></head><body><h1>Danbridge ${year} 年度資料</h1><table><tr><th>年度應收</th><th>年度老師薪資</th><th>年度差額</th><th>正式課程筆數</th></tr><tr><td class="money">${Math.round(totals.receivable)}</td><td class="money">${Math.round(totals.payroll)}</td><td class="money">${Math.round(totals.receivable-totals.payroll)}</td><td>${annual.lessons.length}</td></tr></table><h2>12 個月總覽</h2><table><tr><th>月份</th><th>課程筆數</th><th>老師工時</th><th>學生應收</th><th>老師薪資</th><th>差額</th></tr>${monthRows}</table><h2>學生／家庭月結明細</h2><table><tr><th>月份</th><th>學生</th><th>家長</th><th>原定堂數</th><th>收費堂數</th><th>收費時數</th><th>請假</th><th>請假率</th><th>應收</th></tr>${studentRows}</table><h2>老師月薪明細</h2><table><tr><th>月份</th><th>老師</th><th>固定工作日</th><th>本月工作日</th><th>本月最低時數</th><th>實際時數</th><th>超時</th><th>不足</th><th>請假</th><th>底薪</th><th>超時／一般時薪</th><th>不足扣款時薪</th><th>請假扣款</th><th>不足扣款</th><th>應付</th></tr>${teacherRows}</table><h2>全年正式課程逐筆明細</h2><table><tr><th>課程 ID</th><th>日期</th><th>開始</th><th>結束</th><th>學生／班級</th><th>家長</th><th>老師</th><th>課程</th><th>地點</th><th>教室／地址</th><th>狀態</th><th>付款</th><th>時數</th><th>應收</th></tr>${lessonRows}</table></body></html>`;
+  const blob=new Blob(['\ufeff'+html],{type:'application/vnd.ms-excel;charset=utf-8'}),a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=`Danbridge-${year}-年度資料.xls`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast(`${year} 年度 Excel 已匯出（${annual.lessons.length} 堂）`);
+}
 
 function downloadSettlementExcel(){const{sr,tr}=settleData(),month=$('settleMonth').value,totalRevenue=sr.reduce((s,x)=>s+x.amount,0),totalPayroll=tr.reduce((s,x)=>s+x.amount,0);const studentRows=sr.map(x=>`<tr><td>${excelSafe(x.s.name)}</td><td>${excelSafe(x.s.parent||'')}</td><td>${x.total}</td><td>${x.charged}</td><td>${x.h}</td><td>${x.abs}</td><td>${x.rate.toFixed(1)}%</td><td>${Math.round(x.amount)}</td></tr>`).join('');const teacherRows=tr.map(x=>`<tr><td>${excelSafe(x.t.name)}</td><td>${excelSafe(workDayNames(x.t.workDays))}</td><td>${x.t.minWeeklyHours||0}</td><td>${x.expected}</td><td>${x.h}</td><td>${x.diff}</td><td>${excelSafe(x.payroll.mode==='fixed'?'固定底薪制':'純時薪制')}</td><td>${x.payroll.mode==='fixed'?(x.payroll.overtimeRate??''):(x.payroll.hourlyRate??'')}</td><td>${x.payroll.mode==='fixed'?(x.payroll.deductionRate??''):''}</td><td>${Math.round(x.revenue)}</td><td>${Math.round(x.amount)}</td></tr>`).join('');const html=`<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,"Noto Sans TC",sans-serif;color:#172033}table{border-collapse:collapse;width:100%;margin:12px 0 24px}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left}th{background:#f1f5f9;font-weight:700}.money{font-weight:700;color:#8a641d}h1,h2{color:#172033}</style></head><body><h1>Danbridge ${month} 月底結算</h1><table><tr><th>本月應收</th><th>老師薪資</th><th>預估差額</th></tr><tr><td class="money">${Math.round(totalRevenue)}</td><td class="money">${Math.round(totalPayroll)}</td><td class="money">${Math.round(totalRevenue-totalPayroll)}</td></tr></table><h2>學生應收</h2><table><tr><th>學生</th><th>家長</th><th>原定堂數</th><th>收費堂數</th><th>收費時數</th><th>請假</th><th>請假率</th><th>應收</th></tr>${studentRows}</table><h2>老師工時與薪資</h2><table><tr><th>老師</th><th>固定工作日</th><th>每週最低</th><th>本月最低</th><th>實際時數</th><th>差額</th><th>薪資制度</th><th>超時／一般時薪</th><th>不足扣款時薪</th><th>公司營收 KPI</th><th>應付</th></tr>${teacherRows}</table>
 

@@ -1,4 +1,7 @@
 const {test,expect}=require('@playwright/test');
+const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
+
+test.beforeEach(async({page})=>isolateApplicationAuth(page));
 
 const SECTION_IDS=['dashboard','students','teachers','teacherLeave','calendar','lessons','makeups','camps','winterCamps','settlement','finance','data','security'];
 

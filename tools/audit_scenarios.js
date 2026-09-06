@@ -167,7 +167,7 @@ context.db.lessons.push(lesson({ id: 'sep-unpaid', date: '2026-09-06', start: '1
 const septemberWithUnpaid = context.calculateTeacherPayroll(context.db.teachers[0], '2026-09');
 assert.equal(septemberWithUnpaid.actualHours, 3.5, 'every formal timetable lesson counts toward teacher hours even when explicitly unpaid');
 assert.equal(septemberWithUnpaid.amount, 200, 'an explicitly unpaid lesson adds hours but not hourly pay');
-assert.equal(septemberWithUnpaid.formulaVersion, 'teacher-payroll-v1-formal-timetable', 'payroll results identify the exact formula contract');
+assert.equal(septemberWithUnpaid.formulaVersion, 'teacher-payroll-v2-workday-leave', 'payroll results identify the exact formula contract');
 
 const fixedTeacher = { id: 'fixed', name: 'Fixed', payrollMode: 'fixed', baseSalary: 43000, overtimeRate: 500, deductionRate: 300, minWeeklyHours: 40, workDays: [1, 2, 3, 4, 5] };
 context.db.teachers = [fixedTeacher];
@@ -215,7 +215,7 @@ const lockedAt = '2026-09-01T00:00:00.000Z';
 const lockedData = { m: '2026-08', scope: 'all', sr: [{ s: { id: 's1' }, total: 1, charged: 1, h: 1, abs: 0, lessonAmount: 200, campAmount: 0, amount: 200 }], tr: [{ t: { id: 't1' }, count: 1, h: 1, expected: 1, amount: 100, revenue: 200, payroll: { mode: 'hourly', hourlyRate: 100 } }], lessons: [lesson()] };
 const lockedRecord = context.createLockedSettlementRecord('2026-08', 'all', lockedData, lockedAt);
 assert.equal(lockedRecord.locked, true, 'monthly settlement is locked');
-assert.equal(lockedRecord.payrollFormulaVersion, 'teacher-payroll-v1-formal-timetable', 'locked settlements record the payroll formula version');
+assert.equal(lockedRecord.payrollFormulaVersion, 'teacher-payroll-v2-workday-leave', 'locked settlements record the payroll formula version');
 assert.equal(lockedRecord.id, '2026-08::all', 'settlement identity combines its exact month and scope');
 assert.notEqual(context.createLockedSettlementRecord('2026-08', 'branch-a', { ...lockedData, scope: 'branch-a' }, lockedAt).id, lockedRecord.id, 'the same month in another branch is not a duplicate');
 assert.throws(() => context.createLockedSettlementRecord('2026-07', 'all', lockedData, lockedAt), /month mismatch/, 'a snapshot cannot be stored under the wrong month');
@@ -322,7 +322,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.249'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.250'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');

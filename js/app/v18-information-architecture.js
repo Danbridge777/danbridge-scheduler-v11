@@ -77,7 +77,8 @@
   window.setFinanceWorkspaceMonth=setFinanceWorkspaceMonth;
 
   function buildStudentCollections(settlementCard,collections){
-    const toolbar=$(':scope > .toolbar',settlementCard);
+    const settlementRoot=$(':scope > .card',settlementCard)||settlementCard;
+    const toolbar=$(':scope > .toolbar',settlementRoot);
     const executive=$('#settlementExecutiveSummary',settlementCard);
     const studentTable=$('#studentSettleRows',settlementCard)?.closest('.table-wrap');
     const history=$('.settlement-history',settlementCard);
@@ -89,7 +90,7 @@
     if(toolbar){
       const monthLabel=$('label',toolbar);if(monthLabel&&monthLabel.textContent.includes('結算月份'))monthLabel.textContent='收款月份';
       const branchLabel=$$('#settlementBranchScope',toolbar)[0]?.closest('div')?.querySelector('label');if(branchLabel)branchLabel.textContent='收款校區';
-      $$('button',toolbar).forEach(button=>{if(button.textContent.trim()==='重新計算')button.textContent='重新整理';else button.remove()});
+      $$('button',toolbar).forEach(button=>{if(button.textContent.trim()==='重新計算')button.textContent='重新整理';else if(button.id!=='downloadAnnualSettlementExcel')button.remove()});
     }
     const summary=document.createElement('div'); summary.id='v181CollectionSummary'; summary.className='v181-summary-grid'; module.append(summary);
     if(executive){executive.hidden=true;module.append(executive)}
