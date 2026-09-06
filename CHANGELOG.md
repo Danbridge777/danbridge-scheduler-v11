@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.234（通知確認明確驗證傳輸）
+
+- staging 與 production 的課表通知確認改用和排課相同的明確 callable 傳輸，送出前固定取得並核對目前 Firebase 使用者，且直接附上 Auth ID token 與 App Check token；不再依賴 SDK 在呼叫當下推測登入狀態。
+- 通知確認每次取得獨立的 limited-use App Check token，不與新增、拖曳、複製、批次修改或刪除共用一次性權杖，避免連續操作互相搶用。
+- 傳輸層只允許 staging／production 各自精確配對的排課與通知確認 Function，新增雙環境 header、body、端點與錯配拒絕測試。
+
 ## 20.26.233（課表通知單批渲染）
 
 - 通知中心不再把所有未讀課表通知攤平成同一張表；每次只渲染最新的一個不可變伺服器批次，避免長期未讀累積成數千個 DOM 節點而拖慢新增、拖曳、複製與刪除。

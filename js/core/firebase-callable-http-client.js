@@ -1,7 +1,7 @@
 const REGION='asia-east1';
 const ALLOWED=Object.freeze({
- 'danbridge-d8877-staging':'stagingSchedulerOperation',
- 'danbridge-d8877':'productionSchedulerOperation'
+ 'danbridge-d8877-staging':Object.freeze(new Set(['stagingSchedulerOperation','stagingAcknowledgeScheduleNotification'])),
+ 'danbridge-d8877':Object.freeze(new Set(['productionSchedulerOperation','productionAcknowledgeScheduleNotification']))
 });
 const encoder=new TextEncoder();
 const clean=value=>String(value??'').trim().toLowerCase();
@@ -20,7 +20,7 @@ function identity(cfg){
 // clicked Save while retaining Auth, App Check replay protection and the exact
 // same onCall function boundary.
 export function createFirebaseCallableHttpClient(cfg){
- if(!cfg||typeof cfg!=='object'||Array.isArray(cfg)||ALLOWED[cfg.projectId]!==cfg.functionName||![cfg.getCurrentUser,cfg.getIdToken,cfg.getLimitedUseAppCheckToken,cfg.fetch].every(value=>typeof value==='function')||!Number.isSafeInteger(cfg.timeoutMs)||cfg.timeoutMs<1000||cfg.timeoutMs>60000)throw new Error('排課 callable client 設定無效');
+ if(!cfg||typeof cfg!=='object'||Array.isArray(cfg)||!ALLOWED[cfg.projectId]?.has(cfg.functionName)||![cfg.getCurrentUser,cfg.getIdToken,cfg.getLimitedUseAppCheckToken,cfg.fetch].every(value=>typeof value==='function')||!Number.isSafeInteger(cfg.timeoutMs)||cfg.timeoutMs<1000||cfg.timeoutMs>60000)throw new Error('排課 callable client 設定無效');
  const endpoint=`https://${REGION}-${cfg.projectId}.cloudfunctions.net/${cfg.functionName}`;
  return Object.freeze({
   endpoint,
