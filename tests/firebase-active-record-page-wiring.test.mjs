@@ -57,7 +57,7 @@ test('Firestore 使用多分頁持久快取，不因第二分頁退回記憶體'
 });
 
 test('同帳號雙分頁登入權限初始化會串行化並使用有限權杖重試',()=>{
- assert.match(source,/import \{loadProfileAfterAuthReady\} from '\.\/cloud-auth-profile-bootstrap\.js\?v=20\.26\.236'/);
+ assert.match(source,/import \{loadProfileAfterAuthReady\} from '\.\/cloud-auth-profile-bootstrap\.js\?v=20\.26\.237'/);
  const auth=block('async function loadSignedInProfile','function loginTimeValue');
  assert.match(auth,/loadProfileAfterAuthReady\(\{user,loadProfile:\(\)=>ensureProfile\(user\)\}\)/);
  assert.match(auth,/navigator\.locks\?\.request\? navigator\.locks\.request\(lockName,load\):load\(\)/);
@@ -93,7 +93,7 @@ test('角色證據不能自動填通過，完整實測後才可在記憶體準�
 });
 
 test('角色候選 manifest 與每位本人收據不可變，URL 只顯示按鈕不會自動寫入',()=>{
- assert.match(source,/cloud-role-view-verification\.js\?v=20\.26\.236/);
+ assert.match(source,/cloud-role-view-verification\.js\?v=20\.26\.237/);
  assert.match(source,/stagingRoleViewCandidateManifests/);
  assert.match(source,/stagingRoleViewVerificationReceipts/);
  assert.match(source,/persistStagingRoleCandidateManifest/);
@@ -181,12 +181,15 @@ test('核心逐筆已完成但角色發布仍在執行時，串流快照不會�
 
 test('Owner active save 依資料 hash 合併相同意圖，但不同 hash 仍排入下一輪',()=>{
  const queue=block('function queueOwnerCloudSave','function lessonMap');
- assert.match(source,/import \{decideOwnerActiveSaveIntent\} from '\.\/cloud-owner-active-save-intent\.js\?v=20\.26\.236'/);
+ assert.match(source,/import \{decideOwnerActiveSaveIntent\} from '\.\/cloud-owner-active-save-intent\.js\?v=20\.26\.237'/);
+ assert.match(queue,/scheduleMutation.+queueLocalSave\(\{changedCollections:\['lessons','makeups','changes'\]\}\)/s);
+ assert.ok(queue.indexOf("if(scheduleMutation&&['staging','production'].includes")<queue.indexOf('const nextHash=dataHash'));
  assert.match(queue,/decideOwnerActiveSaveIntent\(\{nextHash,localDirtyHash,lastUploadedHash,diagnostics,applyingCloud\}\)/);
  assert.match(queue,/intent\.action==='coalesce'.+return/s);
  assert.match(queue,/intent\.action==='recover'.+queueLocalSave\(\)/s);
- assert.ok(queue.indexOf("intent.action==='coalesce'")<queue.indexOf('localMutationVersion++'));
- assert.ok(queue.indexOf('localDirtyHash=nextHash')>queue.indexOf('localMutationVersion++'));
+ const normal=queue.slice(queue.indexOf('const nextHash=dataHash'));
+ assert.ok(normal.indexOf("intent.action==='coalesce'")<normal.indexOf('localMutationVersion++'));
+ assert.ok(normal.indexOf('localDirtyHash=nextHash')>normal.indexOf('localMutationVersion++'));
 });
 
 test('Owner 課堂回報直接套用與 listener 套用都先排入逐筆 journal，其他角色不會排 owner core',()=>{
@@ -292,7 +295,7 @@ test('V2 不可變備份與雙 head 驗證在受保護後端執行；瀏覽器�
 
 test('V2 H1/Hn主資料讀回後只接受後端已完成的角色與通知交付',()=>{
  const controller=block('function ensureActiveOwnerPageController','async function acceptActiveOwnerSnapshot');
- assert.match(controller,/activeRoleBootstrapSourceDb=deepCopy\(confirmedDb\)/);
+ assert.match(controller,/const confirmedSnapshot=deepCopy\(confirmedDb\);lastPublishedOwnerDB=confirmedSnapshot;[^}]+activeRoleBootstrapSourceDb=confirmedSnapshot/);
 	 assert.match(controller,/activeRoleRecordProgress='server-verified'/);
 	 assert.match(controller,/scheduleNotificationDelivery='server-verified'/);
 	 assert.doesNotMatch(controller,/activeOwnerV2OperationSender\?async confirmedDb=>[^}]+getActiveRoleRecordPublishQueue/s);

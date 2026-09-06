@@ -1,6 +1,6 @@
 import {FULL_RECORD_COLLECTIONS} from './cloud-full-record-shadow.js';
 import {normalizeStagingV2FirestoreValue} from './staging-v2-active-record-browser-bridge.js';
-import {buildStagingV2AuthorityReadModel} from './staging-v2-authority-read-model.js?v=20.26.236';
+import {buildStagingV2AuthorityReadModel} from './staging-v2-authority-read-model.js?v=20.26.237';
 
 export const STAGING_V2_AUTHORITY_READ_LOADER_SCOPE='staging-only-fresh-server-h1-baseline-dense-ledger-current-daily-double-head-read-loader';
 export const STAGING_V2_AUTHORITY_READ_LOADER_MAX_TOTAL_ROWS=50000;

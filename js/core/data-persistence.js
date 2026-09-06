@@ -123,7 +123,11 @@ function saveDB(options={}){
  let saveError=null;
  const scheduleMutation=typeof options.scheduleAction==='string'&&options.scheduleAction.length>0;
  try{
-  normalizeLessonStates();db=normalizeBranchData(db);
+  // Calendar commands already create normalized lesson records. Re-normalizing
+  // every collection here rebuilt the entire database for each drag, paste or
+  // delete and blocked the next pointer event. Full normalization remains the
+  // boundary for every non-calendar save, import and cloud readback.
+  if(!scheduleMutation){normalizeLessonStates();db=normalizeBranchData(db)}
   if(!scheduleMutation){try{window.__danbridgeReconcileLockedSettlements?.()}catch(error){console.error('Settlement adjustment reconciliation failed:',error)}flushScheduleLocalSnapshot()}
   else scheduleLocalSnapshot();
   try{if(!options.skipRender)((options.calendarOnly||options.scheduleAction&&calendarSectionIsActive())?renderCalendar({deferAnalysis:true}):renderAll())}

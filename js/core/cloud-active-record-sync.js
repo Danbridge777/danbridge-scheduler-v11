@@ -48,12 +48,15 @@ export function prepareActiveRecordSync({documentsByCollection,baselineDb,localD
  if(!validRecordHash(baseHash))throw new Error('日常逐筆基準雜湊無效');
  if(authoritativeSourceHash!==undefined&&(!validRecordHash(authoritativeSourceHash)||authoritativeSourceHash!==baseHash))throw new Error('日常逐筆權威來源雜湊不符');
  const scoped=changedCollections!==null;
- if(scoped&&(!trusted||authoritativeSourceHash===undefined||!Array.isArray(changedCollections)||changedCollections.length<1))throw new Error('日常逐筆受信集合範圍無效');
+ if(scoped&&(!Array.isArray(changedCollections)||changedCollections.length<1||(!trusted&&authoritativeSourceHash!==undefined)))throw new Error('日常逐筆受信集合範圍無效');
  const scope=scoped?[...changedCollections]:FULL_RECORD_COLLECTIONS,scopeSet=new Set(scope);
  if(scoped&&(scopeSet.size!==scope.length||scope.some(collection=>!FULL_RECORD_COLLECTIONS.includes(collection))))throw new Error('日常逐筆受信集合範圍無效');
  // Scoped callers must construct their target with structural sharing. An
  // excluded collection is accepted only when it is the exact immutable source
  // reference; cloning or changing it fails closed before any plan is emitted.
+ // A browser controller may scope an explicit UI command before it has a
+ // trusted server hash; it still rebuilds and merges the complete remote model
+ // above, while refusing any local collection outside the declared command.
  if(scoped)for(const collection of FULL_RECORD_COLLECTIONS)if(!scopeSet.has(collection)&&baselineDb?.[collection]!==localDb?.[collection])throw new Error(`日常逐筆未授權集合未沿用權威參照：${collection}`);
  if(!Number.isSafeInteger(appendOnlyChangesCount)||appendOnlyChangesCount<0||appendOnlyChangesCount>30||appendOnlyChangesCount&&(!trusted||!scoped||!scopeSet.has('changes')))throw new Error('日常逐筆 changes 追加提示無效');
  if(appendOnlyChangesCount){const before=baselineDb?.changes,after=localDb?.changes;if(!Array.isArray(before)||!Array.isArray(after)||after.length!==before.length+appendOnlyChangesCount)throw new Error('日常逐筆 changes 追加數量不符');for(let index=0;index<before.length;index++)if(before[index]!==after[index+appendOnlyChangesCount])throw new Error('日常逐筆 changes 舊歷史未沿用權威參照')}
