@@ -71,25 +71,35 @@ function billingCampFormula(rows){
   if(mode==='weeklySplit')return`前 ${+r.frontWeeks||0} 週 ${money(+r.frontWeeklyRate||0)}／週，後段 ${money(+r.backWeeklyRate||0)}／週`;
   return`${days} 天 × ${money(+r.dailyRate||0)}`;
 }
-function billingParentName(value){return String(value||'').replace(/[\u200B-\u200D\uFEFF]/g,'').trim()}
-function billingLineSalutation(studentId){return String(student(studentId)?.lineSalutation||'媽咪').trim()||'媽咪'}
+function billingParentName(value){return String(value||'').normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\s+/g,' ').trim()}
+/* LINE 家庭對帳只以學生 CRM 的「家長姓名」為單一綁定來源。
+ * 舊的 lineSalutation 僅保留在歷史資料中，不再參與稱呼或家庭合併。 */
+function billingLineSalutation(studentId){return billingParentName(student(studentId)?.parent)||'家長'}
 function billingFamilyStudents(studentId){
   const selected=student(studentId),parent=billingParentName(selected.parent);
   if(!parent)return[selected];
   return(db.students||[]).filter(s=>!s.campSeason&&billingParentName(s.parent)===parent);
 }
+function billingLessonDateLabel(date){const[,month,day]=String(date||'').split('-').map(Number);return month&&day?`${month}/${day}`:String(date||'')}
+function billingLessonDateTimeLines(lessons){return[...lessons].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.start||'').localeCompare(String(b.start||''))).map(l=>`${billingLessonDateLabel(l.date)} ${l.start||'--:--'}–${l.end||'--:--'}（${billingNumber(hours(l.start,l.end))} 小時）`)}
+function billingLessonDayCount(lessons){return new Set(lessons.map(l=>l.date).filter(Boolean)).size}
+function billingTutoringSection(label,lessons,totalHours,rate,amount,subtotalLabel){
+  if(!lessons.length)return[];
+  return[label,'上課日期與時間：',...billingLessonDateTimeLines(lessons).map(line=>`- ${line}`),`上課天數：${billingLessonDayCount(lessons)} 天`,`課程堂數：${lessons.length} 堂`,`總時數：${billingNumber(totalHours)} 小時`,`計算：${billingNumber(totalHours)} 小時 × ${money(rate)} = ${money(amount)}`,`${subtotalLabel}：${money(amount)}`,''];
+}
 function studentBillingSections(d,includeName=false){
-  const lines=[];if(includeName)lines.push(`${d.student.name||'學生'}`);
-  if(d.privateLessons.length)lines.push('一般家教',`共 ${d.privateLessons.length} 堂／${billingNumber(d.privateHours)} 小時`,`${billingNumber(d.privateHours)} 小時 × ${money(d.tutoringRate)}`,`家教小計：${money(d.privateAmount)}`,'');
-  if(d.groupLessons.length)lines.push('團班費用',`共 ${d.groupLessons.length} 堂／${billingNumber(d.groupHours)} 小時`,`${billingNumber(d.groupHours)} 小時 × ${money(d.tutoringRate)}`,`團班小計：${money(d.groupAmount)}`,'');
-  if(d.campRows.length){['summer','winter'].forEach(season=>{const rows=d.campRows.filter(r=>campRegistrationSeason(r)===season);if(!rows.length)return;const dates=[...new Set(rows.flatMap(r=>r.dates||[]))].sort().map(date=>`${+date.slice(5,7)}/${+date.slice(8,10)}`).join('、'),amount=rows.reduce((sum,r)=>sum+summerRegistrationTotal(r),0);lines.push(season==='winter'?'冬令營':'夏令營',`報名日期：${dates}`,billingCampFormula(rows),`小計：${money(amount)}`,'')})}
+  const lines=[`學生：${d.student.name||'學生'}`];
+  lines.push(...billingTutoringSection('一般家教',d.privateLessons,d.privateHours,d.tutoringRate,d.privateAmount,'家教小計'));
+  lines.push(...billingTutoringSection('團班費用',d.groupLessons,d.groupHours,d.tutoringRate,d.groupAmount,'團班小計'));
+  if(d.campRows.length){['summer','winter'].forEach(season=>{const rows=d.campRows.filter(r=>campRegistrationSeason(r)===season);if(!rows.length)return;const rawDates=[...new Set(rows.flatMap(r=>r.dates||[]))].sort(),dates=rawDates.map(billingLessonDateLabel).join('、'),amount=rows.reduce((sum,r)=>sum+summerRegistrationTotal(r),0);lines.push(season==='winter'?'冬令營':'夏令營',`參加日期：${dates}`,`參加天數：${rawDates.length} 天`,billingCampFormula(rows),`小計：${money(amount)}`,'')})}
   return lines;
 }
 function studentLineBillingText(studentId,m,scope='all',familyStudentIds=null,campSeason=activeCampBillingSeason()){
-  const explicitIds=Array.isArray(familyStudentIds)?new Set(familyStudentIds.filter(Boolean)):null;
-  const family=explicitIds?[...explicitIds].map(student).filter(s=>s.id):billingFamilyStudents(studentId),details=family.map(s=>studentMonthlyBillingData(s.id,m,scope,campSeason)).filter(d=>d.tutoringLessons.length||d.campRows.length),multiple=family.length>1;
-  const salutation=billingLineSalutation(studentId),total=details.reduce((sum,d)=>sum+d.total,0);let lines=[`${salutation}好，以下是小朋友 ${billingMonthLabel(m)}的課程費用明細：`,''];
-  details.forEach(d=>lines.push(...studentBillingSections(d,multiple)));
+  const explicitIds=Array.isArray(familyStudentIds)?new Set(familyStudentIds.filter(Boolean).map(String)):null,boundFamily=billingFamilyStudents(studentId);
+  /* 即使呼叫端傳入舊 ID 清單，也只允許同一「家長姓名」的孩子進入同份帳單。 */
+  const selectedFamily=explicitIds?boundFamily.filter(s=>explicitIds.has(String(s.id))):boundFamily,family=selectedFamily.length?selectedFamily:boundFamily,details=family.map(s=>studentMonthlyBillingData(s.id,m,scope,campSeason)).filter(d=>d.tutoringLessons.length||d.campRows.length);
+  const salutation=billingLineSalutation(studentId),total=details.reduce((sum,d)=>sum+d.total,0);let lines=[`${salutation}您好，以下是小朋友 ${billingMonthLabel(m)}的課程費用明細：`,''];
+  details.forEach(d=>lines.push(...studentBillingSections(d,true)));
   const monthNumber=Number(String(m||'').slice(5,7))||Number(String(m||'').split('-')[1])||'';
   lines.push(`${monthNumber}月共計：${money(total)}`,'',`以上請${salutation}確認！`);return lines.join('\n');
 }

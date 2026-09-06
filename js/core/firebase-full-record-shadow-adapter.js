@@ -1,4 +1,4 @@
-import {FULL_RECORD_COLLECTIONS,buildFullRecordShadowPlan,verifyFullRecordShadowReadback,verifyFullRecordShadowCandidate} from './cloud-full-record-shadow.js?v=20.26.248';
+import {FULL_RECORD_COLLECTIONS,buildFullRecordShadowPlan,verifyFullRecordShadowReadback,verifyFullRecordShadowCandidate} from './cloud-full-record-shadow.js?v=20.26.249';
 
 const namespaceFor=environment=>environment==='production'?'productionFullRecordShadows':'stagingFullRecordShadows';
 const pathFor=(environment,collection)=>`${namespaceFor(environment)}/danbridge/collections/${collection}/records`;

@@ -53,7 +53,7 @@ assert.equal(privateLineData.privateAmount,200,'private tutoring remains in the 
 assert.equal(privateLineData.groupAmount,0,'private tutoring is never duplicated into the group LINE subtotal');
 assert.equal(groupLineData.privateAmount,0,'group lessons are excluded from the general tutoring LINE subtotal');
 assert.equal(groupLineData.groupAmount,450,'group lessons retain the original hourly charge in their own LINE subtotal');
-assert.match(context.studentBillingSections(groupLineData).join('\n'),/團班費用[\s\S]*共 1 堂／1\.5 小時[\s\S]*團班小計：\$450/,'group LINE text shows a distinct fee heading, lesson count, hours, and subtotal');
+assert.match(context.studentBillingSections(groupLineData).join('\n'),/團班費用[\s\S]*8\/5 14:00–15:30（1\.5 小時）[\s\S]*上課天數：1 天[\s\S]*課程堂數：1 堂[\s\S]*總時數：1\.5 小時[\s\S]*計算：1\.5 小時 × \$300 = \$450[\s\S]*團班小計：\$450/,'group LINE text shows every date, distinct day count, lesson count, hours-times-rate formula, and subtotal');
 assert.doesNotMatch(context.studentBillingSections(groupLineData).join('\n'),/一般家教/,'a group-only statement does not show an empty general tutoring section');
 context.db.lessons=[];
 const schedulerCopySource = fs.readFileSync(path.join(root, 'js/modules/calendar/scheduler-ui.js'), 'utf8');
@@ -322,7 +322,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.248'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.249'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
