@@ -1,4 +1,4 @@
-import {PRODUCTION_SCHEDULER_EMAILS,projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.234';
+import {PRODUCTION_SCHEDULER_EMAILS,projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.235';
 
 export const SCHEDULER_OPERATION_SCHEMA='danbridge-production-scheduler-operation-v1';
 export const SCHEDULER_OPERATION_RESPONSE_SCHEMA='danbridge-production-scheduler-operation-response-v1';

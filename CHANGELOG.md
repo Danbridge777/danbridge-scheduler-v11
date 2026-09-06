@@ -1,5 +1,11 @@
 # Changelog
 
+## 20.26.235（瀏覽器操作日誌有界壓縮）
+
+- 操作日誌只保留最新 64 筆已確認／已取代歷史，所有 pending、sending、failed、quarantined 列均完整保留；避免長期連續操作後，每一步都重複複製與掃描無上限的舊日誌。
+- 壓縮時固定保留最新 operation ID sequence，重開頁面後仍從最新序號續增，不會回退、衝突或重送舊資料。
+- 新增 300 筆已確認操作壓力回歸，精確驗證 64 筆最新證據、失敗列、待傳列與最高 sequence 同時保留。
+
 ## 20.26.234（通知確認明確驗證傳輸）
 
 - staging 與 production 的課表通知確認改用和排課相同的明確 callable 傳輸，送出前固定取得並核對目前 Firebase 使用者，且直接附上 Auth ID token 與 App Check token；不再依賴 SDK 在呼叫當下推測登入狀態。
