@@ -4,7 +4,7 @@ import {assertChangeRecordIdentity,buildChangeRecordId} from './cloud-change-rec
 export const FULL_RECORD_COLLECTIONS=Object.freeze([...SHARDED_DB_COLLECTION_KEYS]);
 export const FULL_RECORD_SHADOW_SCHEMA='danbridge-full-record-shadow-v1';
 
-const clone=value=>JSON.parse(JSON.stringify(value));
+const clone=value=>typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value));
 const stable=value=>Array.isArray(value)?value.map(stable):(value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value);
 const fingerprint=value=>JSON.stringify(stable(value));
 // Rebuilt authority records and the scheduler target preserve insertion order

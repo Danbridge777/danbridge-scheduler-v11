@@ -1,9 +1,9 @@
 import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js';
 import {recordDataHash} from './cloud-record-data-hash.js';
 import {mergeConcurrentRecordDb} from './cloud-record-three-way-merge.js';
-import {runActiveRecordSync} from './cloud-active-record-runtime.js?v=20.26.235';
+import {runActiveRecordSync} from './cloud-active-record-runtime.js?v=20.26.236';
 
-const clone=value=>JSON.parse(JSON.stringify(value));
+const clone=value=>typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value));
 const token=value=>typeof value==='string'&&value.trim()===value&&value.length>0&&value.length<=128&&!value.includes('/');
 
 export function createActiveRecordPageController({
@@ -65,7 +65,8 @@ export function createActiveRecordPageController({
   if(stopped)return{state:'stopped'};if(inFlight)return{state:'busy'};if(!queued){const counts=await journal.counts();if(!(counts.pending+counts.sending+counts.failed)&&!retryPending)return{state:lastState,counts};queued=true;dirty=true}if(!activationEpoch||!baselineDb||!latestCloudDb){status({state:'waiting-for-stream'});return{state:lastState}}if(!writeAllowed){status({state:'paused'});return{state:'paused'}}
   inFlight=true;queued=false;retryPending=false;const startedVersion=mutationVersion,startedSnapshotVersion=acceptedSnapshotVersion,base=clone(baselineDb),local=clone(getLocalDb());status({state:'backing-up'});
   try{
-   if(await ensureCloudBackup(clone(base))!==true)throw new Error('逐筆寫入前的雲端分片備份尚未完成');status({state:'syncing'});
+   // `base` is already detached by the clone above; avoid copying the full database twice.
+   if(await ensureCloudBackup(base)!==true)throw new Error('逐筆寫入前的雲端分片備份尚未完成');status({state:'syncing'});
    const result=await runActiveRecordSync({journal,readDocuments:readConfirmedDocuments,send:sendWithReceipt,persistConflicts,baselineDb:base,localDb:local,environment,deviceId,activationEpoch,startSequence:await loadSequence(),maxOperations,maxRebases,onProgress:progress=>status({state:progress.kind,counts:progress.counts})});nextSequence=Math.max(nextSequence,result.nextSequence||nextSequence);
    if(result.state!=='complete'){
     dirty=true;const counts=result.worker?.counts||await journal.counts();lastCounts=counts;
@@ -91,7 +92,7 @@ export function createActiveRecordPageController({
     await savePostSyncConflicts(merged.conflicts,readback.db,merged.db);
    }while(capturedVersion!==mutationVersion);
    baselineDb=clone(readback.db);latestCloudDb=clone(readback.db);await apply(merged.db);
-   const cloudHash=recordDataHash(readback.db),desiredHash=recordDataHash(merged.db),newerMutation=mutationVersion!==startedVersion;dirty=newerMutation||desiredHash!==cloudHash;queued=dirty;await publishRoleViews(clone(readback.db));const counts=await journal.counts();status({state:dirty?'queued':'complete',hash:cloudHash,counts,rebases:result.rebases});return{...result,state:dirty?'pending':'complete',readbackHash:cloudHash,readbackDb:clone(readback.db),desiredHash,dirty,counts};
+   const cloudHash=recordDataHash(readback.db),desiredHash=recordDataHash(merged.db),newerMutation=mutationVersion!==startedVersion;dirty=newerMutation||desiredHash!==cloudHash;queued=dirty;await publishRoleViews(readback.db);const counts=await journal.counts();status({state:dirty?'queued':'complete',hash:cloudHash,counts,rebases:result.rebases});return{...result,state:dirty?'pending':'complete',readbackHash:cloudHash,readbackDb:clone(readback.db),desiredHash,dirty,counts};
   }catch(error){dirty=true;queued=false;retryPending=true;status({state:'blocked',error:String(error?.message||error)});return{state:'blocked',error,dirty:true,retryPending:true}}
   finally{inFlight=false;status({state:lastState,error:lastError,counts:lastCounts});if(queued&&writeAllowed)schedule(0)}
  }

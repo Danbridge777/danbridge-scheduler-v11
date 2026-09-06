@@ -5,7 +5,7 @@ import {mergeConcurrentRecordDb} from './cloud-record-three-way-merge.js';
 import {canonicalizeLiveTargetDb} from './cloud-live-operation-plan.js';
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 
-const clone=value=>JSON.parse(JSON.stringify(value));
+const clone=value=>typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value));
 const stable=value=>Array.isArray(value)?value.map(stable):(value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value);
 const same=(left,right)=>JSON.stringify(stable(left))===JSON.stringify(stable(right));
 const validText=value=>typeof value==='string'&&value.trim()===value&&value.length>0&&value.length<=1500&&!/[\u0000-\u001f/]/.test(value);

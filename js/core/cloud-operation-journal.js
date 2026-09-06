@@ -1,5 +1,5 @@
 const SCHEMA='danbridge-operation-journal-v1';
-const clone=value=>JSON.parse(JSON.stringify(value));
+const clone=value=>typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value));
 const validState=new Set(['pending','sending','confirmed','failed','quarantined','superseded']);
 const text=value=>typeof value==='string'&&value.trim().length>0;
 const terminalState=status=>status==='confirmed'||status==='superseded';

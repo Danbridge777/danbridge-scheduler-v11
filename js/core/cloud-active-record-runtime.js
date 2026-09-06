@@ -1,7 +1,7 @@
 import {prepareActiveRecordSync} from './cloud-active-record-sync.js';
-import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.235';
+import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.236';
 
-const clone=value=>JSON.parse(JSON.stringify(value));
+const clone=value=>typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value));
 const revisionConflict=value=>/revision\s*衝突|revision conflict/i.test(String(value||''));
 
 export async function runActiveRecordSync({journal,readDocuments,send,persistConflicts,baselineDb,localDb,environment,deviceId,activationEpoch,startSequence=1,maxOperations=1000,maxRebases=5,onProgress=()=>{}}={}){
