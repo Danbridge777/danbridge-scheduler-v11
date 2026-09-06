@@ -4,11 +4,12 @@ import {readFile} from 'node:fs/promises';
 
 const source=path=>readFile(new URL(path,import.meta.url),'utf8');
 
-test('課表操作先讓出目前輸入，再於下一畫面幀重畫並保存且不重畫隱藏頁面',async()=>{
-  const [scheduler,persistence,orchestrator]=await Promise.all([
+test('課表操作先讓出目前輸入，再於下一畫面幀單次重畫並保存且不重畫隱藏頁面',async()=>{
+  const [scheduler,persistence,orchestrator,visibilityGuard]=await Promise.all([
     source('../js/modules/calendar/scheduler-ui.js'),
     source('../js/core/data-persistence.js'),
-    source('../js/app/render-orchestrator.js')
+    source('../js/app/render-orchestrator.js'),
+    source('../js/modules/calendar/lesson-save-visibility-guard.js')
   ]);
   assert.match(scheduler,/function commitScheduleMutation/);
   assert.match(scheduler,/renderCalendar\(\{deferAnalysis:true\}\)/);
@@ -20,6 +21,8 @@ test('課表操作先讓出目前輸入，再於下一畫面幀重畫並保存�
   assert.match(persistence,/renderCalendar\(\{deferAnalysis:true\}\):renderAll\(\)/);
   assert.match(orchestrator,/function renderVisibleWorkspace/);
   assert.match(orchestrator,/if\(id==='calendar'\)renderCalendar\(\{deferAnalysis:true\}\)/);
+  assert.match(visibilityGuard,/clearMismatchedCalendarFilters\(saved\);toast/);
+  assert.doesNotMatch(visibilityGuard,/clearMismatchedCalendarFilters\(saved\);window\.renderCalendar/);
 });
 
 test('背景分析、健康檢查與相同雲端回條不搶主畫面',async()=>{

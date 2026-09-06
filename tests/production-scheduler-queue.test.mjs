@@ -69,7 +69,7 @@ test('staging 會把既有 30 筆待送要求保留成單一批次並完整續�
   storage:firstStorage,
   maxChangesPerRequest:30,
   createRequestId:()=>`staging-eight-request-${++serial}`,
-  release:'20.26.237',
+  release:'20.26.247',
   send:async request=>{
    sizes.push(request.changes.length);
    for(const change of request.changes)server.lessons.push(clone(change.after));
@@ -102,7 +102,7 @@ test('同步收尾套用遠端快照時又新增操作，必須送妥才宣告�
 test('後端完整回條驗證後先顯示雲端確認，IndexedDB 收尾仍保持永久日誌',async()=>{
  let stored=null,saveCount=0;const finalSave=defer(),states=[];
  const storage={load:async()=>null,save:async value=>{if(++saveCount===4)await finalSave.promise;stored=clone(value)}};
- const q=createProductionSchedulerQueue({storage,release:'20.26.237',createRequestId:()=>`confirmed-boundary-request`,onState:event=>states.push(event.state),send:async request=>{
+ const q=createProductionSchedulerQueue({storage,release:'20.26.247',createRequestId:()=>`confirmed-boundary-request`,onState:event=>states.push(event.state),send:async request=>{
   const server={...base(),lessons:[lesson]};return{schema:SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:request.requestId,state:'committed',sourceHash:recordDataHash(server),sourceRecordRevision:1,operationCount:2,schedulerDb:projectProductionSchedulerDb(server)};
  }});
  await q.start({baselineDb:base()});await q.queue({...base(),lessons:[lesson]});const flight=q.flush();

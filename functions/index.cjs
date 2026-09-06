@@ -70,7 +70,17 @@ async function runtime(){
  return runtimePromise
 }
 
-exports.stagingV2AuthoritySave=onRequest({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,invoker:'public',cors:false,timeoutSeconds:60,memory:'512MiB',concurrency:8,minInstances:1,maxInstances:10},async(request,response)=>{try{const handler=await runtime();await handler.handle(request,response)}catch(error){reportRuntimeBlocked(error);response.set('cache-control','no-store').set('content-type','application/json; charset=utf-8').status(500).send(JSON.stringify({schema:'danbridge-staging-v2-authority-save-response-v1',state:'blocked',code:'RUNTIME_BLOCKED'}))}});
+exports.stagingV2AuthoritySave=onRequest({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,invoker:'public',cors:false,timeoutSeconds:60,memory:'1GiB',cpu:2,concurrency:4,minInstances:1,maxInstances:10},async(request,response)=>{try{const handler=await runtime();await handler.handle(request,response)}catch(error){reportRuntimeBlocked(error);response.set('cache-control','no-store').set('content-type','application/json; charset=utf-8').status(500).send(JSON.stringify({schema:'danbridge-staging-v2-authority-save-response-v1',state:'blocked',code:'RUNTIME_BLOCKED'}))}});
+
+// A minimum instance starts the module before it receives traffic, whereas an
+// onInit callback is awaited only by the first invocation. Begin hydration at
+// module load so the complete authority snapshot is already verified when the
+// first timetable write arrives. The service/project guard keeps deployment
+// discovery and every unrelated function out of this path.
+if(shouldEagerWarmStagingService('stagingv2authoritysave')){
+ console.info('STAGING_RUNTIME_BOOT_WARM',JSON.stringify({state:'started',service:'stagingv2authoritysave'}));
+ runtime().then(()=>console.info('STAGING_RUNTIME_BOOT_WARM',JSON.stringify({state:'complete',service:'stagingv2authoritysave'}))).catch(reportRuntimeBlocked);
+}
 
 // The staging function keeps one instance available. Start its sealed runtime
 // while that instance boots so the first real timetable write does not pay the

@@ -20,7 +20,11 @@
     const saved=(db.lessons||[]).find(l=>l.id===editingId);
     if(!saved){alert('課程儲存後未能在資料中找到，已停止畫面切換。請立即使用「復原」或版本紀錄檢查資料。');return}
     const calendarDate=$('calendarDate');if(calendarDate)calendarDate.value=saved.date;
-    clearMismatchedCalendarFilters(saved);window.renderCalendar?.();toast('課程已儲存並保留在目前課表');
+    // saveLesson already queued the authoritative calendar render for the next
+    // animation frame. Updating its inputs here lets that one render keep the
+    // edited lesson visible without synchronously rebuilding the whole month a
+    // second time inside the click handler.
+    clearMismatchedCalendarFilters(saved);toast('課程已儲存並保留在目前課表');
   }
   guardedSaveLesson.__visibilityGuard=true;window.saveLesson=guardedSaveLesson;
 })();

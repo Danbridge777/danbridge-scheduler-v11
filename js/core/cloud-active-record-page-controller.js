@@ -1,7 +1,7 @@
 import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js';
 import {recordDataHash} from './cloud-record-data-hash.js';
 import {mergeConcurrentRecordDb} from './cloud-record-three-way-merge.js';
-import {runActiveRecordSync} from './cloud-active-record-runtime.js?v=20.26.237';
+import {runActiveRecordSync} from './cloud-active-record-runtime.js?v=20.26.247';
 
 const clone=value=>typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value));
 const token=value=>typeof value==='string'&&value.trim()===value&&value.length>0&&value.length<=128&&!value.includes('/');
@@ -11,7 +11,7 @@ export function createActiveRecordPageController({
  setTimer=(callback,delay)=>setTimeout(callback,delay),clearTimer=timer=>clearTimeout(timer),sleep=delay=>new Promise(resolve=>setTimeout(resolve,delay)),saveDelay=120,maxOperations=1000,maxRebases=5,convergenceTimeoutMs=20000,strictConvergence=false,trustCommittedPlan=false
 }={}){
  if(!['staging','production'].includes(environment)||role!=='owner'||!token(deviceId)||!journal||typeof journal.list!=='function'||typeof journal.counts!=='function'||typeof readDocuments!=='function'||typeof send!=='function'||(sendBatch!==null&&typeof sendBatch!=='function')||typeof persistConflicts!=='function'||typeof getLocalDb!=='function'||typeof applyCloudDb!=='function'||typeof ensureCloudBackup!=='function'||typeof publishRoleViews!=='function'||typeof onStatus!=='function'||typeof setTimer!=='function'||typeof clearTimer!=='function'||typeof sleep!=='function'||!Number.isSafeInteger(saveDelay)||saveDelay<0||!Number.isSafeInteger(maxOperations)||maxOperations<1||!Number.isSafeInteger(maxRebases)||maxRebases<0||!Number.isSafeInteger(convergenceTimeoutMs)||convergenceTimeoutMs<1000||typeof strictConvergence!=='boolean'||typeof trustCommittedPlan!=='boolean')throw new Error('日常逐筆頁面控制器設定無效');
- let activationEpoch='',writeAllowed=false,baselineDb=null,baselineHash='',latestCloudDb=null,trustedDocuments=null,acceptedSnapshotVersion=0,dirty=false,queued=false,inFlight=false,retryPending=false,stopped=false,timer=null,mutationVersion=0,nextSequence=0,lastState='idle',lastError='',lastCounts=null,pendingCollections=null;
+ let activationEpoch='',writeAllowed=false,baselineDb=null,baselineHash='',latestCloudDb=null,trustedDocuments=null,trustedRemote=null,acceptedSnapshotVersion=0,dirty=false,queued=false,inFlight=false,retryPending=false,stopped=false,timer=null,mutationVersion=0,nextSequence=0,lastState='idle',lastError='',lastCounts=null,pendingCollections=null;
  const committedRecords=new Map();
  const remember=operations=>{for(const operation of operations){const key=`${operation.collection}/${operation.recordId}`,old=committedRecords.get(key);if(!old||old.revision<operation.nextRevision){const saved={collection:operation.collection,id:operation.recordId,revision:operation.nextRevision,data:clone(operation.payload)};committedRecords.set(key,saved);if(trustedDocuments){const rows=trustedDocuments[saved.collection]??(trustedDocuments[saved.collection]=[]),index=rows.findIndex(row=>row.id===saved.id),row={id:saved.id,data:clone(saved.data)};if(index<0)rows.push(row);else rows[index]=row}}}};
  async function readConfirmedDocuments({force=false,preferCache=false}={}){
@@ -43,8 +43,8 @@ export function createActiveRecordPageController({
  async function acceptCloudSnapshot(snapshot){
   if(stopped)return{state:'stopped'};if(!snapshot||(activationEpoch&&snapshot.activationEpoch!==activationEpoch)||!token(snapshot.activationEpoch)||!snapshot.db)throw new Error('逐筆串流快照 identity 無效');activationEpoch=snapshot.activationEpoch;writeAllowed=snapshot.writeAllowed===true;
   if(trustCommittedPlan&&snapshot.revisions&&[...committedRecords.values()].some(saved=>(snapshot.revisions[saved.collection]?.[saved.id]||0)<saved.revision)){status({state:writeAllowed?'remote-buffered':'paused'});return{state:lastState,writeAllowed,dirty,accepted:false}}
-  latestCloudDb=clone(snapshot.db);if(trustCommittedPlan&&snapshot.documents)trustedDocuments=clone(snapshot.documents);acceptedSnapshotVersion++;if(!baselineDb){baselineDb=clone(latestCloudDb);baselineHash=snapshot.hash||recordDataHash(baselineDb)}
-  if(!dirty&&!inFlight){baselineDb=clone(latestCloudDb);baselineHash=snapshot.hash||recordDataHash(baselineDb);await apply(latestCloudDb);status({state:writeAllowed?'ready':'paused',hash:baselineHash})}else status({state:writeAllowed?'remote-buffered':'paused',hash:snapshot.hash||recordDataHash(latestCloudDb)});
+  latestCloudDb=clone(snapshot.db);let trustedSnapshot=null;const adoptTrustedSnapshot=!baselineDb||!dirty&&!inFlight;if(trustCommittedPlan&&snapshot.documents&&adoptTrustedSnapshot){trustedDocuments=clone(snapshot.documents);const materialized=Number.isSafeInteger(snapshot.documentCount)&&Number.isSafeInteger(snapshot.activeCount)&&Number.isSafeInteger(snapshot.tombstoneCount)&&snapshot.revisions?snapshot:rebuildFullRecordShadowDb(trustedDocuments,{environment});trustedSnapshot={documentCount:materialized.documentCount,activeCount:materialized.activeCount,tombstoneCount:materialized.tombstoneCount,revisions:clone(materialized.revisions)}}acceptedSnapshotVersion++;if(!baselineDb){baselineDb=clone(latestCloudDb);baselineHash=snapshot.hash||recordDataHash(baselineDb);if(trustedSnapshot)trustedRemote={...trustedSnapshot,db:baselineDb,hash:baselineHash}}
+  if(!dirty&&!inFlight){baselineDb=clone(latestCloudDb);baselineHash=snapshot.hash||recordDataHash(baselineDb);if(trustedSnapshot)trustedRemote={...trustedSnapshot,db:baselineDb,hash:baselineHash};await apply(latestCloudDb);status({state:writeAllowed?'ready':'paused',hash:baselineHash})}else status({state:writeAllowed?'remote-buffered':'paused',hash:snapshot.hash||recordDataHash(latestCloudDb)});
   if(writeAllowed&&queued)schedule(0);return{state:lastState,writeAllowed,dirty};
  }
  function setWriteAllowed(value){writeAllowed=value===true;if(!writeAllowed){if(timer!==null){clearTimer(timer);timer=null}status({state:'paused'})}else{status({state:'ready'});if(queued)schedule(0)}return writeAllowed}
@@ -63,11 +63,27 @@ export function createActiveRecordPageController({
  async function resume(){if(stopped)return{state:'stopped'};if(environment==='staging'&&typeof journal.retryIdentityBlockedOnce==='function')await journal.retryIdentityBlockedOnce();if(environment==='production'&&typeof journal.retryProductionTrustedBatchFormatOnce==='function')await journal.retryProductionTrustedBatchFormatOnce();const counts=await journal.counts(),outstanding=counts.pending+counts.sending+counts.failed+counts.quarantined;if(outstanding||dirty||retryPending){queued=counts.quarantined===0;dirty=true;if(writeAllowed&&queued)schedule(0)}status({state:counts.quarantined?'blocked':queued?'queued':writeAllowed?'ready':'paused',counts});return{state:lastState,counts}}
  async function flush(){
   if(stopped)return{state:'stopped'};if(inFlight)return{state:'busy'};if(!queued){const counts=await journal.counts();if(!(counts.pending+counts.sending+counts.failed)&&!retryPending)return{state:lastState,counts};queued=true;dirty=true}if(!activationEpoch||!baselineDb||!latestCloudDb){status({state:'waiting-for-stream'});return{state:lastState}}if(!writeAllowed){status({state:'paused'});return{state:'paused'}}
-  inFlight=true;queued=false;retryPending=false;const startedVersion=mutationVersion,startedSnapshotVersion=acceptedSnapshotVersion,scope=pendingCollections?[...pendingCollections]:null;pendingCollections=null;const base=scope?baselineDb:clone(baselineDb),currentLocal=getLocalDb(),local=scope?Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,scope.includes(collection)?clone(currentLocal?.[collection]||[]):base?.[collection]||[]])):clone(currentLocal);status({state:'backing-up'});
+  inFlight=true;queued=false;retryPending=false;const startedVersion=mutationVersion,startedSnapshotVersion=acceptedSnapshotVersion,scope=pendingCollections?[...pendingCollections]:null;pendingCollections=null;const base=scope?baselineDb:clone(baselineDb),currentLocal=getLocalDb();
+  // Calendar commands prepend at most 30 immutable change rows. Once the
+  // existing tail is byte-for-byte equal to the already verified baseline,
+  // retain those authority references and plan only the new prefix. This keeps
+  // the append-only proof while avoiding thousands of historical record-ID
+  // hashes on every batch gesture.
+  let appendOnlyChangesCount=0;
+  if(trustCommittedPlan&&scope?.includes('changes')){
+   const before=base?.changes,after=currentLocal?.changes,added=Array.isArray(before)&&Array.isArray(after)?after.length-before.length:0;
+   if(Number.isSafeInteger(added)&&added>0&&added<=30&&JSON.stringify(after.slice(added))===JSON.stringify(before))appendOnlyChangesCount=added;
+  }
+  const local=scope?Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>{
+   if(!scope.includes(collection))return[collection,base?.[collection]||[]];
+   if(collection==='changes'&&appendOnlyChangesCount)return[collection,[...clone(currentLocal.changes.slice(0,appendOnlyChangesCount)),...base.changes]];
+   return[collection,clone(currentLocal?.[collection]||[])];
+  })):clone(currentLocal);status({state:'backing-up'});
   try{
    // `base` is already detached by the clone above; avoid copying the full database twice.
    if(await ensureCloudBackup(base)!==true)throw new Error('逐筆寫入前的雲端分片備份尚未完成');status({state:'syncing'});
-   const result=await runActiveRecordSync({journal,readDocuments:readConfirmedDocuments,send:sendWithReceipt,persistConflicts,baselineDb:base,localDb:local,environment,deviceId,activationEpoch,startSequence:await loadSequence(),maxOperations,maxRebases,changedCollections:scope,onProgress:progress=>status({state:progress.kind,counts:progress.counts})});nextSequence=Math.max(nextSequence,result.nextSequence||nextSequence);
+   const verified=trustCommittedPlan&&trustedRemote&&trustedRemote.db===base&&trustedRemote.hash===baselineHash?trustedRemote:null;
+   const result=await runActiveRecordSync({journal,readDocuments:readConfirmedDocuments,send:sendWithReceipt,persistConflicts,baselineDb:base,localDb:local,environment,deviceId,activationEpoch,startSequence:await loadSequence(),maxOperations,maxRebases,changedCollections:scope,appendOnlyChangesCount,trustedDocuments:verified?trustedDocuments:null,verifiedRemote:verified,onProgress:progress=>status({state:progress.kind,counts:progress.counts})});nextSequence=Math.max(nextSequence,result.nextSequence||nextSequence);
    if(result.state!=='complete'){
     dirty=true;const counts=result.worker?.counts||await journal.counts();lastCounts=counts;
     if(result.state==='waiting'){queued=true;const retryAt=Number(result.worker?.head?.nextRetryAt)||Date.now()+1000;schedule(Math.max(0,retryAt-Date.now()))}
@@ -93,7 +109,8 @@ export function createActiveRecordPageController({
     merged=mergeConcurrentRecordDb(capturedVersion===startedVersion?base:local,currentLocal,readback.db);
     await savePostSyncConflicts(merged.conflicts,readback.db,merged.db);
    }while(capturedVersion!==mutationVersion);
-   const cloudHash=trustCommittedPlan&&result.plan?.targetHash?result.plan.targetHash:recordDataHash(readback.db),newerMutation=mutationVersion!==startedVersion,remoteUnchanged=Boolean(trustCommittedPlan&&result.plan&&baselineHash&&result.plan.baseHash===baselineHash);baselineDb=clone(readback.db);baselineHash=cloudHash;latestCloudDb=baselineDb;
+   const cloudHash=trustCommittedPlan&&result.plan?.targetHash?result.plan.targetHash:recordDataHash(readback.db),newerMutation=mutationVersion!==startedVersion,remoteUnchanged=Boolean(trustCommittedPlan&&result.plan&&baselineHash&&result.plan.baseHash===baselineHash),priorTrusted=verified;baselineDb=clone(readback.db);baselineHash=cloudHash;latestCloudDb=baselineDb;
+   if(trustCommittedPlan&&priorTrusted&&result.plan?.operations?.length){const revisions=clone(priorTrusted.revisions);for(const operation of result.plan.operations)(revisions[operation.collection]??(revisions[operation.collection]={}))[operation.recordId]=operation.nextRevision;const tail=result.plan.operations.at(-1);trustedRemote={db:baselineDb,hash:cloudHash,documentCount:tail.targetDocumentCount,activeCount:tail.targetActiveCount,tombstoneCount:tail.targetTombstoneCount,revisions}}
    // When the exact optimistic schedule target was committed against the same
    // remote hash, rendering and hashing it again only blocks the next gesture.
    if(newerMutation||!scope||!remoteUnchanged)await apply(merged.db);

@@ -1,6 +1,6 @@
 'use strict';
 
-const {nativeCanonicalSha256}=require('./native-canonical-sha256.cjs');
+const {nativeCanonicalRecordDbSha256}=require('./native-canonical-sha256.cjs');
 
 const PROJECT_ID='danbridge-d8877-staging';
 const COMPANY_ID='danbridge';
@@ -71,11 +71,14 @@ function applyAuditPayloadToCachedDb(previousDb,payload,{buildRecordId}={}){
  if(typeof buildRecordId!=='function'||keys.length!==1||baselines.length!==1||locals.length!==1)throw new Error('staging derived audit cache payload count invalid');
  const key=keys[0],baseline=baselines[0],local=locals[0],recordId=text(key?.recordId),rows=next?.changes;
  if(!Array.isArray(rows)||key?.collection!=='changes'||!recordId||baseline?.collection!=='changes'||baseline?.recordId!==recordId||baseline.exists!==false||baseline.deleted!==false||baseline.record!==null||local?.collection!=='changes'||local?.recordId!==recordId||local.exists!==true||local.deleted!==false||!local.record||typeof local.record!=='object'||Array.isArray(local.record))throw new Error('staging derived audit cache payload identity invalid');
+ const recordIndex=rows.length;
+ // A fresh event must be the exact next append. Prove that first so the hot
+ // path never re-hashes all historical audits. Only a non-next identity can
+ // be a response-loss replay and needs the complete immutable-history scan.
+ if(buildRecordId(recordIndex,local.record)===recordId){rows.unshift(clone(local.record));return next}
  const existingPosition=rows.findIndex((row,index)=>buildRecordId(rows.length-1-index,row)===recordId);
  if(existingPosition>=0){if(!jsonRecordsEqual(rows[existingPosition],local.record))throw new Error(`staging derived audit cache replay mismatch: ${recordId}`);return next}
- const recordIndex=rows.length;
- if(buildRecordId(recordIndex,local.record)!==recordId)throw new Error(`staging derived audit cache append sequence invalid: ${recordId}`);
- rows.unshift(clone(local.record));
+ throw new Error(`staging derived audit cache append sequence invalid: ${recordId}`);
  return next
 }
 
@@ -86,11 +89,14 @@ function applyAuditPayloadsToCachedDb(previousDb,payload,{buildRecordId}={}){
  for(let index=0;index<keys.length;index++){
   const key=keys[index],baseline=baselines[index],local=locals[index],recordId=text(key?.recordId);
   if(key?.collection!=='changes'||!recordId||baseline?.collection!=='changes'||baseline?.recordId!==recordId||baseline.exists!==false||baseline.deleted!==false||baseline.record!==null||local?.collection!=='changes'||local?.recordId!==recordId||local.exists!==true||local.deleted!==false||!local.record||typeof local.record!=='object'||Array.isArray(local.record))throw new Error('staging derived audit batch cache payload identity invalid');
+  const recordIndex=rows.length;
+  // The normal batch path is append-only. Checking its exact next sequence
+  // first makes a fresh batch O(batch), while the replay fallback below keeps
+  // the original full-history identity and content verification.
+  if(buildRecordId(recordIndex,local.record)===recordId){rows.unshift(clone(local.record));continue}
   const existingPosition=rows.findIndex((row,rowIndex)=>buildRecordId(rows.length-1-rowIndex,row)===recordId);
   if(existingPosition>=0){if(!jsonRecordsEqual(rows[existingPosition],local.record))throw new Error(`staging derived audit batch cache replay mismatch: ${recordId}`);continue}
-  const recordIndex=rows.length;
-  if(buildRecordId(recordIndex,local.record)!==recordId)throw new Error(`staging derived audit batch cache append sequence invalid: ${recordId}`);
-  rows.unshift(clone(local.record));
+  throw new Error(`staging derived audit batch cache append sequence invalid: ${recordId}`);
  }
  return next
 }
@@ -137,8 +143,13 @@ function buildNotifications({payload,currentDb,accessRows,sourceHash,hash}){if(!
 
 async function createStagingDerivedDeliveryRuntime({firestore,serverTimestamp,now=()=>Date.now(),expectedProjectId=PROJECT_ID}={}){
  if(expectedProjectId!==PROJECT_ID||!firestore||typeof firestore.doc!=='function'||typeof firestore.collection!=='function'||typeof firestore.batch!=='function'||typeof firestore.runTransaction!=='function'||typeof serverTimestamp!=='function'||typeof now!=='function')throw new Error('staging derived delivery boundary invalid');
- const [{FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb},{normalizeRecordDb},{sha256Canonical},{createStagingV2AuthorityReadLoader},{createFirebaseRoleRecordViewAdapter},{roleRecordViewKey},projection,{buildChangeRecordId}]=await Promise.all([import('../js/core/cloud-full-record-shadow.js'),import('../js/core/cloud-record-data-hash.js'),import('../js/core/cloud-immutable-migration-backup.js'),import('../js/core/staging-v2-authority-read-loader.js'),import('../js/core/firebase-role-record-view-adapter.js'),import('../js/core/cloud-role-record-view.js'),import('../js/core/production-role-view-projection.js'),import('../js/core/cloud-change-record-identity.js')]);
- const recordDataHash=db=>`record-v1:${nativeCanonicalSha256(normalizeRecordDb(db,{cloneRecords:false}))}`;
+ const [{FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb},{sha256Canonical},{createStagingV2AuthorityReadLoader},{createFirebaseRoleRecordViewAdapter},{roleRecordViewKey},projection,{buildChangeRecordId}]=await Promise.all([import('../js/core/cloud-full-record-shadow.js'),import('../js/core/cloud-immutable-migration-backup.js'),import('../js/core/staging-v2-authority-read-loader.js'),import('../js/core/firebase-role-record-view-adapter.js'),import('../js/core/cloud-role-record-view.js'),import('../js/core/production-role-view-projection.js'),import('../js/core/cloud-change-record-identity.js')]);
+ // Hydration and every accepted payload retain the untouched authority record
+ // objects. Cache their exact canonical strings across rapid timetable writes;
+ // changed records get new identities and are serialized again automatically.
+ // The final SHA-256 still covers the complete 16-collection normalized DB.
+ const canonicalRecordMemo=new WeakMap(),canonicalOrderMemo=new WeakMap();
+ const recordDataHash=db=>`record-v1:${nativeCanonicalRecordDbSha256(db,FULL_RECORD_COLLECTIONS,{memo:canonicalRecordMemo,orderMemo:canonicalOrderMemo})}`;
  const readDocument=async path=>{const snapshot=await firestore.doc(path).get();return snapshot.exists?snapshot.data():null},readCollection=async path=>(await firestore.collection(path).get()).docs.map(row=>({id:row.id,data:row.data()})),runTransaction=callback=>firestore.runTransaction(native=>callback({get:path=>native.get(firestore.doc(path)),getAll:(...paths)=>native.getAll(...paths.map(path=>firestore.doc(path))),set:(path,value,options={merge:false})=>native.set(firestore.doc(path),value,options)}));
  const loader=createStagingV2AuthorityReadLoader({expectedProjectId,getDocumentFromServer:readDocument,getCollectionFromServer:readCollection});
  let cache=null,warmPromise=null;
@@ -173,7 +184,7 @@ async function createStagingDerivedDeliveryRuntime({firestore,serverTimestamp,no
  const snapshot=()=>cache?clone(cache):null,peek=()=>cache;
  return Object.freeze({warm,snapshot,peek,async deliver(payload,completion,trustedHashes=null){
   if(!payload||!completion||completion.projectId!==PROJECT_ID||completion.activationEpoch!==text(completion.activationEpoch)||completion.saveId!==payload.save?.saveId)throw new Error('staging derived delivery request identity invalid');
-  const started=now(),activationEpoch=completion.activationEpoch,liveHead=await readDocument(headPath(activationEpoch)),auditOnly=payload.changedKeys?.length>0&&payload.changedKeys.every(key=>key?.collection==='changes');
+  const started=now(),activationEpoch=completion.activationEpoch,auditOnly=payload.changedKeys?.length>0&&payload.changedKeys.every(key=>key?.collection==='changes'),accessStarted=now(),accessPromise=auditOnly?null:firestore.collection('companyAccess').get().then(snapshot=>({snapshot,ms:now()-accessStarted})),headStarted=now(),liveHead=await readDocument(headPath(activationEpoch)),headReadMs=now()-headStarted,afterHeadAt=now();
   if(auditOnly){
    if(!liveHead||typeof liveHead.headHash!=='string'||!/^[a-f0-9]{64}$/.test(liveHead.headHash)||typeof completion.resultHeadHash!=='string'||!/^[a-f0-9]{64}$/.test(completion.resultHeadHash))throw new Error('staging derived audit delivery hash identity invalid');
    const cacheForLiveHead=cache?.activationEpoch===activationEpoch&&cache.headHash===liveHead.headHash;let sourceDb,cacheHit=false;
@@ -193,8 +204,8 @@ async function createStagingDerivedDeliveryRuntime({firestore,serverTimestamp,no
   // `cachePrevious` is accepted only after the cache head and source hash are
   // bound to the verified live previous head. Reuse that exact hash instead of
   // serializing and hashing the complete previous database again.
-  const previousSourceHash=trustedDbPair?trustedPreviousSourceHash:(lessonOnly&&cachePrevious?cache.sourceHash:(lessonOnly&&(trustedHashPair&&trustedPreviousSourceHash===(cachePrevious?cache.sourceHash:sourceHash))?trustedPreviousSourceHash:(lessonOnly?recordDataHash(previousDb):sourceHash)));if(trustedHashPair&&(sourceHash!==trustedSourceHash||previousSourceHash!==trustedPreviousSourceHash))throw new Error('staging derived trusted hash pair mismatch');const changedLessonIds=lessonOnly?recordPayload.changedKeys.map(key=>key.recordId):[],access=(await firestore.collection('companyAccess').get()).docs.map(row=>({id:row.id,...(row.data()||{})})),roleStarted=now(),rolePromise=publishRoleViews(sourceDb,previousDb,access,activationEpoch,sourceHash,previousSourceHash,payload.save,{incremental:lessonOnly}).then(value=>({value,ms:now()-roleStarted})),metaStarted=now(),metaPromise=publishLessonMeta(sourceDb,{changedLessonIds,incremental:lessonOnly}).then(value=>({value,ms:now()-metaStarted})),notificationStarted=now(),notificationPromise=publishNotifications(payload,sourceDb,access,sourceHash).then(value=>({value,ms:now()-notificationStarted})),[roleResult,metaResult,notificationResult]=await Promise.all([rolePromise,metaPromise,notificationPromise]),headAfter=await readDocument(headPath(activationEpoch));
-  if(headAfter?.headHash!==completion.resultHeadHash)throw new Error('staging derived delivery head changed during publication');const advancing=cachePrevious&&!cacheCurrent&&!loadedCurrent,documentsByCollection=(cacheCurrent||loadedCurrent)?cache.documentsByCollection:applyPayloadToCachedDocuments(cache.documentsByCollection,payload,sourceHash),auditRevision=advancing?(Number(cache.auditRevision)||0)+auditKeys.length:Number(cache.auditRevision)||0,auditLastRecordId=advancing&&auditKeys.length?text(auditKeys.at(-1).recordId):text(cache.auditLastRecordId),sourceModel=advancing?advanceCachedSourceModel(cache.sourceModel,payload,sourceDb,sourceHash):cache.sourceModel;cache={...cache,activationEpoch,headHash:completion.resultHeadHash,sourceHash,sourceDb,sourceModel,documentsByCollection,auditRevision,auditLastRecordId};const roleViews=roleResult.value,schedulerView=roleViews.find(row=>String(row?.control?.email||'').trim().toLowerCase()==='aa0966626336@gmail.com'&&row?.control?.kind==='scheduler'),sourceRecordRevision=Number(schedulerView?.control?.revision);if(trustedDbPair&&(!Number.isSafeInteger(sourceRecordRevision)||sourceRecordRevision<1||schedulerView.control.sourceRecordHash!==sourceHash))throw new Error('staging scheduler role evidence mismatch');const result=Object.freeze({state:'verified',sourceHash,...(trustedDbPair?{sourceRecordRevision}:{}),cacheHit,roleViewCount:roleViews.length,incrementalRoleViews:roleViews.filter(row=>row.incremental).length,lessonMetaWrites:metaResult.value,notificationCount:notificationResult.value,roleMs:roleResult.ms,lessonMetaMs:metaResult.ms,notificationMs:notificationResult.ms,totalMs:now()-started});console.info('STAGING_V2_DERIVED_DELIVERY',JSON.stringify(result));return result
+  const previousSourceHash=trustedDbPair?trustedPreviousSourceHash:(lessonOnly&&cachePrevious?cache.sourceHash:(lessonOnly&&(trustedHashPair&&trustedPreviousSourceHash===(cachePrevious?cache.sourceHash:sourceHash))?trustedPreviousSourceHash:(lessonOnly?recordDataHash(previousDb):sourceHash)));if(trustedHashPair&&(sourceHash!==trustedSourceHash||previousSourceHash!==trustedPreviousSourceHash))throw new Error('staging derived trusted hash pair mismatch');const prepareMs=now()-afterHeadAt,changedLessonIds=lessonOnly?recordPayload.changedKeys.map(key=>key.recordId):[],accessResult=await accessPromise,access=accessResult.snapshot.docs.map(row=>({id:row.id,...(row.data()||{})})),roleStarted=now(),rolePromise=publishRoleViews(sourceDb,previousDb,access,activationEpoch,sourceHash,previousSourceHash,payload.save,{incremental:lessonOnly}).then(value=>({value,ms:now()-roleStarted})),metaStarted=now(),metaPromise=publishLessonMeta(sourceDb,{changedLessonIds,incremental:lessonOnly}).then(value=>({value,ms:now()-metaStarted})),notificationStarted=now(),notificationPromise=publishNotifications(payload,sourceDb,access,sourceHash).then(value=>({value,ms:now()-notificationStarted})),[roleResult,metaResult,notificationResult]=await Promise.all([rolePromise,metaPromise,notificationPromise]),postHeadStarted=now(),headAfter=await readDocument(headPath(activationEpoch)),postHeadMs=now()-postHeadStarted;
+  if(headAfter?.headHash!==completion.resultHeadHash)throw new Error('staging derived delivery head changed during publication');const advancing=cachePrevious&&!cacheCurrent&&!loadedCurrent,documentsByCollection=(cacheCurrent||loadedCurrent)?cache.documentsByCollection:applyPayloadToCachedDocuments(cache.documentsByCollection,payload,sourceHash),auditRevision=advancing?(Number(cache.auditRevision)||0)+auditKeys.length:Number(cache.auditRevision)||0,auditLastRecordId=advancing&&auditKeys.length?text(auditKeys.at(-1).recordId):text(cache.auditLastRecordId),sourceModel=advancing?advanceCachedSourceModel(cache.sourceModel,payload,sourceDb,sourceHash):cache.sourceModel;cache={...cache,activationEpoch,headHash:completion.resultHeadHash,sourceHash,sourceDb,sourceModel,documentsByCollection,auditRevision,auditLastRecordId};const roleViews=roleResult.value,schedulerView=roleViews.find(row=>String(row?.control?.email||'').trim().toLowerCase()==='aa0966626336@gmail.com'&&row?.control?.kind==='scheduler'),sourceRecordRevision=Number(schedulerView?.control?.revision);if(trustedDbPair&&(!Number.isSafeInteger(sourceRecordRevision)||sourceRecordRevision<1||schedulerView.control.sourceRecordHash!==sourceHash))throw new Error('staging scheduler role evidence mismatch');const result=Object.freeze({state:'verified',sourceHash,...(trustedDbPair?{sourceRecordRevision}:{}),cacheHit,roleViewCount:roleViews.length,incrementalRoleViews:roleViews.filter(row=>row.incremental).length,lessonMetaWrites:metaResult.value,notificationCount:notificationResult.value,headReadMs,prepareMs,accessMs:accessResult.ms,roleMs:roleResult.ms,lessonMetaMs:metaResult.ms,notificationMs:notificationResult.ms,postHeadMs,totalMs:now()-started});console.info('STAGING_V2_DERIVED_DELIVERY',JSON.stringify(result));return result
  }})
 }
 

@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 
 const require=createRequire(import.meta.url);
-const {canonicalJson,nativeCanonicalSha256}=require('../functions/native-canonical-sha256.cjs');
+const {canonicalJson,nativeCanonicalSha256,nativeCanonicalRecordDbSha256}=require('../functions/native-canonical-sha256.cjs');
 const canonical=value=>Array.isArray(value)?value.map(canonical):(value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value);
 const reference=value=>JSON.stringify(canonical(value));
 
@@ -22,4 +22,25 @@ test('caller-owned memo reuses immutable rows without changing canonical identit
  assert.equal(nativeCanonicalSha256(second,{memo}),createHash('sha256').update(reference(second),'utf8').digest('hex'));
  assert.equal(nativeCanonicalSha256({b:2,a:1}),nativeCanonicalSha256({a:1,b:2}));
  assert.throws(()=>nativeCanonicalSha256({}, {memo:new Map()}),/WeakMap/);
+});
+
+test('streamed record DB digest is byte-identical to normalized canonical JSON',async()=>{
+ const {SHARDED_DB_COLLECTION_KEYS}=await import('../js/core/cloud-sharded-store.js');
+ const {normalizeRecordDb}=await import('../js/core/cloud-record-data-hash.js');
+ const db=Object.fromEntries(SHARDED_DB_COLLECTION_KEYS.map(key=>[key,[]]));
+ db.lessons=[
+  {id:'z-lesson',date:'2032-01-09',nested:{b:2,a:'甲'}},
+  {id:'a-lesson',date:'2032-01-07',teacherIds:['teacher-2','teacher-1']}
+ ];
+ db.changes=[
+  {at:'2032-01-09T00:00:00.000Z',type:'newest',payload:{z:true,a:false}},
+  {at:'2032-01-07T00:00:00.000Z',type:'oldest'}
+ ];
+ const expected=nativeCanonicalSha256(normalizeRecordDb(db,{cloneRecords:false}));
+ assert.equal(nativeCanonicalRecordDbSha256(db,SHARDED_DB_COLLECTION_KEYS),expected);
+ const memo=new WeakMap(),orderMemo=new WeakMap();
+ assert.equal(nativeCanonicalRecordDbSha256(db,SHARDED_DB_COLLECTION_KEYS,{memo,orderMemo}),expected);
+ const next={...db,lessons:[...db.lessons,{id:'m-lesson',date:'2032-01-08'}]};
+ assert.equal(nativeCanonicalRecordDbSha256(next,SHARDED_DB_COLLECTION_KEYS,{memo,orderMemo}),nativeCanonicalSha256(normalizeRecordDb(next,{cloneRecords:false})));
+ assert.throws(()=>nativeCanonicalRecordDbSha256({...db,unknown:[]},SHARDED_DB_COLLECTION_KEYS),/unknown collections/);
 });

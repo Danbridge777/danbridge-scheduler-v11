@@ -26,12 +26,12 @@ function advanceCounts(counts,type){
  if(next.documentCount<0||next.activeCount<0||next.tombstoneCount<0||next.documentCount!==next.activeCount+next.tombstoneCount)throw new Error('日常逐筆文件計數鏈無效');
  return next;
 }
-function authoritativeTarget(remoteDb,localDb){
+function authoritativeTarget(remoteDb,localDb,{cloneResult=true}={}){
  const current=remoteDb?.changes,target=localDb?.changes;
  if(!Array.isArray(current)||!Array.isArray(target)||target.length<current.length)throw new Error('日常逐筆權威 changes 歷史缺漏');
  const offset=target.length-current.length;
  for(let index=0;index<current.length;index++)if(!same(current[index],target[index+offset]))throw new Error('日常逐筆權威 changes 舊歷史遭到改寫');
- return clone(localDb);
+ return cloneResult?clone(localDb):localDb;
 }
 function v2Envelope({environment,activationEpoch,collection,recordId,exists,revision,deleted,record},hashCanonical=null){
  const core={collection,recordId,exists,revision,deleted,record:clone(record)},recordHash=hashCanonical===null?activeRecordSaveEnvelopeHash(core):`record-item-v1:${hashCanonical({schema:ACTIVE_RECORD_SAVE_RECORD_HASH_SCHEMA,collection,recordId,exists,deleted,record:core.record})}`;
@@ -60,7 +60,7 @@ export function prepareActiveRecordSync({documentsByCollection,baselineDb,localD
  if(scoped)for(const collection of FULL_RECORD_COLLECTIONS)if(!scopeSet.has(collection)&&baselineDb?.[collection]!==localDb?.[collection])throw new Error(`日常逐筆未授權集合未沿用權威參照：${collection}`);
  if(!Number.isSafeInteger(appendOnlyChangesCount)||appendOnlyChangesCount<0||appendOnlyChangesCount>30||appendOnlyChangesCount&&(!trusted||!scoped||!scopeSet.has('changes')))throw new Error('日常逐筆 changes 追加提示無效');
  if(appendOnlyChangesCount){const before=baselineDb?.changes,after=localDb?.changes;if(!Array.isArray(before)||!Array.isArray(after)||after.length!==before.length+appendOnlyChangesCount)throw new Error('日常逐筆 changes 追加數量不符');for(let index=0;index<before.length;index++)if(before[index]!==after[index+appendOnlyChangesCount])throw new Error('日常逐筆 changes 舊歷史未沿用權威參照')}
- const canonicalLocalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(baselineDb,localDb):(trusted?localDb:authoritativeTarget(remote.db,localDb)),merged=authoritativeSourceHash===undefined?mergeConcurrentRecordDb(baselineDb,canonicalLocalDb,remote.db):{db:canonicalLocalDb,conflicts:[]},canonicalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(remote.db,merged.db):canonicalLocalDb,targetHash=hashRecordDb(canonicalDb),raw=buildFullRecordShadowPlan(documentsByCollection,canonicalDb,{sourceHash:targetHash,batchSize:1,environment,collections:scope,appendOnlyChangesCount,trustedBaselineDb:trusted&&scoped?baselineDb:null});
+ const canonicalLocalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(baselineDb,localDb):(trusted&&appendOnlyChangesCount?localDb:authoritativeTarget(remote.db,localDb,{cloneResult:!trusted})),merged=authoritativeSourceHash===undefined?mergeConcurrentRecordDb(baselineDb,canonicalLocalDb,remote.db):{db:canonicalLocalDb,conflicts:[]},canonicalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(remote.db,merged.db):canonicalLocalDb,targetHash=hashRecordDb(canonicalDb),raw=buildFullRecordShadowPlan(documentsByCollection,canonicalDb,{sourceHash:targetHash,batchSize:1,environment,collections:scope,appendOnlyChangesCount,trustedBaselineDb:trusted&&scoped?baselineDb:null});
  if(!validRecordHash(targetHash))throw new Error('日常逐筆目標雜湊無效');
  let incrementalHash=baseHash;
  let counts={documentCount:remote.documentCount,activeCount:remote.activeCount,tombstoneCount:remote.tombstoneCount};

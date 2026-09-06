@@ -21,14 +21,14 @@ export async function enqueueOperationPlan(journal,plan){
  const entries=await journal.appendMany(plan.operations),counts=await journal.counts();return{enqueued:entries.length,counts};
 }
 
-export async function runOperationWorker({journal,send,recoverInterrupted=true,maxOperations=1000,onProgress=()=>{},classifyError=classifyOperationError}={}){
+export async function runOperationWorker({journal,send,recoverInterrupted=true,maxOperations=1000,maxBatchOperations=8,maxBatchRecords=maxBatchOperations,maxBatchAudits=maxBatchOperations,onProgress=()=>{},classifyError=classifyOperationError}={}){
  if(!journal||typeof journal.claimNext!=='function'||typeof journal.confirm!=='function'||typeof journal.fail!=='function'||typeof journal.counts!=='function'||typeof journal.list!=='function'||typeof journal.recoverInterrupted!=='function')throw new Error('操作工作程序缺少日誌介面');
- if(typeof send!=='function'||(send.batch!==undefined&&typeof send.batch!=='function')||typeof onProgress!=='function'||typeof classifyError!=='function'||!Number.isSafeInteger(maxOperations)||maxOperations<1)throw new Error('操作工作程序設定無效');
+ if(typeof send!=='function'||(send.batch!==undefined&&typeof send.batch!=='function')||typeof onProgress!=='function'||typeof classifyError!=='function'||!Number.isSafeInteger(maxOperations)||maxOperations<1||!Number.isSafeInteger(maxBatchOperations)||maxBatchOperations<1||maxBatchOperations>120||!Number.isSafeInteger(maxBatchRecords)||maxBatchRecords<0||maxBatchRecords>90||!Number.isSafeInteger(maxBatchAudits)||maxBatchAudits<0||maxBatchAudits>30)throw new Error('操作工作程序設定無效');
  const notify=async payload=>{try{await onProgress(payload)}catch{}};
  const recovery=recoverInterrupted?await journal.recoverInterrupted():{recovered:0};let processed=0;
  while(processed<maxOperations){
   if(typeof send.batch==='function'&&typeof journal.claimNextMany==='function'&&typeof journal.confirmMany==='function'&&typeof journal.failMany==='function'&&maxOperations-processed>1){
-   const entries=await journal.claimNextMany({causal:true,max:Math.min(8,maxOperations-processed)});
+   const entries=await journal.claimNextMany({causal:true,max:Math.min(maxBatchOperations,maxOperations-processed),maxRecords:Math.min(maxBatchRecords,maxOperations-processed),maxAudits:Math.min(maxBatchAudits,maxOperations-processed)});
    if(!entries.length)break;
    if(entries.length>1){
     try{

@@ -55,6 +55,20 @@ test('30 堂課與 30 筆稽核同一 authority payload 只前進一份快取，
  assert.deepEqual(start,{lessons:[],changes:[]});
 });
 
+test('30 筆新稽核先驗證下一個序號，不掃描既有歷史',()=>{
+ const historical=Array.from({length:240},(_,index)=>({id:`historical-${index}`,kind:'seed'})),events=Array.from({length:30},(_,index)=>({id:`audit-fast-${index}`,kind:'move',lessonId:`lesson-${index}`})),changedKeys=[],baselineRecords=[],localRecords=[];
+ for(let index=0;index<events.length;index++){
+  const recordId=buildChangeRecordId(historical.length+index,events[index]);
+  changedKeys.push({collection:'changes',recordId});
+  baselineRecords.push({collection:'changes',recordId,exists:false,deleted:false,record:null});
+  localRecords.push({collection:'changes',recordId,exists:true,deleted:false,record:events[index]});
+ }
+ let calls=0;
+ const result=applyAuthorityPayloadToCachedDb({changes:[...historical].reverse()},{save:payload.save,changedKeys,baselineRecords,localRecords},{buildRecordId(index,row){calls++;return buildChangeRecordId(index,row)}});
+ assert.equal(calls,30);
+ assert.deepEqual(result.changes.slice(0,30).map(row=>row.id),events.toReversed().map(row=>row.id));
+});
+
 test('快取未命中時從已提交的 30 堂課與 30 筆稽核精確回推完整前一版',()=>{
  const count=30,previous={lessons:Array.from({length:count},(_,index)=>({...before,id:`lesson-${index}`,start:`${String(8+Math.floor(index/2)).padStart(2,'0')}:${index%2?'30':'00'}`})),changes:[{id:'audit-old',kind:'seed'}],students:current.students},nextLessons=previous.lessons.map(row=>({...row,start:row.start.endsWith('30')?row.start.replace('30','35'):row.start.replace('00','05')})),events=Array.from({length:count},(_,index)=>({id:`audit-${index}`,kind:'move',lessonId:nextLessons[index].id})),changedKeys=[],baselineRecords=[],localRecords=[];
  for(let index=0;index<count;index++){const recordId=nextLessons[index].id;changedKeys.push({collection:'lessons',recordId});baselineRecords.push({collection:'lessons',recordId,exists:true,deleted:false,record:previous.lessons[index]});localRecords.push({collection:'lessons',recordId,exists:true,deleted:false,record:nextLessons[index]})}
