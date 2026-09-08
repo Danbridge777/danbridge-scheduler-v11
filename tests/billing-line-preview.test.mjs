@@ -5,8 +5,8 @@ import vm from 'node:vm';
 
 const source=fs.readFileSync(new URL('../js/modules/business/business-logic.js',import.meta.url),'utf8');
 
-function runtime({students=[],lessons=[],summerCampRegistrations=[],winterCampRegistrations=[]}={}){
-  const db={students,lessons,summerCampRegistrations,winterCampRegistrations,teachers:[],changes:[]};
+function runtime({students=[],lessons=[],summerCampRegistrations=[],winterCampRegistrations=[],collectionRecords=[]}={}){
+  const db={students,lessons,summerCampRegistrations,winterCampRegistrations,collectionRecords,teachers:[],changes:[]};
   const sandbox={
     db,
     window:{},
@@ -34,6 +34,73 @@ function runtime({students=[],lessons=[],summerCampRegistrations=[],winterCampRe
 }
 
 const lesson=(id,studentId,date,start,end,extra={})=>({id,studentId,date,start,end,status:'未上課',chargeStudent:'yes',...extra});
+
+test('after-school tuition is one flat monthly fee regardless of scheduled hours',()=>{
+  const app=runtime({
+    students:[{id:'after-school',name:'安親學生',parent:'王家長',courseType:'安親',billing:'month',rate:8000}],
+    lessons:[
+      lesson('a1','after-school','2026-09-01','13:00','18:00'),
+      lesson('a2','after-school','2026-09-02','13:00','18:00'),
+      lesson('a3','after-school','2026-09-03','13:00','18:00'),
+      lesson('oct','after-school','2026-10-01','13:00','18:00')
+    ]
+  });
+  assert.equal(app.studentMonthlyBillingData('after-school','2026-09').total,8000);
+  assert.equal(app.studentMonthlyBillingData('after-school','2026-10').total,8000);
+  const text=app.studentLineBillingText('after-school','2026-09','all',null,'summer');
+  assert.match(text,/安親/);
+  assert.match(text,/月費/);
+  assert.match(text,/9月共計：NT\$8,000/);
+  assert.doesNotMatch(text,/小時 ×/);
+});
+
+test('after-school tuition follows the unarchived student record even with no lessons that month',()=>{
+  const app=runtime({students:[
+    {id:'current',name:'在籍安親',parent:'甲家長',courseType:'安親',rate:9000},
+    {id:'archived',name:'封存安親',parent:'乙家長',courseType:'安親',rate:7000,archivedAt:'2026-08-31T00:00:00.000Z'}
+  ]});
+  assert.equal(app.studentMonthlyBillingData('current','2026-09').total,9000);
+  assert.equal(app.studentMonthlyBillingData('archived','2026-09').total,0);
+  assert.match(app.studentLineBillingText('current','2026-09'),/9月共計：NT\$9,000/);
+});
+
+test('same group class slot bills each child to that child parent only',()=>{
+  const app=runtime({
+    students:[
+      {id:'kid-a',name:'小安',parent:'王家長',courseType:'團班',rate:600},
+      {id:'kid-b',name:'小晴',parent:'李家長',courseType:'團班',rate:750}
+    ],
+    lessons:[
+      lesson('group-a','kid-a','2026-09-05','14:00','16:00',{title:'G1 團班'}),
+      lesson('group-b','kid-b','2026-09-05','14:00','16:00',{title:'G1 團班'})
+    ]
+  });
+  const wang=app.studentLineBillingText('kid-a','2026-09');
+  const lee=app.studentLineBillingText('kid-b','2026-09');
+  assert.match(wang,/^王家長您好/);assert.match(wang,/學生：小安/);assert.match(wang,/NT\$1,200/);assert.doesNotMatch(wang,/李家長|小晴|1,500/);
+  assert.match(lee,/^李家長您好/);assert.match(lee,/學生：小晴/);assert.match(lee,/NT\$1,500/);assert.doesNotMatch(lee,/王家長|小安|1,200/);
+});
+
+test('mixed monthly, private and per-child group totals stay exact and collected records reduce unpaid total',()=>{
+  const app=runtime({
+    students:[
+      {id:'care',name:'安親生',parent:'陳家長',courseType:'安親',rate:9000},
+      {id:'private',name:'家教生',parent:'林家長',courseType:'1對1',rate:800},
+      {id:'group',name:'團班生',parent:'黃家長',courseType:'團班',rate:600}
+    ],
+    lessons:[
+      lesson('care-1','care','2026-09-01','13:00','18:00'),
+      lesson('private-1','private','2026-09-02','16:00','17:30',{paymentStatus:'paid'}),
+      lesson('group-1','group','2026-09-03','18:00','20:00')
+    ],
+    collectionRecords:[{id:'care-paid',month:'2026-09',branchId:'all',studentIds:['care'],status:'collected',amount:9000}]
+  });
+  assert.equal(app.studentTuitionRevenue('2026-09'),11400);
+  assert.equal(app.studentMonthlyBillingData('care','2026-09').total,9000);
+  assert.equal(app.studentMonthlyBillingData('private','2026-09').total,1200);
+  assert.equal(app.studentMonthlyBillingData('group','2026-09').total,1200);
+  assert.equal(app.studentUnpaidTuitionRevenue('2026-09'),2400);
+});
 
 test('every chargeable private and group lesson is hours multiplied by that student rate',()=>{
   const app=runtime({

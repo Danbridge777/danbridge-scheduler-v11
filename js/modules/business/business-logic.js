@@ -10,7 +10,12 @@ function lessonCountsAsTaught(l){return ['completed','makeup_completed','已上�
 function lessonCountsForTeacherHours(l){return !!l&&!l.isDraft}
 function lessonCountsForTeacherPay(l){return !!l&&!l.isDraft&&l.payTeacher!=='no'}
 function lessonCountsForStudentCharge(l){if(!l||l.isDraft||l.chargeStudent==='no'||lessonIsLinkedMakeup(l))return false;return !['teacher_leave','老師請假','取消','停課'].includes(lessonOutcome(l))}
-function lessonCharge(l){if(!lessonCountsForStudentCharge(l))return 0;const s=student(l.studentId),rate=Number(s.rate)||0,duration=hours(l.start,l.end);return rate*duration}
+function studentBillingCategory(value){const s=typeof value==='object'&&value?value:student(value);return s?.courseType==='安親'?'after_school_monthly':s?.courseType==='團班'?'group_hourly':'tutoring_hourly'}
+function studentUsesMonthlyFee(value){return studentBillingCategory(value)==='after_school_monthly'}
+function studentIsPresentForBilling(s){return !!s?.id&&!s.campSeason&&!String(s.archivedAt||'').trim()}
+function studentMonthlyFlatFee(value){const s=typeof value==='object'&&value?value:student(value);return studentIsPresentForBilling(s)&&studentUsesMonthlyFee(s)?Math.max(0,Number(s.rate)||0):0}
+function lessonCharge(l){if(!lessonCountsForStudentCharge(l))return 0;const s=student(l.studentId);if(studentUsesMonthlyFee(s))return 0;const rate=Number(s.rate)||0,duration=hours(l.start,l.end);return rate*duration}
+function lessonChargeLabel(l){return studentUsesMonthlyFee(student(l?.studentId))?'安親月費制':money(lessonCharge(l))}
 
 /* V17.25 — revenue is derived from actual teacher schedule rows, never from a headcount multiplier.
  * Every teacher assigned to a formal timetable lesson owns one independent revenue row.
@@ -54,14 +59,22 @@ function studentChargeableTutoringLessons(studentId,m,scope='all',sourceLessons=
 }
 function studentMonthlyBillingData(studentId,m,scope='all',campSeason='all'){
   const s=student(studentId),tutoringLessons=studentChargeableTutoringLessons(studentId,m,scope);
-  const groupLessons=tutoringLessons.filter(l=>student(l.studentId).courseType==='團班'),privateLessons=tutoringLessons.filter(l=>student(l.studentId).courseType!=='團班');
+  const afterSchool=studentUsesMonthlyFee(s),afterSchoolLessons=afterSchool?tutoringLessons:[],groupLessons=afterSchool?[]:tutoringLessons.filter(l=>student(l.studentId).courseType==='團班'),privateLessons=afterSchool?[]:tutoringLessons.filter(l=>student(l.studentId).courseType!=='團班');
   const privateHours=privateLessons.reduce((sum,l)=>sum+hours(l.start,l.end),0),privateAmount=privateLessons.reduce((sum,l)=>sum+lessonCharge(l),0),groupHours=groupLessons.reduce((sum,l)=>sum+hours(l.start,l.end),0),groupAmount=groupLessons.reduce((sum,l)=>sum+lessonCharge(l),0);
-  const tutoringHours=privateHours+groupHours,tutoringRate=+s.rate||0,tutoringAmount=privateAmount+groupAmount;
+  const afterSchoolHours=afterSchoolLessons.reduce((sum,l)=>sum+hours(l.start,l.end),0),afterSchoolInScope=scope==='all'||(s.branchIds||[]).includes(scope)||afterSchoolLessons.length>0,afterSchoolAmount=afterSchoolInScope?studentMonthlyFlatFee(s):0,tutoringHours=afterSchool?afterSchoolHours:privateHours+groupHours,tutoringRate=+s.rate||0,tutoringAmount=afterSchoolAmount+privateAmount+groupAmount;
   const campRows=summerCampRegistrationRows(m,scope,campSeason).filter(r=>r.studentId===studentId),campAmount=campRows.reduce((sum,r)=>sum+summerRegistrationTotal(r),0);
   const campDates=[...new Set(campRows.flatMap(r=>r.dates||[]))].sort();
-  return{student:s,month:m,scope,tutoringLessons,tutoringHours,tutoringRate,tutoringAmount,privateLessons,privateHours,privateAmount,groupLessons,groupHours,groupAmount,campRows,campDates,campAmount,total:tutoringAmount+campAmount};
+  return{student:s,month:m,scope,billingCategory:studentBillingCategory(s),billable:studentIsPresentForBilling(s),tutoringLessons,tutoringHours,tutoringRate,tutoringAmount,afterSchoolLessons,afterSchoolHours,afterSchoolAmount,privateLessons,privateHours,privateAmount,groupLessons,groupHours,groupAmount,campRows,campDates,campAmount,total:tutoringAmount+campAmount};
+}
+function studentTuitionRevenue(m,scope='all'){return(db.students||[]).reduce((sum,s)=>sum+studentMonthlyBillingData(s.id,m,scope).tutoringAmount,0)}
+function studentUnpaidTuitionRevenue(m,scope='all'){
+  const due=studentTuitionRevenue(m,scope),branchOf=l=>l.branchId||window.DanbridgeAccess?.branchIdFromLocation?.(l.location||'')||'unassigned';
+  const paidLessons=(db.lessons||[]).filter(l=>!l.isDraft&&l.date?.startsWith(m)&&l.paymentStatus==='paid'&&!effectiveCampId(l)&&(scope==='all'||branchOf(l)===scope)).reduce((sum,l)=>sum+lessonCharge(l),0);
+  const tracked=(db.collectionRecords||[]).filter(r=>r.month===m&&r.status==='collected'&&(scope==='all'||(r.branchId||'all')===scope)).reduce((sum,r)=>sum+(+r.amount||0),0);
+  return Math.max(0,due-Math.max(paidLessons,Math.min(due,tracked)));
 }
 function billingNumber(n){const value=Math.round((+n||0)*100)/100;return Number.isInteger(value)?String(value):String(value.toFixed(2)).replace(/0+$/,'').replace(/\.$/,'')}
+function studentBillingSummary(row){return row?.billingCategory==='after_school_monthly'?`月費制／排課 ${row.total||0} 堂（時數不影響費用）`:`${row?.charged||0} 堂／${billingNumber(row?.h||0)} hr`}
 function billingMonthLabel(m){const[y,month]=String(m||'').split('-').map(Number);return `${y} 年 ${month} 月`}
 function billingCampFormula(rows){
   if(!rows.length)return'';if(rows.length>1)return`${rows.length} 筆報名`;
@@ -89,6 +102,11 @@ function billingTutoringSection(label,lessons,totalHours,rate,amount,subtotalLab
 }
 function studentBillingSections(d,includeName=false){
   const lines=[`學生：${d.student.name||'學生'}`];
+  if(d.billingCategory==='after_school_monthly'){
+    lines.push('安親月費',`計算：每月固定 ${money(d.afterSchoolAmount)}`,`安親小計：${money(d.afterSchoolAmount)}`);
+    if(d.afterSchoolLessons.length)lines.push('本月排課（不影響月費）：',...billingLessonDateTimeLines(d.afterSchoolLessons).map(line=>`- ${line}`),`排課天數：${billingLessonDayCount(d.afterSchoolLessons)} 天`,`排課堂數：${d.afterSchoolLessons.length} 堂`,`排課時數：${billingNumber(d.afterSchoolHours)} 小時`);
+    lines.push('');
+  }
   lines.push(...billingTutoringSection('一般家教',d.privateLessons,d.privateHours,d.tutoringRate,d.privateAmount,'家教小計'));
   lines.push(...billingTutoringSection('團班費用',d.groupLessons,d.groupHours,d.tutoringRate,d.groupAmount,'團班小計'));
   if(d.campRows.length){['summer','winter'].forEach(season=>{const rows=d.campRows.filter(r=>campRegistrationSeason(r)===season);if(!rows.length)return;const rawDates=[...new Set(rows.flatMap(r=>r.dates||[]))].sort(),dates=rawDates.map(billingLessonDateLabel).join('、'),amount=rows.reduce((sum,r)=>sum+summerRegistrationTotal(r),0);lines.push(season==='winter'?'冬令營':'夏令營',`參加日期：${dates}`,`參加天數：${rawDates.length} 天`,billingCampFormula(rows),`小計：${money(amount)}`,'')})}
@@ -97,7 +115,7 @@ function studentBillingSections(d,includeName=false){
 function studentLineBillingText(studentId,m,scope='all',familyStudentIds=null,campSeason=activeCampBillingSeason()){
   const explicitIds=Array.isArray(familyStudentIds)?new Set(familyStudentIds.filter(Boolean).map(String)):null,boundFamily=billingFamilyStudents(studentId);
   /* 即使呼叫端傳入舊 ID 清單，也只允許同一「家長姓名」的孩子進入同份帳單。 */
-  const selectedFamily=explicitIds?boundFamily.filter(s=>explicitIds.has(String(s.id))):boundFamily,family=selectedFamily.length?selectedFamily:boundFamily,details=family.map(s=>studentMonthlyBillingData(s.id,m,scope,campSeason)).filter(d=>d.tutoringLessons.length||d.campRows.length);
+  const selectedFamily=explicitIds?boundFamily.filter(s=>explicitIds.has(String(s.id))):boundFamily,family=selectedFamily.length?selectedFamily:boundFamily,details=family.map(s=>studentMonthlyBillingData(s.id,m,scope,campSeason)).filter(d=>(d.billingCategory==='after_school_monthly'&&d.billable)||d.tutoringLessons.length||d.campRows.length);
   const salutation=billingLineSalutation(studentId),total=details.reduce((sum,d)=>sum+d.total,0);let lines=[`${salutation}您好，以下是小朋友 ${billingMonthLabel(m)}的課程費用明細：`,''];
   details.forEach(d=>lines.push(...studentBillingSections(d,true)));
   const monthNumber=Number(String(m||'').slice(5,7))||Number(String(m||'').split('-')[1])||'';
@@ -128,7 +146,7 @@ function lessonPay(l){return lessonTeacherIds(l).reduce((sum,id)=>sum+lessonTeac
 function fixedExpenseApplies(x,m){const start=x.startMonth||'2026-07',end=x.endMonth||'';return m>=start&&(!end||m<=end)}
 function teacherIncludedForMonth(t,m){const archivedMonth=String(t?.archivedAt||'').slice(0,7);return!archivedMonth||String(m||'')<=archivedMonth}
 
-function financeData(m){const lessons=db.lessons.filter(l=>l.date.startsWith(m)),lessonRevenue=lessons.reduce((a,l)=>a+timetableRevenueCharge(l),0),campRevenue=summerCampRegistrationRevenue(m),revenue=lessonRevenue+campRevenue;const fixed=(db.fixedExpenses||[]).filter(x=>fixedExpenseApplies(x,m));const one=(db.oneTimeExpenses||[]).filter(x=>x.month===m);const fixedTotal=fixed.reduce((a,x)=>a+(+x.amount||0),0);const oneTimeTotal=one.reduce((a,x)=>a+(+x.amount||0),0);const payrollRows=db.teachers.filter(t=>teacherIncludedForMonth(t,m)).map(t=>{const paid=teacherPaidLessons(t,m),payroll=calculateTeacherPayroll(t,m,paid);return{teacher:t,h:payroll.actualHours,amount:payroll.amount,payroll}}).filter(x=>x.h||x.amount);const payroll=payrollRows.reduce((a,x)=>a+x.amount,0);const totalExpenses=fixedTotal+oneTimeTotal+payroll;return{m,revenue,lessonRevenue,campRevenue,fixed,one,fixedTotal,oneTimeTotal,payrollRows,payroll,totalExpenses,profit:revenue-totalExpenses}}
+function financeData(m){const lessons=db.lessons.filter(l=>l.date.startsWith(m)),lessonRevenue=studentTuitionRevenue(m),campRevenue=summerCampRegistrationRevenue(m),revenue=lessonRevenue+campRevenue;const fixed=(db.fixedExpenses||[]).filter(x=>fixedExpenseApplies(x,m));const one=(db.oneTimeExpenses||[]).filter(x=>x.month===m);const fixedTotal=fixed.reduce((a,x)=>a+(+x.amount||0),0);const oneTimeTotal=one.reduce((a,x)=>a+(+x.amount||0),0);const payrollRows=db.teachers.filter(t=>teacherIncludedForMonth(t,m)).map(t=>{const paid=teacherPaidLessons(t,m),payroll=calculateTeacherPayroll(t,m,paid);return{teacher:t,h:payroll.actualHours,amount:payroll.amount,payroll}}).filter(x=>x.h||x.amount);const payroll=payrollRows.reduce((a,x)=>a+x.amount,0);const totalExpenses=fixedTotal+oneTimeTotal+payroll;return{m,revenue,lessonRevenue,campRevenue,fixed,one,fixedTotal,oneTimeTotal,payrollRows,payroll,totalExpenses,profit:revenue-totalExpenses}}
 
 function monthDateRange(m){const[y,mo]=m.split('-').map(Number);return{start:new Date(y,mo-1,1),end:new Date(y,mo,0)}}
 
@@ -230,7 +248,7 @@ function diffClass(n){return n<-.001?'hours-short':n>.001?'hours-over':'hours-ev
 
 function diffText(n){return Math.abs(n)<.001?'剛好':n>0?`多 ${fmtHours(n)} hr`:`少 ${fmtHours(Math.abs(n))} hr`}
 
-function settleData(){const m=$('settleMonth').value||monthNow(),ls=db.lessons.filter(l=>!l.isDraft&&l.date.startsWith(m));const sr=db.students.map(s=>{const x=ls.filter(l=>l.studentId===s.id),chargedLessons=studentChargeableTutoringLessons(s.id,m,'all',ls),abs=x.filter(l=>['學生請假','老師請假','取消','停課'].includes(l.status)),lessonAmount=chargedLessons.reduce((a,l)=>a+lessonCharge(l),0),campAmount=studentSummerCampRevenue(s.id,m);return{s,total:x.length,charged:chargedLessons.length,h:chargedLessons.reduce((a,l)=>a+hours(l.start,l.end),0),abs:abs.length,rate:x.length?abs.length/x.length*100:0,lessonAmount,campAmount,amount:lessonAmount+campAmount}}).filter(x=>x.total||x.campAmount);const tr=db.teachers.filter(t=>teacherIncludedForMonth(t,m)).map(t=>{const paid=teacherPaidLessons(t,m),payroll=calculateTeacherPayroll(t,m,paid),weeks=teacherWeekBreakdown(t,m);return{t,count:paid.length,h:payroll.actualHours,expected:payroll.expectedHours,diff:payroll.diff,weeks,amount:payroll.amount,revenue:teacherCompanyRevenue(t,m,ls),payroll}});return{sr,tr}}
+function settleData(){const m=$('settleMonth').value||monthNow(),ls=db.lessons.filter(l=>!l.isDraft&&l.date.startsWith(m));const sr=db.students.map(s=>{const x=ls.filter(l=>l.studentId===s.id),billing=studentMonthlyBillingData(s.id,m),chargedLessons=billing.tutoringLessons,abs=x.filter(l=>['學生請假','老師請假','取消','停課'].includes(l.status)),lessonAmount=billing.tutoringAmount,campAmount=billing.campAmount;return{s,billingCategory:billing.billingCategory,total:x.length,charged:studentUsesMonthlyFee(s)?0:chargedLessons.length,h:chargedLessons.reduce((a,l)=>a+hours(l.start,l.end),0),abs:abs.length,rate:x.length?abs.length/x.length*100:0,lessonAmount,campAmount,amount:lessonAmount+campAmount}}).filter(x=>x.total||x.campAmount||(studentUsesMonthlyFee(x.s)&&studentIsPresentForBilling(x.s)));const tr=db.teachers.filter(t=>teacherIncludedForMonth(t,m)).map(t=>{const paid=teacherPaidLessons(t,m),payroll=calculateTeacherPayroll(t,m,paid),weeks=teacherWeekBreakdown(t,m);return{t,count:paid.length,h:payroll.actualHours,expected:payroll.expectedHours,diff:payroll.diff,weeks,amount:payroll.amount,revenue:teacherCompanyRevenue(t,m,ls),payroll}});return{sr,tr}}
 
 function settlementSummaryTotals(studentRows){const rows=studentRows||[],totalLessons=rows.reduce((n,x)=>n+(+x.total||0),0),leaveCount=rows.reduce((n,x)=>n+(+x.abs||0),0);return{totalLessons,leaveCount,leaveRate:totalLessons?Math.min(100,leaveCount/totalLessons*100):0}}
 
@@ -241,7 +259,7 @@ function settlementSnapshotPayload(data){
   const totals={totalLessons,totalHours:tr.reduce((n,x)=>n+(+x.h||0),0),totalRevenue:sr.reduce((n,x)=>n+(+x.amount||0),0),leaveCount,leaveRate,payroll:tr.reduce((n,x)=>n+(+x.amount||0),0)};
   const source={
     lessons:lessons.map(l=>{const id=l.id||'',financialFields=[l.date||'',l.start||'',l.end||'',l.studentId||'',lessonTeacherIds(l).slice().sort(),l.status||'',l.teacherReportStatus||'',l.chargeStudent||'',l.payTeacher||'',+l.price||0,+l.rate||0,!!l.isDraft];return{id,fingerprint:settlementSourceHash(financialFields)}}).sort((a,b)=>a.id.localeCompare(b.id)),
-    students:sr.map(x=>({id:x.s?.id||'',total:+x.total||0,charged:+x.charged||0,h:+x.h||0,abs:+x.abs||0,lessonAmount:+x.lessonAmount||0,campAmount:+x.campAmount||0,amount:+x.amount||0})).sort((a,b)=>a.id.localeCompare(b.id)),
+    students:sr.map(x=>({id:x.s?.id||'',billingCategory:x.billingCategory||studentBillingCategory(x.s),total:+x.total||0,charged:+x.charged||0,h:+x.h||0,abs:+x.abs||0,lessonAmount:+x.lessonAmount||0,campAmount:+x.campAmount||0,amount:+x.amount||0})).sort((a,b)=>a.id.localeCompare(b.id)),
     teachers:tr.map(x=>({id:x.t?.id||'',count:+x.count||0,h:+x.h||0,expected:+x.expected||0,amount:+x.amount||0,revenue:+x.revenue||0,payrollMode:x.payroll?.mode||'',baseSalary:x.payroll?.baseSalary??null,hourlyRate:x.payroll?.hourlyRate??null,overtimeRate:x.payroll?.overtimeRate??null,deductionRate:x.payroll?.deductionRate??null,monthlyWorkDays:+x.payroll?.monthlyWorkDays||0,leaveHours:+x.payroll?.leaveHours||0,leaveHourlyRate:+x.payroll?.leaveHourlyRate||0,leaveDeduction:+x.payroll?.leaveDeduction||0,shortageDeduction:+x.payroll?.shortageDeduction||0})).sort((a,b)=>a.id.localeCompare(b.id))
   };
   return{totals,source,sourceHash:settlementSourceHash({totals,source})};
@@ -250,7 +268,7 @@ function createLockedSettlementRecord(month,scope,data,at=new Date().toISOString
   if(data?.m&&data.m!==month)throw new Error(`Settlement month mismatch: ${month} !== ${data.m}`);
   if(data?.scope&&data.scope!==scope)throw new Error(`Settlement scope mismatch: ${scope} !== ${data.scope}`);
   const snapshot=settlementSnapshotPayload(data);
-  return{id:`${month}::${scope}`,month,branchId:scope,savedAt:at,lockedAt:at,locked:true,formulaVersion:'settlement-v1',payrollFormulaVersion:TEACHER_PAYROLL_FORMULA_VERSION,...snapshot.totals,snapshot,adjustments:[]};
+  return{id:`${month}::${scope}`,month,branchId:scope,savedAt:at,lockedAt:at,locked:true,formulaVersion:'settlement-v2-course-type-billing',billingFormulaVersion:'course-type-v1',payrollFormulaVersion:TEACHER_PAYROLL_FORMULA_VERSION,...snapshot.totals,snapshot,adjustments:[]};
 }
 function appendSettlementAdjustment(record,data,at=new Date().toISOString()){
   if(data?.m&&data.m!==record.month)throw new Error(`Settlement adjustment month mismatch: ${record.month} !== ${data.m}`);
@@ -271,7 +289,7 @@ function monthlySettlementSnapshot(m){
   const actualLessons=ls.filter(lessonCountsAsTaught);
   const totalLessons=actualLessons.length;
   const totalHours=actualLessons.reduce((a,l)=>a+hours(l.start,l.end),0);
-  const totalRevenue=ls.reduce((a,l)=>a+timetableRevenueCharge(l),0);
+  const totalRevenue=studentTuitionRevenue(m);
   const leaveStatuses=new Set(['學生請假','老師請假','取消','停課']);
   const leaveCount=ls.filter(l=>leaveStatuses.has(l.status)).length;
   const leaveRate=ls.length?leaveCount/ls.length*100:0;

@@ -56,3 +56,60 @@ test('LINE 計費預覽只綁家長姓名、合併手足、列出時數公式且
   await expect.poll(()=>page.evaluate(()=>window.__billingCopiedText)).toContain('家長確認備註：下週轉帳');
   await expect(modal).not.toHaveClass(/show/);
 });
+
+test('瀏覽器實際計算安親月費與同時段團班孩子，家長與金額互不混用',async({page})=>{
+  await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+  await page.waitForTimeout(450);
+  await page.addStyleTag({content:'#authScreen{display:none!important;pointer-events:none!important}'});
+  const result=await page.evaluate(()=>{
+    const row=(id,studentId)=>({id,studentId,date:'2026-09-08',start:'18:00',end:'20:00',status:'未上課',chargeStudent:'yes',teacherId:'t',teacherIds:['t']});
+    db={...db,students:[
+      {id:'care',name:'安親生',parent:'陳家長',courseType:'安親',rate:9000},
+      {id:'kid-a',name:'團班甲',parent:'王家長',courseType:'團班',rate:600},
+      {id:'kid-b',name:'團班乙',parent:'李家長',courseType:'團班',rate:750}
+    ],teachers:[{id:'t',name:'老師',rate:0}],lessons:[row('care-row','care'),row('group-a','kid-a'),row('group-b','kid-b')],summerCampRegistrations:[],winterCampRegistrations:[],collectionRecords:[]};
+    return{
+      total:studentTuitionRevenue('2026-09'),
+      care:studentLineBillingText('care','2026-09'),
+      wang:studentLineBillingText('kid-a','2026-09'),
+      lee:studentLineBillingText('kid-b','2026-09')
+    };
+  });
+  expect(result.total).toBe(11700);
+  expect(result.care).toContain('每月固定 NT$9,000');
+  expect(result.care).not.toContain('小時 ×');
+  expect(result.wang).toContain('王家長您好');expect(result.wang).toContain('學生：團班甲');expect(result.wang).toContain('NT$1,200');expect(result.wang).not.toContain('李家長');
+  expect(result.lee).toContain('李家長您好');expect(result.lee).toContain('學生：團班乙');expect(result.lee).toContain('NT$1,500');expect(result.lee).not.toContain('王家長');
+});
+
+test('學生與課表快速新增表單依課程類型鎖定正確收費規則',async({page})=>{
+  await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+  await page.waitForTimeout(450);
+  await page.addStyleTag({content:'#authScreen{display:none!important;pointer-events:none!important}'});
+  await page.evaluate(()=>{
+    document.body.classList.remove('auth-locked','teacher-cloud-role','branch-manager-cloud-role','scheduler-cloud-role');
+    window.DanbridgeAccess.setContext({role:'owner',email:'owner@example.com',canManageSchedule:true});
+    window.currentCloudRole=()=> 'owner';
+    switchTab('students');
+  });
+
+  await page.selectOption('#studentCourseType',{label:'安親'});
+  await expect(page.locator('#studentBilling')).toHaveValue('month');
+  await expect(page.locator('#studentBilling')).toBeDisabled();
+  await expect(page.locator('#studentRate').locator('xpath=preceding-sibling::label[1]')).toHaveText('每月月費');
+  await expect(page.locator('#studentRate')).toHaveAttribute('aria-label','每月月費');
+
+  await page.selectOption('#studentCourseType',{label:'團班'});
+  await expect(page.locator('#studentBilling')).toHaveValue('hour');
+  await expect(page.locator('#studentRate').locator('xpath=preceding-sibling::label[1]')).toHaveText('每小時鐘點費');
+
+  await page.evaluate(()=>{openLessonModal();toggleQuickStudent(true)});
+  await page.selectOption('#quickCourseType',{label:'安親'});
+  await expect(page.locator('#quickBilling')).toHaveValue('month');
+  await expect(page.locator('#quickBilling')).toBeDisabled();
+  await expect(page.locator('#quickRate').locator('xpath=preceding-sibling::label[1]')).toHaveText('每月月費');
+
+  await page.selectOption('#quickCourseType',{label:'1對1'});
+  await expect(page.locator('#quickBilling')).toHaveValue('hour');
+  await expect(page.locator('#quickRate').locator('xpath=preceding-sibling::label[1]')).toHaveText('每小時鐘點費');
+});
