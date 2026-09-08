@@ -11,11 +11,11 @@ test.beforeEach(async({page})=>{
  });
 });
 test('左右分頁分開學生與團班，切換保留草稿，編輯既有團班保留 ID 與收費',async({page})=>{
- const left=page.getByRole('tab',{name:'家教',exact:true}),right=page.getByRole('tab',{name:'團班',exact:true});
+ const left=page.getByRole('tab',{name:'家教',exact:true}),right=page.getByRole('tab',{name:'團課',exact:true});
  await expect(left).toHaveAttribute('aria-selected','true');await expect(page.locator('#studentRows tr')).toHaveCount(3);
  await expect(page.locator('#studentRows')).toContainText('安親學生');await expect(page.locator('#studentRows')).not.toContainText('週三團班');
  await page.locator('#studentName').fill('家教未存草稿');await page.locator('#parentName').fill('草稿家長');
- await right.click();await expect(page.locator('#parentName')).not.toBeVisible();await expect(page.locator('#studentRate')).not.toBeVisible();await expect(page.locator('#studentName').locator('..')).toContainText('團班名稱');await expect(page.locator('#studentPartTimeTeacherRate')).toBeVisible();await expect(page.locator('#studentRows tr')).toHaveCount(1);
+ await right.click();await expect(page.locator('#parentName')).not.toBeVisible();await expect(page.locator('#studentRate')).not.toBeVisible();await expect(page.locator('#studentName').locator('..')).toContainText('團課名稱');await expect(page.locator('#studentPartTimeTeacherRate')).toBeVisible();await expect(page.locator('#studentRows tr')).toHaveCount(1);
  await page.locator('#studentName').fill('團班未存草稿');await page.locator('#studentGroupMembers input[value="a"]').check();await page.locator('#studentPartTimeTeacherRate').fill('700');await page.locator('#studentBillingBranch').selectOption('hexi');
  await left.click();await expect(page.locator('#studentName')).toHaveValue('家教未存草稿');await expect(page.locator('#parentName')).toHaveValue('草稿家長');
  await right.click();await expect(page.locator('#studentName')).toHaveValue('團班未存草稿');await expect(page.locator('#studentGroupMembers input[value="a"]')).toBeChecked();await expect(page.locator('#studentPartTimeTeacherRate')).toHaveValue('700');await expect(page.locator('#studentBillingBranch')).toHaveValue('hexi');
@@ -31,7 +31,7 @@ test('左右分頁分開學生與團班，切換保留草稿，編輯既有團�
 test('團班預览區分月費、缺漏費率及零元，搜尋與清空不改既有孩子',async({page})=>{
  await page.evaluate(()=>db.students.push({id:'missing',name:'未填費用',parent:'未填家長',courseType:'1對1'},{id:'zero',name:'零元學生',rate:0,courseType:'1對1'}));
  const before=await page.evaluate(()=>JSON.stringify(db.students));
- await page.getByRole('tab',{name:'團班',exact:true}).click();
+ await page.getByRole('tab',{name:'團課',exact:true}).click();
  for(const id of ['a','care','missing','zero'])await page.locator('#studentGroupMembers input[value="'+id+'"]').check();
  const preview=page.locator('#studentGroupFeePreview');await expect(preview).toContainText('NT$600／小時');await expect(preview).toContainText('NT$9,000／月');await expect(preview).toContainText('未設定收費');await expect(preview).toContainText('NT$0／小時');
  await page.getByRole('searchbox',{name:'搜尋團班學生',exact:true}).fill('王家長');await expect(preview).toContainText('已選 4 位');

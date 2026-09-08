@@ -1,8 +1,6 @@
-import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.262';
+import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.264';
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 
-const clone=value=>JSON.parse(JSON.stringify(value));
-const canonical=value=>Array.isArray(value)?value.map(canonical):(value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value);
 
 export function normalizeRecordDb(db,{cloneRecords=true}={}){
  const expected=new Set(FULL_RECORD_COLLECTIONS),unknown=Object.keys(db??{}).filter(key=>!expected.has(key));
@@ -19,7 +17,9 @@ export function normalizeRecordDb(db,{cloneRecords=true}={}){
 }
 
 export function recordDataDigest(db){
- return sha256Canonical(canonical(normalizeRecordDb(db)));
+ // sha256Canonical already sorts every map recursively. A second canonical
+ // tree was identical, but cloned the entire database on every stream event.
+ return sha256Canonical(normalizeRecordDb(db));
 }
 
 export function recordDataHash(db){

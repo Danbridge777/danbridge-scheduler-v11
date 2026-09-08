@@ -80,6 +80,7 @@ export function createFirebaseProductionRecordStreamAdapter({subscribeDocument,s
     const map=rows[collection];
     if(!initialized){for(const row of value.documents){const id=String(row.id);if(!id||map.has(id))throw new Error(`${collection} production 逐筆包含重複 ID`);map.set(id,clone(row.data))}loaded.add(collection);initialized=true}
     else for(const change of value.changes){const id=String(change.id);if(change.type==='removed')throw new Error(`${collection}/${id} 發生禁止的實體刪除`);const before=map.get(id),after=change.data;if(before&&(!Number.isSafeInteger(after?.revision)||after.revision<before.revision||(after.revision===before.revision&&!same(before,after))))throw new Error(`${collection}/${id} production revision 倒退或同版變造`);map.set(id,clone(after))}
+    if(!initialVerified&&loaded.size<FULL_RECORD_COLLECTIONS.length)state('loading',{waitingFor:'collections',loadedCollectionCount:loaded.size,totalCollectionCount:FULL_RECORD_COLLECTIONS.length});
     await emit(`records:${collection}`);
    },tokenValue),block));
   }

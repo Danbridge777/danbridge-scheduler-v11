@@ -18,7 +18,7 @@ function createSchedulerExecutionLane({maxPending=16,maxWaitMs=5000,clock=()=>Da
 
 // Server-only scheduler capability. The caller never supplies raw record
 // operations, paths, role views or notification recipients.
-async function createProductionSchedulerRuntime({firestore,serverTimestamp,primaryOwnerEmail,now=()=>Date.now()}){
+async function createProductionSchedulerRuntime({firestore,serverTimestamp,primaryOwnerEmail,now=()=>Date.now(),onTiming=()=>{}}){
  const executeInOrder=createSchedulerExecutionLane();
  const [{FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb},{sha256Canonical},{prepareActiveRecordSync},{createFirebaseProductionRecordBatchAdapter},controlPolicy,policy,projection,notificationPolicy]=await Promise.all([
   import('../js/core/cloud-full-record-shadow.js'),import('../js/core/cloud-immutable-migration-backup.js'),import('../js/core/cloud-active-record-sync.js'),import('../js/core/firebase-production-record-runtime-adapter.js'),import('../js/core/cloud-production-record-runtime.js'),import('../js/core/production-scheduler-operation.js'),import('../js/core/production-role-view-projection.js'),import('../js/core/production-notification-policy.js')
@@ -56,12 +56,16 @@ async function createProductionSchedulerRuntime({firestore,serverTimestamp,prima
  return Object.freeze({async execute(input,identity){
   if(!identity||identity.emailVerified!==true||identity.appVerified!==true||!projection.PRODUCTION_SCHEDULER_EMAILS.includes(identity.email))throw new Error('排課專員登入驗證無效');
   const request=policy.normalizeProductionSchedulerRequest(input),fingerprint=sha256Canonical(request),receiptRef=firestore.doc(`companies/danbridge/productionSchedulerReceipts/${request.requestId}`),nowIso=new Date(now()).toISOString();
-  return executeInOrder(()=>withProductionCommitLease(firestore,lease=>firestore.runTransaction(async transaction=>{
+  let phaseStarted=performance.now();
+  const mark=phase=>{const at=performance.now();try{onTiming({requestId:request.requestId,phase,ms:at-phaseStarted,count:request.changes.length})}catch{}phaseStarted=at};
+  const response=await executeInOrder(()=>withProductionCommitLease(firestore,lease=>firestore.runTransaction(async transaction=>{
+   mark('admission');
    await lease.assertHeld(transaction);
    const [receipt,controlSnapshot,safetySnapshot,accessSnapshot,...collections]=await Promise.all([
     transaction.get(receiptRef),transaction.get(firestore.doc(PRODUCTION_RECORD_CONTROL_PATH)),transaction.get(firestore.doc(PRODUCTION_RECORD_SAFETY_PATH)),transaction.get(firestore.collection('companyAccess').where('companyId','==','danbridge')),
     ...FULL_RECORD_COLLECTIONS.map(name=>transaction.get(firestore.collection(`productionFullRecordShadows/danbridge/collections/${name}/records`)))
    ]);
+   mark('authority-read');
    const accessRows=accessSnapshot.docs.map(row=>({...row.data(),email:row.id.toLowerCase()})),member=accessRows.find(row=>row.email===identity.email),caller=policy.assertProductionSchedulerActor({...member,uid:identity.uid,email:identity.email});
    if(receipt.exists){const saved=receipt.data();if(saved.fingerprint!==fingerprint||saved.uid!==caller.uid||saved.email!==caller.email)throw new Error('排課回條識別衝突');return saved.response}
    const control=assertProductionRecordRuntimeControl(controlSnapshot.data()),safety=assertProductionRecordRuntimeSafety(safetySnapshot.data(),{activationEpoch:control.activationEpoch});
@@ -69,11 +73,13 @@ async function createProductionSchedulerRuntime({firestore,serverTimestamp,prima
    const documents=Object.fromEntries(FULL_RECORD_COLLECTIONS.map((name,index)=>[name,collections[index].docs.map(row=>({id:row.id,data:row.data()}))])),source=rebuildFullRecordShadowDb(documents,{environment:'production'});
    const hashMemo=new WeakMap(),orderMemo=new WeakMap(),fastRecordHash=db=>`record-v1:${nativeCanonicalRecordDbSha256(db,FULL_RECORD_COLLECTIONS,{memo:hashMemo,orderMemo})}`;
    if(fastRecordHash(source.db)!==safety.recordDataHash||source.documentCount!==safety.documentCount||source.activeCount!==safety.activeCount||source.tombstoneCount!==safety.tombstoneCount)throw new Error('正式權威資料 16 集合核對不符');
+   mark('authority-verify');
    for(const change of request.changes)if(change.before===null&&documents.lessons.some(row=>row.id===change.lessonId))throw new Error('課程 ID 曾使用過，不能復活刪除紀錄');
    const target=policy.buildProductionSchedulerTarget(source.db,request,caller,{nowIso});
    const plan=prepareActiveRecordSync({documentsByCollection:documents,baselineDb:source.db,localDb:target.db,environment:'production',deviceId:`scheduler-${sha256Canonical({uid:caller.uid,requestId:request.requestId}).slice(0,48)}`,activationEpoch:control.activationEpoch,createdAt:nowIso,
     authoritativeSourceHash:safety.recordDataHash,verifiedRemote:{...source,hash:safety.recordDataHash},hashRecordDb:fastRecordHash,hashCanonical:nativeCanonicalSha256,compactResult:true,changedCollections:FULL_RECORD_COLLECTIONS.filter(name=>['lessons','students','makeups','changes'].includes(name)),appendOnlyChangesCount:target.db.changes.length-source.db.changes.length});
    if(plan.conflicts.length||plan.operationCount>180)throw new Error('排課交易超過安全範圍或有資料衝突');
+   mark('target-plan');
    // Unchanged immutable lesson rows cannot change their lesson-only metadata.
    // Include indirect changes (e.g. cancelling an arranged makeup), not merely
    // request IDs, and retain canonical comparison for any newly allocated row.
@@ -92,6 +98,7 @@ async function createProductionSchedulerRuntime({firestore,serverTimestamp,prima
    const response={schema:policy.SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:request.requestId,state:'committed',sourceHash:plan.targetHash,sourceRecordRevision:sourceRevision,operationCount:plan.operationCount,notificationCount:notices.length,schedulerDb:views.find(view=>view.kind==='scheduler'&&view.email===caller.email).db};
    if(Buffer.byteLength(JSON.stringify(response))>750000)throw new Error('排課回條超過安全大小');
    if(2*plan.operationCount+3+derived.length>450)throw new Error('排課原子交易超過安全寫入上限');
+   mark('role-notification-plan');
    // The existing Owner-only adapter is an internal service primitive. It only
    // receives this server-built bounded plan after scheduler authorization.
    const readTransaction=createProductionTransactionReader(firestore,transaction,[controlSnapshot,safetySnapshot,...collections.flatMap(snapshot=>snapshot.docs)]);
@@ -99,8 +106,10 @@ async function createProductionSchedulerRuntime({firestore,serverTimestamp,prima
    if(plan.operationCount){const result=await adapter.apply({activationEpoch:plan.activationEpoch,reason:'scheduler-timetable',operations:plan.operations},`scheduler-${sha256Canonical({uid:caller.uid,requestId:request.requestId}).slice(0,48)}`);if(result.kind!=='batch'||result.targetHash!==plan.targetHash)throw new Error('排課原子提交回條不符')}
    for(const write of derived){if(write.remove)transaction.delete(write.ref);else transaction.set(write.ref,write.value,{merge:write.merge===true})}
    transaction.set(receiptRef,{fingerprint,uid:caller.uid,email:caller.email,response,createdAt:serverTimestamp()});
+   mark('adapter-read-write-plan');
    return response;
   })));
+  mark('commit-release');return response;
  }});
 }
 function productionSchedulerErrorCode(error){

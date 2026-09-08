@@ -322,7 +322,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.262'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.264'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -396,8 +396,9 @@ assert.match(roleResponsiveSource, /function branchManagerConvenience\(\)[\s\S]*
 assert.match(roleResponsiveSource, /if\(current==='owner'\)restoreRoleResponsiveControls\(\)/, 'owner role restores controls hidden by the responsive role layer');
 assert.match(cloudSource, /if\(cloudRole==='owner'\)\{[\s\S]*restoreRoleIsolated\(\);[\s\S]*DanbridgeRoleResponsive\?\.restoreRoleResponsiveControls\?\.\(\)/, 'owner login immediately restores both role-isolation layers');
 assert.match(courseOperationsSource, /if\(ownerCanEdit\)\{editBtn\.style\.removeProperty\('display'\);delete editBtn\.dataset\.roleResponsiveHidden\}/, 'opening a lesson as owner defensively restores its edit button');
-assert.match(cloudSource, /await loadSignedInProfile\(user\);try\{await recordSuccessfulLogin\(user,profile\)\}/, 'last login is written only after token-ready authorization succeeds');
-assert.match(cloudSource, /最後登入時間更新失敗[\s\S]*applyRoleUI\(profile,user\)/, 'a login timestamp failure does not block an authorized account');
+assert.match(cloudSource, /await loadSignedInProfile\(user\);if\(auth.currentUser\?\.uid!==user.uid\)return;/, 'token-ready authorization and current identity precede login initialization');
+assert.match(cloudSource, /void recordSuccessfulLogin\(user,profile\)\.catch/, 'login metadata does not block authorized data subscriptions');
+assert.match(cloudSource, /applyRoleUI\(profile,user\)[\s\S]*void recordSuccessfulLogin\(user,profile\)\.catch/, 'authorized role is applied before the non-blocking login timestamp update');
 assert.match(cloudSource, /最後登入：\$\{escapeHTML\(last\)\}/, 'account management displays the last successful login');
 assert.match(cloudSource, /filter\(d=>d\.data\(\)\?\.role==='teacher'\)/, 'teacher access list excludes branch managers');
 const rulesSource = fs.readFileSync(path.join(root, 'firebase/firestore.rules'), 'utf8');

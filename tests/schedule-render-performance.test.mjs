@@ -1,8 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
 
 const source=path=>readFile(new URL(path,import.meta.url),'utf8');
+
+test('實際角色 UI 包裝保留課表延後分析參數、this 與回傳值',async()=>{
+ const code=await source('../js/app/v20014-role-responsive-ux.js');
+ const calls=[],receiver={},options={deferAnalysis:true},result={rendered:true};
+ const document={readyState:'complete',body:{dataset:{}},querySelector:()=>null,querySelectorAll:()=>[]};
+ const window={renderCalendar:function(...args){calls.push({receiver:this,args});return result}};
+ vm.runInNewContext(code,{window,document});
+ assert.equal(window.renderCalendar.call(receiver,options),result);
+ assert.equal(calls.length,1);assert.equal(calls[0].receiver,receiver);assert.equal(calls[0].args[0],options);
+});
 
 test('課表操作先讓出目前輸入，再於下一畫面幀單次重畫並保存且不重畫隱藏頁面',async()=>{
   const [scheduler,persistence,orchestrator,visibilityGuard]=await Promise.all([

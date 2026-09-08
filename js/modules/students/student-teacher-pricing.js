@@ -2,7 +2,7 @@
 function ensureStudentTeacherPricingFields(){
   const rate=$('studentRate');if(!rate||$('studentPartTimeTeacherRate'))return;
   const box=document.createElement('div');box.id='studentTeacherPricingFields';
-  box.innerHTML='<label for="studentPartTimeTeacherRate">支付兼職老師的鐘點費</label><input id="studentPartTimeTeacherRate" type="number" min="0" step="0.01" inputmode="decimal" placeholder="留白沿用老師原有時薪"><p class="small">只適用身份為兼職、純時薪制的老師。家教按這位學生設定；團班請填在團班資料，整班每小時付一次，不按孩子人數累加。留白沿用老師時薪，填 0 表示不支付；正職底薪不受影響。</p>';
+  box.innerHTML='<label for="studentPartTimeTeacherRate">兼職老師鐘點費</label><input id="studentPartTimeTeacherRate" type="number" min="0" step="0.01" inputmode="decimal"><details class="student-pricing-details"><summary>計薪說明</summary><p class="small">留白沿用老師時薪，0 為不支付。家教按學生設定；團課整班每小時只付一次。僅適用兼職純時薪制，不影響正職底薪。</p></details>';
   rate.parentElement.after(box);
 }
 function renderStudentTeacherPricing(s={}){ensureStudentTeacherPricingFields();if($('studentPartTimeTeacherRate'))$('studentPartTimeTeacherRate').value=s.partTimeTeacherRate??''}

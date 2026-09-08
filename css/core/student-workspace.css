@@ -1,0 +1,56 @@
+/* One compact CRM workspace; data IDs and financial calculations are unchanged. */
+html body #students{--danbridge-control-height:48px;--danbridge-control-font-size:14px}
+html body #students.active{display:flex!important;flex-direction:column;gap:12px}
+html body #students .student-workspace-tabs{flex:0 0 auto;margin:0;gap:0;background:#fff;border:1px solid #deddd6;border-radius:10px;overflow:hidden}
+html body #students .student-workspace-tabs button{height:48px;min-height:48px;padding:0 16px;font-size:14px!important;line-height:1.3;cursor:pointer}
+html body #students>.grid{grid-template-columns:minmax(340px,420px) minmax(0,1fr)!important;gap:16px!important;min-height:0!important}
+html body #students.active>.grid{flex:1 1 0;height:auto!important}
+html body #students .card{border:1px solid #e2e3e0!important;border-radius:12px!important;padding:18px!important;background:#fff!important;box-shadow:none!important}
+html body #students>.grid>.card.col-4,html body #students>.grid>.card.col-8{padding:18px!important;background:#fff!important;border-radius:12px!important;box-shadow:none!important}
+html body #students .card::before,html body #students .card h2::before,html body #students .card h2::after{display:none!important}
+html body #students .card h2{font-size:18px!important;font-weight:650!important;line-height:1.4!important;margin:0 0 16px!important;padding:0!important}
+html body #students>.grid>.card.col-4>h2{font-size:18px!important;padding:0!important;margin:0 0 16px!important;border:0!important}
+html body #students .crm-form-grid,html body #students .student-details-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px 12px!important}
+html body #students .crm-form-grid>div,html body #students .student-details-grid>div{min-width:0;background:transparent!important;border:0!important;border-radius:0!important;padding:0!important;box-shadow:none!important}
+html body #students .crm-form-grid .span-2,html body #students .student-details-grid .span-2{grid-column:1/-1!important}
+html body #students label{font-size:13px!important;font-weight:550!important;line-height:1.5!important;margin:0 0 6px!important;color:#506070!important;letter-spacing:0!important}
+html body #students .crm-form-grid label{font-size:13px!important;letter-spacing:0!important}
+html body #students :is(input:not([type=checkbox]):not([type=hidden]),select,textarea){border:1px solid #d8dcd9!important;border-radius:7px!important;background-color:#fff!important;box-shadow:none!important;text-align:left!important}
+html body:not(.auth-locked) main section#students .crm-form-grid :is(input:not([type=checkbox]):not([type=hidden]),select,textarea){font-size:14px!important}
+html body:not(.auth-locked) main section#students :is(.crm-form-grid,.toolbar) :is(input:not([type=checkbox]):not([type=hidden]),select,textarea){font-size:14px!important;font-weight:550!important;border-radius:7px!important;text-align:left!important;text-align-last:left!important}
+html body:not(.auth-locked) main section#students :is(.crm-form-grid,.toolbar) select:not([multiple]):not([size]){appearance:none!important;-webkit-appearance:none!important;padding-right:30px!important;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23506070' stroke-width='1.5'/%3E%3C/svg%3E")!important;background-position:right 12px center!important;background-repeat:no-repeat!important}
+html body #students :is(input,select,textarea):focus-visible{outline:2px solid #a78d54;outline-offset:2px}
+html body #students textarea{min-height:80px!important;height:80px;padding:10px!important}
+html body #students .small{font-size:12px!important;line-height:1.6!important;color:#6a7480}
+html body #students details{min-width:0;border-top:1px solid #ecece7;padding-top:10px}
+html body #students summary{font-size:13px!important;color:#64705e;cursor:pointer;padding:6px 0;line-height:1.5}
+html body #students details[open]>.student-details-grid{margin-top:12px}
+html body #students .student-editor-actions{position:sticky;bottom:-18px;z-index:4;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;background:#fff;border-top:1px solid #e7e7e1;padding:12px 0;margin-top:16px}
+html body #students .student-editor-actions .btn{width:100%;height:48px;min-width:0!important;margin:0!important;padding:0 6px!important;font-size:14px!important;border-radius:7px!important;box-shadow:none!important;white-space:normal}
+html body #students .card.col-8>.toolbar{display:grid!important;grid-template-columns:minmax(0,2fr) repeat(2,minmax(0,1fr))!important;gap:12px!important;background:transparent!important;border:0!important;border-bottom:1px solid #e7e7e1!important;padding:0 0 16px!important;margin:0 0 12px!important}
+html body #students .col-8>.toolbar>div:first-child{grid-column:1/-1}
+html body #students .col-8>.toolbar h2{margin:0!important}
+html body #students .card.col-8>.toolbar h2{font-size:18px!important;line-height:1.4!important}
+html body #students .card.col-8>.toolbar label{font-size:13px!important}
+html body #students .col-8>.toolbar>div{min-width:0!important}
+html body #students :is(#crmSearch,#crmTeacherFilter,#crmArchiveFilter){height:48px!important;min-height:48px!important;max-height:48px!important;font-size:14px!important;text-align:left!important;text-align-last:left!important}
+html body #students .table-wrap{border:0!important;border-radius:0!important}
+html body #students .table-wrap table{width:100%!important;min-width:0!important;table-layout:fixed}
+html body #students .table-wrap :is(th,td){white-space:normal!important;overflow-wrap:anywhere}
+html body #students .table-wrap th:nth-child(1){width:18%}html body #students .table-wrap th:nth-child(2){width:24%}html body #students .table-wrap th:nth-child(3){width:13%}html body #students .table-wrap th:nth-child(4){width:18%}html body #students .table-wrap th:nth-child(5){width:10%}html body #students .table-wrap th:nth-child(6){width:17%}
+html body #students :is(th,td){font-size:13px!important;padding:12px 10px!important;line-height:1.5}
+html body #students .crm-actions .btn{min-width:0!important;min-height:36px!important;height:36px!important;padding:0 8px!important;font-size:12px!important;border-radius:6px!important;margin:3px!important;box-shadow:none!important}
+html body #students .group-roster-options{max-height:240px;overflow:auto;border:1px solid #e3e4de;border-radius:7px;padding:0!important}
+html body #students .group-roster-option{display:flex!important;align-items:center;gap:10px;padding:10px!important;margin:0!important;min-height:44px;line-height:1.5}
+html body #students .group-roster-option[hidden]{display:none!important}
+html body #students .group-roster-option span{font-size:13px!important;overflow-wrap:anywhere}
+html body #students .group-roster-search .small{margin:6px 0}
+html body #students #studentGroupFeePreview{margin:0;padding:0;border:0}
+html body #students #studentGroupFeePreview p{margin:6px 0}
+/* Normal text and actionable controls use one scale in both tabs. */
+html body #students :is(.crm-form-grid,.student-details-grid,.card.col-8>.toolbar) label,
+html body #students :is(summary,.small,.group-roster-option span,th,td){font-size:14px!important}
+html body #students .crm-actions .btn{width:100%!important;height:48px!important;min-height:48px!important;margin:0!important;font-size:14px!important;white-space:normal!important;line-height:1.3!important;max-width:100%!important}
+@media(min-width:1041px){html body #students.active{height:var(--student-crm-viewport-height,calc(100dvh - 118px))!important;min-height:520px!important;overflow:hidden!important}html body #students.active>.grid>.card{height:100%!important;min-height:0!important}html body #students.active>.grid>.card.col-4{overflow-y:auto!important;overflow-x:hidden!important}html body #students.active>.grid>.card.col-8{display:flex!important;flex-direction:column!important;overflow:hidden!important}html body #students.active>.grid>.card.col-8>.table-wrap{min-height:0;flex:1;overflow:auto!important}}
+@media(max-width:1040px){html body #students>.grid{grid-template-columns:minmax(0,1fr)!important}html body #students.active>.grid{flex:none}html body #students .student-workspace-tabs{position:sticky;top:0;z-index:10}html body #students .card{padding:16px!important}html body #students .student-editor-actions{bottom:-16px}}
+@media(max-width:540px){html body #students .card.col-8>.toolbar{grid-template-columns:repeat(2,minmax(0,1fr))!important}html body #students .col-8>.toolbar>div:nth-child(2){grid-column:1/-1}html body #students .table-wrap{overflow:auto!important}html body #students .student-branch-fields{grid-template-columns:repeat(2,minmax(0,1fr))!important}}

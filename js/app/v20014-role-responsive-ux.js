@@ -194,7 +194,7 @@
     }
     const originalCalendar=window.renderCalendar;
     if(typeof originalCalendar==='function'&&!originalCalendar.__mobileClipboard){
-      const wrapped=function(){originalCalendar();installMobileCalendarClipboard()};wrapped.__mobileClipboard=true;window.renderCalendar=wrapped;
+      const wrapped=function(...args){const result=originalCalendar.apply(this,args);installMobileCalendarClipboard();return result};wrapped.__mobileClipboard=true;window.renderCalendar=wrapped;
     }
     installMobileCalendarClipboard();
     window.DanbridgeRoleResponsive={apply,restoreRoleResponsiveControls,teacherStats,teacherConvenience,branchManagerStats,branchManagerConvenience,installCampDateScroller,installMobileCalendarClipboard};

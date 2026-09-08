@@ -3,9 +3,9 @@ function ensureStudentGroupFields(){
   if($('studentGroupFields'))return;
   const anchor=$('studentCourseType')?.parentElement;if(!anchor)return;
   const box=document.createElement('div');box.id='studentGroupFields';box.className='span-2 hidden';
-  box.innerHTML='<input type="checkbox" id="studentIsGroupRoster" hidden aria-hidden="true" tabindex="-1"><div id="studentGroupMembersWrap" class="hidden"><label>團班學生名單</label><div id="studentGroupMembers" class="group-roster-options"></div><div id="studentGroupFeePreview" aria-live="polite"></div><p class="small">每位孩子沿用自己的收費與家長資料。更改名單只影響之後新增的課程；排課時核對老師、教室與學生的時間。</p></div>';
-  anchor.after(box);
-  const branchFields=document.createElement('div');branchFields.className='span-2 student-branch-fields';branchFields.innerHTML='<div><label for="studentBillingBranch">歸屬校區（營收計入）</label><select id="studentBillingBranch"></select></div><div><label for="studentAttendanceBranch">預設上課校區</label><select id="studentAttendanceBranch"></select></div><p class="small span-2">兩者獨立保存。營收只依歸屬校區；未填寫時列為未歸屬，不以教室或舊校區猜填。</p>';anchor.before(branchFields);
+  box.innerHTML='<input type="checkbox" id="studentIsGroupRoster" hidden aria-hidden="true" tabindex="-1"><div id="studentGroupMembersWrap" class="hidden"><div id="studentGroupMembers" class="group-roster-options"></div><details class="student-roster-billing-details"><summary>已選學生與收費</summary><div id="studentGroupFeePreview" aria-live="polite"></div><p class="small">依課表時數、各孩子收費及家長分帳；名單變更不回改舊課程。</p></details></div>';
+  $('studentStatus').parentElement.after(box);
+  const branchFields=document.createElement('div');branchFields.className='span-2 student-branch-fields';branchFields.innerHTML='<div><label for="studentBillingBranch">歸屬校區 · 營收</label><select id="studentBillingBranch"></select></div><div><label for="studentAttendanceBranch">上課校區</label><select id="studentAttendanceBranch"></select></div>';anchor.before(branchFields);
   $('studentGroupMembers').addEventListener('change',renderGroupFeePreview);
   ensureStudentWorkspace();
 }

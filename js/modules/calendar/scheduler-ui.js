@@ -536,6 +536,8 @@ function attachDragHandlers(){
   /* 放下區永遠註冊；拖曳中途若選取狀態改變也不會失去 drop。 */
   if(!canMove)return;
   document.querySelectorAll('#calendarCanvas [data-date]').forEach(c=>{
+    if(c.dataset.calendarDropBound==='1')return;
+    c.dataset.calendarDropBound='1';
     c.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';c.classList.add('drop-target')});
     c.addEventListener('dragleave',()=>c.classList.remove('drop-target'));
     c.addEventListener('drop',e=>{e.preventDefault();c.classList.remove('drop-target');moveLessonTo(e.dataTransfer.getData('text/plain'),c.dataset.date,c.dataset.time)})
