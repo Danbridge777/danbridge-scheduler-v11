@@ -68,7 +68,7 @@ function buildBatchCandidates(){
 function previewBatch(){
   const rows=buildBatchCandidates();batchPreviewCache=rows;
   const ok=rows.filter(x=>!x.error).length,bad=rows.length-ok;
-  $('batchPreview').innerHTML=`<p><span class="ok-text">可套用 ${ok} 堂</span>｜<span class="danger-text">衝突／無效 ${bad} 堂</span></p>`+rows.map(x=>`<div>${esc(student(x.old.studentId).name)}：${x.old.date} ${x.old.start} → ${x.next.date} ${x.next.start}｜${esc(locationLabel(x.next))}｜${esc(x.next.room||'未指定教室')} ${x.error?`<span class="danger-text">（${x.error}）</span>`:x.warning?`<span class="danger-text">（${x.warning}，允許套用）</span>`:''}</div>`).join('');
+  $('batchPreview').innerHTML=`<p><span class="ok-text">可套用 ${ok} 堂</span>｜<span class="danger-text">衝突／無效 ${bad} 堂</span></p>`+rows.map(x=>`<div><span data-calendar-student-id="${esc(x.old.studentId)}">${esc(student(x.old.studentId).name)}</span>：${x.old.date} ${x.old.start} → ${x.next.date} ${x.next.start}｜${esc(locationLabel(x.next))}｜${esc(x.next.room||'未指定教室')} ${x.error?`<span class="danger-text">（${x.error}）</span>`:x.warning?`<span class="danger-text">（${x.warning}，允許套用）</span>`:''}</div>`).join('');
 }
 function applyBatch(){
   const rows=batchPreviewCache||buildBatchCandidates();

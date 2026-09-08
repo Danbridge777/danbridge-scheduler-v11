@@ -1,7 +1,56 @@
 /* Danbridge Scheduler V15.7 — Calendar Course Operations
    Extracted without changing data schema or runtime behavior. */
 
-function openLessonModal(date=todayStr(),start='16:00',id=''){cancelSelectionForNewAction();renderSelects();renderLessonBranchOptions();clearLessonForm();toggleQuickStudent(false);$('lessonDate').value=date;$('startTime').value=start;$('endTime').value=addMinutes(start,60);if(id)fillLessonForm(id);$('lessonModal').classList.add('show');handleLocationChange();syncCampField()}
+function applyStudentScheduleDefaults(){
+  if($('lessonId')?.value||!calendarOwnerCanEdit())return false;
+  const selector=$('lessonStudent'),sid=selector?.value||'';
+  const matches=(db.students||[]).filter(row=>String(row.id)===sid);
+  if(!sid||matches.length!==1)return false;
+  const s=matches[0],date=$('lessonDate').value;
+  const previous=(db.lessons||[]).filter(row=>String(row.studentId)===sid&&row.date<=date&&!row.isDraft&&row.lessonState!=='draft'&&!['取消','停課','草稿'].includes(row.status))
+    .sort((a,b)=>(String(b.date)+String(b.start)).localeCompare(String(a.date)+String(a.start))||String(a.id).localeCompare(String(b.id)))[0];
+  const availableTeachers=activeTeachers(),validTeacher=id=>availableTeachers.some(row=>String(row.id)===String(id));
+  const teacherId=validTeacher(s.preferredTeacherId)?s.preferredTeacherId:(validTeacher(previous?.teacherId)?previous.teacherId:'');
+  const studentBranches=(s.branchIds||[]).filter(id=>branchRecord(id)&&!['unassigned','home_service','online'].includes(id));
+  const historicalBranch=previous?.branchId||'';
+  const branchId=studentBranches.length===1?studentBranches[0]:(branchRecord(historicalBranch)?historicalBranch:'');
+  const mode=previous?window.DanbridgeAccess.deliveryModeFromLesson(previous):'onsite';
+  const minutes=time=>/^([01]\d|2[0-3]):[0-5]\d$/.test(time||'')?Number(time.slice(0,2))*60+Number(time.slice(3)):NaN;
+  const duration=previous?minutes(previous.end)-minutes(previous.start):NaN;
+  const start=minutes($('startTime').value);
+  if(Number.isFinite(duration)&&duration>0&&start+duration<1440)$('endTime').value=addMinutes($('startTime').value,duration);
+  else if(selector.dataset.defaultsStudentId&&selector.dataset.defaultsStudentId!==sid&&start+60<1440)$('endTime').value=addMinutes($('startTime').value,60);
+  $('lessonTeacher').value=teacherId;
+  $('lessonTitle').value=previous?.title||s.courseType||'';
+  $('lessonBranch').value=branchId;
+  $('lessonDeliveryMode').value=['onsite','home','online'].includes(mode)?mode:'onsite';
+  $('lessonRoom').value='';$('lessonAddress').value='';$('lessonMeetingUrl').value='';
+  $('lessonOnlinePlatform').value=previous?.onlinePlatform||'Google Meet';
+  handleBranchChange();
+  if(mode==='onsite'&&historicalBranch===branchId&&(branchRecord(branchId)?.rooms||[]).includes(previous?.room))$('lessonRoom').value=previous.room;
+  if(mode==='home')$('lessonAddress').value=s.homeAddress||previous?.address||'';
+  if(mode==='online')$('lessonMeetingUrl').value=previous?.meetingUrl||'';
+  syncCoTeacherOptions();syncCampField();
+  if(isGroupStudentId(sid)){
+    const coTeachers=new Set(previous?lessonTeacherIds(previous).filter(id=>validTeacher(id)&&id!==teacherId):[]);
+    document.querySelectorAll('#coTeacherChecks input').forEach(input=>input.checked=coTeachers.has(input.value));
+    $('lessonCampId').value=previous?.campId||'';
+  }
+  renderLessonMapLink();selector.dataset.defaultsStudentId=sid;
+  let hint=$('lessonStudentDefaultsHint');
+  if(!hint){hint=document.createElement('div');hint.id='lessonStudentDefaultsHint';hint.className='small';hint.setAttribute('role','status');selector.closest('.student-select-row')?.after(hint);if(!hint.isConnected)selector.after(hint)}
+  hint.textContent=previous?`已帶入學生設定與 ${previous.date} 課程的排課資料；請核對老師、地點與時間，仍可修改。`:'已帶入學生已設定的排課資料；未設定的老師、校區與教室請補選。';
+  window.realtimeConflicts?.();
+  return true;
+}
+
+function openLessonModal(date=todayStr(),start='16:00',id=''){
+  cancelSelectionForNewAction();renderSelects();renderLessonBranchOptions();clearLessonForm();toggleQuickStudent(false);
+  $('lessonStudent').value='';$('lessonTeacher').value='';delete $('lessonStudent').dataset.defaultsStudentId;$('lessonStudentDefaultsHint')?.remove();
+  $('lessonDate').value=date;$('startTime').value=start;$('endTime').value=addMinutes(start,60);
+  if(id)fillLessonForm(id);
+  $('lessonModal').classList.add('show');handleLocationChange();syncCampField();
+}
 
 function closeLessonModal(){toggleQuickStudent(false);$('lessonModal').classList.remove('show')}
 
@@ -131,6 +180,7 @@ function openCourseDrawer(id){
   const mode=window.DanbridgeAccess?.deliveryModeFromLesson?.(l)||'onsite';const place=mode==='home'?`${locationLabel(l)}${l.address?'・'+l.address:''}`:mode==='online'?`${locationLabel(l)}${l.onlinePlatform?'・'+l.onlinePlatform:''}`:`${locationLabel(l)}${l.room?'・'+l.room:''}`;
   const role=window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role||'',teacherView=role==='teacher',payment=l.paymentStatus==='paid'?'已繳':l.paymentStatus==='waived'?'免收':'未繳';
   $('courseDrawerTitle').textContent=s.name||l.title||'課程';
+  $('courseDrawerTitle').dataset.calendarStudentId=l.studentId||'';
   $('courseDrawerSubtitle').textContent=`${formatCourseDrawerDate(l.date)}・${l.start}–${l.end}`;
   $('courseDrawerBody').innerHTML=`
     <div class="course-drawer-status-row">

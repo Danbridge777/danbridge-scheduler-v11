@@ -4,10 +4,57 @@
  * Contains calendar rendering, selection, clipboard, keyboard and drag handlers.
  */
 
+// One delegated preview survives calendar re-renders without changing data or drag handlers.
+function installCalendarStudentParentPreview(){
+  const selector='#calendarCanvas [data-id], [data-calendar-student-id], #lessonStudent, #calendarStudentFilter, #smartStudent';
+  let tooltip=null,anchor=null;
+  const hide=()=>{if(tooltip){tooltip.remove();tooltip=null}anchor=null};
+  const position=()=>{
+    if(!anchor?.isConnected||!tooltip){hide();return}
+    const rect=anchor.getBoundingClientRect(),box=tooltip.getBoundingClientRect();
+    if(rect.bottom<0||rect.top>innerHeight){hide();return}
+    tooltip.style.left=Math.max(12,Math.min(rect.left,innerWidth-box.width-12))+'px';
+    tooltip.style.top=Math.max(12,rect.bottom+8+box.height<=innerHeight-12?rect.bottom+8:rect.top-box.height-8)+'px';
+  };
+  const show=event=>{
+    const target=event.target?.closest?.(selector);if(!target){hide();return}
+    if(event.buttons||document.body.classList.contains('touch-drag-active')){hide();return}
+    const studentId=target.dataset.calendarStudentId||
+      (target.matches('select')?target.value:db.lessons.find(row=>String(row.id)===target.dataset.id)?.studentId);
+    const text=studentId?calendarStudentParentPreview(studentId):'';
+    if(!text){hide();return}
+    if(anchor===target&&tooltip?.textContent===text)return;
+    hide();anchor=target;tooltip=document.createElement('div');
+    tooltip.id='calendarStudentParentPreview';tooltip.setAttribute('role','tooltip');
+    tooltip.textContent=text;
+    Object.assign(tooltip.style,{position:'fixed',zIndex:'2147483647',pointerEvents:'none',whiteSpace:'pre-wrap',overflowWrap:'anywhere',maxWidth:'min(320px, calc(100vw - 24px))',maxHeight:'calc(100vh - 24px)',overflow:'hidden',padding:'10px 14px',borderRadius:'10px',background:'#17263b',color:'#fff',fontSize:'14px',lineHeight:'1.5',boxShadow:'0 4px 18px #0003'});
+    document.body.appendChild(tooltip);
+    position();
+  };
+  document.addEventListener('pointerover',show);
+  document.addEventListener('focusin',show);
+  document.addEventListener('change',event=>{if(event.target.matches?.(selector))show(event)});
+  document.addEventListener('pointerout',event=>{if(anchor&&!anchor.contains(event.relatedTarget))hide()});
+  document.addEventListener('focusout',hide);
+  document.addEventListener('pointerdown',hide,true);
+  document.addEventListener('keydown',hide,true);
+  document.addEventListener('scroll',()=>{if(anchor)position()},true);
+  window.addEventListener('blur',hide);window.addEventListener('resize',hide);
+  new MutationObserver(()=>{if(anchor&&(!anchor.isConnected||!calendarStudentParentPreview(anchor.dataset.calendarStudentId||anchor.value||db.lessons.find(row=>String(row.id)===anchor.dataset.id)?.studentId)))hide()}).observe(document.body,{attributes:true,attributeFilter:['class','data-cloud-role']});
+}
+
 function calendarFilterState(){return{teacher:$('calendarTeacherFilter')?.value||'',location:$('calendarLocationFilter')?.value||'',student:$('calendarStudentFilter')?.value||'',room:$('calendarRoomFilter')?.value||'',state:$('calendarStateFilter')?.value||'',search:($('calendarSearch')?.value||'').trim().toLowerCase()}}
 function currentCalendarTeacherId(){return $('calendarTeacherFilter')?.value||''}
 function calendarIsTeacherView(){const context=window.DanbridgeAccess?.getContext?.()||{};return (window.currentCloudRole?.()||context.role||'')==='teacher'&&context.canManageSchedule!==true}
 function calendarTeacherScopedLessons(rows){const teacherId=currentCalendarTeacherId();return teacherId?rows.filter(l=>lessonTeacherIds(l).includes(teacherId)):rows}
+function calendarStudentParentPreview(studentId){
+  const role=window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role||'';
+  if(document.body.classList.contains('auth-locked')||!['owner','branch_manager'].includes(role))return '';
+  const matches=(db.students||[]).filter(row=>String(row.id)===String(studentId));
+  if(matches.length!==1)return '';
+  const row=matches[0];
+  return `${row.name||'未命名學生'}\n家長：${String(row.parent||'').trim()||'尚未填寫'}`;
+}
 function lessonMatchesCalendar(l,f=calendarFilterState()){if(f.teacher&&!lessonTeacherIds(l).includes(f.teacher))return false;if(f.location&&locationLabel(l)!==f.location)return false;if(f.student&&l.studentId!==f.student)return false;if(f.room&&(l.room||'')!==f.room)return false;if(f.state&&(l.lessonState||(l.isDraft?'draft':'active'))!==f.state)return false;if(f.search){const hay=[l.date,l.start,l.end,l.title,l.room,l.location,l.address,l.status,student(l.studentId).name,student(l.studentId).parent,lessonTeacherNames(l),effectiveCampId(l)].join(' ').toLowerCase();if(!hay.includes(f.search))return false}return true}
 function lessonHoverText(l){const s=student(l.studentId),teacherView=(window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role)==='teacher',parent=!teacherView&&s.parent?`\n家長：${s.parent}`:'',contact=!teacherView&&s.contact?`\n聯絡：${s.contact}`:'',addr=l.location==='到府'&&l.address?`\n地址：${l.address}`:'',payment=teacherView?'':`\n付款：${l.paymentStatus==='paid'?'已繳':l.paymentStatus==='waived'?'免收':'未繳'}`;return `${l.date} ${l.start}–${l.end}\n學生／班級：${s.name||'未命名'}${parent}${contact}\n老師：${lessonTeacherNames(l)||'未指定'}\n課程：${l.title||'未命名'}\n地點：${locationLabel(l)} ${l.room||''}${addr}\n狀態：${l.status||''}${payment}\n備註：${l.note||'—'}`}
 function visibleCalendarRange(){const mode=$('calendarMode').value,d=new Date(($('calendarDate').value||todayStr())+'T00:00:00');if(mode==='week'){const mon=new Date(d);mon.setDate(d.getDate()-((d.getDay()+6)%7));const sun=new Date(mon);sun.setDate(mon.getDate()+6);return{start:localDate(mon),end:localDate(sun),days:7}}const start=new Date(d.getFullYear(),d.getMonth(),1),end=new Date(d.getFullYear(),d.getMonth()+1,0);return{start:localDate(start),end:localDate(end),days:end.getDate()}}
@@ -488,3 +535,4 @@ function attachDragHandlers(){
     c.addEventListener('drop',e=>{e.preventDefault();c.classList.remove('drop-target');moveLessonTo(e.dataTransfer.getData('text/plain'),c.dataset.date,c.dataset.time)})
   })
 }
+installCalendarStudentParentPreview();

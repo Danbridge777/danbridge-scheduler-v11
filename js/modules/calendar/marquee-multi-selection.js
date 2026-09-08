@@ -44,6 +44,7 @@
 
   function toggleCard(card){
     const id=card?.dataset.id;if(!id)return;
+    focusCalendar();
     const wasSelecting=selectionMode||selectedLessonIds.size>0;
     if(selectedLessonIds.has(id))selectedLessonIds.delete(id);else selectedLessonIds.add(id);
     selectionMode=selectedLessonIds.size>0;updateSelectionCount();
@@ -52,8 +53,17 @@
     if(!wasSelecting||!selectionMode)refresh();
   }
 
+  function focusCalendar(){
+    // Selection owns subsequent shortcuts; preventDefault must not leave focus
+    // in the search/filter field. Do not scroll or intercept text-field typing.
+    const canvas=controller.canvas;if(!canvas)return;
+    if(!canvas.hasAttribute('tabindex'))canvas.tabIndex=-1;
+    canvas.focus({preventScroll:true});
+  }
+
   function beginMarquee(event){
     if(!canEdit()||event.pointerType==='touch'||event.button!==0||pasteClickMode||cardOf(event.target)||isControl(event.target))return;
+    focusCalendar();
     const box=document.getElementById('marqueeBox');
     controller.marquee={pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,x:event.clientX,y:event.clientY,moved:false,additive:event.ctrlKey||event.metaKey,box,items:cards().map(element=>({element,rect:element.getBoundingClientRect()}))};
     selectionMode=true;updateSelectionCount();
