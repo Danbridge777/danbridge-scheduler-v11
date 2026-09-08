@@ -125,6 +125,20 @@ test('every chargeable private and group lesson is hours multiplied by that stud
   assert.equal(groupBill.total,3.5*600);
 });
 
+test('student availability text never affects billing; only timetable start and end times do',()=>{
+  const app=runtime({
+    students:[{id:'s',name:'課表唯一時間來源',parent:'林家長',courseType:'1對1',rate:800,availability:'週一 09:00-21:00\n週三 00:00-23:59'}],
+    lessons:[
+      lesson('l1','s','2026-09-07','16:10','17:40'),
+      lesson('l2','s','2026-09-09','18:25','19:10')
+    ]
+  });
+  const bill=app.studentMonthlyBillingData('s','2026-09');
+  assert.equal(bill.tutoringHours,2.25);
+  assert.equal(bill.total,2.25*800);
+  assert.match(app.studentLineBillingText('s','2026-09'),/計算：2\.25 小時 × NT\$800 = NT\$1,800/);
+});
+
 test('legacy per-lesson or monthly billing labels cannot override hours multiplied by rate',()=>{
   const app=runtime({
     students:[

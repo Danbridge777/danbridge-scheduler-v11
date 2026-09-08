@@ -92,6 +92,7 @@ test('學生與課表快速新增表單依課程類型鎖定正確收費規則',
     window.currentCloudRole=()=> 'owner';
     switchTab('students');
   });
+  await expect(page.locator('#studentAvailability')).toHaveCount(0);
 
   await page.selectOption('#studentCourseType',{label:'安親'});
   await expect(page.locator('#studentBilling')).toHaveValue('month');
