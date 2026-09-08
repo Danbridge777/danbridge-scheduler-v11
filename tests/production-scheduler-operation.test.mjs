@@ -1,13 +1,79 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {FULL_RECORD_COLLECTIONS} from '../js/core/cloud-full-record-shadow.js';
+import {FULL_RECORD_COLLECTIONS,buildFullRecordShadowPlan,rebuildFullRecordShadowDb} from '../js/core/cloud-full-record-shadow.js';
+import {prepareActiveRecordSync} from '../js/core/cloud-active-record-sync.js';
+import {recordDataHash} from '../js/core/cloud-record-data-hash.js';
+import {nativeCanonicalSha256,nativeCanonicalRecordDbSha256} from '../functions/native-canonical-sha256.cjs';
 import {productionSchedulerErrorCode,createSchedulerExecutionLane} from '../functions/production-scheduler-runtime.cjs';
+import {withProductionCommitLease,COMMIT_LEASE_PATH} from '../functions/production-commit-lease.cjs';
+import {createProductionTransactionReader} from '../functions/production-transaction-reads.cjs';
 import {SCHEDULER_OPERATION_SCHEMA,normalizeProductionSchedulerRequest,assertProductionSchedulerActor,buildProductionSchedulerTarget,schedulerLesson} from '../js/core/production-scheduler-operation.js';
 const actor={uid:'scheduler-test-uid',email:'aa0966626336@gmail.com',role:'teacher',active:true,companyId:'danbridge',teacherId:'teacher-aa',canManageSchedule:true,displayName:'AA'};
 const lesson={id:'test-lesson-1',date:'2026-10-01',start:'20:00',end:'20:30',studentId:'student-1',teacherId:'teacher-1',teacherIds:['teacher-1'],branchId:'art_museum',status:'未上課'};
 const seed=()=>({...Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]])),branches:[{id:'art_museum'}],students:[{id:'student-1',name:'Isolated',rate:123,parentContact:'private'}],teachers:[{id:'teacher-1'}],lessons:[{...structuredClone(lesson),paymentStatus:'paid',chargeStudent:'yes',payTeacher:'yes',teacherReportText:'preserve report'}],fixedExpenses:[{id:'expense-1',amount:999}]});
 const request=changes=>({schema:SCHEDULER_OPERATION_SCHEMA,requestId:'scheduler-test-request-1',release:'20.26.164',changes});
 const run=(db,changes)=>buildProductionSchedulerTarget(db,request(changes),actor,{nowIso:'2026-09-03T13:00:00.000Z'});
+
+test('交易讀取合併 RPC、保留不存在文件、只共用同次交易快照',async()=>{
+ const snapshot=(path,exists=true)=>({ref:{path},exists,data:()=>exists?{path}:undefined}),calls=[],firestore={doc:path=>({path})};
+ const transaction={getAll:async(...refs)=>{calls.push(refs.map(row=>row.path));return refs.map(row=>snapshot(row.path,row.path!=='missing')).reverse();}};
+ const cached=snapshot('cached'),read=createProductionTransactionReader(firestore,transaction,[cached]);
+ const a=read('a');assert.equal(read('a'),a);
+ const values=await Promise.all([a,read('b'),read('missing'),read('cached')]);
+ assert.deepEqual(calls,[['a','b','missing']]);assert.equal(values[0].ref.path,'a');assert.equal(values[2].exists,false);assert.equal(values[3],cached);
+ await createProductionTransactionReader(firestore,transaction)('a');assert.equal(calls.length,2,'new attempt must read again');
+ for(const getAll of [async()=>[],async()=>{throw Error('network failure')}]){
+  const read=createProductionTransactionReader(firestore,{getAll});
+  const outcomes=await Promise.allSettled([read('a'),read('b')]);assert.ok(outcomes.every(row=>row.status==='rejected'));
+ }
+});
+
+test('最佳化規劃與完整規劃的 DB、每筆操作、雜湊及計數完全一致',()=>{
+ const empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(name=>[name,[]]));
+ const documents=empty();for(const op of buildFullRecordShadowPlan(empty(),seed(),{environment:'production',sourceHash:'fixture'}).operations)documents[op.payload.collection].push({id:op.payload.recordId,data:op.payload});
+ for(const action of ['add','move','leave','unleave','note','delete']){
+  const source=rebuildFullRecordShadowDb(documents,{environment:'production'}),current=source.db.lessons.find(row=>row.id==='parity-lesson'),before=current?schedulerLesson(current):null;
+  const after=action==='add'?{...lesson,id:'parity-lesson',date:'2026-10-03'}:action==='delete'?null:{...before,...({move:{date:'2026-10-04'},leave:{status:'學生請假'},unleave:{status:'未上課'},note:{note:'Unicode 臺灣 😀'}}[action])};
+  const target=run(source.db,[{lessonId:'parity-lesson',before,after}]),options={documentsByCollection:documents,baselineDb:source.db,localDb:target.db,environment:'production',deviceId:'parity-device',activationEpoch:'parity-epoch',createdAt:'2026-09-03T13:00:00.000Z'},reference=prepareActiveRecordSync(options),hash=recordDataHash(source.db);
+  const optimized=prepareActiveRecordSync({...options,authoritativeSourceHash:hash,verifiedRemote:{...source,hash},compactResult:true,hashRecordDb:db=>`record-v1:${nativeCanonicalRecordDbSha256(db,FULL_RECORD_COLLECTIONS)}`,hashCanonical:nativeCanonicalSha256,changedCollections:FULL_RECORD_COLLECTIONS.filter(name=>['lessons','students','makeups','changes'].includes(name)),appendOnlyChangesCount:target.db.changes.length-source.db.changes.length});
+  for(const key of ['db','targetHash','baseHash','operations','operationCount','nextSequence'])assert.deepEqual(optimized[key],reference[key],`${action}: ${key}`);
+  for(const op of optimized.operations){const rows=documents[op.collection],index=rows.findIndex(row=>row.id===op.recordId),row={id:op.recordId,data:op.payload};if(index<0)rows.push(row);else rows[index]=row;}
+ }
+});
+
+function leaseStore(){
+ let value=null,revision=0,lostCreate=false;const error=code=>Object.assign(Error('fixture'),{code});
+ const ref={
+  create:async data=>{if(value)throw error(6);value={...data};revision++;if(lostCreate){lostCreate=false;throw error(14);}return{writeTime:revision}},
+  get:async()=>({exists:!!value,data:()=>value&&({...value}),updateTime:revision}),
+  update:async(data,pre)=>{if(!value||pre.lastUpdateTime!==revision)throw error(9);value={...data};return{writeTime:++revision}},
+  delete:async pre=>{if(!value)throw error(5);if(pre.lastUpdateTime!==revision)throw error(9);value=null;revision++}
+ };
+ return{firestore:{doc:path=>{assert.equal(path,COMMIT_LEASE_PATH);return ref}},transaction:{get:()=>ref.get()},get:()=>value,replace:data=>{value=data;revision++},loseCreate:()=>lostCreate=true};
+}
+test('跨實例租約正常提交與例外皆釋放，建立回條遺失只恢復同一 token',async()=>{
+ const store=leaseStore();store.loseCreate();
+ assert.equal(await withProductionCommitLease(store.firestore,async lease=>{await lease.assertHeld(store.transaction);return'committed'}),'committed');assert.equal(store.get(),null);
+ await assert.rejects(withProductionCommitLease(store.firestore,async()=>{throw Error('business failure')}),/business failure/);assert.equal(store.get(),null);
+});
+test('過期租約可條件接管；舊持有者不可提交或刪掉新持有者',async()=>{
+ const store=leaseStore();store.replace({schema:'danbridge-production-commit-lease-v1',token:'expired',expiresAtMs:0});
+ await withProductionCommitLease(store.firestore,async lease=>{
+  await lease.assertHeld(store.transaction);store.replace({schema:'danbridge-production-commit-lease-v1',token:'successor',expiresAtMs:999999});
+  await assert.rejects(lease.assertHeld(store.transaction),e=>e.code===14);
+ },{clock:()=>100});assert.equal(store.get().token,'successor');
+});
+test('未過期或格式不明租約不搶占；等候逾時不執行工作',async()=>{
+ for(const value of [{schema:'danbridge-production-commit-lease-v1',token:'other',expiresAtMs:999999},{malformed:true}]){
+  const store=leaseStore();store.replace(value);let clock=0;
+  await assert.rejects(withProductionCommitLease(store.firestore,()=>assert.fail('must not execute'),{clock:()=>clock,maxWaitMs:30,sleep:async ms=>{clock+=ms},random:()=>0}),e=>e.code===14);
+  assert.deepEqual(store.get(),value);
+ }
+});
+test('工作已超出租約有效時間時必須拒絕提交',async()=>{
+ const store=leaseStore();let clock=0;
+ await withProductionCommitLease(store.firestore,async lease=>{clock=11;await assert.rejects(lease.assertHeld(store.transaction),e=>e.code===14)},{clock:()=>clock,leaseMs:10});assert.equal(store.get(),null);
+});
 
 test('group roster survives scheduler create, move and delete, rejects missing members and overlapping child',()=>{
  const db=seed();db.students.push({id:'group',name:'團班',courseType:'團班',isGroupRoster:true,groupMemberIds:['student-1']});

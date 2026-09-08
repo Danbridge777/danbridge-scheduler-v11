@@ -4,7 +4,7 @@ import {createRequire} from 'node:module';
 import {Firestore,FieldValue} from '@google-cloud/firestore';
 import {FULL_RECORD_COLLECTIONS,buildFullRecordShadowPlan,rebuildFullRecordShadowDb} from '../js/core/cloud-full-record-shadow.js';
 import {recordDataHash} from '../js/core/cloud-record-data-hash.js';
-import {buildProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,PRODUCTION_RECORD_CONTROL_PATH,PRODUCTION_RECORD_SAFETY_PATH} from '../js/core/cloud-production-record-runtime.js';
+import {buildProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,advanceProductionRecordRuntimeSafety,PRODUCTION_RECORD_CONTROL_PATH,PRODUCTION_RECORD_SAFETY_PATH} from '../js/core/cloud-production-record-runtime.js';
 import {SCHEDULER_OPERATION_SCHEMA,schedulerLesson} from '../js/core/production-scheduler-operation.js';
 const {createProductionSchedulerRuntime}=createRequire(import.meta.url)('../functions/production-scheduler-runtime.cjs');
 
@@ -47,6 +47,37 @@ test('真實本機 Firestore：AA 原子新增、即時移動、刪除、重送�
   await Promise.all(independent.map(async(worker,index)=>{const n=index+1,input=req([{lessonId:`distributed-${n}`,before:null,after:{...lesson(n),id:`distributed-${n}`,date:'2026-10-06'}}]),start=performance.now();await worker.execute(input,identity);distributedTimings.push({id:input.requestId,ms:Math.round(performance.now()-start)})}));
   const distributedDb=await read(),distributedSafety=(await firestore.doc(PRODUCTION_RECORD_SAFETY_PATH).get()).data();assert.equal(distributedDb.db.lessons.filter(row=>row.id.startsWith('distributed-')).length,3);assert.equal(recordDataHash(distributedDb.db),distributedSafety.recordDataHash);
   for(const n of [1,2,3]){const view=(await firestore.doc(`companies/danbridge/teacherViews/teacher${n}@example.com`).get()).data();assert.ok(view.db.lessons.every(row=>row.teacherId===`teacher-${n}`));assert.equal(view.sourceRecordRevision,distributedSafety.recordRevision)}
+  const rounds=Number(process.env.DANBRIDGE_SCHEDULER_PERFORMANCE_ROUNDS||0),bulkTimings=[];
+  assert.ok(Number.isInteger(rounds)&&rounds>=0&&rounds<=20);
+  const baselineLessons=Number(process.env.DANBRIDGE_SCHEDULER_BASELINE_LESSONS||0);
+  assert.ok(Number.isInteger(baselineLessons)&&baselineLessons>=0&&baselineLessons<=3000);
+  if(baselineLessons){
+   const fixture={...empty(),lessons:Array.from({length:baselineLessons},(_,i)=>({...lesson(i%3+1),id:`baseline-${i}`,date:new Date(Date.UTC(2020,0,1+Math.floor(i/3))).toISOString().slice(0,10)}))};
+   const operations=buildFullRecordShadowPlan(empty(),fixture,{environment:'production',sourceHash:'isolated-capacity-fixture'}).operations;
+   for(let start=0;start<operations.length;start+=400){const seed=firestore.batch();for(const op of operations.slice(start,start+400))seed.set(firestore.doc(op.path),op.payload);await seed.commit();}
+   const rebuilt=await read();await firestore.doc(PRODUCTION_RECORD_SAFETY_PATH).set(advanceProductionRecordRuntimeSafety(distributedSafety,{operation:{activationEpoch:epoch,baseHash:distributedSafety.recordDataHash,targetHash:recordDataHash(rebuilt.db),targetDocumentCount:rebuilt.documentCount,targetActiveCount:rebuilt.activeCount,targetTombstoneCount:rebuilt.tombstoneCount,operationId:'isolated-capacity-fixture',createdAt:'2026-09-03T15:00:00.000Z'}}));
+  }
+  for(let round=0;round<rounds;round++){
+   const rows=independent.map((_,worker)=>Array.from({length:15},(_,i)=>({...lesson(worker+1),id:`bulk-${round}-${worker}-${i}`,date:new Date(Date.UTC(2028,0,1+round*60+i)).toISOString().slice(0,10)})));
+   const copies=rows.map(group=>group.map(row=>({...row,id:row.id+'-copy',date:new Date(new Date(row.date+'T00:00:00Z').getTime()+30*86400000).toISOString().slice(0,10)})));
+   for(const phase of ['add','move','copy','delete']){
+    const outcomes=await Promise.allSettled(independent.map(async(worker,index)=>{
+     const group=rows[index],copy=copies[index];let changes;
+     if(phase==='add')changes=group.map(row=>({lessonId:row.id,before:null,after:row}));
+     if(phase==='move')changes=group.map(row=>({lessonId:row.id,before:row,after:{...row,start:'19:00',end:'19:30'}}));
+     if(phase==='copy')changes=copy.map(row=>({lessonId:row.id,before:null,after:row}));
+     if(phase==='delete')changes=[...group,...copy].map(row=>({lessonId:row.id,before:row,after:null}));
+     const started=performance.now(),result=await worker.execute(req(changes),identity),ms=Math.round(performance.now()-started);bulkTimings.push({round,phase,worker:index,count:changes.length,ms});
+     if(phase==='add'||phase==='move')rows[index]=group.map(row=>schedulerLesson(result.schedulerDb.lessons.find(saved=>saved.id===row.id)));
+     if(phase==='copy')copies[index]=copy.map(row=>schedulerLesson(result.schedulerDb.lessons.find(saved=>saved.id===row.id)));
+    }));
+    if(outcomes.some(row=>row.status==='rejected')){console.log('ISOLATED_BULK_PARTIAL '+JSON.stringify(bulkTimings));throw outcomes.find(row=>row.status==='rejected').reason;}
+    const rebuilt=await read(),head=(await firestore.doc(PRODUCTION_RECORD_SAFETY_PATH).get()).data();assert.equal(recordDataHash(rebuilt.db),head.recordDataHash);
+    for(const n of [1,2,3]){const view=(await firestore.doc(`companies/danbridge/teacherViews/teacher${n}@example.com`).get()).data();assert.ok(view.db.lessons.every(row=>row.teacherId===`teacher-${n}`));assert.equal(view.sourceRecordRevision,head.recordRevision)}
+   }
+   assert.equal((await read()).db.lessons.filter(row=>row.id.startsWith(`bulk-${round}-`)).length,0);
+  }
+  if(rounds){console.log('ISOLATED_BULK_PERFORMANCE '+JSON.stringify(bulkTimings));assert.equal((await read()).db.lessons.filter(row=>row.id.startsWith('baseline-')).length,baselineLessons);assert.ok(bulkTimings.every(row=>row.ms<=2500),'Every measured 15/30-lesson concurrent command must finish within 2500 ms');}
   await firestore.doc(`companyAccess/${email}`).update({canManageSchedule:false});await assert.rejects(execute(initial),/權限無效/);
   console.log('ISOLATED_SCHEDULER_ATOMIC_TIMINGS '+JSON.stringify(timings));console.log('ISOLATED_DISTRIBUTED_SCHEDULER_TIMINGS '+JSON.stringify(distributedTimings));assert.equal(concurrent.length,3);
  }finally{await firestore.terminate()}

@@ -1,4 +1,6 @@
 import test from 'node:test';
+import {withProductionCommitLease} from '../functions/production-commit-lease.cjs';
+import {createProductionTransactionReader} from '../functions/production-transaction-reads.cjs';
 import assert from 'node:assert/strict';
 import {Firestore,FieldValue} from '@google-cloud/firestore';
 import {FULL_RECORD_COLLECTIONS,buildFullRecordShadowPlan,rebuildFullRecordShadowDb} from '../js/core/cloud-full-record-shadow.js';
@@ -13,7 +15,7 @@ test('真實本機 Firestore：三裝置競爭新增→拖移→複製→批次�
  const firestore=new Firestore({projectId:'demo-danbridge-schedule-test'}),empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(k=>[k,[]]));
  const baseline={...empty(),students:[{id:'test-student',name:'Isolated'}],teachers:[1,2,3].map(n=>({id:'teacher-'+n,name:'Teacher '+n})),lessons:[]};
  const epoch='production-emulator-epoch',hash=recordDataHash(baseline),control=buildProductionRecordRuntimeControl({activationEpoch:epoch,legacyVersionHash:'seed:1',recordDataHash:hash,sourceSha256:'a'.repeat(64),documentCount:4,activeCount:4,tombstoneCount:0,roleViewDigest:'b'.repeat(64),rollbackChannel:'emulator-only',activatedAt:'2026-09-03T00:00:00.000Z'});
- const runTransaction=callback=>firestore.runTransaction(t=>callback({get:path=>t.get(firestore.doc(path)),set:(path,value)=>t.set(firestore.doc(path),value),delete:path=>t.delete(firestore.doc(path))}));
+ const runTransaction=callback=>withProductionCommitLease(firestore,lease=>firestore.runTransaction(async t=>{await lease.assertHeld(t);return callback({get:createProductionTransactionReader(firestore,t),set:(path,value)=>t.set(firestore.doc(path),value),delete:path=>t.delete(firestore.doc(path))});}));
  const dependencies={runTransaction,serverTimestamp:()=>FieldValue.serverTimestamp(),actor:{uid:'test-owner',email:'owner@example.com'},role:'owner'};
  const adapter=createFirebaseProductionRecordOperationAdapter(dependencies),batchAdapter=createFirebaseProductionRecordBatchAdapter(dependencies);
  const read=async()=>{const snapshots=await Promise.all(FULL_RECORD_COLLECTIONS.map(name=>firestore.collection('productionFullRecordShadows/danbridge/collections/'+name+'/records').get()));return Object.fromEntries(FULL_RECORD_COLLECTIONS.map((name,i)=>[name,snapshots[i].docs.map(d=>({id:d.id,data:d.data()}))]))};

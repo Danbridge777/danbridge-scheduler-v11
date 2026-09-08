@@ -11,6 +11,8 @@ const {GoogleAuth}=require('google-auth-library');
 const {createHash}=require('node:crypto');
 const {commitProductionDerivedWrites,readProductionRoleViewInputs}=require('./production-derived-commit.cjs');
 const {createProductionSchedulerRuntime,productionSchedulerErrorCode}=require('./production-scheduler-runtime.cjs');
+const {withProductionCommitLease}=require('./production-commit-lease.cjs');
+const {createProductionTransactionReader}=require('./production-transaction-reads.cjs');
 const {createStagingDerivedDeliveryRuntime}=require('./staging-derived-delivery-runtime.cjs');
 
 const PROJECT_ID='danbridge-d8877-staging';
@@ -89,7 +91,10 @@ if(shouldEagerWarmStagingService('stagingv2authoritysave')){
 async function productionRuntime(){
  if(productionRuntimePromise===null)productionRuntimePromise=(async()=>{
   const app=getApps().find(row=>row.name==='production-trusted')??initializeApp({projectId:PRODUCTION_PROJECT_ID,credential:applicationDefault()},'production-trusted'),firestore=getFirestore(app),[{createFirebaseProductionRecordOperationAdapter,createFirebaseProductionRecordBatchAdapter,createFirebaseProductionAccessMutationAdapter},{assertProductionTrustedCaller,assertProductionTrustedOperation,buildProductionTrustedResponse}]=await Promise.all([import('../js/core/firebase-production-record-runtime-adapter.js'),import('../js/core/production-trusted-operation-contract.js')]);
-  const reference=path=>firestore.doc(path),runTransaction=callback=>firestore.runTransaction(native=>callback({get:path=>native.get(reference(path)),set:(path,value,options={merge:false})=>native.set(reference(path),value,options),delete:path=>native.delete(reference(path))})),serverTimestamp=()=>FieldValue.serverTimestamp(),deleteField=()=>FieldValue.delete();
+  const reference=path=>firestore.doc(path),runTransaction=callback=>withProductionCommitLease(firestore,lease=>firestore.runTransaction(async native=>{
+   await lease.assertHeld(native);
+   return callback({get:createProductionTransactionReader(firestore,native),set:(path,value,options={merge:false})=>native.set(reference(path),value,options),delete:path=>native.delete(reference(path))});
+  })),serverTimestamp=()=>FieldValue.serverTimestamp(),deleteField=()=>FieldValue.delete();
   return Object.freeze({app,firestore,assertProductionTrustedCaller,assertProductionTrustedOperation,buildProductionTrustedResponse,adaptersFor:actor=>Object.freeze({record:createFirebaseProductionRecordOperationAdapter({runTransaction,serverTimestamp,actor,role:'owner'}),batch:createFirebaseProductionRecordBatchAdapter({runTransaction,serverTimestamp,actor,role:'owner'}),access:createFirebaseProductionAccessMutationAdapter({runTransaction,serverTimestamp,deleteField,actor,role:'owner'})})});
  })().catch(error=>{productionRuntimePromise=null;throw error});
  return productionRuntimePromise;
@@ -280,7 +285,7 @@ exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PR
   else if(trusted.kind==='record.batch.apply')result=await adapters.batch.apply(trusted.batch,trusted.requestId);
   else result=await adapters.access.mutate(trusted.mutation,trusted.requestId);
   return runtimeValue.buildProductionTrustedResponse({requestId:trusted.requestId,result});
- }catch(error){if(error instanceof HttpsError)throw error;console.error('PRODUCTION_TRUSTED_OPERATION_BLOCKED',JSON.stringify({name:String(error?.name||'Error'),message:String(error?.message||'blocked')}));throw new HttpsError('failed-precondition','正式寫入已安全阻止。')}
+ }catch(error){if(error instanceof HttpsError)throw error;console.error('PRODUCTION_TRUSTED_OPERATION_BLOCKED',JSON.stringify({name:String(error?.name||'Error'),message:String(error?.message||'blocked')}));throw new HttpsError(productionSchedulerErrorCode(error),'正式寫入尚未完成，操作保留等待確認。')}
 });
 
 exports.productionPublishRoleViews=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:540,memory:'1GiB',concurrency:4,minInstances:1,maxInstances:10},async request=>{

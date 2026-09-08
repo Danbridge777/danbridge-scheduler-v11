@@ -33,7 +33,8 @@ test('正式已部署 Rules：角色隔離且通知／回報／排課／錯誤�
     [`${base}/scheduleNotifications/other`,{recipientEmail:other,read:false}],
     [`${base}/scheduleRequests/own`,{companyId:'danbridge',actorEmail:aa,status:'pending'}],
     [`${base}/lessonReports/own`,{companyId:'danbridge',lessonId:'own',reportedForTeacherIds:['teacher-1'],branchId:'a',content:'fixture'}],
-    [`${base}/errorEvents/own`,{category:'cloud-read',role:'teacher'}]
+    [`${base}/errorEvents/own`,{category:'cloud-read',role:'teacher'}],
+    [`${base}/productionRuntimeLocks/own`,{schema:'danbridge-production-commit-lease-v1',token:'server-only',expiresAtMs:1}]
    ];
    for(const [path,data] of rows)await setDoc(doc(db,path),data);
   });
@@ -59,7 +60,7 @@ test('正式已部署 Rules：角色隔離且通知／回報／排課／錯誤�
   await assertSucceeds(getDoc(doc(ownerDb,`${base}/errorEvents/own`)));
   await assertFails(getDoc(doc(teacherDb,`${base}/errorEvents/own`)));
   for(const db of [ownerDb,aaDb,teacherDb,otherDb,anon]){
-   for(const name of ['scheduleNotifications','scheduleRequests','lessonReports','errorEvents']){
+   for(const name of ['scheduleNotifications','scheduleRequests','lessonReports','errorEvents','productionRuntimeLocks']){
     await assertFails(setDoc(doc(db,`${base}/${name}/forged`),{companyId:'danbridge',recipientEmail:teacher}));
     await assertFails(updateDoc(doc(db,`${base}/${name}/own`),{read:true}));
     await assertFails(deleteDoc(doc(db,`${base}/${name}/own`)));
