@@ -6,8 +6,18 @@
  const addDays=(dateText,days)=>{const d=new Date(`${dateText}T00:00:00`);d.setDate(d.getDate()+days);return localDate(d)};
  const withinRetention=(dateText,today,days)=>!!dateText&&dateText>=addDays(today,-days);
  function outstandingPaymentGroups(lessons,today){
-  const studentsById=new Map((db.students||[]).filter(s=>s?.id).map(s=>[String(s.id),s])),grouped=new Map();
-  lessons.filter(l=>studentsById.has(String(l.studentId||''))&&(l.paymentStatus||'unpaid')==='unpaid'&&lessonCharge(l)>0&&l.date<=today&&withinRetention(l.date,today,120)).forEach(l=>{const key=String(l.studentId),row=grouped.get(key)||{studentId:l.studentId,student:studentsById.get(key),lessons:[],amount:0};row.lessons.push(l);row.amount+=lessonCharge(l);grouped.set(key,row)});
+  const studentsById=new Map((db.students||[]).filter(s=>s?.id).map(s=>[String(s.id),s])),grouped=new Map(),eligible=lessons.filter(l=>!l.isDraft&&l.date<=today&&withinRetention(l.date,today,120)),byId=new Map(eligible.map(l=>[String(l.id),l])),months=[...new Set(eligible.map(l=>l.date.slice(0,7)))];
+  for(const month of months){
+   const balance=billingCollectionBalance(month),reviewIds=new Set(balance.reviewStudentIds.map(String));
+   for(const charge of balance.items){
+    const remaining=Math.max(0,charge.amount-charge.collected),studentId=String(charge.studentId);if(!remaining||!studentsById.has(studentId))continue;
+    const identity=JSON.parse(charge.key),matching=identity[0]==='lesson'?[byId.get(String(identity[1]))].filter(Boolean):identity[0]==='monthly'?eligible.filter(l=>l.date.startsWith(month)&&lessonIncludesStudent(l,studentId)):[];
+    if(!matching.length)continue;
+    const key=`${month}|${studentId}`,row=grouped.get(key)||{studentId,student:studentsById.get(studentId),month,lessons:[],amount:0,requiresReview:false};
+    row.lessons.push(...matching);row.amount+=remaining;row.requiresReview ||= reviewIds.has(studentId);grouped.set(key,row);
+   }
+  }
+  for(const row of grouped.values())row.lessons=[...new Map(row.lessons.map(l=>[l.id,l])).values()];
   return[...grouped.values()].map(row=>{row.lessons.sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start));return row});
  }
  const readKey=()=>`danbridge_notification_read_v1526_${ctx().email||ctx().role||'local'}`;
@@ -25,7 +35,7 @@
   [...overdue,...incomplete].slice(0,60).forEach(l=>items.push(item({id:`report:${l.id}`,category:'report',severity:'danger',icon:'報',title:`${student(l.studentId).name||l.title||'課程'}尚未完成課堂回報`,detail:`${l.date} ${l.start}–${l.end}｜${lessonTeacherNames(l)}｜${locationLabel(l)}`,sort:`1-${l.date}-${l.start}`,action:{type:(c.role==='branch_manager'&&!lessonTeacherIds(l).includes(c.teacherId))?'lessons':'report',lessonId:l.id}})));
   lessons.filter(l=>l.date===tomorrow&&!['取消','停課'].includes(l.status)).sort((a,b)=>a.start.localeCompare(b.start)).forEach(l=>items.push(item({id:`tomorrow:${l.id}`,category:'tomorrow',severity:'info',icon:'明',title:`明日 ${l.start}｜${student(l.studentId).name||l.title||'課程'}`,detail:`${lessonTeacherNames(l)}｜${locationLabel(l)}${l.room?'｜'+l.room:''}`,sort:`4-${l.start}`,action:{type:'calendar',date:l.date,lessonId:l.id}})));
   if(c.role!=='teacher'){
-   outstandingPaymentGroups(lessons,today).slice(0,80).forEach(row=>{const first=row.lessons[0],last=row.lessons[row.lessons.length-1],studentName=String(row.student?.name||'').trim(),parentName=String(row.student?.parent||'').trim();items.push(item({id:`unpaid:${row.studentId}:${last.date}:${row.lessons.length}`,category:'payment',severity:'warn',icon:'收',title:`${studentName}${parentName?`（家長：${parentName}）`:''}有 ${row.lessons.length} 堂未收款`,detail:`${first.date}${last.date!==first.date?'～'+last.date:''}｜合計 ${money(row.amount)}｜${locationLabel(last)}`,sort:`2-${first.date}-${first.start}`,action:{type:'lessons',studentId:row.studentId,month:last.date.slice(0,7)}}))});
+   outstandingPaymentGroups(lessons,today).slice(0,80).forEach(row=>{const first=row.lessons[0],last=row.lessons[row.lessons.length-1],studentName=String(row.student?.name||'').trim(),parentName=String(row.student?.parent||'').trim();items.push(item({id:`unpaid:${row.studentId}:${last.date}:${row.lessons.length}`,category:'payment',severity:'warn',icon:'收',title:`${studentName}${parentName?`（家長：${parentName}）`:''} ${row.month} 費用${row.requiresReview?'需核對':'未收款'}`,detail:`${first.date}${last.date!==first.date?'～'+last.date:''}｜${row.lessons.length} 堂｜${row.requiresReview?'金額需核對':`未收 ${money(row.amount)}`}｜${locationLabel(last)}`,sort:`2-${first.date}-${first.start}`,action:{type:'collections',studentId:row.studentId,month:row.month}}))});
    (db.makeups||[]).filter(m=>m.status==='pending').filter(m=>c.role==='owner'||c.branchIds.includes(m.branchId||'unassigned')).forEach(m=>{const l=(db.lessons||[]).find(x=>x.id===m.lessonId);items.push(item({id:`makeup:${m.id}`,category:'makeup',severity:'warn',icon:'補',title:`${student(m.studentId||l?.studentId).name||'學生'}的補課尚未安排`,detail:`原課程 ${l?.date||m.originalDate||'日期未設定'}｜${l?lessonTeacherNames(l):'老師未設定'}`,sort:`3-${l?.date||''}`,action:{type:'makeups'}}))})
   }
   if(c.role==='owner'||c.role==='branch_manager'){
@@ -42,7 +52,7 @@
  function open(){document.body.classList.add('notification-center-open');render()}
  function close(){document.body.classList.remove('notification-center-open')}
  function markAllRead(){const reads=readIds();state.items.forEach(x=>reads.add(x.id));saveRead(reads);render()}
- function openItem(id){const n=state.items.find(x=>x.id===id);if(!n)return;const reads=readIds();reads.add(id);saveRead(reads);render();close();const a=n.action||{};if(a.type==='report'){window.openLessonReport?.(a.lessonId);return}if(a.type==='calendar'){const input=$id('calendarDate');if(input&&a.date)input.value=a.date;switchTab('calendar');setTimeout(()=>a.lessonId&&window.editLesson?.(a.lessonId),40);return}if(a.type==='lessons'){const month=$id('lessonMonth'),studentFilter=$id('filterStudent');if(month&&a.month)month.value=a.month;if(studentFilter&&a.studentId)studentFilter.value=a.studentId;switchTab('lessons');setTimeout(()=>{window.renderLessons?.();if(a.lessonId)window.editLesson?.(a.lessonId)},40);return}if(a.type==='makeups'){switchTab('makeups');return}if(a.type==='settlement'){switchTab('settlement')}}
+ function openItem(id){const n=state.items.find(x=>x.id===id);if(!n)return;const reads=readIds();reads.add(id);saveRead(reads);render();close();const a=n.action||{};if(a.type==='report'){window.openLessonReport?.(a.lessonId);return}if(a.type==='calendar'){const input=$id('calendarDate');if(input&&a.date)input.value=a.date;switchTab('calendar');setTimeout(()=>a.lessonId&&window.editLesson?.(a.lessonId),40);return}if(a.type==='collections'){switchTab('finance');window.setFinanceWorkspaceMonth?.(a.month,true);document.querySelector('.v181-finance-nav button[data-pane="collections"]')?.click();return}if(a.type==='lessons'){const month=$id('lessonMonth'),studentFilter=$id('filterStudent');if(month&&a.month)month.value=a.month;if(studentFilter&&a.studentId)studentFilter.value=a.studentId;switchTab('lessons');setTimeout(()=>{window.renderLessons?.();if(a.lessonId)window.editLesson?.(a.lessonId)},40);return}if(a.type==='makeups'){switchTab('makeups');return}if(a.type==='settlement'){switchTab('settlement')}}
  document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
  window.DanbridgeNotifications={render,open,close,setFilter,markAllRead,openItem,buildNotifications,outstandingPaymentGroups,withinRetention};
 })();

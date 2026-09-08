@@ -35,6 +35,42 @@ function runtime({students=[],lessons=[],summerCampRegistrations=[],winterCampRe
 
 const lesson=(id,studentId,date,start,end,extra={})=>({id,studentId,date,start,end,status:'未上課',chargeStudent:'yes',...extra});
 
+test('itemized receipts cover only their original lesson and campus after new lessons are added',()=>{
+  const app=runtime({students:[{id:'a',parent:'王',rate:600,courseType:'1對1'}],lessons:[lesson('one','a','2026-09-01','16:00','17:00',{billingBranchId:'hexi'}),lesson('two','a','2026-09-02','16:00','17:00',{billingBranchId:'art_museum'})]});
+  const items=app.billingCollectionSnapshot(['a'],'2026-09','hexi');
+  app.db.collectionRecords=[{id:'paid',month:'2026-09',branchId:'hexi',studentIds:['a'],status:'collected',amount:600,billingItemsVersion:1,billingItems:items}];
+  app.db.lessons.push(lesson('new','a','2026-09-03','16:00','17:00',{billingBranchId:'hexi'}));
+  assert.equal(app.studentUnpaidTuitionRevenue('2026-09'),1200);
+  assert.equal(app.studentUnpaidTuitionRevenue('2026-09','hexi'),600);
+  assert.equal(app.studentUnpaidTuitionRevenue('2026-09','art_museum'),600);
+  assert.equal(app.billingCollectionBalance('2026-09').requiresReview,false);
+});
+
+test('legacy partial receipt without line allocation is flagged instead of silently guessing a family or campus balance',()=>{
+  const app=runtime({students:[{id:'a',parent:'王',rate:600,courseType:'1對1'}],lessons:[lesson('one','a','2026-09-01','16:00','17:00',{billingBranchId:'hexi'}),lesson('two','a','2026-09-02','16:00','17:00',{billingBranchId:'art_museum'})],collectionRecords:[{id:'partial',month:'2026-09',branchId:'all',studentIds:['a'],status:'collected',amount:600}]});
+  assert.equal(app.billingCollectionBalance('2026-09').requiresReview,true);
+  assert.equal(app.studentUnpaidTuitionLabel('2026-09','hexi'),'需核對');
+  assert.equal(app.studentUnpaidTuitionLabel('2026-09','art_museum'),'需核對');
+  assert.equal(app.db.collectionRecords[0].amount,600);
+});
+
+test('camp payment cannot pay another family tuition and both kinds reconcile in the collection summary',()=>{
+  const app=runtime({students:[{id:'a',parent:'王',rate:600,courseType:'1對1'},{id:'b',parent:'李',rate:800,courseType:'1對1'}],lessons:[lesson('one','a','2026-09-01','16:00','17:00'),lesson('two','b','2026-09-02','16:00','17:00')],summerCampRegistrations:[{id:'camp',studentId:'a',month:'2026-09',totalFee:9000}],collectionRecords:[{id:'family-paid',month:'2026-09',branchId:'all',studentIds:['a'],status:'collected',amount:9600}]});
+  assert.equal(app.studentTuitionRevenue('2026-09'),1400);
+  assert.equal(app.studentUnpaidTuitionRevenue('2026-09'),800);
+  const balance=app.billingCollectionBalance('2026-09','all',true);
+  assert.equal(balance.due,10400);assert.equal(balance.collected,9600);assert.equal(balance.unpaid,800);
+});
+
+test('exact itemized partial amount is not double counted with lesson paid or repeated scoped receipts',()=>{
+  const app=runtime({students:[{id:'a',parent:'王',rate:600,courseType:'1對1'}],lessons:[lesson('one','a','2026-09-01','16:00','17:00',{billingBranchId:'hexi'})]});
+  const items=app.billingCollectionSnapshot(['a'],'2026-09').map(item=>({...item,amount:200}));
+  app.db.collectionRecords=['all','hexi'].map(branchId=>({id:branchId,month:'2026-09',branchId,studentIds:['a'],status:'collected',amount:200,billingItemsVersion:1,billingItems:items}));
+  assert.equal(app.studentUnpaidTuitionRevenue('2026-09'),400);
+  app.db.lessons[0].paymentStatus='paid';
+  assert.equal(app.studentUnpaidTuitionRevenue('2026-09'),0);
+});
+
 test('12 months × 6 durations × 5 roster sizes reconcile child bills, campus subtotals and total revenue',()=>{
  for(let month=1;month<=12;month++)for(const minutes of [15,30,45,60,90,120])for(const count of [1,2,3,8,30]){
   const m=`2026-${String(month).padStart(2,'0')}`,other=month===12?'2027-01':`2026-${String(month+1).padStart(2,'0')}`;
@@ -166,7 +202,7 @@ test('mixed monthly, private and per-child group totals stay exact and collected
   assert.equal(app.studentMonthlyBillingData('care','2026-09').total,9000);
   assert.equal(app.studentMonthlyBillingData('private','2026-09').total,1200);
   assert.equal(app.studentMonthlyBillingData('group','2026-09').total,1200);
-  assert.equal(app.studentUnpaidTuitionRevenue('2026-09'),2400);
+  assert.equal(app.studentUnpaidTuitionRevenue('2026-09'),1200);
 });
 
 test('every chargeable private and group lesson is hours multiplied by that student rate',()=>{

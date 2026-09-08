@@ -50,6 +50,17 @@ html body:not(.auth-locked) :is(#students,#teachers,#teacherLeave,#calendar,#les
   max-height:var(--danbridge-control-height)!important;
 }
 .group-roster-option>span{min-width:0}
+.group-roster-search{min-width:0;margin-block:8px}
+#students .student-workspace-tabs{display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #d8caa4;margin:0 0 20px}
+#students .student-workspace-tabs button{appearance:none;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:#71674f;min-height:48px;width:100%;padding:12px;font:inherit;font-weight:600;box-shadow:none}
+#students .student-workspace-tabs button[aria-selected="true"]{border-bottom-color:#a58a43;color:#58471f;background:rgba(165,138,67,.07)}
+#students .student-workspace-tabs button:focus-visible{outline:2px solid #a58a43;outline-offset:-4px}
+#students[data-workspace="group"] .col-4 h2::before{content:"團班資料";color:#897039}
+html body #students[data-workspace="group"] .individual-student-field,
+html body #students #studentIsGroupRoster[hidden]{display:none!important}
+#studentGroupFeePreview{border-top:1px solid #ded6c2;margin-top:12px;padding-top:8px;overflow-wrap:anywhere}
+.group-roster-search input{width:100%;box-sizing:border-box}
+html body .group-roster-options>.group-roster-option[hidden]{display:none!important}
 .group-roster-options>.group-roster-option+.group-roster-option{border-top:1px solid #eeeae2}
 .group-roster-option:has(input:checked){color:#655431;background:#faf8f3}
 #studentGroupFields.hidden,#studentGroupMembersWrap.hidden,#lessonGroupRoster.hidden{display:none!important}

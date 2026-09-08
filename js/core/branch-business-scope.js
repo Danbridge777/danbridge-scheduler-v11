@@ -114,7 +114,7 @@
     const people=scopedPeople(scope,ls),todayTeacherIds=new Set(today.flatMap(l=>lessonTeacherIds(l)));
     $('mStudents').textContent=people.students.length;$('mTeachers').textContent=people.teachers.length;$('mLessons').textContent=ls.length;
     $('mRevenue').textContent=money(studentTuitionRevenue(m,scope)+summerCampRegistrationRevenue(m,scope));
-    $('mUnpaid').textContent=money(studentUnpaidTuitionRevenue(m,scope));
+    $('mUnpaid').textContent=studentUnpaidTuitionLabel(m,scope);
     $('mPayroll').textContent=money(financeData(m).payroll);
     if($('mTeacherHours')){$('mTeacherHours').textContent=`${ls.filter(l=>l.teacherReportStatus==='completed'||l.teacherReportStatus==='makeup_completed').reduce((s,l)=>s+hours(l.start,l.end),0).toFixed(1)} 小時`;}
     if($('mMakeups'))$('mMakeups').textContent=(db.makeups||[]).filter(x=>x.status==='pending'&&(scope==='all'||branchId((db.lessons||[]).find(l=>l.id===x.lessonId)||x)===scope)).length;
@@ -133,9 +133,9 @@
     if($('v33RoomStatus'))$('v33RoomStatus').innerHTML=roomNames.length?roomNames.slice(0,10).map(name=>{const rows=roomLessons.filter(l=>`${locationLabel(l)}｜${l.room}`===name).sort((a,b)=>a.start.localeCompare(b.start)),live=rows.find(l=>l.start<=currentTime&&l.end>currentTime),soon=rows.find(l=>l.start>currentTime),state=live?'live':soon?'soon':'',text=live?`${student(live.studentId).name||live.title||'課程'}・${live.end} 下課`:soon?`${soon.start} ${student(soon.studentId).name||soon.title||'課程'}`:'今日課程已結束';return `<div class="v33-room ${state}"><span class="v33-room-dot"></span><div style="min-width:0"><b>${esc(name.replace('｜','・'))}</b><span>${esc(text)}</span></div></div>`}).join(''):'<div class="small">今天沒有設定教室的課程。</div>';
     const days=[];for(let i=0;i<7;i++){const d=new Date();d.setDate(d.getDate()+i);const ds=localDate(d),count=(db.lessons||[]).filter(l=>!l.isDraft&&l.date===ds&&!['取消','停課'].includes(l.status)&&match(l,scope)).length;days.push({d,count})}
     const max=Math.max(1,...days.map(x=>x.count));if($('v33WeekBars'))$('v33WeekBars').innerHTML=days.map(x=>`<div class="v33-week-day"><div class="v33-week-bar-wrap"><div class="v33-week-bar" style="height:${Math.max(4,Math.round(x.count/max*100))}%"></div></div><b>${['日','一','二','三','四','五','六'][x.d.getDay()]}</b><span>${x.count}堂</span></div>`).join('');
-    const unpaid=ls.filter(l=>(l.paymentStatus||'unpaid')==='unpaid'&&lessonCharge(l)>0),insights=[];
+    const paymentBalance=billingCollectionBalance(m,scope),unpaid=paymentBalance.items.filter(item=>item.amount>item.collected),insights=[];
     const missingReports=today.filter(l=>l.status==='已上課'&&!l.teacherReportStatus);if(missingReports.length)insights.push({type:'danger',title:`${missingReports.length} 堂尚未填寫回報`,text:'請老師完成今日課程內容與家庭作業。'});
-    if(unpaid.length)insights.push({type:'',title:`本月有 ${unpaid.length} 堂未繳`,text:`預估待收 ${money(unpaid.reduce((a,l)=>a+lessonCharge(l),0))}`});
+    if(unpaid.length||paymentBalance.requiresReview)insights.push({type:'',title:paymentBalance.requiresReview?'本月收款需核對':`本月有 ${unpaid.length} 筆費用未收款`,text:paymentBalance.requiresReview?'部分歷史收款缺少明細，請到學生收款核對。':`待收 ${money(paymentBalance.unpaid)}`});
     const overlaps=today.filter(hasTeacherOverlap);if(overlaps.length)insights.push({type:'danger',title:`今日有 ${overlaps.length} 堂老師時間重複`,text:'請檢查課表中的紅色課程卡。'});
     const pending=(db.makeups||[]).filter(x=>x.status==='pending'&&(scope==='all'||branchId((db.lessons||[]).find(l=>l.id===x.lessonId)||x)===scope)).length;if(pending)insights.push({type:'',title:`${pending} 筆補課待安排`,text:'可前往補課中心進行後續處理。'});
     if(!insights.length)insights.push({type:'good',title:'目前沒有急迫事項',text:`${scopeLabel(scope)}的課表與回報狀態正常。`});

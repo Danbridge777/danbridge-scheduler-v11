@@ -6,9 +6,19 @@
   function records(){db.collectionRecords=Array.isArray(db.collectionRecords)?db.collectionRecords:[];return db.collectionRecords}
   function familyInfo(studentId){const family=billingFamilyStudents(studentId).filter(s=>s?.id),ids=family.map(s=>s.id).sort();return{family,ids,key:ids.join(',')||studentId}}
   function collectionRecord(studentId,month,create=false,scope='all'){const info=familyInfo(studentId),branchId=scope||'all',id=`${month}|${branchId}|${info.key}`;let record=records().find(x=>x.id===id);if(!record&&branchId==='all')record=records().find(x=>x.id===`${month}|${info.key}`&&(!x.branchId||x.branchId==='all'));if(!record&&create){record={id,month,branchId,familyKey:info.key,studentIds:info.ids,status:'pending',notifiedAt:'',collectedAt:'',paymentMethod:'',amount:0,updatedAt:now()};records().push(record)}return{record,info}}
-  function familyAmount(studentId,month,scope='all'){const{info}=familyInfo(studentId);return info.ids.reduce((sum,id)=>sum+studentMonthlyBillingData(id,month,scope).total,0)}
-  function statusLabel(record){return record?.status==='collected'?'已收款':record?.notifiedAt?'已通知':'待通知'}
+  function familyAmount(studentId,month,scope='all'){const info=familyInfo(studentId);return info.ids.reduce((sum,id)=>sum+studentMonthlyBillingData(id,month,scope).total,0)}
+  function statusLabel(record){return record?.status==='review'?'需核對':record?.status==='partial'?'部分已收款':record?.status==='collected'?'已收款':record?.notifiedAt?'已通知':'待通知'}
   function statusClass(record){return record?.status==='collected'?'collected':record?.notifiedAt?'notified':'pending'}
+  function collectionDisplayRecord(info,month,scope,record,balance){
+    const ids=new Set(info.ids.map(String)),items=balance.items.filter(item=>ids.has(String(item.studentId))),due=items.reduce((sum,item)=>sum+item.amount,0),paid=items.reduce((sum,item)=>sum+item.collected,0);
+    const candidates=records().filter(row=>row.month===month&&(scope==='all'||!row.branchId||row.branchId==='all'||row.branchId===scope)&&[...billingCollectionRecordStudentIds(row)].some(id=>ids.has(String(id))));
+    const latest=candidates.filter(row=>row.notifiedAt||row.collectedAt).sort((a,b)=>String(b.collectedAt||b.notifiedAt).localeCompare(String(a.collectedAt||a.notifiedAt)))[0];
+    const base={...(record||{}),...(latest?{notifiedAt:latest.notifiedAt,collectedAt:latest.collectedAt,paymentMethod:latest.paymentMethod}:{})};
+    if(balance.reviewStudentIds.some(id=>ids.has(String(id))))return{...base,status:'review'};
+    if(due>0&&paid>=due)return{...base,status:'collected'};
+    if(paid>0)return{...base,status:'partial'};
+    return{...base,status:due>0?'pending':base.status};
+  }
 
   function lessonDiff(){
     const id=$('#lessonId')?.value,old=(db.lessons||[]).find(l=>l.id===id);if(!old)return[];
@@ -70,16 +80,56 @@
   function syncSalutationControl(){const modal=$('#v181LineBillingPreview'),row=$('.v181-salutation-row',modal);if(!modal||!row)return;const value=billingParentName(student(modal.dataset.studentId)?.parent),binding=$('.v181-parent-binding',row),season=$('.v18211-line-season',row);if(binding){binding.value=value||'尚未填寫家長姓名';binding.classList.toggle('is-missing',!value)}if(season)season.value=modal.dataset.campSeason||activeCampBillingSeason()}
   function installLineEnhancement(){const original=window.copyStudentLineBilling;if(typeof original!=='function'||original.__v1817)return;function wrapped(...args){original(...args);setTimeout(()=>{enhanceLinePreview();syncSalutationControl()},0)}wrapped.__v1817=true;window.copyStudentLineBilling=wrapped}
 
-  function setCollectionStatus(keys,status){const month=window.__danbridgeFinanceWorkspaceMonth||$('#settleMonth')?.value||monthNow(),scope=$('#settlementBranchScope')?.value||'all',method=$('#v181PaymentMethod')?.value||'';if(!keys.length)return alert('請先勾選家庭');snapshot();keys.forEach(key=>{const studentId=key.split(',')[0],{record}=collectionRecord(studentId,month,true,scope);record.amount=familyAmount(studentId,month,scope);record.updatedAt=now();if(status==='notified'){record.notifiedAt=record.notifiedAt||now();record.status=record.status==='collected'?'collected':'notified'}if(status==='collected'){record.notifiedAt=record.notifiedAt||now();record.collectedAt=now();record.paymentMethod=method;record.status='collected'}if(status==='pending'){record.status='pending';record.notifiedAt='';record.collectedAt='';record.paymentMethod=''}});saveDB();toast(status==='collected'?'已標記收款':status==='notified'?'已標記通知':'已恢復待通知')}
+  function setCollectionStatus(keys,status){
+    const month=window.__danbridgeFinanceWorkspaceMonth||$('#settleMonth')?.value||monthNow(),scope=$('#settlementBranchScope')?.value||'all',method=$('#v181PaymentMethod')?.value||'';
+    if(!keys.length)return alert('請先勾選家庭');
+    const allItems=billingCollectionItems(month);
+    snapshot();
+    keys.forEach(key=>{
+      const studentId=key.split(',')[0],info=familyInfo(studentId),ids=new Set(info.ids.map(String));
+      const items=allItems.filter(item=>ids.has(String(item.studentId))&&(scope==='all'||item.branchId===scope)).map(({key,studentId,branchId,kind,amount})=>({key,studentId,branchId,kind,amount}));
+      const{record}=collectionRecord(studentId,month,true,scope);
+      record.updatedAt=now();
+      if(status==='notified'){
+        record.notifiedAt=record.notifiedAt||now();
+        // Re-copying or marking a reminder must never overwrite a paid receipt.
+        if(record.status!=='collected'){record.amount=items.reduce((sum,item)=>sum+item.amount,0);record.status='notified'}
+      }
+      if(status==='collected'){
+        record.amount=items.reduce((sum,item)=>sum+item.amount,0);record.billingItemsVersion=1;record.billingItems=items;
+        record.notifiedAt=record.notifiedAt||now();record.collectedAt=now();record.paymentMethod=method;record.status='collected';
+      }
+      if(status==='pending'){record.status='pending';record.notifiedAt='';record.collectedAt='';record.paymentMethod='';record.amount=0;delete record.billingItems;delete record.billingItemsVersion}
+    });
+    saveDB();window.renderSettlement?.();toast(status==='collected'?'已標記收款':status==='notified'?'已標記通知':'已恢復待通知');
+  }
   function selectedFamilyKeys(){return[...new Set($$('#studentSettleRows input[data-family-key]:checked').map(x=>x.dataset.familyKey))]}
   function decorateCollections(){
+    let displayBalance;
     const module=$('.v181-collections-module'),table=$('#studentSettleRows')?.closest('table');if(!module||!table)return;let actions=$('#v181CollectionActions');if(!actions){actions=document.createElement('div');actions.id='v181CollectionActions';actions.className='v181-collection-actions';actions.innerHTML='<label><input type="checkbox" id="v181SelectAllFamilies"> 全選</label><select id="v181PaymentMethod"><option value="">收款方式</option><option>轉帳</option><option>現金</option><option>LINE Pay</option><option>其他</option></select><button class="btn" data-status="notified">標記已通知</button><button class="btn ok" data-status="collected">標記已收款</button><button class="btn" data-status="pending">恢復待通知</button>';$('#v181CollectionSummary',module)?.before(actions);actions.addEventListener('click',e=>{const status=e.target.dataset.status;if(status)setCollectionStatus(selectedFamilyKeys(),status)});$('#v181SelectAllFamilies',actions).addEventListener('change',e=>$$('#studentSettleRows input[data-family-key]').forEach(x=>x.checked=e.target.checked))}
     const head=table.tHead?.rows[0];if(head&&!head.querySelector('[data-collection-track]')){const select=document.createElement('th');select.dataset.collectionTrack='select';select.textContent='選取';head.append(select);const status=document.createElement('th');status.dataset.collectionTrack='status';status.textContent='通知／收款';head.append(status)}
-    const month=window.__danbridgeFinanceWorkspaceMonth||$('#settleMonth')?.value||monthNow(),scope=$('#settlementBranchScope')?.value||'all';$$('#studentSettleRows tr').forEach(row=>{if(row.dataset.collectionDecorated)return;const button=row.querySelector('.line-billing-btn'),match=button?.getAttribute('onclick')?.match(/copyStudentLineBilling\('([^']+)'/);if(!match)return;const studentId=match[1],{record,info}=collectionRecord(studentId,month,false,scope);row.dataset.collectionDecorated='1';const select=document.createElement('td');select.innerHTML=`<input type="checkbox" data-family-key="${esc(info.key)}" aria-label="選取 ${esc(student(studentId).name||'學生')}">`;row.append(select);const status=document.createElement('td');status.innerHTML=`<span class="v181-collection-status ${statusClass(record)}">${statusLabel(record)}</span>${record?.collectedAt?`<small>${new Date(record.collectedAt).toLocaleDateString('zh-TW')} ${esc(record.paymentMethod||'')}</small>`:record?.notifiedAt?`<small>${new Date(record.notifiedAt).toLocaleDateString('zh-TW')}</small>`:''}`;row.append(status)})
+    const month=window.__danbridgeFinanceWorkspaceMonth||$('#settleMonth')?.value||monthNow(),scope=$('#settlementBranchScope')?.value||'all';$$('#studentSettleRows tr').forEach(row=>{if(row.dataset.collectionDecorated)return;const button=row.querySelector('.line-billing-btn'),match=button?.getAttribute('onclick')?.match(/copyStudentLineBilling\('([^']+)'/);if(!match)return;const studentId=match[1],lookup=collectionRecord(studentId,month,false,scope),info=lookup.info,record=collectionDisplayRecord(info,month,scope,lookup.record,displayBalance||(displayBalance=billingCollectionBalance(month,scope,true)));row.dataset.collectionDecorated='1';const select=document.createElement('td');select.innerHTML=`<input type="checkbox" data-family-key="${esc(info.key)}" aria-label="選取 ${esc(student(studentId).name||'學生')}">`;row.append(select);const status=document.createElement('td');status.innerHTML=`<span class="v181-collection-status ${statusClass(record)}">${statusLabel(record)}</span>${record?.collectedAt?`<small>${new Date(record.collectedAt).toLocaleDateString('zh-TW')} ${esc(record.paymentMethod||'')}</small>`:record?.notifiedAt?`<small>${new Date(record.notifiedAt).toLocaleDateString('zh-TW')}</small>`:''}`;row.append(status)})
   }
-  function markCopiedNotified(e){const{studentId,month,scope='all'}=e.detail||{};if(!studentId||!month)return;const{record}=collectionRecord(studentId,month,true,scope);if(!record.notifiedAt){record.notifiedAt=now();record.status='notified';record.amount=familyAmount(studentId,month,scope);record.updatedAt=now();saveDB()}}
+  function markCopiedNotified(e){const{studentId,month,scope='all'}=e.detail||{};if(!studentId||!month)return;const amount=familyAmount(studentId,month,scope),{record}=collectionRecord(studentId,month,true,scope);if(!record.notifiedAt){record.notifiedAt=now();if(record.status!=='collected'){record.status='notified';record.amount=amount}record.updatedAt=now();saveDB();window.renderSettlement?.()}}
 
-  function renderMonthTasks(){const overview=$('.v181-finance-pane[data-pane="overview"] .v181-module-card');if(!overview)return;let panel=$('#v181MonthTasks');if(!panel){panel=document.createElement('div');panel.id='v181MonthTasks';panel.className='v181-month-tasks';overview.append(panel)}const month=window.__danbridgeFinanceWorkspaceMonth||monthNow(),scope=$('#financeBranchScope')?.value||'all',branchOf=timetableBillingBranchId,lessons=(db.lessons||[]).filter(l=>!l.isDraft&&l.date?.startsWith(month)&&!effectiveCampId(l)&&(scope==='all'||branchOf(l)===scope)),studentIds=[...new Set([...lessons.flatMap(l=>lessonBillingStudentIds(l)),...(db.students||[]).filter(s=>studentUsesMonthlyFee(s)&&studentIsPresentForBilling(s)&&(scope==='all'||studentMonthlyFeeBranch(s.id,month)===scope)).map(s=>s.id)])],familyKeys=[...new Set(studentIds.map(id=>familyInfo(id).key))],monthRecords=records().filter(r=>r.month===month),unnotified=familyKeys.filter(key=>!monthRecords.find(r=>r.familyKey===key)?.notifiedAt).length,uncollected=familyKeys.filter(key=>monthRecords.find(r=>r.familyKey===key)?.status!=='collected').length,badStudents=studentIds.filter(id=>(+student(id).rate||0)<=0).length,teacherIds=[...new Set(lessons.flatMap(l=>lessonTeacherIds(l)))],badTeachers=teacherIds.filter(id=>{const t=teacher(id);return teacherPayrollMode(t)==='fixed'?(teacherBaseSalary(t)===null||teacherOvertimeRate(t)===null||teacherDeductionRate(t)===null):(+t.rate||0)<=0}).length;panel.innerHTML=`<div><h3>${monthLabel(month)} 月底待辦</h3><span>依目前校區即時更新</span></div><div class="v181-task-grid"><article class="${unnotified?'warn':'done'}"><b>${unnotified}</b><span>家庭尚未通知</span></article><article class="${uncollected?'warn':'done'}"><b>${uncollected}</b><span>家庭尚未收款</span></article><article class="${badStudents?'bad':'done'}"><b>${badStudents}</b><span>學生單價異常</span></article><article class="${badTeachers?'bad':'done'}"><b>${badTeachers}</b><span>老師薪資設定異常</span></article></div>`}
+  function renderMonthTasks(){
+    const overview=$('.v181-finance-pane[data-pane="overview"] .v181-module-card');if(!overview)return;
+    let panel=$('#v181MonthTasks');if(!panel){panel=document.createElement('div');panel.id='v181MonthTasks';panel.className='v181-month-tasks';overview.append(panel)}
+    const month=window.__danbridgeFinanceWorkspaceMonth||monthNow(),scope=$('#financeBranchScope')?.value||'all';
+    const balance=billingCollectionBalance(month,scope,true),studentIds=[...new Set(balance.items.map(item=>item.studentId))];
+    const families=new Map(studentIds.map(id=>{const info=familyInfo(id);return[info.key,info]}));
+    const monthRecords=records().filter(record=>record.month===month);
+    let unnotified=0,uncollected=0;
+    for(const info of families.values()){
+      const ids=new Set(info.ids.map(String)),items=balance.items.filter(item=>ids.has(String(item.studentId)));
+      if(items.some(item=>item.amount-item.collected>.001)||balance.reviewStudentIds.some(id=>ids.has(id)))uncollected++;
+      if(items.some(item=>!monthRecords.some(record=>record.notifiedAt&&billingCollectionRecordStudentIds(record).has(String(item.studentId))&&((record.branchId||'all')==='all'||record.branchId===item.branchId))))unnotified++;
+    }
+    const lessons=(db.lessons||[]).filter(l=>!l.isDraft&&l.date?.startsWith(month)&&!effectiveCampId(l)&&(scope==='all'||timetableBillingBranchId(l)===scope));
+    const badStudents=studentIds.filter(id=>payrollNumber(student(id).rate)===null).length;
+    const teacherIds=[...new Set(lessons.flatMap(l=>lessonTeacherIds(l)))],badTeachers=teacherIds.filter(id=>!teacher(id)?.id||!calculateTeacherPayroll(teacher(id),month).configured).length;
+    panel.innerHTML=`<div><h3>${monthLabel(month)} 月底待辦</h3><span>依目前校區即時更新${balance.requiresReview?'｜歷史收款需核對':''}</span></div><div class="v181-task-grid"><article class="${unnotified?'warn':'done'}"><b>${unnotified}</b><span>家庭尚未通知</span></article><article class="${uncollected?'warn':'done'}"><b>${uncollected}</b><span>家庭尚未收款</span></article><article class="${badStudents?'bad':'done'}"><b>${badStudents}</b><span>學生單價異常</span></article><article class="${badTeachers?'bad':'done'}"><b>${badTeachers}</b><span>老師薪資設定異常</span></article></div>`;
+  }
   function patchSettlement(){const original=window.renderSettlement;if(typeof original!=='function'||original.__v1817)return;function wrapped(){original();decorateCollections();renderMonthTasks()}wrapped.__v1817=true;window.renderSettlement=wrapped}
   function init(){records();installLessonDiff();installLineEnhancement();patchSettlement();document.addEventListener('danbridge:line-billing-copied',markCopiedNotified);window.renderSettlement?.();renderMonthTasks()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(init,120));else setTimeout(init,120);

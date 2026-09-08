@@ -84,12 +84,65 @@ function studentMonthlyBillingData(studentId,m,scope='all',campSeason='all'){
   return{student:s,month:m,scope,billingCategory:studentBillingCategory(s),billable:studentIsPresentForBilling(s),tutoringLessons,tutoringHours,tutoringRate,tutoringAmount,afterSchoolLessons,afterSchoolHours,afterSchoolAmount,privateLessons,privateHours,privateAmount,groupLessons,groupHours,groupAmount,campRows,campDates,campAmount,total:tutoringAmount+campAmount};
 }
 function studentTuitionRevenue(m,scope='all'){return(db.students||[]).reduce((sum,s)=>sum+studentMonthlyBillingData(s.id,m,scope).tutoringAmount,0)}
-function studentUnpaidTuitionRevenue(m,scope='all'){
-  const due=studentTuitionRevenue(m,scope),branchOf=timetableBillingBranchId;
-  const paidLessons=(db.lessons||[]).filter(l=>!l.isDraft&&l.date?.startsWith(m)&&l.paymentStatus==='paid'&&!effectiveCampId(l)&&(scope==='all'||branchOf(l)===scope)).reduce((sum,l)=>sum+lessonCharge(l),0);
-  const tracked=(db.collectionRecords||[]).filter(r=>r.month===m&&r.status==='collected'&&(scope==='all'||(r.branchId||'all')===scope)).reduce((sum,r)=>sum+(+r.amount||0),0);
-  return Math.max(0,due-Math.max(paidLessons,Math.min(due,tracked)));
+// Every payment covers identified charge items, not a global money bucket.
+// Repeated all-campus / campus receipts cover the same item only once.
+function billingCollectionItems(m){
+  const items=[];
+  for(const s of db.students||[]){
+    if(!s.id||s.isGroupRoster)continue;
+    const data=studentMonthlyBillingData(s.id,m);
+    if(data.afterSchoolAmount>0)items.push({key:JSON.stringify(['monthly',m,s.id]),studentId:s.id,branchId:studentMonthlyFeeBranch(s.id,m),kind:'tuition',amount:data.afterSchoolAmount,paid:false});
+    for(const lesson of data.tutoringLessons){
+      const amount=lessonStudentCharge(lesson,s.id);if(!(amount>0))continue;
+      items.push({key:JSON.stringify(['lesson',lesson.id,s.id]),studentId:s.id,branchId:timetableBillingBranchId(lesson),kind:'tuition',amount,paid:lesson.paymentStatus==='paid'});
+    }
+    for(const row of data.campRows){
+      const amount=summerRegistrationTotal(row);if(!(amount>0))continue;
+      items.push({key:JSON.stringify(['camp',row.season,row.id,s.id]),studentId:s.id,branchId:row.branchId||'unassigned',kind:'camp',amount,paid:false});
+    }
+  }
+  return items;
 }
+function billingCollectionRecordStudentIds(record){
+  const raw=Array.isArray(record.studentIds)?record.studentIds:String(record.familyKey||String(record.id||'').split('|').pop()||'').split(',');
+  return new Set(raw.filter(Boolean).map(String));
+}
+function billingCollectionSnapshot(studentIds,m,scope='all'){
+  const ids=new Set(studentIds.map(String));
+  return billingCollectionItems(m).filter(item=>ids.has(String(item.studentId))&&(scope==='all'||item.branchId===scope)).map(({key,studentId,branchId,kind,amount})=>({key,studentId,branchId,kind,amount}));
+}
+function billingCollectionBalance(m,scope='all',includeCamp=false,studentIds=null){
+  const items=billingCollectionItems(m),covered=new Map(items.map(item=>[item.key,item.paid?item.amount:0])),issues=[];
+  for(const record of db.collectionRecords||[]){
+    if(record.month!==m||record.status!=='collected')continue;
+    const ids=billingCollectionRecordStudentIds(record),branch=record.branchId||'all';
+    const candidates=items.filter(item=>ids.has(String(item.studentId))&&(branch==='all'||item.branchId===branch));
+    if(!candidates.length)continue;
+    const total=candidates.reduce((sum,item)=>sum+item.amount,0),amount=Math.max(0,Number(record.amount)||0);
+    let allocations;
+    if(record.billingItemsVersion===1&&Array.isArray(record.billingItems)){
+      const unique=new Map(record.billingItems.map(item=>[item.key,item]));
+      allocations=candidates.map(item=>{const paid=unique.get(item.key);return paid&&String(paid.studentId)===String(item.studentId)&&paid.branchId===item.branchId?{...item,amount:Math.min(item.amount,Math.max(0,Number(paid.amount)||0))}:null}).filter(Boolean);
+      if(allocations.reduce((sum,item)=>sum+item.amount,0)>amount+.001){issues.push({recordId:record.id,items:candidates});continue}
+    }else if(amount+.001>=total){
+      allocations=candidates;
+    }else if(candidates.length===1){
+      allocations=[{...candidates[0],amount}];
+    }else{
+      // Legacy partial receipts have no trustworthy lesson/campus allocation.
+      // Preserve them, flag review, and never invent an allocation to a child.
+      issues.push({recordId:record.id,items:candidates});continue;
+    }
+    for(const item of allocations)covered.set(item.key,Math.max(covered.get(item.key)||0,item.amount));
+  }
+  const selectedIds=studentIds?new Set(studentIds.map(String)):null;
+  const selected=items.filter(item=>(includeCamp||item.kind==='tuition')&&(scope==='all'||item.branchId===scope)&&(!selectedIds||selectedIds.has(String(item.studentId))));
+  const keys=new Set(selected.map(item=>item.key)),due=selected.reduce((sum,item)=>sum+item.amount,0),collected=selected.reduce((sum,item)=>sum+Math.min(item.amount,covered.get(item.key)||0),0);
+  const reviewRecords=issues.filter(issue=>issue.items.some(item=>keys.has(item.key))).map(issue=>issue.recordId);
+  return{due,collected,unpaid:Math.max(0,due-collected),requiresReview:reviewRecords.length>0,reviewRecords,items:selected.map(item=>({...item,collected:Math.min(item.amount,covered.get(item.key)||0)})),reviewStudentIds:[...new Set(issues.filter(issue=>reviewRecords.includes(issue.recordId)).flatMap(issue=>issue.items.map(item=>String(item.studentId))))]};
+}
+function studentUnpaidTuitionRevenue(m,scope='all'){return billingCollectionBalance(m,scope).unpaid}
+function studentUnpaidTuitionLabel(m,scope='all'){const balance=billingCollectionBalance(m,scope);return balance.requiresReview?'需核對':money(balance.unpaid)}
 function billingNumber(n){const value=Math.round((+n||0)*100)/100;return Number.isInteger(value)?String(value):String(value.toFixed(2)).replace(/0+$/,'').replace(/\.$/,'')}
 function studentBillingSummary(row){return row?.billingCategory==='after_school_monthly'?`月費制／排課 ${row.total||0} 堂（時數不影響費用）`:`${row?.charged||0} 堂／${billingNumber(row?.h||0)} hr`}
 function billingMonthLabel(m){const[y,month]=String(m||'').split('-').map(Number);return `${y} 年 ${month} 月`}
@@ -143,7 +196,13 @@ function copyStudentLineBilling(studentId,m,scope='all',encodedFamilyIds='',camp
   if(navigator.clipboard?.writeText)return navigator.clipboard.writeText(text).then(done).catch(()=>copyStudentLineBillingFallback(text,done));
   copyStudentLineBillingFallback(text,done);
 }
-function copyStudentLineBillingFallback(text,done){const area=document.createElement('textarea');area.value=text;area.style.position='fixed';area.style.opacity='0';document.body.append(area);area.select();document.execCommand('copy');area.remove();done()}
+function copyStudentLineBillingFallback(text,done){
+  const area=document.createElement('textarea');area.value=text;area.style.position='fixed';area.style.opacity='0';document.body.append(area);
+  let copied=false;try{area.select();copied=document.execCommand('copy')===true}catch{}finally{area.remove()}
+  if(copied){done();return true}
+  if(typeof toast==='function')toast('複製失敗，請保留預覽並手動選取文字複製；尚未標記通知');
+  return false;
+}
 
 /* Company revenue generated by one teacher's timetable.
  * This walks that teacher's own schedule rows one by one; it does not multiply by

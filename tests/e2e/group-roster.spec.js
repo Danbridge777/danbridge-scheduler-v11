@@ -1,5 +1,20 @@
 const {test,expect}=require('@playwright/test');
 const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
+test('大量團班名單搜尋保留勾選，非 Owner 不索引家長及聯絡資料',async({page})=>{
+ await isolateApplicationAuth(page);await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.addStyleTag({content:'#authScreen{display:none!important;pointer-events:none!important}'});
+ await page.evaluate(()=>{document.body.classList.remove('auth-locked');window.DanbridgeAccess.setContext({role:'owner',email:'owner@example.com'});window.currentCloudRole=()=> 'owner';db.students=Array.from({length:500},(_,i)=>({id:'kid-'+i,name:'Student '+i,parent:'家長'+i,contact:'0988123456',school:'河西國小',grade:'二年級',courseType:'1對1'}));renderSelects();switchTab('students');renderStudentGroupRoster({isGroupRoster:true,groupMemberIds:['kid-499']});$('studentCourseType').value='團班';syncStudentGroupVisibility()});
+ const search=page.getByRole('searchbox',{name:'搜尋團班學生',exact:true});
+ await search.fill('ＳＴＵＤＥＮＴ 499');await expect(page.locator('#studentGroupMembers .group-roster-option:visible')).toHaveCount(1);
+ await expect(page.locator('#studentGroupMembers input[value="kid-499"]')).toBeChecked();
+ await search.fill('0988123456 河西 二年級');await expect(page.locator('#studentGroupMembers .group-roster-option:visible')).toHaveCount(500);
+ await search.fill('<img onerror=alert(1)>');await expect(page.locator('#studentGroupMembersEmpty')).toBeVisible();
+ await search.fill('  ');await expect(page.locator('#studentGroupMembersSummary')).toHaveText('已選 1 位 · 顯示 500／500 位');
+ await page.evaluate(()=>groupMemberChecks($('studentGroupMembers'),['kid-499'],{parent:false}));
+ await search.fill('家長499');await expect(page.locator('#studentGroupMembers .group-roster-option:visible')).toHaveCount(0);
+ expect(await page.locator('#studentGroupMembers').innerHTML()).not.toContain('0988123456');
+ await search.fill('Student 499');await expect(page.locator('#studentGroupMembers input[value="kid-499"]')).toBeVisible();await expect(page.locator('#studentGroupMembers input[value="kid-499"]')).toBeChecked();
+});
 test('建立團班、勾選同名不同家長學生、課表存名單並按月產生各自帳單',async({page})=>{
  await isolateApplicationAuth(page);
  await page.goto('/index.html',{waitUntil:'domcontentloaded'});
@@ -14,7 +29,9 @@ test('建立團班、勾選同名不同家長學生、課表存名單並按月�
  const dialogs=[];page.on('dialog',async dialog=>{dialogs.push(dialog.message());await dialog.accept()});
  await page.locator('#createGroupRosterButton').click();
  await expect(page.locator('#studentGroupMembersWrap')).toBeVisible();
- const controlSizes=await page.evaluate(()=>['studentIsGroupRoster','studentName','studentCourseType'].map(id=>{const el=document.getElementById(id),r=el.getBoundingClientRect(),s=getComputedStyle(el);return{id,width:r.width,height:r.height,appearance:s.appearance}}));
+ await expect(page.locator('#studentIsGroupRoster')).not.toBeVisible();
+ await expect(page.locator('#studentCourseType')).not.toBeVisible();
+ const controlSizes=await page.evaluate(()=>[document.querySelector('#studentGroupMembers input'),document.getElementById('studentName'),document.getElementById('studentBillingBranch')].map(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return{width:r.width,height:r.height,appearance:s.appearance}}));
  expect(controlSizes[0]).toMatchObject({width:18,height:18,appearance:'none'});
  expect(controlSizes[1].height).toBe(48);expect(controlSizes[2].height).toBe(48);
  await page.locator('#studentGroupMembers input[value="kid-a"]').focus();
@@ -24,8 +41,18 @@ test('建立團班、勾選同名不同家長學生、課表存名單並按月�
  await expect(page.locator('#studentGroupMembers input[value="kid-a"]')).not.toBeChecked();
  await page.locator('#studentName').fill('週二英文團班');
  await page.locator('#studentBillingBranch').selectOption('hexi');
+ await page.getByRole('searchbox',{name:'搜尋團班學生',exact:true}).fill('王家長');
+ await expect(page.locator('#studentGroupMembers input[value="kid-b"]')).not.toBeVisible();
  await page.locator('#studentGroupMembers input[value="kid-a"]').check();
+ await page.getByRole('searchbox',{name:'搜尋團班學生',exact:true}).fill('李家長');
  await page.locator('#studentGroupMembers input[value="kid-b"]').check();
+ await expect(page.locator('#studentGroupMembersSummary')).toHaveText('已選 2 位 · 顯示 1／2 位');
+ await page.getByRole('searchbox',{name:'搜尋團班學生',exact:true}).fill('找不到的人');
+ await expect(page.locator('#studentGroupMembersEmpty')).toBeVisible();
+ await expect(page.locator('#studentGroupMembers input:checked')).toHaveCount(2);
+ await page.getByRole('searchbox',{name:'搜尋團班學生',exact:true}).press('Enter');
+ expect(await page.evaluate(()=>db.students.filter(s=>s.isGroupRoster).length)).toBe(0);
+ await page.getByRole('searchbox',{name:'搜尋團班學生',exact:true}).fill('');
  await expect(page.locator('#studentGroupMembers')).toContainText('王家長');
  await expect(page.locator('#studentGroupMembers')).toContainText('李家長');
  await page.locator('#studentGroupFields').screenshot({path:require('node:path').join(require('node:os').tmpdir(),'danbridge-group-roster-controls-'+test.info().project.name+'.png')});
@@ -38,6 +65,9 @@ test('建立團班、勾選同名不同家長學生、課表存名單並按月�
  await expect(page.locator('#lessonBillingBranch')).toHaveValue('hexi');
  await page.locator('#endTime').selectOption('17:30');
  await expect(page.locator('#lessonGroupStudents input:checked')).toHaveCount(2);
+ await page.getByRole('searchbox',{name:'搜尋本堂學生',exact:true}).fill('小安 王');
+ await expect(page.locator('#lessonGroupStudents input[value="kid-a"]')).toBeVisible();
+ await expect(page.locator('#lessonGroupStudents input[value="kid-b"]')).not.toBeVisible();
  await page.locator('#lessonModal button[onclick="saveLesson()"]').click();
  const result=await page.evaluate(()=>({lessons:db.lessons,wang:studentLineBillingText('kid-a','2026-09'),lee:studentLineBillingText('kid-b','2026-09'),total:studentTuitionRevenue('2026-09'),oct:studentTuitionRevenue('2026-10'),names:lessonGroupRosterText(db.lessons[0])}));
  expect(dialogs).toEqual([]);expect(result.lessons).toHaveLength(1);expect(result.lessons[0].groupStudentIds).toEqual(['kid-a','kid-b']);
