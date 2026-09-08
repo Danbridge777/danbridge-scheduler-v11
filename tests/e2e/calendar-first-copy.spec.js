@@ -18,14 +18,17 @@ async function openCalendarFixture(page){
     window.renderCalendar();
   });
 }
-test.beforeEach(async({page})=>openCalendarFixture(page));
+test.beforeEach(async({page})=>{await openCalendarFixture(page);await page.locator('#calendarFilterPanel > summary').click()});
 
 for(const shortcut of ['Control+c','Meta+c'])test(`first ${shortcut} after search and marquee copies immediately`,async({page})=>{
   const card=page.locator('#calendarCanvas [data-id="first-copy"]').first();
   await expect(card).toBeVisible();
   await page.locator('#calendarSearch').focus();
-  await card.scrollIntoViewIfNeeded();
+  // Center the gesture target: mobile fixed navigation otherwise covers the
+  // edge-aligned card even though Playwright considers it in the viewport.
+  await card.evaluate(el=>el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'}));
   const box=await card.boundingBox();
+  expect(await page.evaluate(({x,y})=>!!document.elementFromPoint(x,y)?.closest('#calendarCanvas'),{x:box.x+box.width/2,y:box.y-3})).toBe(true);
   await page.mouse.move(box.x+box.width/2,box.y-3);
   await page.mouse.down();
   await page.mouse.move(box.x+box.width/2,box.y+box.height/2,{steps:5});

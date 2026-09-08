@@ -17,6 +17,8 @@
   function focusCurrentSearch(){
     const section=document.body.dataset.activeSection||$('.active[id]')?.id||'dashboard';
     const target=document.getElementById(searchBySection[section]||'');
+    const panel=target?.closest('details');
+    if(panel&&!panel.open)panel.open=true;
     if(!visible(target)){window.toast?.('目前頁面沒有搜尋欄位');return}
     target.focus({preventScroll:true});
     target.select?.();

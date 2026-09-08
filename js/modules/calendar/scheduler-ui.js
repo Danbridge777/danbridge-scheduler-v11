@@ -141,7 +141,13 @@ function scheduleCalendarAnalysisRender(){
   const run=()=>{calendarAnalysisRenderHandle=null;if(calendarSectionIsActive())renderCalendarAnalysis()};
   calendarAnalysisRenderHandle=typeof requestIdleCallback==='function'?requestIdleCallback(run,{timeout:350}):setTimeout(run,90);
 }
-function renderCalendar(options={}){ensureCalendarDefaults();ensureTeacherCalendarMonth();rebuildCalendarTeacherConflictCache();const mode=$('calendarMode').value,date=new Date($('calendarDate').value+'T00:00:00'),f=calendarFilterState();if(mode==='month')renderMonth(date,f);else renderWeek(date,f);if(options.deferAnalysis)scheduleCalendarAnalysisRender();else renderCalendarAnalysis();setTimeout(enableDesktopMarquee,0)}
+function updateCalendarFilterSummary(){
+  const summary=$('calendarFilterSummary');if(!summary)return;
+  const labels=['calendarTeacherFilter','calendarLocationFilter','calendarStudentFilter','calendarRoomFilter','calendarStateFilter'].map(id=>$(id)).filter(el=>el?.value).map(el=>el.selectedOptions?.[0]?.textContent||el.value);
+  const search=$('calendarSearch')?.value.trim();if(search)labels.push(`搜尋：${search}`);
+  const text=labels.length?labels.join(' · '):'未設定篩選';if(summary.textContent!==text)summary.textContent=text;summary.title=text;
+}
+function renderCalendar(options={}){ensureCalendarDefaults();ensureTeacherCalendarMonth();updateCalendarFilterSummary();rebuildCalendarTeacherConflictCache();const mode=$('calendarMode').value,date=new Date($('calendarDate').value+'T00:00:00'),f=calendarFilterState();if(mode==='month')renderMonth(date,f);else renderWeek(date,f);if(options.deferAnalysis)scheduleCalendarAnalysisRender();else renderCalendarAnalysis();setTimeout(enableDesktopMarquee,0)}
 let schedulePersistenceFrame=null,scheduleRenderFrame=null,pendingScheduleAction='';
 function commitScheduleMutation(scheduleAction='lesson.update.fields'){
   calendarTeacherConflictCache=null;
