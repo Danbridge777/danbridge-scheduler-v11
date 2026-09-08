@@ -13,7 +13,7 @@ function applyStudentScheduleDefaults(){
   const teacherId=validTeacher(s.preferredTeacherId)?s.preferredTeacherId:(validTeacher(previous?.teacherId)?previous.teacherId:'');
   const studentBranches=(s.branchIds||[]).filter(id=>branchRecord(id)&&!['unassigned','home_service','online'].includes(id));
   const historicalBranch=previous?.branchId||'';
-  const branchId=studentBranches.length===1?studentBranches[0]:(branchRecord(historicalBranch)?historicalBranch:'');
+  const branchId=branchRecord(s.attendanceBranchId)?s.attendanceBranchId:(studentBranches.length===1?studentBranches[0]:(branchRecord(historicalBranch)?historicalBranch:''));
   const mode=previous?window.DanbridgeAccess.deliveryModeFromLesson(previous):'onsite';
   const minutes=time=>/^([01]\d|2[0-3]):[0-5]\d$/.test(time||'')?Number(time.slice(0,2))*60+Number(time.slice(3)):NaN;
   const duration=previous?minutes(previous.end)-minutes(previous.start):NaN;
@@ -36,7 +36,7 @@ function applyStudentScheduleDefaults(){
     document.querySelectorAll('#coTeacherChecks input').forEach(input=>input.checked=coTeachers.has(input.value));
     $('lessonCampId').value=previous?.campId||'';
   }
-  renderLessonMapLink();selector.dataset.defaultsStudentId=sid;
+  renderLessonMapLink();renderLessonGroupRoster();selector.dataset.defaultsStudentId=sid;
   let hint=$('lessonStudentDefaultsHint');
   if(!hint){hint=document.createElement('div');hint.id='lessonStudentDefaultsHint';hint.className='small';hint.setAttribute('role','status');selector.closest('.student-select-row')?.after(hint);if(!hint.isConnected)selector.after(hint)}
   hint.textContent=previous?`已帶入學生設定與 ${previous.date} 課程的排課資料；請核對老師、地點與時間，仍可修改。`:'已帶入學生已設定的排課資料；未設定的老師、校區與教室請補選。';
@@ -49,7 +49,7 @@ function openLessonModal(date=todayStr(),start='16:00',id=''){
   $('lessonStudent').value='';$('lessonTeacher').value='';delete $('lessonStudent').dataset.defaultsStudentId;$('lessonStudentDefaultsHint')?.remove();
   $('lessonDate').value=date;$('startTime').value=start;$('endTime').value=addMinutes(start,60);
   if(id)fillLessonForm(id);
-  $('lessonModal').classList.add('show');handleLocationChange();syncCampField();
+  $('lessonModal').classList.add('show');handleLocationChange();syncCampField();renderLessonGroupRoster(id?db.lessons.find(l=>l.id===id):null);
 }
 
 function closeLessonModal(){toggleQuickStudent(false);$('lessonModal').classList.remove('show')}
@@ -62,11 +62,13 @@ function saveLesson(){
   $('startTime').value=snapTimeTo5($('startTime').value);
   $('endTime').value=snapTimeTo5($('endTime').value);
   const sid=$('lessonStudent').value,primary=$('lessonTeacher').value;
-  if(!$('lessonDate').value||!$('startTime').value||!$('endTime').value||!sid||!primary||!$('lessonBranch').value)return alert('日期、時間、學生、老師、歸屬校區都要填');
+  if(!$('lessonDate').value||!$('startTime').value||!$('endTime').value||!sid||!primary||!$('lessonBranch').value)return alert('日期、時間、學生、老師、上課校區都要填');
   if($('endTime').value<=$('startTime').value)return alert('結束時間必須晚於開始時間');
   const group=isGroupStudentId(sid),teacherIds=group?[...new Set([primary,...selectedCoTeacherIds()])]:[primary];
   if(!group&&teacherIds.length>1)return alert('只有團班可以安排多位老師。');
   const id=$('lessonId').value||createLessonId(),old=db.lessons.find(x=>x.id===id),o={...(old||{}),id,date:$('lessonDate').value,start:$('startTime').value,end:$('endTime').value,studentId:sid,teacherId:primary,teacherIds,title:$('lessonTitle').value,campId:group?normalizeCampCode($('lessonCampId').value):'',room:$('lessonDeliveryMode').value==='onsite'?$('lessonRoom').value.trim():'',location:$('lessonDeliveryMode').value==='home'?'到府':$('lessonDeliveryMode').value==='online'?'線上課':(branchRecord($('lessonBranch').value)?.name||''),branchId:$('lessonBranch').value,deliveryMode:$('lessonDeliveryMode').value,address:$('lessonDeliveryMode').value==='home'?$('lessonAddress').value.trim():'',onlinePlatform:$('lessonDeliveryMode').value==='online'?$('lessonOnlinePlatform').value:'',meetingUrl:$('lessonDeliveryMode').value==='online'?$('lessonMeetingUrl').value.trim():'',paymentStatus:$('paymentStatus').value,status:$('lessonStatus').value,chargeStudent:$('chargeStudent').value,payTeacher:$('payTeacher').value,note:$('lessonNote').value,seriesId:old?.seriesId||'',lessonState:$('lessonState').value||'active',isDraft:($('lessonState').value==='draft'),draftOriginal:null};
+  if(group&&student(sid).isGroupRoster){const ids=selectedLessonGroupStudents();if(!ids.length)return alert('請至少選擇一位團班學生');o.groupStudentIds=ids}else delete o.groupStudentIds;
+  o.billingBranchId=$('lessonBillingBranch')?.value||'';
   const conflict=conflictDetail(o,id);
   if(conflict){
     const msg=`${conflict.type}撞課：${conflict.name}\n已排 ${conflict.lesson.date} ${conflict.lesson.start}–${conflict.lesson.end}｜${student(conflict.lesson.studentId).name||''} ${conflict.lesson.title||''}`;
@@ -81,7 +83,9 @@ function saveLesson(){
     let changed=0;
     for(const l of seriesTargets){
       const before={...l},ns=shiftTime(l.start,timeDelta),ne=shiftTime(l.end,timeDelta);
-      const candidate={...l,date:shiftDate(l.date,dateDelta),start:ns,end:ne,teacherId:o.teacherId,teacherIds:[...o.teacherIds],studentId:o.studentId,title:o.title,campId:o.campId,room:o.room,location:o.location,branchId:o.branchId,deliveryMode:o.deliveryMode,address:o.address,onlinePlatform:o.onlinePlatform,meetingUrl:o.meetingUrl,paymentStatus:o.paymentStatus,status:o.status,chargeStudent:o.chargeStudent,payTeacher:o.payTeacher,note:o.note,lessonState:o.lessonState,isDraft:o.isDraft,draftOriginal:null};
+      const candidate={...l,date:shiftDate(l.date,dateDelta),start:ns,end:ne,teacherId:o.teacherId,teacherIds:[...o.teacherIds],studentId:o.studentId,...(o.groupStudentIds?{groupStudentIds:[...o.groupStudentIds]}:{}),title:o.title,campId:o.campId,room:o.room,location:o.location,branchId:o.branchId,deliveryMode:o.deliveryMode,address:o.address,onlinePlatform:o.onlinePlatform,meetingUrl:o.meetingUrl,paymentStatus:o.paymentStatus,status:o.status,chargeStudent:o.chargeStudent,payTeacher:o.payTeacher,note:o.note,lessonState:o.lessonState,isDraft:o.isDraft,draftOriginal:null};
+      if(!o.groupStudentIds)delete candidate.groupStudentIds;
+      if(o.billingBranchId)candidate.billingBranchId=o.billingBranchId;else delete candidate.billingBranchId;
       if(!ns||!ne||hasConflict(candidate,l.id))continue;
       Object.assign(l,candidate);changedIds.push(l.id);logChange('系列修改',l,before);window.syncMakeupForLessonStatus?.(l,before.status);changed++;
     }
@@ -149,7 +153,7 @@ function conflictDetail(o,ignore=''){
   for(const l of db.lessons){
     if(ignored.has(l.id)||!lessonBlocksScheduling(l)||l.date!==o.date||!(o.start<l.end&&o.end>l.start))continue;
     // 老師重疊改為警告，不阻止儲存；學生與教室規則維持原樣。
-    if(l.studentId===o.studentId&&!isGroupStudentId(o.studentId))return{type:'學生',name:student(l.studentId).name||'未命名學生',lesson:l};
+    if((o.groupStudentIds?.length?o.groupStudentIds:[o.studentId]).some(id=>(l.groupStudentIds?.length?l.groupStudentIds:[l.studentId]).includes(id))&&(o.groupStudentIds?.length||l.groupStudentIds?.length||!isGroupStudentId(o.studentId)))return{type:'學生',name:student(l.studentId).name||'未命名學生',lesson:l};
     if(o.deliveryMode==='onsite'&&l.deliveryMode!=='home'&&l.deliveryMode!=='online'&&o.branchId===l.branchId&&o.room&&l.room===o.room)return{type:'教室',name:locationLabel(o)+' '+o.room,lesson:l};
   }
   return null;
@@ -188,10 +192,12 @@ function openCourseDrawer(id){
       ${teacherView?'':`<span class="course-detail-badge ${l.paymentStatus==='paid'||l.paymentStatus==='waived'?'payment-paid':'payment-unpaid'}">${payment}</span>`}
     </div>
     <div class="course-detail-grid">
+      ${l.groupStudentIds?.length?`<div class="course-detail-item wide"><div class="course-detail-label">團班學生（${l.groupStudentIds.length} 位）</div><div class="course-detail-value">${esc(lessonGroupRosterText(l))}</div></div>`:''}
       <div class="course-detail-item"><div class="course-detail-label">上課時間</div><div class="course-detail-value">${esc(l.start)}–${esc(l.end)}<br>${hours(l.start,l.end)} 小時</div></div>
       <div class="course-detail-item"><div class="course-detail-label">課程／班別</div><div class="course-detail-value">${esc(l.title||s.courseType||'一般課程')}</div></div>
       <div class="course-detail-item wide"><div class="course-detail-label">授課老師</div><div class="course-detail-value">${esc(teachers)}</div></div>
       <div class="course-detail-item wide"><div class="course-detail-label">上課地點</div><div class="course-detail-value">${esc(place||'未指定')}</div></div>
+      ${teacherView?'':`<div class="course-detail-item"><div class="course-detail-label">營收歸屬校區</div><div class="course-detail-value">${esc(branchRecord(timetableBillingBranchId(l))?.name||'未歸屬')}</div></div>`}
       ${teacherView?'':`<div class="course-detail-item"><div class="course-detail-label">課表營收</div><div class="course-detail-value">${esc(lessonChargeLabel(l))}</div></div><div class="course-detail-item"><div class="course-detail-label">收費確認</div><div class="course-detail-value">${l.chargeStudent==='no'?'尚未確認':'已確認'}</div></div><div class="course-detail-item"><div class="course-detail-label">老師薪資</div><div class="course-detail-value">${l.payTeacher==='no'?'不計薪':money(lessonPay(l))}</div></div>`}
     </div>
     ${l.teacherReportContent||l.teacherReportHomework||l.teacherReportNote?`<div class="course-detail-section-title">老師課堂回報</div><div class="course-detail-note">${l.teacherReportContent?`<b>課程內容</b>\n${esc(l.teacherReportContent)}\n\n`:''}${l.teacherReportHomework?`<b>家庭作業</b>\n${esc(l.teacherReportHomework)}\n\n`:''}${l.teacherReportFeedback?`<b>老師回饋</b>\n${esc(l.teacherReportFeedback)}\n\n`:''}${l.teacherReportNote?`<b>內部備註</b>\n${esc(l.teacherReportNote)}`:''}</div>`:''}

@@ -1,9 +1,9 @@
-import {PRODUCTION_SCHEDULER_EMAILS,projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.253';
+import {PRODUCTION_SCHEDULER_EMAILS,projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.257';
 
 export const SCHEDULER_OPERATION_SCHEMA='danbridge-production-scheduler-operation-v1';
 export const SCHEDULER_OPERATION_RESPONSE_SCHEMA='danbridge-production-scheduler-operation-response-v1';
-export const SCHEDULER_LESSON_FIELDS=Object.freeze(['id','date','start','end','studentId','teacherId','teacherIds','title','campId','room','location','branchId','deliveryMode','address','onlinePlatform','meetingUrl','status','note','seriesId','lessonState','isDraft']);
-export const SCHEDULER_STUDENT_FIELDS=Object.freeze(['id','name','status','school','grade','level','preferredTeacherId','courseType','branchIds']);
+export const SCHEDULER_LESSON_FIELDS=Object.freeze(['id','date','start','end','studentId','groupStudentIds','billingBranchId','teacherId','teacherIds','title','campId','room','location','branchId','deliveryMode','address','onlinePlatform','meetingUrl','status','note','seriesId','lessonState','isDraft']);
+export const SCHEDULER_STUDENT_FIELDS=Object.freeze(['id','name','status','school','grade','level','preferredTeacherId','courseType','branchIds','isGroupRoster','groupMemberIds','billingBranchId','attendanceBranchId']);
 const clone=value=>value===undefined?undefined:JSON.parse(JSON.stringify(value));
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 const same=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
@@ -23,7 +23,8 @@ export function assertProductionSchedulerActor(actor){
 function assertSafeLesson(value,id,{complete=false}={}){
  exact(value,SCHEDULER_LESSON_FIELDS,'課程');if(value.id!==id)throw new Error('課程 ID 不一致');
  for(const [key,item] of Object.entries(value)){
-  if(key==='teacherIds'){if(!Array.isArray(item)||item.length>8||item.some(row=>!token(row))||new Set(item).size!==item.length)throw new Error('授課老師格式無效')}
+  if(key==='groupStudentIds'){if(!Array.isArray(item)||item.length>100||item.some(row=>!token(row))||new Set(item).size!==item.length)throw new Error('團班學生名單格式無效')}
+  else if(key==='teacherIds'){if(!Array.isArray(item)||item.length>8||item.some(row=>!token(row))||new Set(item).size!==item.length)throw new Error('授課老師格式無效')}
   else if(key==='isDraft'){if(typeof item!=='boolean')throw new Error('草稿格式無效')}
   else if(typeof item!=='string'||item.length>(key==='note'?4000:1000))throw new Error(`課程 ${key} 格式無效`);
  }
@@ -42,7 +43,7 @@ export function normalizeProductionSchedulerRequest(input){
   if(!token(id)||seen.has(id)||change.before===null&&change.after===null)throw new Error('排課異動 ID 重複或無效');seen.add(id);
   if(change.before!==null)assertSafeLesson(change.before,id);
   if(change.after!==null)assertSafeLesson(change.after,id,{complete:true});
-  if(change.student!==undefined&&change.student!==null){exact(change.student,SCHEDULER_STUDENT_FIELDS,'學生');if(change.student.id!==change.after?.studentId||!token(change.student.id)||typeof change.student.name!=='string'||!change.student.name.trim()||change.student.name.length>120)throw new Error('新增學生身分無效');for(const [key,value] of Object.entries(change.student)){if(key==='branchIds'){if(!Array.isArray(value)||value.length>20||value.some(item=>!token(item)))throw new Error('學生校區無效')}else if(typeof value!=='string'||value.length>300)throw new Error('學生欄位格式無效')}}
+  if(change.student!==undefined&&change.student!==null){exact(change.student,SCHEDULER_STUDENT_FIELDS,'學生');if(change.student.id!==change.after?.studentId||!token(change.student.id)||typeof change.student.name!=='string'||!change.student.name.trim()||change.student.name.length>120)throw new Error('新增學生身分無效');for(const [key,value] of Object.entries(change.student)){if(key==='isGroupRoster'){if(typeof value!=='boolean')throw new Error('團班格式無效')}else if(key==='groupMemberIds'){if(!Array.isArray(value)||value.length>100||value.some(id=>!token(id))||new Set(value).size!==value.length)throw new Error('團班名單無效')}else if(key==='branchIds'){if(!Array.isArray(value)||value.length>20||value.some(item=>!token(item)))throw new Error('學生校區無效')}else if(typeof value!=='string'||value.length>300)throw new Error('學生欄位格式無效')}}
   return{lessonId:id,before:clone(change.before),after:clone(change.after),...(change.student?{student:clone(change.student)}:{})};
  });
  return Object.freeze({schema:input.schema,requestId:input.requestId,release:input.release,changes});
@@ -77,9 +78,12 @@ export function buildProductionSchedulerTarget(source,input,actor,{nowIso}={}){
    assertSafeLesson(schedulerLesson(next),change.lessonId,{complete:true});
    if(!teacherIds(next).every(id=>target.teachers.some(teacher=>teacher.id===id&&!teacher.archivedAt)))throw new Error('授課老師不存在或已封存');
    if(next.branchId&&!target.branches.some(branch=>branch.id===next.branchId)&&next.branchId!=='unassigned')throw new Error('課程校區不存在');
+   if(next.billingBranchId&&!target.branches.some(branch=>branch.id===next.billingBranchId))throw new Error('團班歸屬校區不存在');
    const existingStudent=target.students.find(student=>student.id===next.studentId);
+   if(next.groupStudentIds?.length){if(!existingStudent?.isGroupRoster||existingStudent.courseType!=='團班'||next.groupStudentIds.some(id=>!target.students.some(s=>s.id===id&&!s.isGroupRoster)))throw new Error('團班學生名單包含不存在的學生或班別無效')}
+   if(existingStudent?.isGroupRoster&&!next.groupStudentIds?.length)throw new Error('團班必須選擇學生');
    if(existingStudent?.archivedAt)throw new Error('學生已封存');
-   if(!existingStudent){if(change.student?.id!==next.studentId)throw new Error('課程學生不存在');if(change.student.branchIds?.some(id=>!target.branches.some(row=>row.id===id)))throw new Error('學生校區不存在');if(change.student.preferredTeacherId&&!target.teachers.some(row=>row.id===change.student.preferredTeacherId&&!row.archivedAt))throw new Error('學生指定老師不存在');target.students.push({...clone(change.student),billing:'hour',rate:0,note:''})}
+   if(!existingStudent){if(change.student?.isGroupRoster)throw new Error('請由 Owner 先建立團班');if(change.student?.id!==next.studentId)throw new Error('課程學生不存在');if(change.student.branchIds?.some(id=>!target.branches.some(row=>row.id===id)))throw new Error('學生校區不存在');if(change.student.preferredTeacherId&&!target.teachers.some(row=>row.id===change.student.preferredTeacherId&&!row.archivedAt))throw new Error('學生指定老師不存在');target.students.push({...clone(change.student),billing:'hour',rate:0,note:''})}
    if(teacherIds(next).length>1&&target.students.find(row=>row.id===next.studentId)?.courseType!=='團班')throw new Error('只有團班可以安排多位老師');
   }
   if(same(current,next))continue;
@@ -114,9 +118,9 @@ export function buildProductionSchedulerTarget(source,input,actor,{nowIso}={}){
  // UI warning, matching the existing timetable; student/room overlap blocks.
  const active=row=>row&&!row.isDraft&&!['取消','已取消','停課','cancel','cancelled','canceled','stopped','inactive','deleted','draft'].includes(String(row.status||'').trim().toLowerCase())&&!['取消','已取消','停課','cancel','cancelled','canceled','stopped','inactive','deleted','draft'].includes(String(row.lessonState||'').trim().toLowerCase());
  for(const event of events){const next=event.after;if(!active(next))continue;const original=event.before;
-  if(original&&['date','start','end','studentId','room','branchId','deliveryMode','status','lessonState','isDraft'].every(key=>same(original[key],next[key])))continue;
+  if(original&&['date','start','end','studentId','groupStudentIds','billingBranchId','room','branchId','deliveryMode','status','lessonState','isDraft'].every(key=>same(original[key],next[key])))continue;
   for(const other of target.lessons){if(other.id===next.id||!active(other)||other.date!==next.date||!(next.start<other.end&&next.end>other.start))continue;
-   if(other.studentId===next.studentId&&target.students.find(row=>row.id===next.studentId)?.courseType!=='團班')throw new Error('學生時間衝突，整批未執行');
+   if((next.groupStudentIds?.length?next.groupStudentIds:[next.studentId]).some(id=>(other.groupStudentIds?.length?other.groupStudentIds:[other.studentId]).includes(id))&&(next.groupStudentIds?.length||other.groupStudentIds?.length||target.students.find(row=>row.id===next.studentId)?.courseType!=='團班'))throw new Error('學生時間衝突，整批未執行');
    if(next.deliveryMode==='onsite'&&!['home','online'].includes(other.deliveryMode)&&next.branchId===other.branchId&&next.room&&other.room===next.room)throw new Error('教室時間衝突，整批未執行');
   }
  }

@@ -9,6 +9,23 @@ const seed=()=>({...Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]
 const request=changes=>({schema:SCHEDULER_OPERATION_SCHEMA,requestId:'scheduler-test-request-1',release:'20.26.164',changes});
 const run=(db,changes)=>buildProductionSchedulerTarget(db,request(changes),actor,{nowIso:'2026-09-03T13:00:00.000Z'});
 
+test('group roster survives scheduler create, move and delete, rejects missing members and overlapping child',()=>{
+ const db=seed();db.students.push({id:'group',name:'團班',courseType:'團班',isGroupRoster:true,groupMemberIds:['student-1']});
+ db.branches.push({id:'hexi'});
+ const added={...lesson,id:'group-lesson',date:'2026-10-03',studentId:'group',billingBranchId:'hexi',groupStudentIds:['student-1']};
+ const first=run(db,[{lessonId:added.id,before:null,after:added}]);
+ assert.deepEqual(first.schedulerDb.lessons.find(l=>l.id===added.id).groupStudentIds,['student-1']);
+ const moved={...added,date:'2026-10-04'};
+ const second=run(first.db,[{lessonId:added.id,before:added,after:moved}]);
+ assert.deepEqual(second.db.lessons.find(l=>l.id===added.id).groupStudentIds,['student-1']);
+ assert.equal(second.schedulerDb.lessons.find(l=>l.id===added.id).billingBranchId,'hexi');
+ assert.equal(run(db,[{lessonId:added.id,before:null,after:{...added,billingBranchId:''}}]).db.lessons.find(l=>l.id===added.id).billingBranchId,'','missing ownership is retained as unassigned, never guessed');
+ assert.throws(()=>run(db,[{lessonId:added.id,before:null,after:{...added,billingBranchId:'unknown'}}]),/歸屬校區/);
+ assert.throws(()=>run(db,[{lessonId:added.id,before:null,after:{...added,groupStudentIds:['missing']}}]),/名單/);
+ assert.throws(()=>run(db,[{lessonId:added.id,before:null,after:{...added,date:lesson.date}}]),/學生時間衝突/);
+ const third=run(second.db,[{lessonId:added.id,before:moved,after:null}]);assert.equal(third.db.lessons.length,1);
+});
+
 test('同一後端實例依序處理；失敗釋放佇列，過載或久候不偷偷丟棄操作',async()=>{
  let release,time=0;const firstGate=new Promise(resolve=>release=resolve),events=[],lane=createSchedulerExecutionLane({maxPending:2,maxWaitMs:10,clock:()=>time});
  const first=lane(async()=>{events.push('first');await firstGate;throw Error('rejected')});const firstFailure=assert.rejects(first,/rejected/);

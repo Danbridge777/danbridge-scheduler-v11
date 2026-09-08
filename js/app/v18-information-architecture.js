@@ -41,13 +41,13 @@
     if(refresh&&!refresh.dataset.workspaceBound){refresh.dataset.workspaceBound='1';refresh.addEventListener('click',()=>{setFinanceWorkspaceMonth(month?.value||financeWorkspaceMonth(),true);window.toast?.('財務資料已重新計算')})}
   }
   function monthEndAudit(){
-    const month=financeWorkspaceMonth(),scope=$('#financeBranchScope')?.value||'all',branchOf=l=>l.branchId||window.DanbridgeAccess?.branchIdFromLocation?.(l.location||'')||'unassigned';
+    const month=financeWorkspaceMonth(),scope=$('#financeBranchScope')?.value||'all',branchOf=timetableBillingBranchId;
     const lessons=(db.lessons||[]).filter(l=>!l.isDraft&&l.date?.startsWith(month)&&(scope==='all'||branchOf(l)===scope)),tutoring=lessons.filter(l=>!effectiveCampId(l)),camps=lessons.filter(l=>effectiveCampId(l));
     const registrations=summerCampRegistrationRows(month,scope),issues=[];
     const add=(severity,title,detail)=>issues.push({severity,title,detail});
     tutoring.forEach(l=>{const s=student(l.studentId),name=s?.name||`學生 ID ${l.studentId||'空白'}`;if(!s?.id)add('error','課程找不到學生',`${l.date} ${l.start||'--:--'}｜${name}`);if(!l.start||!l.end||hours(l.start,l.end)<=0)add('error','課程時間不完整',`${l.date}｜${name}｜${l.start||'--:--'}–${l.end||'--:--'}`);if(s?.id&&(+s.rate||0)<=0)add('error','學生單價未設定',`${name}｜${l.date}｜目前單價 ${money(+s.rate||0)}`)});
     const duplicateMap=new Map();tutoring.forEach(l=>{const key=[l.studentId,l.date,l.start,l.end].join('|'),rows=duplicateMap.get(key)||[];rows.push(l);duplicateMap.set(key,rows)});duplicateMap.forEach(rows=>{if(rows.length>1){const l=rows[0];add('error','學生同時段重複課程',`${student(l.studentId)?.name||l.studentId}｜${l.date} ${l.start}–${l.end}｜共 ${rows.length} 筆`)}});
-    const billedStudentIds=new Set([...tutoring.map(l=>l.studentId),...(db.students||[]).filter(s=>studentUsesMonthlyFee(s)&&studentIsPresentForBilling(s)&&(scope==='all'||(s.branchIds||[]).includes(scope))).map(s=>s.id)]);billedStudentIds.forEach(id=>{const s=student(id);if(s?.id&&!billingParentName(s.parent))add('warning','缺少家長姓名',`${s.name||id}｜家庭 LINE 無法正確合併`)});
+    const billedStudentIds=new Set([...tutoring.map(l=>l.studentId),...(db.students||[]).filter(s=>studentUsesMonthlyFee(s)&&studentIsPresentForBilling(s)&&(scope==='all'||studentMonthlyFeeBranch(s.id,month)===scope)).map(s=>s.id)]);billedStudentIds.forEach(id=>{const s=student(id);if(s?.id&&!billingParentName(s.parent))add('warning','缺少家長姓名',`${s.name||id}｜家庭 LINE 無法正確合併`)});
     const usedTeacherIds=new Set(lessons.flatMap(l=>lessonTeacherIds(l)));usedTeacherIds.forEach(id=>{const t=teacher(id);if(!t?.id)return add('error','課程找不到老師',`老師 ID ${id}`);if(teacherPayrollMode(t)==='fixed'){if(teacherBaseSalary(t)===null)add('error','固定底薪未設定',t.name);if(teacherOvertimeRate(t)===null)add('error','超時時薪未設定',t.name);if(teacherDeductionRate(t)===null)add('error','不足工時扣款未設定',t.name)}else if((+t.rate||0)<=0)add('error','老師時薪未設定',t.name)});
     const campStudentIds=new Set(camps.map(l=>l.studentId));campStudentIds.forEach(id=>{if(!registrations.some(r=>(r.campStudentId||inferSummerRegistrationCamp(r))===id))add('warning','營隊課表尚無報名收費',`${student(id)?.name||id}｜${month}`)});
     registrations.forEach(r=>{const s=student(r.studentId),total=summerRegistrationTotal(r);if(!s?.id)add('error','營隊報名找不到學生',`報名 ID ${r.id}`);if(!(r.dates||[]).length)add('error','營隊報名沒有日期',s?.name||r.id);if(total<=0)add('error','營隊費用為 0',s?.name||r.id)});
@@ -153,7 +153,7 @@
     const due=rows.reduce((n,r)=>n+parseMoney(r.cells[6]?.textContent),0);
     const lessonRows=rows.filter(r=>(parseFloat(r.cells[2]?.textContent)||0)>0),leave=lessonRows.reduce((n,r)=>n+(parseFloat(r.cells[5]?.textContent)||0),0)/(lessonRows.length||1);
     const month=$('#settleMonth')?.value||'';const scope=$('#settlementBranchScope')?.value||'all';
-    const branchOf=l=>l.branchId||window.DanbridgeAccess?.branchIdFromLocation?.(l.location||'')||'unassigned';
+    const branchOf=timetableBillingBranchId;
     const lessons=(typeof db!=='undefined'?(db.lessons||[]):[]).filter(l=>!l.isDraft&&l.date?.startsWith(month)&&(scope==='all'||branchOf(l)===scope));
     const paid=lessons.filter(l=>l.paymentStatus==='paid').reduce((n,l)=>n+(typeof timetableRevenueCharge==='function'?timetableRevenueCharge(l):0),0),tracked=(db.collectionRecords||[]).filter(r=>r.month===month&&r.status==='collected'&&(scope==='all'||(r.branchId||'all')===scope)).reduce((n,r)=>n+(+r.amount||0),0);
     const collected=Math.min(due,tracked||paid),unpaid=Math.max(0,due-collected);

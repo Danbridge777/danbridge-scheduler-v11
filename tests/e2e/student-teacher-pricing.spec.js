@@ -1,0 +1,31 @@
+const {test,expect}=require('@playwright/test');
+const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
+test('兼職逐生收費、老師成本獨立儲存，整班只付一次且切月正確',async({page})=>{
+ await isolateApplicationAuth(page);await page.goto('/index.html',{waitUntil:'domcontentloaded'});
+ await page.addStyleTag({content:'#authScreen{display:none!important;pointer-events:none!important}'});
+ await page.evaluate(()=>{
+  document.body.classList.remove('auth-locked','teacher-cloud-role','branch-manager-cloud-role','scheduler-cloud-role');
+  window.DanbridgeAccess.setContext({role:'owner',email:'owner@example.com'});window.currentCloudRole=()=> 'owner';
+  db={...db,students:[{id:'a',name:'同名',parent:'王家長',courseType:'1對1',rate:800},{id:'b',name:'同名',parent:'李家長',courseType:'1對1',rate:1000}],teachers:[{id:'t',name:'兼職老師',type:'兼職',payrollMode:'hourly',rate:500}],lessons:[],summerCampRegistrations:[],winterCampRegistrations:[]};
+  saveDB=()=>{renderSelects();renderStudents()};commitScheduleMutation=()=>{};renderSelects();editStudent('a');
+ });
+ await expect(page.locator('#studentRate')).toHaveValue('800');
+ await page.locator('#studentPartTimeTeacherRate').fill('300');
+ await page.locator('#students button[onclick="saveStudent()"]').click();
+ await page.evaluate(()=>editStudent('a'));
+ await expect(page.locator('#studentPartTimeTeacherRate')).toHaveValue('300');
+ await expect(page.locator('#studentRate')).toHaveValue('800');
+ await page.evaluate(()=>openLessonModal('2026-09-08','16:00'));
+ await page.locator('#lessonStudent').selectOption('a');await page.locator('#lessonTeacher').selectOption('t');
+ await page.locator('#endTime').selectOption('17:30');await page.locator('#lessonBranch').selectOption('art_museum');
+ await page.locator('#lessonModal button[onclick="saveLesson()"]').click();
+ expect(await page.evaluate(()=>({revenue:studentTuitionRevenue('2026-09'),pay:calculateTeacherPayroll(teacher('t'),'2026-09').amount}))).toEqual({revenue:1200,pay:450});
+ await page.evaluate(()=>switchTab('students'));await page.locator('#createGroupRosterButton').click();
+ await page.locator('#studentName').fill('兼職整班');await page.locator('#studentGroupMembers input[value="a"]').check();await page.locator('#studentGroupMembers input[value="b"]').check();
+ await page.locator('#studentPartTimeTeacherRate').fill('600');await page.locator('#students button[onclick="saveStudent()"]').click();
+ const group=await page.evaluate(()=>db.students.find(s=>s.isGroupRoster).id);
+ await page.evaluate(()=>openLessonModal('2026-09-09','16:00'));await page.locator('#lessonStudent').selectOption(group);await page.locator('#lessonTeacher').selectOption('t');await page.locator('#endTime').selectOption('17:30');await page.locator('#lessonBranch').selectOption('art_museum');await page.locator('#lessonModal button[onclick="saveLesson()"]').click();
+ expect(await page.evaluate(()=>({revenue:studentTuitionRevenue('2026-09'),pay:calculateTeacherPayroll(teacher('t'),'2026-09').amount,oct:calculateTeacherPayroll(teacher('t'),'2026-10').amount}))).toEqual({revenue:3900,pay:1350,oct:0});
+ await page.evaluate(()=>editStudent('a'));await page.locator('#studentPartTimeTeacherRate').fill('');await page.locator('#students button[onclick="saveStudent()"]').click();
+ expect(await page.evaluate(()=>calculateTeacherPayroll(teacher('t'),'2026-09').amount)).toBe(1650);
+});

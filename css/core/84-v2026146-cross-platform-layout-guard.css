@@ -5,6 +5,62 @@
   --danbridge-ui-line-height:1.35;
 }
 
+/* Native semantics, consistent restrained line controls on every platform. */
+html body:not(.auth-locked) :is(main #students,main #teachers,main #camps,main #winterCamps,main,#lessonModal,.modal,.course-drawer,.notification-drawer) input[type=checkbox]{
+  appearance:none!important;
+  -webkit-appearance:none!important;
+  display:inline-grid!important;
+  place-content:center!important;
+  box-sizing:border-box!important;
+  width:18px!important;min-width:18px!important;max-width:18px!important;
+  height:18px!important;min-height:18px!important;max-height:18px!important;
+  flex:0 0 18px!important;
+  margin:0!important;padding:0!important;
+  border:1px solid #9b937f!important;border-radius:4px!important;
+  background:#fff!important;background-image:none!important;
+  color:#74623d!important;box-shadow:none!important;
+  cursor:pointer;vertical-align:middle;
+}
+html body:not(.auth-locked) :is(main #students,main #teachers,main #camps,main #winterCamps,main,#lessonModal,.modal,.course-drawer,.notification-drawer) input[type=checkbox]::before{
+  content:'';width:8px;height:4px;
+  border:solid currentColor;border-width:0 0 1.5px 1.5px;
+  transform:translateY(-1px) rotate(-45deg);visibility:hidden;
+}
+html body:not(.auth-locked) :is(main #students,main #teachers,main #camps,main #winterCamps,main,#lessonModal,.modal,.course-drawer,.notification-drawer) input[type=checkbox]:checked{
+  border-color:#74623d!important;background:#f6f3eb!important;
+}
+html body:not(.auth-locked) :is(main #students,main #teachers,main #camps,main #winterCamps,main,#lessonModal,.modal,.course-drawer,.notification-drawer) input[type=checkbox]:checked::before{visibility:visible}
+html body:not(.auth-locked) :is(main #students,main #teachers,main #camps,main #winterCamps,main,#lessonModal,.modal,.course-drawer,.notification-drawer) input[type=checkbox]:indeterminate::before{
+  visibility:visible;border-width:0 0 1.5px;height:0;transform:none;
+}
+html body:not(.auth-locked) :is(main #students,main #teachers,main #camps,main #winterCamps,main,#lessonModal,.modal,.course-drawer,.notification-drawer) input[type=checkbox]:focus-visible{
+  outline:2px solid #74623d!important;outline-offset:3px!important;
+}
+html body:not(.auth-locked) :is(main #students,main #teachers,main #camps,main #winterCamps,main,#lessonModal,.modal,.course-drawer,.notification-drawer) input[type=checkbox]:disabled{opacity:.45;cursor:not-allowed}
+.group-roster-options{max-height:240px;overflow:auto;display:grid;gap:0;border-block:1px solid #e5e0d5}
+html body:not(.auth-locked) :is(#studentGroupFields,#lessonGroupRoster) label.group-roster-option{
+  display:flex;align-items:center;gap:10px;min-height:44px;
+  padding:10px 4px;margin:0;box-sizing:border-box;
+  font-size:var(--danbridge-control-font-size);font-weight:500;line-height:1.45;
+  overflow-wrap:anywhere;cursor:pointer;
+}
+html body:not(.auth-locked) :is(#students,#teachers,#teacherLeave,#calendar,#lessons,#makeups,#camps,#winterCamps,#settlement,#finance,#data,#security,#dashboard,#lessonModal) :is(input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=hidden]),select){
+  height:var(--danbridge-control-height)!important;
+  min-height:var(--danbridge-control-height)!important;
+  max-height:var(--danbridge-control-height)!important;
+}
+.group-roster-option>span{min-width:0}
+.group-roster-options>.group-roster-option+.group-roster-option{border-top:1px solid #eeeae2}
+.group-roster-option:has(input:checked){color:#655431;background:#faf8f3}
+#studentGroupFields.hidden,#studentGroupMembersWrap.hidden,#lessonGroupRoster.hidden{display:none!important}
+.student-branch-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.student-branch-fields>.span-2{grid-column:1/-1}
+@media(max-width:430px){.student-branch-fields{grid-template-columns:1fr}}
+@media(forced-colors:active){
+  html body:not(.auth-locked) :is(main #students,main #teachers,main #camps,main #winterCamps,main,#lessonModal,.modal,.course-drawer,.notification-drawer) input[type=checkbox]{appearance:auto!important;-webkit-appearance:auto!important}
+  html body:not(.auth-locked) :is(main #students,main #teachers,main #camps,main #winterCamps,main,#lessonModal,.modal,.course-drawer,.notification-drawer) input[type=checkbox]::before{display:none}
+}
+
 html{
   max-width:100%;
   overflow-x:clip;

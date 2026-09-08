@@ -23,7 +23,7 @@
     return ids.includes(scope)||lessonIds.has(record?.id);
   };
   function scopedPeople(scope,lessons){
-    const studentIds=new Set(lessons.map(l=>l.studentId));
+    const studentIds=new Set(lessons.flatMap(l=>lessonBillingStudentIds(l)));
     const teacherIds=new Set(lessons.flatMap(l=>lessonTeacherIds(l)));
     return{
       students:(db.students||[]).filter(s=>recordMatchesBranch(s,scope,studentIds)),
@@ -62,7 +62,7 @@
     const teacherRecord=teacherId?teacher(teacherId):null;
     const rows=teacherRecord?teacherPayableHourLessons(teacherRecord,lessons):lessons;
     rows.filter(l=>!teacherId||lessonTeacherIds(l).includes(teacherId)).forEach(l=>{
-      const id=branchId(l),row=grouped.get(id)||{branchId:id,h:0,amount:0,count:0};
+      const id=teacherId?branchId(l):timetableBillingBranchId(l),row=grouped.get(id)||{branchId:id,h:0,amount:0,count:0};
       row.h+=hours(l.start,l.end);row.amount+=teacherId?lessonTeacherPay(l,teacherId):timetableRevenueCharge(l);row.count++;grouped.set(id,row);
     });
     return [...grouped.values()].sort((a,b)=>scopeLabel(a.branchId).localeCompare(scopeLabel(b.branchId),'zh-Hant'));
@@ -89,18 +89,19 @@
   };
 
   function settlementDataFor(m,scope){
-    scope=allowedScope(scope);const ls=scopedLessons(scope,m),campRows=summerCampRegistrationRows(m,scope);
-    const studentIds=new Set([...ls.map(l=>l.studentId),...campRows.map(r=>r.studentId),...(db.students||[]).filter(s=>studentUsesMonthlyFee(s)&&studentIsPresentForBilling(s)).map(s=>s.id)]),teacherIds=new Set(ls.flatMap(l=>lessonTeacherIds(l)));
-    const sr=(db.students||[]).filter(s=>recordMatchesBranch(s,scope,studentIds)).map(s=>{
-      const x=ls.filter(l=>l.studentId===s.id),billing=studentMonthlyBillingData(s.id,m,scope),chargedLessons=billing.tutoringLessons,abs=x.filter(l=>['學生請假','老師請假','取消','停課'].includes(l.status));
+    scope=allowedScope(scope);const ls=scopedLessons('all',m).filter(l=>scope==='all'||timetableBillingBranchId(l)===scope),campRows=summerCampRegistrationRows(m,scope);
+    const teacherLessons=scopedLessons(scope,m);
+    const studentIds=new Set([...ls.flatMap(l=>lessonBillingStudentIds(l)),...campRows.map(r=>r.studentId),...(db.students||[]).filter(s=>studentUsesMonthlyFee(s)&&studentIsPresentForBilling(s)).map(s=>s.id)]),teacherIds=new Set(teacherLessons.flatMap(l=>lessonTeacherIds(l)));
+    const sr=(db.students||[]).filter(s=>!s.isGroupRoster&&(recordMatchesBranch(s,scope,studentIds)||(studentUsesMonthlyFee(s)&&studentMonthlyFeeBranch(s.id,m)===scope))).map(s=>{
+      const x=ls.filter(l=>lessonIncludesStudent(l,s.id)),billing=studentMonthlyBillingData(s.id,m,scope),chargedLessons=billing.tutoringLessons,abs=x.filter(l=>['學生請假','老師請假','取消','停課'].includes(l.status));
       const lessonAmount=billing.tutoringAmount,campAmount=billing.campAmount;
       return{s,billingCategory:billing.billingCategory,total:x.length,charged:studentUsesMonthlyFee(s)?0:chargedLessons.length,h:chargedLessons.reduce((a,l)=>a+hours(l.start,l.end),0),abs:abs.length,rate:x.length?abs.length/x.length*100:0,lessonAmount,campAmount,amount:lessonAmount+campAmount};
-    }).filter(x=>x.total||x.campAmount||(studentUsesMonthlyFee(x.s)&&studentIsPresentForBilling(x.s)));
+    }).filter(x=>x.total||x.campAmount||(studentUsesMonthlyFee(x.s)&&x.lessonAmount>0));
     const tr=(db.teachers||[]).filter(t=>teacherIncludedForMonth(t,m)&&recordMatchesBranch(t,scope,teacherIds)).map(t=>{
-      const paid=ls.filter(l=>lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherHours(l)),payroll=calculateTeacherPayroll(t,m,paid),h=payroll.actualHours;
+      const paid=teacherLessons.filter(l=>lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherHours(l)),payroll=calculateTeacherPayroll(t,m,paid),h=payroll.actualHours;
       const expected=payroll.expectedHours,diff=payroll.diff,weeks=teacherWeekBreakdownForLessons(t,m,paid);
       const amount=payroll.amount;
-      return{t,count:paid.length,h,expected,diff,weeks,amount,revenue:teacherCompanyRevenue(t,m,ls),payroll,branches:branchBreakdown(paid,t.id),companyWide:true};
+      return{t,count:paid.length,h,expected,diff,weeks,amount,revenue:teacherCompanyRevenue(t,m,teacherLessons),payroll,branches:branchBreakdown(paid,t.id),companyWide:true};
     });
     return{sr,tr,scope,m,lessons:ls};
   }
@@ -144,6 +145,8 @@
   const baseRenderFinance=window.renderFinance;
   window.renderFinance=function(){
     syncSelectors();baseRenderFinance();const scope=allowedScope(scopes.finance),m=window.__danbridgeFinanceWorkspaceMonth||$('financeMonth')?.value||'2026-07',d=financeData(m);
+    let unassignedNote=$('financeUnassignedRevenue');if(!unassignedNote&&$('financeExpenseBreakdown')){unassignedNote=document.createElement('div');unassignedNote.id='financeUnassignedRevenue';unassignedNote.className='hint';$('financeExpenseBreakdown').before(unassignedNote)}
+    if(unassignedNote){const amount=studentTuitionRevenue(m,'unassigned');unassignedNote.textContent=`本月未歸屬學費：${money(amount)}。已包含在全部校區總收入；請補填學生或課程的歸屬校區，不會依上課教室自動分配。`;unassignedNote.hidden=amount===0}
     if($('financeTotalExpenses'))$('financeTotalExpenses').textContent=money(d.totalExpenses);
     if($('expenseTotalScope'))$('expenseTotalScope').textContent=scopeLabel(scope);
     if($('expenseTotalAmount'))$('expenseTotalAmount').textContent=money(d.fixedTotal+d.oneTimeTotal);

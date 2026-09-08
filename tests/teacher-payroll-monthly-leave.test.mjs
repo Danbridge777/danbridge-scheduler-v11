@@ -5,11 +5,11 @@ import vm from 'node:vm';
 
 const source=fs.readFileSync(new URL('../js/modules/business/business-logic.js',import.meta.url),'utf8');
 
-function runtime({teacher,lessons=[],leaves=[]}){
-  const db={students:[],teachers:[teacher],lessons,teacherLeaveRecords:leaves,summerCampRegistrations:[],winterCampRegistrations:[]};
+function runtime({teacher,lessons=[],leaves=[],students=[]}){
+  const db={students,teachers:[teacher],lessons,teacherLeaveRecords:leaves,summerCampRegistrations:[],winterCampRegistrations:[]};
   const sandbox={
     db,window:{},document:{getElementById:()=>null},localStorage:{getItem:()=>null,setItem:()=>{}},
-    student:()=>({}),teacher:id=>db.teachers.find(row=>row.id===id)||{},
+    student:id=>db.students.find(row=>row.id===id)||{},teacher:id=>db.teachers.find(row=>row.id===id)||{},
     lessonTeacherIds:row=>row.teacherIds||[row.teacherId].filter(Boolean),effectiveCampId:()=>'',sameCampSlot:()=>false,
     summerRegistrationTotal:()=>0,summerRegistrationPricingMode:()=>'',summerRegistrationWeekCount:()=>0,
     hours:(start,end)=>{const minutes=value=>Number(value.slice(0,2))*60+Number(value.slice(3));return Math.max(0,(minutes(end)-minutes(start))/60)},
@@ -22,6 +22,26 @@ function runtime({teacher,lessons=[],leaves=[]}){
 
 const fixed={id:'teacher-1',name:'Wendy',payrollMode:'fixed',baseSalary:44000,overtimeRate:500,deductionRate:300,minWeeklyHours:40,workDays:[1,2,3,4,5]};
 const lesson=(id,date,start='09:00',end='17:00')=>({id,date,start,end,teacherId:'teacher-1',teacherIds:['teacher-1'],status:'未上課'});
+test('part-time cost is per student or whole group, independent from parent charges and fixed payroll',()=>{
+ const teacher={id:'teacher-1',type:'兼職',payrollMode:'hourly',rate:500,workDays:[1,2,3,4,5]};
+ const students=[{id:'a',name:'同名',parent:'王家長',courseType:'1對1',rate:800,partTimeTeacherRate:300},{id:'b',name:'同名',parent:'李家長',courseType:'1對1',rate:1000,partTimeTeacherRate:400},{id:'g',isGroupRoster:true,courseType:'團班',groupMemberIds:['a','b'],rate:99999,partTimeTeacherRate:600},{id:'legacy',rate:700,courseType:'1對1'}];
+ const l=(id,s,date,end='10:30')=>({...lesson(id,date,'09:00',end),studentId:s});
+ const lessons=[l('a','a','2026-09-01'),l('b','b','2026-09-02'),{...l('g','g','2026-09-03'),groupStudentIds:['a','b','a']},l('legacy','legacy','2026-09-04','10:00'),l('oct','a','2026-10-01')];
+ const app=runtime({teacher,students,lessons}),pay=app.calculateTeacherPayroll(teacher,'2026-09');
+ assert.equal(pay.amount,2450);assert.equal(pay.actualHours,5.5);
+ assert.equal(app.studentTuitionRevenue('2026-09'),6100);
+ assert.equal(app.lessonTeacherPay(lessons[2],teacher.id),900,'whole group 1.5 × 600, not child rates or headcount');
+ assert.equal(app.calculateTeacherPayroll(teacher,'2026-10').amount,450);
+ assert.equal(pay.formulaVersion,'teacher-payroll-v3-student-rate');
+ assert.match(app.teacherPayrollFormulaText(pay),/依學生／整班鐘點費/);
+ assert.equal(pay.rateBreakdown.reduce((sum,r)=>sum+r.amount,0),pay.amount);
+ students[0].rate=1600;assert.equal(app.calculateTeacherPayroll(teacher,'2026-09').amount,2450,'parent rate cannot change teacher pay');
+ students[0].partTimeTeacherRate=0;assert.equal(app.lessonTeacherPay(lessons[0],teacher.id),0,'explicit zero does not fall back');
+ delete students[0].partTimeTeacherRate;assert.equal(app.lessonTeacherPay(lessons[0],teacher.id),750,'blank inherits existing teacher rate');
+ teacher.type='正職';assert.equal(app.lessonTeacherPay(lessons[1],teacher.id),750,'not applied to non-part-time teachers');
+ Object.assign(teacher,{...fixed,type:'兼職'});assert.equal(app.calculateTeacherPayroll(teacher,'2026-09').mode,'fixed');
+ assert.equal(app.lessonTeacherHourlyRate(lessons[1],teacher.id),500,'fixed payroll never uses student cost override');
+});
 function weekdayLessons(month){
   const[y,m]=month.split('-').map(Number),last=new Date(y,m,0).getDate(),rows=[];
   for(let day=1;day<=last;day++){const date=`${month}-${String(day).padStart(2,'0')}`,weekday=new Date(`${date}T12:00:00`).getDay();if(weekday>=1&&weekday<=5)rows.push(lesson(`lesson-${date}`,date))}

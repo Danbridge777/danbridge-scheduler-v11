@@ -19,8 +19,8 @@ const KIND_FIELDS=Object.freeze({
   'lesson.update.time':new Set(['date','start','end']),
   'lesson.update.teacher':new Set(['teacherId','teacherIds']),
   'lesson.update.room':new Set(['room']),
-  'lesson.update.location':new Set(['location','branchId','deliveryMode','address','onlinePlatform','meetingUrl']),
-  'lesson.update.student':new Set(['studentId']),
+  'lesson.update.location':new Set(['location','branchId','billingBranchId','deliveryMode','address','onlinePlatform','meetingUrl']),
+  'lesson.update.student':new Set(['studentId','groupStudentIds']),
   'lesson.update.title':new Set(['title']),
   'lesson.update.status':new Set(['status','lessonState','isDraft']),
   'lesson.update.note':new Set(['note'])

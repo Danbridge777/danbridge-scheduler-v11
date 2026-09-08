@@ -35,6 +35,73 @@ function runtime({students=[],lessons=[],summerCampRegistrations=[],winterCampRe
 
 const lesson=(id,studentId,date,start,end,extra={})=>({id,studentId,date,start,end,status:'未上課',chargeStudent:'yes',...extra});
 
+test('12 months × 6 durations × 5 roster sizes reconcile child bills, campus subtotals and total revenue',()=>{
+ for(let month=1;month<=12;month++)for(const minutes of [15,30,45,60,90,120])for(const count of [1,2,3,8,30]){
+  const m=`2026-${String(month).padStart(2,'0')}`,other=month===12?'2027-01':`2026-${String(month+1).padStart(2,'0')}`;
+  const children=Array.from({length:count},(_,i)=>({id:`s${i}`,name:'同名學生',parent:`家長${i}`,courseType:i%2?'團班':'1對1',rate:(i+1)*60}));
+  const ids=children.map(s=>s.id),end=`${String(16+Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;
+  const app=runtime({students:[...children,{id:'g',name:'團班容器',isGroupRoster:true,groupMemberIds:ids,courseType:'團班',rate:999999}],lessons:[lesson('one','g',`${m}-08`,'16:00',end,{groupStudentIds:[...ids,ids[0]],billingBranchId:'owner',branchId:'attendance',teacherIds:['t1','t2','t3']})]});
+  const expected=minutes*count*(count+1)/2;
+  assert.equal(app.studentTuitionRevenue(m),expected);
+  assert.equal(app.studentTuitionRevenue(m,'owner'),expected);
+  assert.equal(app.studentTuitionRevenue(m,'attendance'),0);
+  assert.equal(app.studentTuitionRevenue(other),0);
+  for(let i=0;i<count;i++)assert.equal(app.studentMonthlyBillingData(`s${i}`,m).total,minutes*(i+1));
+ }
+});
+
+test('company revenue follows explicit ownership for every student and never attendance rooms or legacy profile branches',()=>{
+ const app=runtime({students:[
+  {id:'care',name:'安親',courseType:'安親',rate:9000,billingBranchId:'B',branchIds:['wrong-profile']},
+  {id:'a',name:'同名',courseType:'1對1',rate:600,billingBranchId:'B',branchIds:['wrong-profile']},
+  {id:'b',name:'同名',courseType:'團班',rate:800},
+  {id:'group',name:'班級',courseType:'團班',isGroupRoster:true,groupMemberIds:['a','b'],rate:999999}
+ ],lessons:[
+  lesson('care-1','care','2026-09-01','13:00','14:00',{room:'教室甲',branchId:'wrong-profile'}),
+  lesson('care-2','care','2026-09-02','13:00','16:00',{room:'教室乙'}),
+  lesson('care-3','care','2026-10-01','13:00','16:00',{room:'教室甲'}),
+  lesson('group-1','group','2026-09-03','16:00','17:30',{room:'教室乙',branchId:'B',billingBranchId:'A',groupStudentIds:['a','b','a'],teacherIds:['t1','t2']}),
+  lesson('private-1','a','2026-09-04','16:00','17:00',{room:'教室乙'}),
+  lesson('private-oct','a','2026-10-04','16:00','18:00',{room:'教室甲'}),
+  lesson('draft','a','2026-09-04','16:00','18:00',{room:'教室甲',isDraft:true})
+ ]});
+ app.db.branches=[{id:'A',rooms:['教室甲']},{id:'B',rooms:['教室乙']}];
+ assert.equal(app.studentTuitionRevenue('2026-09'),11700);
+ assert.equal(app.studentTuitionRevenue('2026-09','A'),2100);
+ assert.equal(app.studentTuitionRevenue('2026-09','B'),9600);
+ app.db.lessons.find(l=>l.id==='group-1').room='教室甲';
+ assert.equal(app.studentTuitionRevenue('2026-09','A'),2100,'moving classroom cannot move group ownership revenue');
+ assert.equal(app.studentTuitionRevenue('2026-09','wrong-profile'),0);
+ assert.equal(app.studentTuitionRevenue('2026-09','unassigned'),0);
+ assert.equal(app.studentTuitionRevenue('2026-10','A'),0);
+ assert.equal(app.studentTuitionRevenue('2026-10','B'),10200);
+ assert.equal(app.studentMonthlyFeeBranch('care','2026-09'),'B');
+ app.db.lessons.find(l=>l.id==='care-2').end='14:00';
+ assert.equal(app.studentMonthlyFeeBranch('care','2026-09'),'B','attendance hours never change ownership');
+ delete app.db.students[0].billingBranchId;
+ assert.equal(app.studentMonthlyFeeBranch('care','2026-11'),'unassigned','never fall back to attendance or legacy profile branchIds');
+ assert.equal(app.studentTuitionRevenue('2026-11','unassigned'),9000,'unallocated monthly fees remain visible, never silently lost');
+});
+
+test('group roster bills each selected child by timetable hours, month and parent without charging the container',()=>{
+ const app=runtime({students:[
+  {id:'group',name:'週二團班',courseType:'團班',isGroupRoster:true,groupMemberIds:['a','b'],rate:99999},
+  {id:'a',name:'同名',parent:'王家長',courseType:'1對1',rate:600},
+  {id:'b',name:'同名',parent:'李家長',courseType:'團班',rate:750},
+  {id:'c',name:'妹妹',parent:'王家長',courseType:'團班',rate:400}
+ ],lessons:[lesson('g1','group','2026-09-08','16:00','17:30',{groupStudentIds:['a','b','a']}),lesson('g2','group','2026-10-06','16:00','18:00',{groupStudentIds:['b','c']})]});
+ assert.equal(app.lessonCharge(app.db.lessons[0]),2025);
+ assert.equal(app.studentMonthlyBillingData('a','2026-09').total,900);
+ assert.equal(app.studentMonthlyBillingData('b','2026-09').total,1125);
+ assert.equal(app.studentMonthlyBillingData('group','2026-09').total,0);
+ assert.equal(app.studentTuitionRevenue('2026-09'),2025);
+ assert.equal(app.studentTuitionRevenue('2026-10'),2300);
+ assert.match(app.studentLineBillingText('a','2026-09'),/團班費用/);
+ assert.doesNotMatch(app.studentLineBillingText('a','2026-09'),/李家長|1,125/);
+ app.db.students[0].groupMemberIds=['c'];
+ assert.equal(app.studentMonthlyBillingData('a','2026-09').total,900,'changing default roster cannot rewrite past lesson membership');
+});
+
 test('after-school tuition is one flat monthly fee regardless of scheduled hours',()=>{
   const app=runtime({
     students:[{id:'after-school',name:'安親學生',parent:'王家長',courseType:'安親',billing:'month',rate:8000}],
