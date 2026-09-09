@@ -64,3 +64,13 @@ test('排課家教團課切換、搜尋、收合名單、建立團課與統一�
  await page.evaluate(()=>{window.DanbridgeAccess.setContext({role:'teacher',teacherId:'t',canManageSchedule:true});window.currentCloudRole=()=> 'teacher';syncLessonWorkspace()});
  await expect(page.locator('#lessonWorkspaceAdd')).not.toBeVisible();
 });
+test('共同授課老師框名間距一致，點姓名可勾選且不改主要老師',async({page},info)=>{
+ await page.evaluate(()=>{db.teachers.push(...['張毅','aa','Wendy','Maria','德立','Daniel','Ray','Lucas','Catherine'].map((name,i)=>({id:'co-'+i,name})));renderSelects();openLessonModal('2026-09-08','16:00','l')});
+ const labels=page.locator('#coTeacherChecks .teacher-check');await expect(labels).toHaveCount(9);
+ await labels.filter({hasText:'Wendy'}).click();await expect(page.locator('#coTeacherChecks input[value="co-2"]')).toBeChecked();
+ await expect(page.locator('#lessonTeacher')).toHaveValue('t');
+ await labels.filter({hasText:'Wendy'}).click();await expect(page.locator('#coTeacherChecks input[value="co-2"]')).not.toBeChecked();
+ const measurements=await labels.evaluateAll(elements=>elements.map(label=>{const input=label.querySelector('input'),r=input.getBoundingClientRect(),lr=label.getBoundingClientRect(),text=[...label.childNodes].find(n=>n.nodeType===Node.TEXT_NODE&&n.textContent.trim()),range=document.createRange();range.selectNodeContents(text);const tr=range.getBoundingClientRect();return{height:lr.height,gap:tr.left-r.right,checkboxWidth:r.width,checkboxHeight:r.height,font:getComputedStyle(label).fontSize,left:lr.left,right:lr.right,textRight:tr.right}}));
+ for(const row of measurements){expect(row.height).toBeCloseTo(48,2);expect(row.gap).toBeGreaterThanOrEqual(11.9);expect(row.checkboxWidth).toBeCloseTo(18,2);expect(row.checkboxHeight).toBeCloseTo(18,2);expect(row.font).toBe('14px');expect(row.left).toBeGreaterThanOrEqual(0);expect(row.right).toBeLessThanOrEqual(page.viewportSize().width);expect(row.textRight).toBeLessThanOrEqual(row.right)}
+ await page.locator('#coTeacherWrap').screenshot({path:info.outputPath('co-teacher-spacing.png')});
+});

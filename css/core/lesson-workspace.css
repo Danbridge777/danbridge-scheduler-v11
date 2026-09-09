@@ -33,4 +33,13 @@ html body #lessonModal :is(#lessonBillingBranchWrap>p,#lessonStudentDefaultsHint
 html body #lessonModal .grid{gap:12px!important}
 html body #lessonModal>.modal :is(#lessonDate,#startTime,#endTime,#repeatUntil){height:48px!important;min-height:48px!important;max-height:48px!important;font-size:14px!important}
 html body #lessonModal>.modal :is(#lessonDate,#startTime,#endTime,#repeatUntil)::-webkit-datetime-edit{height:46px!important}
+/* Scope the shared teacher-check class to this editor; camp forms stay intact. */
+html body #lessonModal #coTeacherWrap{padding:12px!important;border:1px solid #e2e3de!important;border-radius:8px!important;background:#fafbf9!important}
+html body #lessonModal #coTeacherWrap>b{font-size:14px!important;font-weight:650!important;line-height:1.5!important}
+html body #lessonModal #coTeacherChecks{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important;margin-top:10px!important}
+html body #lessonModal #coTeacherChecks .teacher-check{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:12px!important;box-sizing:border-box!important;min-width:0!important;min-height:48px!important;margin:0!important;padding:10px 12px!important;border:1px solid #d8dcd9!important;border-radius:7px!important;background:#fff!important;font-size:14px!important;font-weight:550!important;line-height:1.5!important;text-align:left!important;overflow-wrap:anywhere;cursor:pointer}
+html body #lessonModal #coTeacherChecks .teacher-check input[type=checkbox]{flex:0 0 18px!important;width:18px!important;height:18px!important;min-width:18px!important;min-height:18px!important;max-width:18px!important;max-height:18px!important;margin:0!important;padding:0!important}
+html body #lessonModal #coTeacherChecks .teacher-check:has(input:checked){border-color:#ad9459!important;background:#f7f4ec!important}
+html body #lessonModal #coTeacherChecks .teacher-check:focus-within{outline:2px solid #a78d54;outline-offset:2px}
+@media(max-width:600px){html body #lessonModal #coTeacherChecks{grid-template-columns:minmax(0,1fr)!important}}
 @media(max-width:540px){html body #lessonModal .modal{padding:14px!important}html body #lessonModal .student-select-row{grid-template-columns:minmax(0,1fr)!important}html body #lessonModal #lessonWorkspaceAdd{width:100%!important}}

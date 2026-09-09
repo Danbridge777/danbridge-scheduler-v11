@@ -33,7 +33,7 @@ test('Catherine／Lucas／AA：校區投影與排課最小資料不混入其他�
 
 test('保留目前 30 筆安全上限，拒絕超限、重複 ID 或費用欄位注入',()=>{
  const changes=Array.from({length:30},(_,i)=>({lessonId:'boundary-'+i,before:null,after:{id:'boundary-'+i,studentId:'art-child',teacherId:'art-teacher',date:new Date(Date.UTC(2027,0,i+1)).toISOString().slice(0,10),start:'10:00',end:'11:00',branchId:'art_museum'}}));
- const request={schema:SCHEDULER_OPERATION_SCHEMA,requestId:'batch-boundary-test',release:'20.26.265',changes};assert.equal(normalizeProductionSchedulerRequest(request).changes.length,30);
+ const request={schema:SCHEDULER_OPERATION_SCHEMA,requestId:'batch-boundary-test',release:'20.26.266',changes};assert.equal(normalizeProductionSchedulerRequest(request).changes.length,30);
  assert.throws(()=>normalizeProductionSchedulerRequest({...request,changes:[...changes,changes[0]]}));
  assert.throws(()=>normalizeProductionSchedulerRequest({...request,changes:[changes[0],changes[0]]}));
  assert.throws(()=>normalizeProductionSchedulerRequest({...request,changes:[{...changes[0],after:{...changes[0].after,teacherHourlyRate:1}}]}));
