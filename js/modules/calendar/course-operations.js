@@ -45,6 +45,7 @@ function applyStudentScheduleDefaults(){
 }
 
 function openLessonModal(date=todayStr(),start='16:00',id=''){
+  if(typeof ensureLessonWorkspace==='function'){ensureLessonWorkspace();lessonWorkspaceMode='individual';toggleLessonNewGroup(false)}
   cancelSelectionForNewAction();renderSelects();renderLessonBranchOptions();clearLessonForm();toggleQuickStudent(false);
   $('lessonStudent').value='';$('lessonTeacher').value='';delete $('lessonStudent').dataset.defaultsStudentId;$('lessonStudentDefaultsHint')?.remove();
   $('lessonDate').value=date;$('startTime').value=start;$('endTime').value=addMinutes(start,60);
@@ -127,7 +128,9 @@ function teacherConflictDetail(o,ignore=''){
   const ignored=new Set(Array.isArray(ignore)?ignore:[ignore].filter(Boolean));
   const oTeachers=new Set(lessonTeacherIds(o));
   for(const l of db.lessons){
-    if(ignored.has(l.id)||!lessonBlocksScheduling(l)||l.date!==o.date||!(o.start<l.end&&o.end>l.start))continue;
+    // Reject unrelated dates/times before allocating status/teacher sets.
+    // The same conflict predicates still run for every overlapping lesson.
+    if(ignored.has(l.id)||l.date!==o.date||!(o.start<l.end&&o.end>l.start)||!lessonBlocksScheduling(l))continue;
     const teacherHit=lessonTeacherIds(l).find(id=>oTeachers.has(id));
     if(teacherHit)return{type:'老師',name:teacher(teacherHit).name||'未命名老師',teacherId:teacherHit,lesson:l};
   }
@@ -139,7 +142,7 @@ function lessonTeacherConflictNames(l){
   const names=new Set();
   const ids=new Set(lessonTeacherIds(l));
   for(const x of db.lessons){
-    if(x.id===l.id||!lessonBlocksScheduling(x)||x.date!==l.date||!(l.start<x.end&&l.end>x.start))continue;
+    if(x.id===l.id||x.date!==l.date||!(l.start<x.end&&l.end>x.start)||!lessonBlocksScheduling(x))continue;
     lessonTeacherIds(x).forEach(id=>{if(ids.has(id))names.add(teacher(id).name||'未命名老師')});
   }
   return [...names];
@@ -151,7 +154,7 @@ function conflictDetail(o,ignore=''){
   if(!lessonBlocksScheduling(o))return null;
   const ignored=new Set(Array.isArray(ignore)?ignore:[ignore].filter(Boolean));
   for(const l of db.lessons){
-    if(ignored.has(l.id)||!lessonBlocksScheduling(l)||l.date!==o.date||!(o.start<l.end&&o.end>l.start))continue;
+    if(ignored.has(l.id)||l.date!==o.date||!(o.start<l.end&&o.end>l.start)||!lessonBlocksScheduling(l))continue;
     // 老師重疊改為警告，不阻止儲存；學生與教室規則維持原樣。
     if((o.groupStudentIds?.length?o.groupStudentIds:[o.studentId]).some(id=>(l.groupStudentIds?.length?l.groupStudentIds:[l.studentId]).includes(id))&&(o.groupStudentIds?.length||l.groupStudentIds?.length||!isGroupStudentId(o.studentId)))return{type:'學生',name:student(l.studentId).name||'未命名學生',lesson:l};
     if(o.deliveryMode==='onsite'&&l.deliveryMode!=='home'&&l.deliveryMode!=='online'&&o.branchId===l.branchId&&o.room&&l.room===o.room)return{type:'教室',name:locationLabel(o)+' '+o.room,lesson:l};

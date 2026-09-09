@@ -7,7 +7,8 @@
   },
   "scripts": {
     "test:first-priority": "node --test tests/production-first-priority-hardening.test.mjs tests/production-derived-commit.test.mjs tests/production-role-view-incremental-write.test.mjs tests/schedule-render-performance.test.mjs tests/cloud-login-nonblocking.test.mjs tests/billing-line-preview.test.mjs tests/teacher-payroll-monthly-leave.test.mjs tests/group-roster-projection.test.mjs tests/billing-collection-record-roundtrip.test.mjs",
-    "posttest": "npm run test:first-priority && npm run test:notification-delivery && npm run test:scheduler-atomic",
+    "posttest": "npm run test:first-priority && npm run test:notification-delivery && npm run test:scheduler-atomic && npm run test:calendar-fast-filter",
+    "test:calendar-fast-filter": "node --test tests/calendar-conflict-fast-filter.test.mjs",
     "test:scheduler-atomic": "node --test tests/production-scheduler-operation.test.mjs tests/production-scheduler-queue.test.mjs tests/production-scheduler-page.test.mjs",
     "test:scheduler-emulator": "firebase emulators:exec --only firestore --project demo-danbridge-scheduler-atomic \"node --test tests/production-scheduler-emulator.test.mjs\"",
     "test:production-transactions": "firebase emulators:exec --only firestore --project demo-danbridge-derived-test \"node --test tests/production-derived-commit-emulator.test.mjs\" && firebase emulators:exec --only firestore --project demo-danbridge-schedule-test \"node --test tests/production-schedule-emulator.test.mjs\"",

@@ -1,5 +1,8 @@
 const {test,expect}=require('@playwright/test');
 const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
+// Playwright trace DOM/screenshot capture is useful for functional debugging,
+// but must not be included in a frame-time measurement of the application.
+test.use({trace:'off'});
 
 test('40 堂實際批次按鈕連續操作：畫面量測與資料順序（隔離傳輸，非雲端延遲證據）',async({page},testInfo)=>{
  test.setTimeout(90000);
@@ -12,6 +15,16 @@ test('40 堂實際批次按鈕連續操作：畫面量測與資料順序（隔�
   db.lessons.push(...Array.from({length:3000},(_,i)=>({...lesson,id:'archived-render-'+i,date:new Date(Date.UTC(2010,0,i+1)).toISOString().slice(0,10),start:'08:00',end:'08:30'})));
   window.saveDB=()=>{}; // No Firebase or formal records; UI timing only.
   renderAll();switchTab('calendar');document.getElementById('calendarDate').value='2026-10-05';document.getElementById('calendarMode').value='week';renderCalendar();
+  window.__renderProfiles=[];
+  window.__renderLongTasks=[];
+  if(window.PerformanceObserver?.supportedEntryTypes?.includes('longtask')){
+   window.__renderLongTaskObserver=new PerformanceObserver(list=>window.__renderLongTasks.push(...list.getEntries().map(e=>({start:e.startTime,ms:e.duration}))));
+   window.__renderLongTaskObserver.observe({type:'longtask'});
+  }
+  for(const name of ['renderCalendar','renderWeek','renderCalendarAnalysis','rebuildCalendarTeacherConflictCache','attachDragHandlers','renderSelects','buildBatchCandidates']){
+   const original=window[name];if(typeof original!=='function')continue;
+   window[name]=function(...args){const started=performance.now();try{return original.apply(this,args)}finally{window.__renderProfiles.push({name,ms:performance.now()-started})}};
+  }
   window.__renderFrames=[];window.__renderMarks=[];let last=0;const tick=now=>{if(last)window.__renderFrames.push(now-last);last=now;window.__renderRaf=requestAnimationFrame(tick)};window.__renderRaf=requestAnimationFrame(tick);
  });
  const dialogs=[];page.on('dialog',async d=>{dialogs.push(d.message());await d.dismiss()});
@@ -27,7 +40,7 @@ test('40 堂實際批次按鈕連續操作：畫面量測與資料順序（隔�
   expect(state.count).toBe(3040);expect(state.ids).toBe(3040);expect(state.first).toBe(`${String(8+Math.floor((round+1)/2)).padStart(2,'0')}:${(round+1)%2?'30':'00'}`);expect(state.paid.every(v=>v==='unpaid')).toBe(true);
  }
  expect(dialogs).toEqual([]);
- const timing=await page.evaluate(()=>{cancelAnimationFrame(window.__renderRaf);const frames=window.__renderFrames.sort((a,b)=>a-b);return{samples:frames.length,medianFrameMs:frames[Math.floor(frames.length/2)],p95FrameMs:frames[Math.ceil(frames.length*.95)-1],maxFrameMs:frames.at(-1),automationActionMs:window.__renderMarks}});
+ const timing=await page.evaluate(()=>{cancelAnimationFrame(window.__renderRaf);window.__renderLongTaskObserver?.disconnect();const frames=window.__renderFrames.sort((a,b)=>a-b);return{samples:frames.length,medianFrameMs:frames[Math.floor(frames.length/2)],p95FrameMs:frames[Math.ceil(frames.length*.95)-1],maxFrameMs:frames.at(-1),automationActionMs:window.__renderMarks,profiles:window.__renderProfiles,longTasks:window.__renderLongTasks}});
  console.log('ISOLATED_BROWSER_40_FRAME_MEASUREMENTS '+JSON.stringify({project:testInfo.project.name,...timing}));
  await testInfo.attach('frame-measurements',{body:JSON.stringify(timing,null,2),contentType:'application/json'});
  // Do not assert 120 Hz on a 60 Hz/headless device, and never call this a

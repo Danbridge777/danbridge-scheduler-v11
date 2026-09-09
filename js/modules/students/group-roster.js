@@ -19,7 +19,7 @@ function filterGroupMemberChecks(target){
 function ensureGroupMemberSearch(target,parent){
   let tools=document.getElementById(target.id+'SearchTools');
   if(!tools){tools=document.createElement('div');tools.id=target.id+'SearchTools';tools.className='group-roster-search';const label=document.createElement('label'),input=document.createElement('input'),summary=document.createElement('p'),empty=document.createElement('p');input.id=target.id+'Search';input.type='search';input.autocomplete='off';label.htmlFor=input.id;summary.id=target.id+'Summary';summary.className='small';summary.setAttribute('role','status');summary.setAttribute('aria-live','polite');empty.id=target.id+'Empty';empty.className='small';tools.append(label,input,summary);target.before(tools);target.after(empty);input.addEventListener('input',()=>filterGroupMemberChecks(target));input.addEventListener('keydown',event=>{if(event.key==='Enter')event.preventDefault()});target.addEventListener('change',()=>filterGroupMemberChecks(target))}
-  tools.querySelector('label').textContent=target.id==='studentGroupMembers'?'搜尋團班學生':'搜尋本堂學生';
+  tools.querySelector('label').textContent=target.id==='studentGroupMembers'?'搜尋團班學生':target.id==='lessonNewGroupStudents'?'搜尋新團課學生':'搜尋本堂學生';
   const input=tools.querySelector('input');input.placeholder=parent?'輸入學生、家長姓名、電話或學校':'輸入學生姓名';input.value='';
 }
 function groupMemberChecks(target,ids=[],{parent=true,exclude=''}={}){
@@ -45,13 +45,15 @@ function saveStudentGroupRoster(s){
   Object.assign(s,{isGroupRoster:true,groupMemberIds:[...new Set(ids)]});return true;
 }
 function renderLessonGroupRoster(lesson=null){
+  if(typeof syncLessonWorkspace==='function')syncLessonWorkspace();
   const s=student($('lessonStudent')?.value);let box=$('lessonGroupRoster');
   let billingBox=$('lessonBillingBranchWrap');if(!billingBox){billingBox=document.createElement('div');billingBox.id='lessonBillingBranchWrap';billingBox.innerHTML='<label for="lessonBillingBranch">歸屬校區（營收計入）</label><select id="lessonBillingBranch"></select><p class="small">與上課校區分開保存；移動教室不改變營收歸屬。未填寫的收入列為未歸屬。</p>';$('lessonStudent')?.closest('.student-select-row')?.after(billingBox)}
   fillGroupBranchOptions($('lessonBillingBranch'),lesson?.billingBranchId||s.billingBranchId||'');const branchLabel=document.querySelector('label[for="lessonBranch"]')||$('lessonBranch')?.previousElementSibling;if(branchLabel?.tagName==='LABEL')branchLabel.textContent='上課校區';
-  if(!box){box=document.createElement('div');box.id='lessonGroupRoster';box.innerHTML='<label>本堂團班學生</label><div id="lessonGroupStudents"></div><p class="small">此名單隨本堂課保存，月底依學生分別歸入家長帳單。</p>';$('lessonStudent')?.closest('.student-select-row')?.after(box)}
+  if(!box){box=document.createElement('details');box.id='lessonGroupRoster';box.innerHTML='<summary>本堂學生 · 編輯名單</summary><div id="lessonGroupStudents"></div>';$('lessonStudent')?.closest('.student-select-row')?.after(box);box.addEventListener('change',()=>{box.querySelector('summary').textContent=`本堂 ${selectedLessonGroupStudents().length} 位學生 · 編輯名單`})}
   box.classList.toggle('hidden',!s.isGroupRoster);if(!s.isGroupRoster)return;
   const owner=(window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role)==='owner';
   groupMemberChecks($('lessonGroupStudents'),lesson?.groupStudentIds||s.groupMemberIds||[],{parent:owner,exclude:s.id});
+  box.open=false;box.querySelector('summary').textContent=`本堂 ${selectedLessonGroupStudents().length} 位學生 · 編輯名單`;
 }
 function selectedLessonGroupStudents(){return [...new Set([...document.querySelectorAll('#lessonGroupStudents input:checked')].map(x=>x.value))]}
 function lessonGroupRosterText(lesson){return(lesson?.groupStudentIds||[]).map(id=>student(id).name||'學生資料未載入').join('、')}

@@ -64,7 +64,8 @@ test('建立團班、勾選同名不同家長學生、課表存名單並按月�
  await page.locator('#lessonBranch').selectOption('art_museum');
  await expect(page.locator('#lessonBillingBranch')).toHaveValue('hexi');
  await page.locator('#endTime').selectOption('17:30');
- await expect(page.locator('#lessonGroupStudents input:checked')).toHaveCount(2);
+  await expect(page.locator('#lessonGroupStudents input:checked')).toHaveCount(2);
+  await page.locator('#lessonGroupRoster summary').click();
  await page.getByRole('searchbox',{name:'搜尋本堂學生',exact:true}).fill('小安 王');
  await expect(page.locator('#lessonGroupStudents input[value="kid-a"]')).toBeVisible();
  await expect(page.locator('#lessonGroupStudents input[value="kid-b"]')).not.toBeVisible();

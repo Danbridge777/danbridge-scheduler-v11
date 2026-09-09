@@ -8,6 +8,11 @@
 function installCalendarStudentParentPreview(){
   const selector='#calendarCanvas [data-id], [data-calendar-student-id], #lessonStudent, #calendarStudentFilter, #smartStudent';
   let tooltip=null,anchor=null;
+  const previewText=target=>{
+    const lesson=target?.closest?.('#calendarCanvas [data-id]');
+    if(lesson){const row=db.lessons.find(row=>String(row.id)===lesson.dataset.id);return row?calendarLessonStudentPreview(row):''}
+    return calendarStudentParentPreview(target?.dataset.calendarStudentId||target?.value||'');
+  };
   const hide=()=>{if(tooltip){tooltip.remove();tooltip=null}anchor=null};
   const position=()=>{
     if(!anchor?.isConnected||!tooltip){hide();return}
@@ -19,9 +24,7 @@ function installCalendarStudentParentPreview(){
   const show=event=>{
     const target=event.target?.closest?.(selector);if(!target){hide();return}
     if(event.buttons||document.body.classList.contains('touch-drag-active')){hide();return}
-    const studentId=target.dataset.calendarStudentId||
-      (target.matches('select')?target.value:db.lessons.find(row=>String(row.id)===target.dataset.id)?.studentId);
-    const text=studentId?calendarStudentParentPreview(studentId):'';
+    const text=previewText(target);
     if(!text){hide();return}
     if(anchor===target&&tooltip?.textContent===text)return;
     hide();anchor=target;tooltip=document.createElement('div');
@@ -40,7 +43,20 @@ function installCalendarStudentParentPreview(){
   document.addEventListener('keydown',hide,true);
   document.addEventListener('scroll',()=>{if(anchor)position()},true);
   window.addEventListener('blur',hide);window.addEventListener('resize',hide);
-  new MutationObserver(()=>{if(anchor&&(!anchor.isConnected||!calendarStudentParentPreview(anchor.dataset.calendarStudentId||anchor.value||db.lessons.find(row=>String(row.id)===anchor.dataset.id)?.studentId)))hide()}).observe(document.body,{attributes:true,attributeFilter:['class','data-cloud-role']});
+  new MutationObserver(()=>{if(anchor&&(!anchor.isConnected||previewText(anchor)!==tooltip?.textContent))hide()}).observe(document.body,{attributes:true,attributeFilter:['class','data-cloud-role']});
+}
+
+function calendarLessonStudentPreview(lesson){
+  const context=window.DanbridgeAccess?.getContext?.()||{},role=window.currentCloudRole?.()||context.role||'';
+  if(document.body.classList.contains('auth-locked')||!['owner','branch_manager','teacher'].includes(role))return '';
+  if(role==='teacher'&&context.canManageSchedule!==true&&!lessonTeacherIds(lesson).includes(context.teacherId))return '';
+  const group=student(lesson.studentId);
+  if(!group.isGroupRoster&&!Array.isArray(lesson.groupStudentIds))return calendarStudentParentPreview(lesson.studentId);
+  // Use this lesson's saved roster, never today's group registration or fees.
+  const students=new Map((db.students||[]).map(row=>[String(row.id),row]));
+  const ids=[...new Set(lesson.groupStudentIds||[])];
+  const names=ids.map(id=>students.get(String(id))?.name||'學生資料未載入');
+  return `${group.name||'團課'}\n學生：${names.length?names.join('、'):'本堂尚未登記學生'}`;
 }
 
 function calendarFilterState(){return{teacher:$('calendarTeacherFilter')?.value||'',location:$('calendarLocationFilter')?.value||'',student:$('calendarStudentFilter')?.value||'',room:$('calendarRoomFilter')?.value||'',state:$('calendarStateFilter')?.value||'',search:($('calendarSearch')?.value||'').trim().toLowerCase()}}

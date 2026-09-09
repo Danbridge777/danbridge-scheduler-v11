@@ -34,7 +34,7 @@
     return Array.from(select.options||[]).filter(option=>{
       const value=String(option.value||'');
       const label=optionLabel(option);
-      return value && label && !option.disabled;
+      return value && label && !option.disabled && !option.hidden;
     });
   }
 
@@ -43,6 +43,7 @@
     state.results.hidden=true;
     state.results.innerHTML='';
     state.wrapper.classList.remove('is-open');
+    if(state.select.id==='lessonStudent')state.input.setAttribute('aria-expanded','false');
   }
 
   function syncInputFromSelect(state,force=false){
@@ -64,7 +65,7 @@
     const options=searchableOptions(state.select);
     state.results.innerHTML='';
 
-    if(!query){
+    if(!query&&state.select.id!=='lessonStudent'){
       closeResults(state);
       return;
     }
@@ -72,6 +73,7 @@
     const matches=options.filter(option=>normalize(optionLabel(option)).includes(query)).slice(0,40);
     state.results.hidden=false;
     state.wrapper.classList.add('is-open');
+    if(state.select.id==='lessonStudent')state.input.setAttribute('aria-expanded','true');
 
     if(!matches.length){
       const empty=document.createElement('div');
@@ -87,6 +89,7 @@
       button.className='student-select-search-option';
       if(option.value===state.select.value)button.classList.add('is-selected');
       button.textContent=optionLabel(option);
+      button.setAttribute('role','option');button.setAttribute('aria-selected',String(option.value===state.select.value));
       button.addEventListener('pointerdown',event=>event.preventDefault());
       button.addEventListener('click',()=>chooseOption(state,option));
       state.results.appendChild(button);
@@ -120,6 +123,10 @@
     results.className='student-select-search-results';
     results.hidden=true;
     results.setAttribute('role','listbox');
+    if(select.id==='lessonStudent'){
+      results.id='lessonStudentResults';input.id='lessonStudentSearch';input.setAttribute('role','combobox');input.setAttribute('aria-expanded','false');input.setAttribute('aria-controls',results.id);input.setAttribute('aria-autocomplete','list');
+      select.tabIndex=-1;select.setAttribute('aria-hidden','true');
+    }
 
     select.parentNode.insertBefore(wrapper,select);
     wrapper.appendChild(inputWrap);
@@ -134,7 +141,7 @@
     states.set(select,state);
 
     input.addEventListener('input',()=>renderResults(state));
-    input.addEventListener('focus',()=>{if(input.value.trim())renderResults(state)});
+    input.addEventListener('focus',()=>{if(input.value.trim()||select.id==='lessonStudent')renderResults(state)});
     input.addEventListener('keydown',event=>{
       if(event.key==='Escape'){
         closeResults(state);

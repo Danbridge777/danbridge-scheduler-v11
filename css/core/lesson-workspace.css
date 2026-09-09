@@ -1,0 +1,36 @@
+/* Scoped scheduling editor. Financial controls and validation remain available. */
+html body #lessonModal{--danbridge-control-height:48px;--danbridge-control-font-size:14px}
+html body #lessonModal .modal{width:min(760px,calc(100vw - 24px))!important;max-width:760px!important;padding:20px!important;border-radius:14px!important;background:#fff!important;overflow-x:hidden!important}
+html body #lessonModal .modal-head{padding:0 0 14px!important;margin:0 0 14px!important;background:#fff!important;top:0!important}
+html body #lessonModal h2{font-size:20px!important;line-height:1.4!important;margin:0!important}
+html body #lessonModal :is(label,summary,.small){font-size:14px!important;line-height:1.5!important;letter-spacing:0!important}
+html body #lessonModal label{margin:12px 0 6px!important;font-weight:550!important}
+html body #lessonModal :is(input:not([type=checkbox]):not([type=hidden]),select,.btn,#lessonWorkspaceTabs button){box-sizing:border-box!important;min-width:0!important;max-width:100%!important;height:48px!important;min-height:48px!important;font-size:14px!important;line-height:1.4!important;border-radius:7px!important;padding:0 12px!important;margin:0!important;box-shadow:none!important}
+html body #lessonModal :is(input:not([type=checkbox]),select){border:1px solid #d8dcd9!important;background-color:#fff!important;text-align:center!important;text-align-last:center!important}
+html body #lessonModal textarea{font-size:14px!important;min-height:72px!important;height:72px!important;border:1px solid #d8dcd9!important;border-radius:7px!important;padding:10px!important}
+html body #lessonModal :is(input,select,button):focus-visible{outline:2px solid #a78d54;outline-offset:2px}
+html body #lessonWorkspaceTabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid #deddd6;border-radius:8px;overflow:hidden;margin-bottom:16px}
+html body #lessonWorkspaceTabs button{background:#fff;color:#596675;border:0!important;cursor:pointer;border-radius:0!important}
+html body #lessonWorkspaceTabs button[aria-selected=true]{background:#f3f0e7;color:#24364a;box-shadow:inset 0 -2px #ad9459!important;font-weight:650}
+html body #lessonModal .student-select-row{display:grid!important;grid-template-columns:minmax(0,1fr) 108px!important;gap:8px!important;align-items:start!important}
+html body #lessonModal .student-select-search{display:block!important;min-width:0!important;position:relative}
+/* Native select remains the save/change source, not a second visible picker. */
+html body #lessonModal #lessonStudent{position:absolute!important;opacity:0!important;pointer-events:none!important;inset:0!important;width:100%!important}
+html body #lessonModal .student-select-search-input-wrap{min-width:0!important}
+html body #lessonModal .student-select-search-input{padding-left:28px!important}
+html body #lessonModal .student-select-search-results{grid-column:1/-1;max-height:220px;overflow:auto}
+html body #lessonModal .student-select-search-option{font-size:14px!important;min-height:44px!important;padding:10px!important}
+html body #lessonModal :is(#lessonGroupRoster,#lessonNewGroup){border:1px solid #e2e3de;border-radius:8px;padding:12px;margin:12px 0}
+html body #lessonModal #lessonGroupRoster summary{cursor:pointer;color:#526273;margin:0;padding:0}
+html body #lessonModal .group-roster-options{max-height:220px;overflow:auto;border-top:1px solid #e2e3de}
+html body #lessonModal .group-roster-option{display:flex!important;align-items:center;gap:10px;min-height:44px!important;margin:0!important;padding:10px 0!important}
+html body #lessonModal .group-roster-option span{font-size:14px!important;overflow-wrap:anywhere}
+html body #lessonModal .group-roster-option[hidden],html body #lessonModal [hidden]{display:none!important}
+html body #lessonModal .student-select-row #lessonWorkspaceAdd[hidden]{display:none!important}
+html body #lessonModal .group-roster-search .small{margin:6px 0!important}
+html body #lessonModal .lesson-workspace-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+html body #lessonModal :is(#lessonBillingBranchWrap>p,#lessonStudentDefaultsHint){display:none!important}
+html body #lessonModal .grid{gap:12px!important}
+html body #lessonModal>.modal :is(#lessonDate,#startTime,#endTime,#repeatUntil){height:48px!important;min-height:48px!important;max-height:48px!important;font-size:14px!important}
+html body #lessonModal>.modal :is(#lessonDate,#startTime,#endTime,#repeatUntil)::-webkit-datetime-edit{height:46px!important}
+@media(max-width:540px){html body #lessonModal .modal{padding:14px!important}html body #lessonModal .student-select-row{grid-template-columns:minmax(0,1fr)!important}html body #lessonModal #lessonWorkspaceAdd{width:100%!important}}
