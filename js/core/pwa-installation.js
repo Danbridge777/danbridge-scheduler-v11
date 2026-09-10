@@ -47,10 +47,23 @@
 
   function reloadAcceptedUpdate(){
     if(!reloadForAcceptedUpdate||refreshing)return;
+    if(!allowUpdateNow()){reloadForAcceptedUpdate=false;return;}
     refreshing=true;
     const freshUrl=new URL(window.location.href);
     freshUrl.searchParams.set('__danbridge_refresh',Date.now().toString(36));
     window.location.replace(freshUrl.href);
+  }
+
+  function allowUpdateNow(){
+    const visible=element=>!element.hidden&&element.getClientRects().length>0;
+    const editorOpen=[...document.querySelectorAll('dialog[open],.modal-backdrop.show,[role="dialog"][aria-modal="true"]')].some(visible);
+    const crmOpen=['studentName','teacherName'].some(id=>String(document.getElementById(id)?.value||'').trim());
+    let synced=false;
+    try{synced=typeof window.__danbridgeCanReloadForUpdate==='function'?window.__danbridgeCanReloadForUpdate()===true:document.body.classList.contains('auth-locked')}catch{}
+    if(!editorOpen&&!crmOpen&&synced)return true;
+    const banner=updateBanner(),message=banner.querySelector('span'),button=banner.querySelector('.pwa-update-now');
+    banner.hidden=false;message.textContent=editorOpen||crmOpen?'請先儲存或關閉編輯中的表單，再按立即更新。':'尚有同步或本機保存待完成；完成後請再按立即更新。';
+    button.disabled=false;button.textContent='立即更新';return false;
   }
 
   function offerUpdate(worker){
@@ -59,6 +72,7 @@
     banner.hidden=false;
     const updateNow=banner.querySelector('.pwa-update-now');
     updateNow.onclick=()=>{
+      if(!allowUpdateNow())return;
       updateNow.disabled=true;
       updateNow.textContent='更新中…';
       reloadForAcceptedUpdate=true;
@@ -122,7 +136,7 @@
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
         reloadAcceptedUpdate();
       });
-      navigator.serviceWorker.register('./sw.js?v=20.26.266',{scope:'./'}).then(reg=>{
+      navigator.serviceWorker.register('./sw.js?v=20.26.276',{scope:'./'}).then(reg=>{
         if(!reg)return;
         reg.update().catch(()=>{});
         if(reg.waiting&&navigator.serviceWorker.controller)offerUpdate(reg.waiting);

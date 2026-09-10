@@ -69,14 +69,24 @@
   window.monthEndAudit=monthEndAudit;
   function closeLineBillingPreview(){const modal=$('#v181LineBillingPreview');if(modal)modal.classList.remove('show')}
   function copyPreviewText(){
-    const modal=$('#v181LineBillingPreview'),text=$('#v181LineBillingPreviewText')?.value||'',done=()=>{document.dispatchEvent(new CustomEvent('danbridge:line-billing-copied',{detail:{studentId:modal?.dataset.studentId||'',month:modal?.dataset.month||'',scope:modal?.dataset.scope||'all'}}));window.toast?.('LINE 對帳內容已複製');closeLineBillingPreview()};
+    const active=$('#v181LineBillingPreview');
+    if(billingFamilyNeedsReview(active?.dataset.studentId)&&active?.dataset.familyReviewed!==billingFamilyReviewSignature(active.dataset.studentId)){window.toast?.('請先核對同名家長的家庭成員，再複製');return}
+    const modal=$('#v181LineBillingPreview'),text=$('#v181LineBillingPreviewText')?.value||'';
+    // Clipboard completion may arrive after the user opens a different family
+    // or month. Bind the receipt to the original preview, never the live modal.
+    const context={studentId:modal?.dataset.studentId||'',month:modal?.dataset.month||'',scope:modal?.dataset.scope||'all',familySignature:billingFamilyReviewSignature(modal?.dataset.studentId)};
+    const previewToken=modal?.dataset.previewToken;
+    const done=()=>{document.dispatchEvent(new CustomEvent('danbridge:line-billing-copied',{detail:context}));window.toast?.('LINE 對帳內容已複製');if(modal?.dataset.previewToken===previewToken)closeLineBillingPreview()};
     if(navigator.clipboard?.writeText)return navigator.clipboard.writeText(text).then(done).catch(()=>copyStudentLineBillingFallback(text,done));
     copyStudentLineBillingFallback(text,done);
   }
   function openLineBillingPreview(studentId,m,scope='all',encodedFamilyIds='',campSeason=''){
     const resolvedSeason=campSeason==='winter'?'winter':campSeason==='summer'?'summer':activeCampBillingSeason(),familyIds=encodedFamilyIds?decodeURIComponent(encodedFamilyIds).split(',').filter(Boolean):null,text=studentLineBillingText(studentId,m,scope,familyIds,resolvedSeason);let modal=$('#v181LineBillingPreview');
     if(!modal){modal=document.createElement('div');modal.id='v181LineBillingPreview';modal.className='modal-backdrop v181-line-preview';modal.innerHTML='<div class="modal"><div class="modal-head"><div><h2>LINE 費用明細預覽</h2><p>可直接修改文字；修改內容只影響這次複製，不會更動系統資料。</p></div><button type="button" aria-label="關閉">×</button></div><textarea id="v181LineBillingPreviewText"></textarea><div class="v181-line-preview-actions"><button type="button" class="btn">取消</button><button type="button" class="btn primary">確認複製</button></div></div>';document.body.append(modal);const buttons=$$('button',modal);buttons[0].addEventListener('click',closeLineBillingPreview);buttons[1].addEventListener('click',closeLineBillingPreview);buttons[2].addEventListener('click',copyPreviewText);modal.addEventListener('click',e=>{if(e.target===modal)closeLineBillingPreview()})}
-    modal.dataset.studentId=studentId;modal.dataset.month=m;modal.dataset.scope=scope;modal.dataset.campSeason=resolvedSeason;$('#v181LineBillingPreviewText',modal).value=text;modal.classList.add('show');setTimeout(()=>$('#v181LineBillingPreviewText',modal)?.focus(),0);
+    modal.dataset.studentId=studentId;modal.dataset.month=m;modal.dataset.scope=scope;modal.dataset.campSeason=resolvedSeason;modal.dataset.previewToken=String((Number(modal.dataset.previewToken)||0)+1);delete modal.dataset.familyReviewed;
+    let review=$('#lineFamilyReview');if(!review){review=document.createElement('div');review.id='lineFamilyReview';review.className='line-family-review';$('#v181LineBillingPreviewText',modal).before(review)}review.replaceChildren();review.hidden=!billingFamilyNeedsReview(studentId);
+    if(!review.hidden){const signature=billingFamilyReviewSignature(studentId),label=document.createElement('label'),check=document.createElement('input'),text=document.createElement('span');check.type='checkbox';check.id='lineFamilyReviewConfirmed';text.textContent='確認以下孩子屬於同一家庭：'+billingFamilyStudents(studentId).map(s=>s.name||s.id).join('、');label.append(check,text);review.append(label);check.onchange=()=>{if(check.checked)modal.dataset.familyReviewed=signature;else delete modal.dataset.familyReviewed};const help=document.createElement('p');help.className='small';help.textContent='若只是家長同名，請先在學生資料設定不同家庭識別碼。';review.append(help)}
+    $('#v181LineBillingPreviewText',modal).value=text;modal.classList.add('show');setTimeout(()=>$('#v181LineBillingPreviewText',modal)?.focus(),0);
   }
   function installLineBillingPreview(){if(window.copyStudentLineBilling?.__previewInstalled)return;const preview=(studentId,m,scope='all',encodedFamilyIds='',campSeason='')=>openLineBillingPreview(studentId,m,scope,encodedFamilyIds,campSeason);preview.__previewInstalled=true;window.copyStudentLineBilling=preview}
   window.openLineBillingPreview=openLineBillingPreview;window.closeLineBillingPreview=closeLineBillingPreview;window.copyPreviewText=copyPreviewText;
@@ -104,7 +114,7 @@
     const details=document.createElement('details'); details.className='v181-student-details'; details.innerHTML='<summary><span>查看全部學生</span><small>點擊展開完整應收名單</small></summary>';
     move(studentTable,details); module.append(details);
     if(text)text.hidden=true;
-    if(history)history.hidden=true;
+    if(history){const archive=document.createElement('details');archive.className='v181-student-details';const label=document.createElement('summary');label.textContent='月結封存與調整';archive.append(label);history.hidden=false;archive.append(history);const lock=document.createElement('button');lock.type='button';lock.className='btn';lock.textContent='鎖定目前月份月結';lock.onclick=()=>window.saveMonthlySettlement?.();archive.append(lock);module.append(archive)}
     collections.append(module);
     $('#v181StudentSearch',module)?.addEventListener('input',filterStudentRows);
     $('#v181ParentSearch',module)?.addEventListener('input',filterStudentRows);

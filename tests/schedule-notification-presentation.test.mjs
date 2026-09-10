@@ -47,3 +47,17 @@ test('大量未讀通知一次只渲染最新的單一伺服器批次',()=>{
  assert.equal(shown[0][0].details.length,30);
  presenter.stop();
 });
+
+test('稍後查看暫緩目前所有未讀，不寫已讀；新通知及手動入口仍保留',()=>{
+ const clicks=new Map(),shown=[];
+ const document={addEventListener(){},removeEventListener(){}};
+ const button={hidden:true,textContent:'',setAttribute(){},addEventListener:(name,fn)=>clicks.set(name,fn),removeEventListener:name=>clicks.delete(name)};
+ const presenter=createScheduleNotificationPresenter({document,button,render:batch=>shown.push(batch.map(x=>x.id)),getActor:()=>({uid:'owner'}),isBusy:()=>false,idleMs:0});
+ const rows=[{id:'old-1',createdBy:'other'},{id:'old-2',createdBy:'other'}];
+ presenter.update(rows);assert.deepEqual(shown,[['old-1']]);
+ presenter.deferCurrent();presenter.update(rows);assert.equal(shown.length,1);
+ assert.equal(button.textContent,'課表通知（2）');assert.ok(rows.every(row=>row.read===undefined));
+ presenter.update([{id:'new',createdBy:'other'},...rows]);assert.deepEqual(shown[1],['new']);
+ clicks.get('click')();assert.deepEqual(shown[2],['new']);
+ presenter.stop();
+});

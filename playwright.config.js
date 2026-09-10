@@ -1,6 +1,9 @@
 const { defineConfig, devices } = require('@playwright/test');
 const path = require('node:path');
 const os = require('node:os');
+const localTestPort = Number(process.env.E2E_PORT || 4173);
+if (!Number.isInteger(localTestPort) || localTestPort < 1024 || localTestPort > 65535) throw new Error('Invalid E2E_PORT');
+const localTestUrl = `http://127.0.0.1:${localTestPort}`;
 
 module.exports = defineConfig({
   testDir: './tests/e2e',
@@ -13,7 +16,7 @@ module.exports = defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    baseURL: process.env.E2E_BASE_URL || 'http://127.0.0.1:4173',
+    baseURL: process.env.E2E_BASE_URL || localTestUrl,
     serviceWorkers: 'block',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure'
@@ -30,7 +33,7 @@ module.exports = defineConfig({
   ],
   webServer: process.env.E2E_BASE_URL ? undefined : {
     command: 'node tools/e2e_static_server.js',
-    url: 'http://127.0.0.1:4173/index.html',
+    url: `${localTestUrl}/index.html`,
     reuseExistingServer: !process.env.CI,
     timeout: 15_000,
     stdout: 'ignore',

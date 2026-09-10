@@ -37,7 +37,7 @@ const context = {
   dragState: null,
   crypto: { randomUUID: () => `00000000-0000-4000-8000-${String(++nextId).padStart(12, '0')}` },
   document: {
-    body: { dataset: {}, classList: { add() {}, remove() {} } },
+    body: { dataset: {}, classList: fakeClassList() },
     querySelectorAll: () => [],
     getElementById: id => elements[id] || null
   },
@@ -317,6 +317,7 @@ assert.equal(context.conflictDetail(lesson({ id: 'co-teaching-candidate', studen
 
 // A single confirmed deletion keeps a complete recovery point and undo restores
 // the exact lesson identity without touching unrelated records or creating copies.
+(async()=>{
 elements.lessonId = { value: 'delete-target' };
 elements.lessonModal = { classList: fakeClassList('show') };
 context.syncMakeupForDeletedLesson = () => { context.makeupDeletes += 1; };
@@ -338,17 +339,20 @@ const deleteStart = courseSource.indexOf('function deleteCurrentLesson');
 const deleteEnd = courseSource.indexOf("let activeCourseDrawerId=''");
 assert.ok(deleteStart >= 0 && deleteEnd > deleteStart, 'single-lesson delete function is available');
 vm.runInContext(courseSource.slice(deleteStart, deleteEnd), context);
+// DOM focus/cancel/permission races are exercised by the real browser suite.
+// This VM harness retains the asynchronous result of that confirmation UI.
+context.calendarOwnerCanEdit = () => true;
 const deleteTarget = lesson({ id: 'delete-target', note: 'recovery marker' });
 const deleteUntouched = lesson({ id: 'delete-untouched', date: '2026-08-04', studentId: 's2', teacherId: 't2', teacherIds: ['t2'], room: 'B' });
 context.db = { students: [...context.db.students], teachers: [...context.db.teachers], lessons: [deleteTarget, deleteUntouched] };
 const savesBeforeDelete = context.saves;
-context.confirm = () => false;
-context.deleteCurrentLesson();
+context.confirmCurrentLessonDeletion = async () => false;
+await context.deleteCurrentLesson();
 assert.deepEqual(context.db.lessons.map(row => row.id), ['delete-target', 'delete-untouched'], 'cancelling deletion changes nothing');
 assert.equal(context.saves, savesBeforeDelete, 'cancelled deletion does not save');
 assert.equal(context.scheduleHistory.length, 0, 'cancelled deletion creates no recovery snapshot');
-context.confirm = () => true;
-context.deleteCurrentLesson();
+context.confirmCurrentLessonDeletion = async () => true;
+await context.deleteCurrentLesson();
 assert.deepEqual(context.db.lessons.map(row => row.id), ['delete-untouched'], 'confirmed deletion removes only the selected lesson');
 assert.equal(context.db.students.length, 2, 'deleting a lesson preserves every student');
 assert.equal(context.db.teachers.length, 2, 'deleting a lesson preserves every teacher');
@@ -365,3 +369,4 @@ assert.equal(context.db.teachers.length, 2, 'undo preserves every teacher');
 assert.equal(context.saves, savesBeforeDelete + 2, 'undo schedules exactly one additional save');
 
 console.log('PASS: teacher-scoped copy, calendar dates, cross-midnight rejection, co-teaching, and conflict sources.');
+})().catch(error=>{console.error(error);process.exitCode=1});

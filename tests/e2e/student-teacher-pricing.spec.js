@@ -1,6 +1,8 @@
 const {test,expect}=require('@playwright/test');
 const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
 test('兼職逐生收費、老師成本獨立儲存，整班只付一次且切月正確',async({page})=>{
+ // Set prices before these lessons occur. Retrospective preservation is tested separately.
+ await page.clock.setFixedTime(new Date('2026-09-01T01:00:00Z'));
  await isolateApplicationAuth(page);await page.goto('/index.html',{waitUntil:'domcontentloaded'});
  await page.addStyleTag({content:'#authScreen{display:none!important;pointer-events:none!important}'});
  await page.evaluate(()=>{

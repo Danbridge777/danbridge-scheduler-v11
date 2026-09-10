@@ -47,7 +47,11 @@ test('V2 authority reader factory保持明確建構、只做fresh server invento
  assert.match(factory,/getIdTokenResult\(true\)/);
  assert.match(factory,/getDocFromServer\(doc\(cloud/);
  assert.match(factory,/getDocsFromServer\(collection\(cloud/);
- assert.match(factory,/cloudRole!=='owner'/);
+ assert.match(factory,/await verifyActiveStagingV2Owner\(user\)/);
+ const authorization=block('async function verifyActiveStagingV2Owner','export function createExplicitStagingV2AuthorityReadLoader');
+ assert.match(authorization,/cloudRole!=='owner'/);
+ assert.match(authorization,/getDocFromServer\(doc\(cloud,'companyAccess',email\)\)/);
+ assert.match(authorization,/access\?\.active!==true\|\|access.companyId!==COMPANY_ID\|\|access.role!=='owner'/);
  assert.doesNotMatch(factory,/onSnapshot|activeRecordMode\s*=|window\.|readTakeoverEnabled:true|writeTakeoverEnabled:true/);
 });
 
@@ -62,7 +66,7 @@ test('Firestore 查詢協調使用有界記憶體快取，耐久操作仍由獨�
 });
 
 test('同帳號雙分頁登入權限初始化會串行化並使用有限權杖重試',()=>{
- assert.match(source,/import \{loadProfileAfterAuthReady\} from '\.\/cloud-auth-profile-bootstrap\.js\?v=20\.26\.266'/);
+ assert.match(source,/import \{loadProfileAfterAuthReady\} from '\.\/cloud-auth-profile-bootstrap\.js\?v=20\.26\.276'/);
  const auth=block('async function loadSignedInProfile','function loginTimeValue');
  assert.match(auth,/loadProfileAfterAuthReady\(\{user,loadProfile:\(\)=>ensureProfile\(user\)\}\)/);
  assert.match(auth,/navigator\.locks\?\.request\? navigator\.locks\.request\(lockName,load\):load\(\)/);
@@ -98,7 +102,7 @@ test('角色證據不能自動填通過，完整實測後才可在記憶體準�
 });
 
 test('角色候選 manifest 與每位本人收據不可變，URL 只顯示按鈕不會自動寫入',()=>{
- assert.match(source,/cloud-role-view-verification\.js\?v=20\.26\.266/);
+ assert.match(source,/cloud-role-view-verification\.js\?v=20\.26\.276/);
  assert.match(source,/stagingRoleViewCandidateManifests/);
  assert.match(source,/stagingRoleViewVerificationReceipts/);
  assert.match(source,/persistStagingRoleCandidateManifest/);
@@ -186,7 +190,7 @@ test('核心逐筆已完成但角色發布仍在執行時，串流快照不會�
 
 test('Owner active save 依資料 hash 合併相同意圖，但不同 hash 仍排入下一輪',()=>{
  const queue=block('function queueOwnerCloudSave','function lessonMap');
- assert.match(source,/import \{decideOwnerActiveSaveIntent\} from '\.\/cloud-owner-active-save-intent\.js\?v=20\.26\.266'/);
+ assert.match(source,/import \{decideOwnerActiveSaveIntent\} from '\.\/cloud-owner-active-save-intent\.js\?v=20\.26\.276'/);
  assert.match(queue,/scheduleMutation.+queueLocalSave\(\{changedCollections:\['lessons','makeups','changes'\]\}\)/s);
  assert.ok(queue.indexOf("if(scheduleMutation&&['staging','production'].includes")<queue.indexOf('const nextHash=dataHash'));
  assert.match(queue,/decideOwnerActiveSaveIntent\(\{nextHash,localDirtyHash,lastUploadedHash,diagnostics,applyingCloud\}\)/);
@@ -229,8 +233,9 @@ test('staging 僅允許永久 fence 後走 V2；缺少 fence 或任何 V2 錯誤
  assert.match(runtime,/assertStagingV2RuntimeHead/);
  assert.match(runtime,/activeOwnerV2OperationSender=stagingV2BrowserOperationSender\(\)/);
  assert.match(runtime,/stagingV2H0GenesisBaselineDocuments\(await readActiveRecordDocumentsFromServer\(\)\)/);
- assert.match(runtime,/activeOwnerV2HeadState==='hn'&&latestState!=='hn'/);
- assert.match(runtime,/const documents=await activeOwnerV2ReadDocuments\(\)/);
+ assert.match(runtime,/readState==='hn'&&latestState!=='hn'/);
+ assert.match(runtime,/const documents=await readDocuments\(\);assertCurrent\(\)/);
+ assert.match(runtime,/activeOwnerV2ReadDocuments=readDocuments/);
  assert.match(runtime,/activeRecordMode='active-blocked'/);
  assert.doesNotMatch(runtime,/catch\([^)]*\).+startOwnerLegacyActiveRecordRuntime/s);
 });
@@ -256,7 +261,7 @@ test('V2 Hn 角色逐筆檢視由同一個受保護後端管理，瀏覽器不�
 	 assert.match(bootstrap,/setTimeout\(queueInitialActiveRoleRecordViews/);
 	 const ownerRuntime=block('async function startOwnerStagingV2Runtime','async function flushActiveOwnerState');
 	 assert.match(source,/(?:async )?function acceptActiveOwnerSnapshot\(snapshot\)\{\s*[^\n]*activeRoleBootstrapSourceDb=deepCopy\(snapshot\.db\)/);
-	 assert.match(ownerRuntime,/activeOwnerV2HeadState==='hn'.*state:'server-managed'/s);
+	 assert.match(ownerRuntime,/readState==='hn'.*state:'server-managed'/s);
 	 assert.doesNotMatch(ownerRuntime,/queueInitialActiveRoleRecordViews\(\)/);
 	 assert.match(ownerRuntime,/activeRoleBootstrapSourceDb=deepCopy\(rebuilt\.db\)/);
 	 assert.doesNotMatch(ownerRuntime,/activeOwnerV2HeadState==='h0'\)queueInitialActiveRoleRecordViews\(\)/);
@@ -281,7 +286,8 @@ test('App Check 與 H1 入口只存在 staging，limited-use token 送入固定 
 
 test('V2 不可變備份與雙 head 驗證在受保護後端執行；瀏覽器不再重複讀取證據而阻塞操作',()=>{
  const verifier=block('async function confirmStagingV2DurablePrewriteBackup','async function startOwnerStagingV2Runtime');
- for(const required of ['server-enforced','activeOwnerV2Fence.targetV2Epoch!==activeOwnerControllerEpoch','activeOwnerV2HeadState!==\'hn\''])assert.match(verifier,new RegExp(required));
+ for(const required of ['server-enforced','activeOwnerV2Fence!==fence','activeOwnerControllerEpoch!==epoch','fence.targetV2Epoch!==epoch','activeOwnerV2HeadState!==\'hn\''])assert.match(verifier,new RegExp(required));
+ assert.match(verifier,/assertCurrent\(\);await verifyActiveStagingV2Owner\(user\);assertCurrent\(\)/);
  for(const forbidden of ['getDocFromServer','stagingRecordSyncV1FrozenSourceProofs','stagingRecordSyncV1RawCutoverBackups','stagingRecordSyncV2Genesis','verifyStagingV2PrewriteBackup'])assert.equal(verifier.includes(forbidden),false,forbidden);
  for(const required of ['verifyStagingV2PrewriteBackup','stagingRecordSyncV1FrozenSourceProofs','stagingRecordSyncV1RawCutoverBackups','stagingRecordSyncV2Genesis','stagingRecordSyncV2GenesisAuthorities','headBefore','headAfter','verifyDurablePrewrite'])assert.match(chainAdapterSource,new RegExp(required));
  assert.match(chainAdapterSource,/await verifyDurablePrewrite\(fence,head\)/);

@@ -43,3 +43,14 @@ html body #lessonModal #coTeacherChecks .teacher-check:has(input:checked){border
 html body #lessonModal #coTeacherChecks .teacher-check:focus-within{outline:2px solid #a78d54;outline-offset:2px}
 @media(max-width:600px){html body #lessonModal #coTeacherChecks{grid-template-columns:minmax(0,1fr)!important}}
 @media(max-width:540px){html body #lessonModal .modal{padding:14px!important}html body #lessonModal .student-select-row{grid-template-columns:minmax(0,1fr)!important}html body #lessonModal #lessonWorkspaceAdd{width:100%!important}}
+/* Financial review controls share the compact input scale, without affecting the timetable. */
+.line-family-review{padding:12px;border:1px solid #d8dee7;border-radius:10px;margin:8px 0}
+.line-family-review label{display:flex;align-items:flex-start;gap:10px}
+.line-family-review input[type=checkbox]{flex:0 0 20px;width:20px;height:20px;margin:2px 0}
+#settlementRecordPreview .modal{width:min(780px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto}
+#settlementRecordPreview .toolbar{display:flex;flex-wrap:wrap;gap:8px}
+#settlementRecordPreview .toolbar button{min-height:44px;flex:1 1 140px}
+#settlementRecordPreview .toolbar button[aria-pressed=true]{border-color:#95752e;background:#fbf6e8}
+#settlementRecordPreview dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 16px}
+#settlementRecordPreview :is(dt,dd){margin:0;overflow-wrap:anywhere}
+.pricing-effective-field input{box-sizing:border-box;width:100%;min-width:0;min-height:44px}

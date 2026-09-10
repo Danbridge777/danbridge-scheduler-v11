@@ -15,6 +15,7 @@ function clearTeacherForm(){
   if($('teacherColor'))$('teacherColor').value='#2563eb';
   const defaults=new Set([1,2,3,4,5]);
   document.querySelectorAll('#teacherWorkDays input[type=checkbox]').forEach(cb=>cb.checked=defaults.has(Number(cb.value)));
+  renderPricingEffectiveDate('teacher');
 }
 function teacherIsArchived(t){return !!String(t?.archivedAt||'').trim()}
 function saveTeacher(){
@@ -46,6 +47,7 @@ function saveTeacher(){
     color:$('teacherColor')?.value||'#2563eb',
     note:$('teacherNote')?.value||''
   };
+  if(!savePricingHistoryFromEditor(old,item,'teacher'))return;
   snapshot();
   const i=db.teachers.findIndex(t=>String(t.id)===String(id));
   if(i>=0)db.teachers[i]=item;else db.teachers.push(item);
@@ -63,6 +65,7 @@ function editTeacher(id){
   $('teacherSubjects').value=t.subjects||'';$('teacherColor').value=t.color||'#2563eb';$('teacherNote').value=t.note||'';
   const days=new Set(normalizedWorkDays(t.workDays));
   document.querySelectorAll('#teacherWorkDays input[type=checkbox]').forEach(cb=>cb.checked=days.has(Number(cb.value)));
+  renderPricingEffectiveDate('teacher',t);
   $('teacherName').focus();
 }
 async function archiveTeacher(id){

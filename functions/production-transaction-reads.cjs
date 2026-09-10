@@ -4,10 +4,13 @@
 // This cache lives for ONE transaction attempt only, never across requests or
 // retries. Supplied snapshots must have been read by that same transaction.
 function createProductionTransactionReader(firestore,transaction,snapshots=[]){
- const reads=new Map(snapshots.map(snapshot=>[snapshot.ref.path,Promise.resolve(snapshot)]));
+ // Keep already-read snapshots directly. Creating 30,000 resolved promises
+ // here adds allocations/async hooks even though a 40-row command only asks
+ // the adapter for its touched records. Reads remain async and memoized.
+ const reads=new Map(snapshots.map(snapshot=>[snapshot.ref.path,snapshot]));
  let queued=[],scheduled=false;
  return path=>{
-  if(reads.has(path))return reads.get(path);
+  if(reads.has(path)){const saved=reads.get(path),promise=Promise.resolve(saved);if(saved!==promise)reads.set(path,promise);return promise}
   const result=new Promise((resolve,reject)=>queued.push({path,resolve,reject}));
   reads.set(path,result);
   if(!scheduled){scheduled=true;queueMicrotask(async()=>{

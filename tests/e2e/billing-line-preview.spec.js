@@ -52,6 +52,7 @@ test('LINE 計費預覽只綁家長姓名、合併手足、列出時數公式且
 
   const original=await preview.inputValue();
   await preview.fill(`${original}\n家長確認備註：下週轉帳`);
+  await modal.locator('#lineFamilyReviewConfirmed').check();
   await modal.locator('.v181-line-preview-actions .btn.primary').click();
   await expect.poll(()=>page.evaluate(()=>window.__billingCopiedText)).toContain('家長確認備註：下週轉帳');
   await expect(modal).not.toHaveClass(/show/);

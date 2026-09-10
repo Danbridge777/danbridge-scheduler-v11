@@ -91,17 +91,17 @@
   function settlementDataFor(m,scope){
     scope=allowedScope(scope);const ls=scopedLessons('all',m).filter(l=>scope==='all'||timetableBillingBranchId(l)===scope),campRows=summerCampRegistrationRows(m,scope);
     const teacherLessons=scopedLessons(scope,m);
-    const studentIds=new Set([...ls.flatMap(l=>lessonBillingStudentIds(l)),...campRows.map(r=>r.studentId),...(db.students||[]).filter(s=>studentUsesMonthlyFee(s)&&studentIsPresentForBilling(s)).map(s=>s.id)]),teacherIds=new Set(teacherLessons.flatMap(l=>lessonTeacherIds(l)));
-    const sr=(db.students||[]).filter(s=>!s.isGroupRoster&&(recordMatchesBranch(s,scope,studentIds)||(studentUsesMonthlyFee(s)&&studentMonthlyFeeBranch(s.id,m)===scope))).map(s=>{
+    const studentIds=new Set([...ls.flatMap(l=>lessonBillingStudentIds(l)),...campRows.map(r=>r.studentId),...(db.students||[]).filter(s=>studentUsesMonthlyFee(s,m+'-01')&&studentIsPresentForBilling(s)).map(s=>s.id)]),teacherIds=new Set(teacherLessons.flatMap(l=>lessonTeacherIds(l)));
+    const sr=(db.students||[]).filter(s=>!s.isGroupRoster&&(recordMatchesBranch(s,scope,studentIds)||(studentUsesMonthlyFee(s,m+'-01')&&studentMonthlyFeeBranch(s.id,m)===scope))).map(s=>{
       const x=ls.filter(l=>lessonIncludesStudent(l,s.id)),billing=studentMonthlyBillingData(s.id,m,scope),chargedLessons=billing.tutoringLessons,abs=x.filter(l=>['學生請假','老師請假','取消','停課'].includes(l.status));
       const lessonAmount=billing.tutoringAmount,campAmount=billing.campAmount;
-      return{s,billingCategory:billing.billingCategory,total:x.length,charged:studentUsesMonthlyFee(s)?0:chargedLessons.length,h:chargedLessons.reduce((a,l)=>a+hours(l.start,l.end),0),abs:abs.length,rate:x.length?abs.length/x.length*100:0,lessonAmount,campAmount,amount:lessonAmount+campAmount};
+      return{s:billing.student,billingCategory:billing.billingCategory,lessonIds:x.map(l=>l.id),total:x.length,charged:studentUsesMonthlyFee(s,m+'-01')?0:chargedLessons.length,h:chargedLessons.reduce((a,l)=>a+hours(l.start,l.end),0),abs:abs.length,rate:x.length?abs.length/x.length*100:0,lessonAmount,campAmount,amount:lessonAmount+campAmount};
     }).filter(x=>x.total||x.campAmount||(studentUsesMonthlyFee(x.s)&&x.lessonAmount>0));
     const tr=(db.teachers||[]).filter(t=>teacherIncludedForMonth(t,m)&&recordMatchesBranch(t,scope,teacherIds)).map(t=>{
       const paid=teacherLessons.filter(l=>lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherHours(l)),payroll=calculateTeacherPayroll(t,m,paid),h=payroll.actualHours;
-      const expected=payroll.expectedHours,diff=payroll.diff,weeks=teacherWeekBreakdownForLessons(t,m,paid);
+      const expected=payroll.expectedHours,diff=payroll.diff,weeks=teacherWeekBreakdownForLessons(payroll.teacher,m,paid);
       const amount=payroll.amount;
-      return{t,count:paid.length,h,expected,diff,weeks,amount,revenue:teacherCompanyRevenue(t,m,teacherLessons),payroll,branches:branchBreakdown(paid,t.id),companyWide:true};
+      return{t:payroll.teacher,count:paid.length,h,expected,diff,weeks,amount,revenue:teacherCompanyRevenue(t,m,teacherLessons),payroll,branches:branchBreakdown(paid,t.id),companyWide:true};
     });
     return{sr,tr,scope,m,lessons:ls};
   }
@@ -189,7 +189,29 @@
     const rows=[...(db.settlementRecords||[])].filter(r=>current==='all'||(r.branchId||'all')===current).sort((a,b)=>b.month.localeCompare(a.month));
     box.innerHTML=rows.map(r=>{const rs=r.branchId||'all',adjustments=r.adjustments||[],latest=adjustments[adjustments.length-1],delta=latest?.delta;return `<tr><td><b>${esc(monthLabel(r.month))}</b><div class="small">${esc(scopeLabel(rs))}｜已鎖定</div></td><td>${new Date(r.lockedAt||r.savedAt).toLocaleString('zh-TW')}</td><td>${r.totalLessons} 堂</td><td>${fmtHours(r.totalHours)} hr</td><td>${money(r.totalRevenue)}</td><td>${r.leaveCount} 堂</td><td>${(+r.leaveRate||0).toFixed(1)}%</td><td>${money(r.payroll)}</td><td class="row-actions"><button class="btn" onclick="loadSettlementRecord('${r.month}','${rs}')">檢視</button>${adjustments.length?`<div class="small">${adjustments.length} 筆調整<br>最新：收入 ${delta.totalRevenue>=0?'+':''}${money(delta.totalRevenue)}／薪資 ${delta.payroll>=0?'+':''}${money(delta.payroll)}</div>`:'<div class="small">尚無調整</div>'}</td></tr>`}).join('')||'<tr><td colspan="9" class="small">此範圍尚未儲存結算紀錄。</td></tr>';
   };
-  window.loadSettlementRecord=function(month,scope='all'){renderSettlementMonthOptions();$('settleMonth').value=month;if(ctx().role==='owner'){scopes.settlement=scope;syncSelectors()}renderSettlement();$('settlement').scrollIntoView({behavior:'smooth',block:'start'})};
+  window.loadSettlementRecord=function(month,scope='all'){
+    if(!['owner','branch_manager'].includes(ctx().role))return toast('此帳號不能檢視月結');
+    scope=allowedScope(scope);
+    const record=(db.settlementRecords||[]).find(r=>r.month===month&&(r.branchId||'all')===scope);
+    if(!record)return toast('找不到此月份與校區的原月結');
+    let modal=$('settlementRecordPreview');
+    if(!modal){modal=document.createElement('div');modal.id='settlementRecordPreview';modal.className='modal-backdrop';modal.innerHTML='<div class="modal" role="dialog" aria-modal="true" aria-labelledby="settlementRecordTitle"><div class="modal-head"><h2 id="settlementRecordTitle"></h2><button type="button" class="btn" aria-label="關閉月結檢視">關閉</button></div><div class="toolbar" role="group" aria-label="月結資料版本"></div><div class="settlement-record-content"></div></div>';document.body.append(modal);modal.querySelector('button').onclick=()=>modal.classList.remove('show');modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('show')})}
+    modal.querySelector('h2').textContent=monthLabel(month)+'｜'+scopeLabel(scope)+' 月結';
+    const toolbar=modal.querySelector('.toolbar');toolbar.replaceChildren();
+    const show=mode=>{
+      const latest=(record.adjustments||[]).at(-1),current=mode==='current'?settlementSnapshotPayload(settlementDataFor(month,scope)):null;
+      const totals=current?.totals||(mode==='adjusted'&&latest?latest.currentTotals:record.snapshot?.totals||record);
+      const source=current?.source||(mode==='adjusted'&&latest?latest.currentSource:record.snapshot?.source)||{};
+      const label=mode==='original'?'原結算（封存、不重算）':mode==='adjusted'?'結算後最新調整（已記錄）':'目前重算（未取代原結算）';
+      const time=current?new Date().toISOString():mode==='adjusted'&&latest?latest.createdAt:record.lockedAt||record.savedAt;
+      toolbar.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===mode)));
+      const summary=[['學生應收',money(totals.totalRevenue)],['老師薪資',money(totals.payroll)],['課程堂數'+(totals.lessonCountBasis==='unique-lesson-id'?'':'（舊版為學生人次）'),totals.totalLessons||0],['學生人次',totals.studentAttendances??'舊版未分列'],['老師授課人時',fmtHours(totals.totalHours||0)]];
+      const detail=(rows,title)=>!Array.isArray(rows)?'<p>'+title+'：此舊版調整未封存逐人明細，不能用目前資料冒充。</p>':'<h3>'+title+'</h3><div class="table-wrap"><table><thead><tr><th>識別碼</th><th>金額</th></tr></thead><tbody>'+rows.map(row=>'<tr><td>'+esc(row.id||'')+'</td><td>'+money(row.amount)+'</td></tr>').join('')+'</tbody></table></div>';
+      modal.querySelector('.settlement-record-content').innerHTML='<p><b>'+esc(label)+'</b></p><p>'+esc(time||'未記錄時間')+'</p><dl>'+summary.map(([name,value])=>'<dt>'+esc(name)+'</dt><dd>'+esc(String(value))+'</dd>').join('')+'</dl>'+detail(source.students,'學生明細')+detail(source.teachers,'老師明細');
+    };
+    for(const [mode,label] of [['original','原結算'],['adjusted','事後調整'],['current','目前重算']]){const button=document.createElement('button');button.className='btn';button.type='button';button.textContent=label;button.dataset.mode=mode;button.onclick=()=>show(mode);toolbar.append(button)}
+    show('original');modal.classList.add('show');toolbar.querySelector('button').focus();
+  };
   window.deleteSettlementRecord=function(){toast('月結已鎖定，不可刪除')};
 
   document.addEventListener('DOMContentLoaded',syncSelectors);

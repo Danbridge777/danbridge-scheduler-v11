@@ -3,6 +3,55 @@
  * Loaded as a classic script so existing global callers remain compatible.
  */
 
+function pricingFields(kind){return kind==='teacher'?['rate','payrollMode','baseSalary','overtimeRate','deductionRate','minWeeklyHours','workDays','type']:['rate','partTimeTeacherRate','courseType']}
+function pricingSnapshot(record,kind){return Object.fromEntries(pricingFields(kind).map(key=>[key,record?.[key]===undefined?null:JSON.parse(JSON.stringify(record[key]))]))}
+function pricingDateValid(date){return typeof date==='string'&&date>='0001-01-01'&&/^\d{4}-\d{2}-\d{2}$/.test(date)&&Number.isFinite(Date.parse(date+'T00:00:00Z'))&&new Date(date+'T00:00:00Z').toISOString().slice(0,10)===date}
+function checkedPricingRows(record,kind){
+ if(record?.pricingHistory===undefined&&record?.pricingHistoryVersion===undefined)return null;
+ const rows=record.pricingHistory,fields=pricingFields(kind);let previous='';
+ if(record.pricingHistoryVersion!==1||!Array.isArray(rows)||!rows.length||rows.length>120)throw new Error('費率歷程版本或筆數不符，請核對後再計算');
+ for(const row of rows){
+  if(!row||!pricingDateValid(row.effectiveFrom)||row.effectiveFrom<=previous||!row.values||typeof row.values!=='object'||Array.isArray(row.values)||Object.keys(row.values).length!==fields.length||fields.some(key=>!Object.hasOwn(row.values,key)))throw new Error('費率歷程日期或欄位不符，請核對後再計算');
+  // Validate imported/cached data as well as server-validated writes. A bad
+  // historical amount must never become zero via Number(value) || 0.
+  for(const [key,value] of Object.entries(row.values)){
+   if(value===null)continue;
+   if(key==='workDays'){
+    if(!Array.isArray(value)||value.some(day=>!Number.isInteger(day)||day<0||day>6)||new Set(value).size!==value.length)throw new Error('費率歷程上班日格式不符，請核對後再計算');
+   }else if(['courseType','payrollMode','type'].includes(key)){
+    if(typeof value!=='string')throw new Error('費率歷程計費類型格式不符，請核對後再計算');
+   }else if(!(typeof value==='number'||typeof value==='string')||!Number.isFinite(Number(value))||Number(value)<0)throw new Error('費率歷程金額或時數無效，請核對後再計算');
+  }
+  previous=row.effectiveFrom;
+ }
+ if(rows[0].effectiveFrom!=='0001-01-01')throw new Error('費率歷程缺少原始基準，請核對後再計算');return rows;
+}
+function pricingProfileAt(record,date,kind='student'){
+ const rows=checkedPricingRows(record,kind);if(!rows)return record||{};
+ if(!pricingDateValid(date))throw new Error('費率計算日期無效');
+ let selected=null;
+ for(const row of rows){if(row.effectiveFrom<=date&&(!selected||row.effectiveFrom>selected.effectiveFrom))selected=row}
+ if(!selected)throw new Error('找不到指定日期的費率，請先核對歷史設定');
+ const value={...record};for(const key of pricingFields(kind)){if(selected.values[key]===null||selected.values[key]===undefined)delete value[key];else value[key]=selected.values[key]}
+ return value;
+}
+function withPricingChange(before,after,{kind='student',effectiveFrom,today}={}){
+ checkedPricingRows(before,kind);
+ const next=pricingSnapshot(after,kind),prior=pricingSnapshot(before,kind);
+ if(!before?.id||JSON.stringify(prior)===JSON.stringify(next))return after;
+ if(!pricingDateValid(today)||!pricingDateValid(effectiveFrom)||effectiveFrom<today)throw new Error('費率生效日不得早於今天；歷史更正請使用月結調整，不直接覆寫舊費率');
+ if((kind==='teacher'||before.courseType!==after.courseType||before.courseType==='安親'||after.courseType==='安親')&&!effectiveFrom.endsWith('-01'))throw new Error('薪資制度、安親月費或課程類型變更須從月份第一天生效');
+ const history=Array.isArray(before.pricingHistory)&&before.pricingHistory.length?JSON.parse(JSON.stringify(before.pricingHistory)):[{effectiveFrom:'0001-01-01',values:prior,source:'preserved-before-first-change'}];
+ if(history.length>=120&&!history.some(row=>row.effectiveFrom===effectiveFrom))throw new Error('費率歷程已達保護上限，請先封存核對，不會丟棄舊價格');
+ const rows=history.filter(row=>row.effectiveFrom!==effectiveFrom);rows.push({effectiveFrom,values:next,source:'explicit-rate-change'});rows.sort((a,b)=>a.effectiveFrom.localeCompare(b.effectiveFrom));
+ const result={...after,pricingHistoryVersion:1,pricingHistory:rows};
+ // Inserting an intermediate future price must not erase a later agreement.
+ for(const key of pricingFields(kind)){const value=rows[rows.length-1].values[key];if(value===null||value===undefined)delete result[key];else result[key]=value}
+ return result;
+}
+function studentPricingAt(value,date){return pricingProfileAt(typeof value==='object'&&value?value:student(value),date,'student')}
+function teacherPricingAt(value,date){return pricingProfileAt(typeof value==='object'&&value?value:teacher(value),date,'teacher')}
+
 function lessonMakeupId(l){const explicit=String(l?.makeupId||'').trim();if(explicit)return explicit;return String(l?.note||'').match(/(?:^|｜|\s)MAKEUP:([^｜\s]+)/)?.[1]||''}
 function lessonIsLinkedMakeup(l){return !!(l?.isMakeup||lessonMakeupId(l)||l?.sourceLessonId)}
 function lessonOutcome(l){return String(l?.teacherReportStatus||l?.status||'')}
@@ -11,7 +60,7 @@ function lessonCountsForTeacherHours(l){return !!l&&!l.isDraft}
 function lessonCountsForTeacherPay(l){return !!l&&!l.isDraft&&l.payTeacher!=='no'}
 function lessonCountsForStudentCharge(l){if(!l||l.isDraft||l.chargeStudent==='no'||lessonIsLinkedMakeup(l))return false;return !['teacher_leave','老師請假','取消','停課'].includes(lessonOutcome(l))}
 function studentBillingCategory(value){const s=typeof value==='object'&&value?value:student(value);return s?.courseType==='安親'?'after_school_monthly':s?.courseType==='團班'?'group_hourly':'tutoring_hourly'}
-function studentUsesMonthlyFee(value){return studentBillingCategory(value)==='after_school_monthly'}
+function studentUsesMonthlyFee(value,date=''){return studentBillingCategory(date?studentPricingAt(value,date):value)==='after_school_monthly'}
 function studentIsPresentForBilling(s){return !!s?.id&&!s.campSeason&&!String(s.archivedAt||'').trim()}
 function studentMonthlyFlatFee(value){const s=typeof value==='object'&&value?value:student(value);return studentIsPresentForBilling(s)&&studentUsesMonthlyFee(s)?Math.max(0,Number(s.rate)||0):0}
 function lessonBillingStudentIds(l){
@@ -21,9 +70,9 @@ function lessonBillingStudentIds(l){
   return s.isGroupRoster?[...new Set(s.groupMemberIds||[])]:[l.studentId];
 }
 function lessonIncludesStudent(l,id){return lessonBillingStudentIds(l).includes(id)}
-function lessonStudentCharge(l,id){if(!lessonCountsForStudentCharge(l)||!lessonIncludesStudent(l,id))return 0;const s=student(id);return s.isGroupRoster||studentUsesMonthlyFee(s)?0:Math.max(0,Number(s.rate)||0)*hours(l.start,l.end)}
+function lessonStudentCharge(l,id){if(!lessonCountsForStudentCharge(l)||!lessonIncludesStudent(l,id))return 0;const s=studentPricingAt(id,l.date);return s.isGroupRoster||studentUsesMonthlyFee(s)?0:Math.max(0,Number(s.rate)||0)*hours(l.start,l.end)}
 function lessonCharge(l){return lessonBillingStudentIds(l).reduce((sum,id)=>sum+lessonStudentCharge(l,id),0)}
-function lessonChargeLabel(l){return studentUsesMonthlyFee(student(l?.studentId))?'安親月費制':money(lessonCharge(l))}
+function lessonChargeLabel(l){return studentUsesMonthlyFee(student(l?.studentId),l?.date)?'安親月費制':money(lessonCharge(l))}
 
 /* V17.25 — revenue is derived from actual teacher schedule rows, never from a headcount multiplier.
  * Every teacher assigned to a formal timetable lesson owns one independent revenue row.
@@ -75,7 +124,7 @@ function studentChargeableTutoringLessons(studentId,m,scope='all',sourceLessons=
   return (sourceLessons||db.lessons||[]).filter(l=>lessonCountsForStudentCharge(l)&&lessonIncludesStudent(l,studentId)&&l.date?.startsWith(m)&&!effectiveCampId(l)&&(scope==='all'||branchOf(l)===scope));
 }
 function studentMonthlyBillingData(studentId,m,scope='all',campSeason='all'){
-  const s=student(studentId),tutoringLessons=studentChargeableTutoringLessons(studentId,m,scope);
+  const s=studentPricingAt(studentId,m+'-01'),tutoringLessons=studentChargeableTutoringLessons(studentId,m,scope);
   const afterSchool=studentUsesMonthlyFee(s),afterSchoolLessons=afterSchool?tutoringLessons:[],groupLessons=afterSchool?[]:tutoringLessons.filter(l=>(l.groupStudentIds?.length||student(l.studentId).courseType==='團班')),privateLessons=afterSchool?[]:tutoringLessons.filter(l=>!(l.groupStudentIds?.length||student(l.studentId).courseType==='團班'));
   const privateHours=privateLessons.reduce((sum,l)=>sum+hours(l.start,l.end),0),privateAmount=privateLessons.reduce((sum,l)=>sum+lessonStudentCharge(l,studentId),0),groupHours=groupLessons.reduce((sum,l)=>sum+hours(l.start,l.end),0),groupAmount=groupLessons.reduce((sum,l)=>sum+lessonStudentCharge(l,studentId),0);
   const afterSchoolHours=afterSchoolLessons.reduce((sum,l)=>sum+hours(l.start,l.end),0),afterSchoolInScope=scope==='all'||studentMonthlyFeeBranch(studentId,m)===scope,afterSchoolAmount=afterSchoolInScope?studentMonthlyFlatFee(s):0,tutoringHours=afterSchool?afterSchoolHours:privateHours+groupHours,tutoringRate=+s.rate||0,tutoringAmount=afterSchoolAmount+privateAmount+groupAmount;
@@ -159,17 +208,21 @@ function billingParentName(value){return String(value||'').normalize('NFKC').rep
  * 舊的 lineSalutation 僅保留在歷史資料中，不再參與稱呼或家庭合併。 */
 function billingLineSalutation(studentId){return billingParentName(student(studentId)?.parent)||'家長'}
 function billingFamilyStudents(studentId){
-  const selected=student(studentId),parent=billingParentName(selected.parent);
+  const selected=student(studentId),parent=billingParentName(selected.parent),familyId=String(selected.billingFamilyId||'').trim();
   if(!parent)return[selected];
-  return(db.students||[]).filter(s=>!s.campSeason&&billingParentName(s.parent)===parent);
+  return(db.students||[]).filter(s=>!s.campSeason&&!s.isGroupRoster&&billingParentName(s.parent)===parent&&String(s.billingFamilyId||'').trim()===familyId);
 }
+function billingFamilyNeedsReview(studentId){const family=billingFamilyStudents(studentId);return family.length>1&&!String(student(studentId).billingFamilyId||'').trim()}
+function billingFamilyReviewSignature(studentId){return JSON.stringify(billingFamilyStudents(studentId).map(s=>[s.id,s.name,billingParentName(s.parent),String(s.billingFamilyId||'')]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))))}
 function billingLessonDateLabel(date){const[,month,day]=String(date||'').split('-').map(Number);return month&&day?`${month}/${day}`:String(date||'')}
 function billingLessonDateTimeLines(lessons){return[...lessons].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.start||'').localeCompare(String(b.start||''))).map(l=>`${billingLessonDateLabel(l.date)} ${l.start||'--:--'}–${l.end||'--:--'}（${billingNumber(hours(l.start,l.end))} 小時）`)}
 function billingLessonDayCount(lessons){return new Set(lessons.map(l=>l.date).filter(Boolean)).size}
-function billingTutoringSection(label,lessons,totalHours,rate,amount,subtotalLabel){
+function billingTutoringSection(label,lessons,totalHours,rate,amount,subtotalLabel,rateBreakdown=[]){
   if(!lessons.length)return[];
-  return[label,'上課日期與時間：',...billingLessonDateTimeLines(lessons).map(line=>`- ${line}`),`上課天數：${billingLessonDayCount(lessons)} 天`,`課程堂數：${lessons.length} 堂`,`總時數：${billingNumber(totalHours)} 小時`,`計算：${billingNumber(totalHours)} 小時 × ${money(rate)} = ${money(amount)}`,`${subtotalLabel}：${money(amount)}`,''];
+  const formula=rateBreakdown.length?rateBreakdown.map(row=>`${billingNumber(row.hours)} 小時 × ${money(row.rate)}`).join(' ＋ '):`${billingNumber(totalHours)} 小時 × ${money(rate)}`;
+  return[label,'上課日期與時間：',...billingLessonDateTimeLines(lessons).map(line=>`- ${line}`),`上課天數：${billingLessonDayCount(lessons)} 天`,`課程堂數：${lessons.length} 堂`,`總時數：${billingNumber(totalHours)} 小時`,`計算：${formula} = ${money(amount)}`,`${subtotalLabel}：${money(amount)}`,''];
 }
+function studentLessonRateBreakdown(lessons,studentId){const groups=new Map();for(const l of lessons){const rate=Math.max(0,Number(studentPricingAt(studentId,l.date).rate)||0),row=groups.get(rate)||{rate,hours:0};row.hours+=hours(l.start,l.end);groups.set(rate,row)}return [...groups.values()]}
 function studentBillingSections(d,includeName=false){
   const lines=[`學生：${d.student.name||'學生'}`];
   if(d.billingCategory==='after_school_monthly'){
@@ -177,8 +230,8 @@ function studentBillingSections(d,includeName=false){
     if(d.afterSchoolLessons.length)lines.push('本月排課（不影響月費）：',...billingLessonDateTimeLines(d.afterSchoolLessons).map(line=>`- ${line}`),`排課天數：${billingLessonDayCount(d.afterSchoolLessons)} 天`,`排課堂數：${d.afterSchoolLessons.length} 堂`,`排課時數：${billingNumber(d.afterSchoolHours)} 小時`);
     lines.push('');
   }
-  lines.push(...billingTutoringSection('一般家教',d.privateLessons,d.privateHours,d.tutoringRate,d.privateAmount,'家教小計'));
-  lines.push(...billingTutoringSection('團班費用',d.groupLessons,d.groupHours,d.tutoringRate,d.groupAmount,'團班小計'));
+  lines.push(...billingTutoringSection('一般家教',d.privateLessons,d.privateHours,d.tutoringRate,d.privateAmount,'家教小計',studentLessonRateBreakdown(d.privateLessons,d.student.id)));
+  lines.push(...billingTutoringSection('團班費用',d.groupLessons,d.groupHours,d.tutoringRate,d.groupAmount,'團班小計',studentLessonRateBreakdown(d.groupLessons,d.student.id)));
   if(d.campRows.length){['summer','winter'].forEach(season=>{const rows=d.campRows.filter(r=>campRegistrationSeason(r)===season);if(!rows.length)return;const rawDates=[...new Set(rows.flatMap(r=>r.dates||[]))].sort(),dates=rawDates.map(billingLessonDateLabel).join('、'),amount=rows.reduce((sum,r)=>sum+summerRegistrationTotal(r),0);lines.push(season==='winter'?'冬令營':'夏令營',`參加日期：${dates}`,`參加天數：${rawDates.length} 天`,billingCampFormula(rows),`小計：${money(amount)}`,'')})}
   return lines;
 }
@@ -218,9 +271,9 @@ function teacherCompanyRevenue(t,m,lessons){
 function lessonPartTimeTeacherRate(l,t){
   if(t?.type!=='兼職'||teacherPayrollMode(t)!=='hourly'||effectiveCampId(l))return null;
   // The timetable's student is the group container: never sum children's teacher rates.
-  return payrollNumber(student(l?.studentId)?.partTimeTeacherRate);
+  return payrollNumber(studentPricingAt(l?.studentId,l?.date)?.partTimeTeacherRate);
 }
-function lessonTeacherHourlyRate(l,tid){const t=teacher(tid);return lessonPartTimeTeacherRate(l,t)??(payrollNumber(t?.rate)??0)}
+function lessonTeacherHourlyRate(l,tid){const t=teacherPricingAt(tid,l?.date);return lessonPartTimeTeacherRate(l,t)??(payrollNumber(t?.rate)??0)}
 function lessonTeacherPay(l,tid){if(!lessonCountsForTeacherPay(l)||!lessonTeacherIds(l).includes(tid))return 0;const camp=effectiveCampId(l);if(camp){const idx=db.lessons.indexOf(l);/* 同一老師若同時掛在同營隊多個班，只計一次該時段；不同老師仍各自完整計薪。 */const duplicate=db.lessons.some((x,i)=>i<idx&&lessonCountsForTeacherPay(x)&&sameCampSlot(l,x)&&lessonTeacherIds(x).includes(tid));if(duplicate)return 0}return lessonTeacherHourlyRate(l,tid)*hours(l.start,l.end)}
 
 function lessonPay(l){return lessonTeacherIds(l).reduce((sum,id)=>sum+lessonTeacherPay(l,id),0)}
@@ -291,6 +344,7 @@ function teacherPayrollMode(t){
 }
 const TEACHER_PAYROLL_FORMULA_VERSION='teacher-payroll-v2-workday-leave';
 function calculateTeacherPayroll(t,m,paid){
+  t=teacherPricingAt(t,m+'-01');
   const rows=paid||teacherPaidLessons(t,m);
   const hourRows=teacherPayableHourLessons(t,rows);
   const actualHours=hourRows.reduce((a,l)=>a+hours(l.start,l.end),0);
@@ -328,21 +382,21 @@ function teacherPayrollFormulaText(result){
   return parts.join('；');
 }
 
-function teacherWeekBreakdown(t,m){const r=monthDateRange(m),daily=(+t.minWeeklyHours||0)/Math.max(1,(t.workDays||[]).length),paid=teacherPayableHourLessons(t,teacherPaidLessons(t,m)),rows=[];let cursor=new Date(r.start);cursor.setDate(cursor.getDate()-((cursor.getDay()+6)%7));while(cursor<=r.end){const ws=new Date(cursor),we=new Date(cursor);we.setDate(we.getDate()+6);const from=ws<r.start?r.start:ws,to=we>r.end?r.end:we,workCount=countTeacherWorkDaysInRange(t,from,to),expected=daily*workCount;const actual=paid.filter(l=>{const d=new Date(l.date+'T00:00:00');return d>=from&&d<=to}).reduce((a,l)=>a+hours(l.start,l.end),0);rows.push({from:localDate(from),to:localDate(to),expected,actual,diff:actual-expected});cursor.setDate(cursor.getDate()+7)}return rows}
+function teacherWeekBreakdown(t,m){t=teacherPricingAt(t,m+'-01');const r=monthDateRange(m),daily=(+t.minWeeklyHours||0)/Math.max(1,(t.workDays||[]).length),paid=teacherPayableHourLessons(t,teacherPaidLessons(t,m)),rows=[];let cursor=new Date(r.start);cursor.setDate(cursor.getDate()-((cursor.getDay()+6)%7));while(cursor<=r.end){const ws=new Date(cursor),we=new Date(cursor);we.setDate(we.getDate()+6);const from=ws<r.start?r.start:ws,to=we>r.end?r.end:we,workCount=countTeacherWorkDaysInRange(t,from,to),expected=daily*workCount;const actual=paid.filter(l=>{const d=new Date(l.date+'T00:00:00');return d>=from&&d<=to}).reduce((a,l)=>a+hours(l.start,l.end),0);rows.push({from:localDate(from),to:localDate(to),expected,actual,diff:actual-expected});cursor.setDate(cursor.getDate()+7)}return rows}
 
 function diffClass(n){return n<-.001?'hours-short':n>.001?'hours-over':'hours-even'}
 
 function diffText(n){return Math.abs(n)<.001?'剛好':n>0?`多 ${fmtHours(n)} hr`:`少 ${fmtHours(Math.abs(n))} hr`}
 
-function settleData(){const m=$('settleMonth').value||monthNow(),ls=db.lessons.filter(l=>!l.isDraft&&l.date.startsWith(m));const sr=db.students.map(s=>{const x=ls.filter(l=>lessonIncludesStudent(l,s.id)),billing=studentMonthlyBillingData(s.id,m),chargedLessons=billing.tutoringLessons,abs=x.filter(l=>['學生請假','老師請假','取消','停課'].includes(l.status)),lessonAmount=billing.tutoringAmount,campAmount=billing.campAmount;return{s,billingCategory:billing.billingCategory,total:x.length,charged:studentUsesMonthlyFee(s)?0:chargedLessons.length,h:chargedLessons.reduce((a,l)=>a+hours(l.start,l.end),0),abs:abs.length,rate:x.length?abs.length/x.length*100:0,lessonAmount,campAmount,amount:lessonAmount+campAmount}}).filter(x=>x.total||x.lessonAmount||x.campAmount||(studentUsesMonthlyFee(x.s)&&studentIsPresentForBilling(x.s)));const tr=db.teachers.filter(t=>teacherIncludedForMonth(t,m)).map(t=>{const paid=teacherPaidLessons(t,m),payroll=calculateTeacherPayroll(t,m,paid),weeks=teacherWeekBreakdown(t,m);return{t,count:paid.length,h:payroll.actualHours,expected:payroll.expectedHours,diff:payroll.diff,weeks,amount:payroll.amount,revenue:teacherCompanyRevenue(t,m,ls),payroll}});return{sr,tr}}
+function settleData(){const m=$('settleMonth').value||monthNow(),ls=db.lessons.filter(l=>!l.isDraft&&l.date.startsWith(m));const sr=db.students.map(s=>{const x=ls.filter(l=>lessonIncludesStudent(l,s.id)),billing=studentMonthlyBillingData(s.id,m),chargedLessons=billing.tutoringLessons,abs=x.filter(l=>['學生請假','老師請假','取消','停課'].includes(l.status)),lessonAmount=billing.tutoringAmount,campAmount=billing.campAmount;return{s:billing.student,billingCategory:billing.billingCategory,lessonIds:x.map(l=>l.id),total:x.length,charged:studentUsesMonthlyFee(s,m+'-01')?0:chargedLessons.length,h:chargedLessons.reduce((a,l)=>a+hours(l.start,l.end),0),abs:abs.length,rate:x.length?abs.length/x.length*100:0,lessonAmount,campAmount,amount:lessonAmount+campAmount}}).filter(x=>x.total||x.lessonAmount||x.campAmount||(studentUsesMonthlyFee(x.s)&&studentIsPresentForBilling(x.s)));const tr=db.teachers.filter(t=>teacherIncludedForMonth(t,m)).map(t=>{const paid=teacherPaidLessons(t,m),payroll=calculateTeacherPayroll(t,m,paid),weeks=teacherWeekBreakdown(payroll.teacher,m);return{t:payroll.teacher,count:paid.length,h:payroll.actualHours,expected:payroll.expectedHours,diff:payroll.diff,weeks,amount:payroll.amount,revenue:teacherCompanyRevenue(t,m,ls),payroll}});return{sr,tr}}
 
-function settlementSummaryTotals(studentRows){const rows=studentRows||[],totalLessons=rows.reduce((n,x)=>n+(+x.total||0),0),leaveCount=rows.reduce((n,x)=>n+(+x.abs||0),0);return{totalLessons,leaveCount,leaveRate:totalLessons?Math.min(100,leaveCount/totalLessons*100):0}}
+function settlementSummaryTotals(studentRows){const rows=studentRows||[],studentAttendances=rows.reduce((n,x)=>n+(+x.total||0),0),hasIds=rows.every(x=>Array.isArray(x.lessonIds)),totalLessons=hasIds?new Set(rows.flatMap(x=>x.lessonIds).filter(Boolean)).size:studentAttendances,leaveCount=rows.reduce((n,x)=>n+(+x.abs||0),0);return{totalLessons,studentAttendances,lessonCountBasis:hasIds?'unique-lesson-id':'legacy-student-attendances',leaveCount,leaveRate:studentAttendances?Math.min(100,leaveCount/studentAttendances*100):0}}
 
 function settlementSourceHash(value){const serialized=typeof value==='string'?value:JSON.stringify(value);let hash=2166136261;for(let i=0;i<serialized.length;i++){hash^=serialized.charCodeAt(i);hash=Math.imul(hash,16777619)}return`v1-${(hash>>>0).toString(16).padStart(8,'0')}`}
 function settlementSnapshotPayload(data){
   const sr=data?.sr||[],tr=data?.tr||[],lessons=data?.lessons||[];
-  const {totalLessons,leaveCount,leaveRate}=settlementSummaryTotals(sr);
-  const totals={totalLessons,totalHours:tr.reduce((n,x)=>n+(+x.h||0),0),totalRevenue:sr.reduce((n,x)=>n+(+x.amount||0),0),leaveCount,leaveRate,payroll:tr.reduce((n,x)=>n+(+x.amount||0),0)};
+  const {totalLessons,studentAttendances,lessonCountBasis,leaveCount,leaveRate}=settlementSummaryTotals(sr);
+  const totals={totalLessons,studentAttendances,lessonCountBasis,totalHours:tr.reduce((n,x)=>n+(+x.h||0),0),totalRevenue:sr.reduce((n,x)=>n+(+x.amount||0),0),leaveCount,leaveRate,payroll:tr.reduce((n,x)=>n+(+x.amount||0),0)};
   const source={
     lessons:lessons.map(l=>{const id=l.id||'',financialFields=[l.date||'',l.start||'',l.end||'',l.studentId||'',l.groupStudentIds||[],l.billingBranchId||'',lessonTeacherIds(l).slice().sort(),l.status||'',l.teacherReportStatus||'',l.chargeStudent||'',l.payTeacher||'',+l.price||0,+l.rate||0,!!l.isDraft];return{id,fingerprint:settlementSourceHash(financialFields)}}).sort((a,b)=>a.id.localeCompare(b.id)),
     students:sr.map(x=>({id:x.s?.id||'',billingCategory:x.billingCategory||studentBillingCategory(x.s),total:+x.total||0,charged:+x.charged||0,h:+x.h||0,abs:+x.abs||0,lessonAmount:+x.lessonAmount||0,campAmount:+x.campAmount||0,amount:+x.amount||0})).sort((a,b)=>a.id.localeCompare(b.id)),
@@ -367,7 +421,7 @@ function appendSettlementAdjustment(record,data,at=new Date().toISOString()){
   const delta={};for(const key of ['totalLessons','totalHours','totalRevenue','leaveCount','leaveRate','payroll'])delta[key]=(+current.totals[key]||0)-(+previous[key]||0);
   const previousSource=previousAdjustment?.currentSource||record.snapshot?.source||{lessons:[]},beforeIds=new Set((previousSource.lessons||[]).map(x=>`${x.id}:${JSON.stringify(x)}`)),afterIds=new Set((current.source.lessons||[]).map(x=>`${x.id}:${JSON.stringify(x)}`));
   const affectedLessonIds=[...new Set([...(previousSource.lessons||[]).filter(x=>!afterIds.has(`${x.id}:${JSON.stringify(x)}`)).map(x=>x.id),...(current.source.lessons||[]).filter(x=>!beforeIds.has(`${x.id}:${JSON.stringify(x)}`)).map(x=>x.id)])].filter(Boolean).sort();
-  adjustments.push({id:`adj-${record.id||record.month}-${at}-${current.sourceHash}`,createdAt:at,type:'post-lock-data-change',sourceHash:current.sourceHash,affectedLessonIds,previousTotals:{...previous},currentTotals:{...current.totals},currentSource:{lessons:current.source.lessons},delta});
+  adjustments.push({id:`adj-${record.id||record.month}-${at}-${current.sourceHash}`,createdAt:at,type:'post-lock-data-change',sourceHash:current.sourceHash,affectedLessonIds,previousTotals:{...previous},currentTotals:{...current.totals},currentSource:current.source,delta});
   record.locked=true;record.lockedAt=record.lockedAt||record.savedAt||at;record.adjustments=adjustments;return true;
 }
 

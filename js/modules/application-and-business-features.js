@@ -1,6 +1,6 @@
 let draftMode=false,db=loadDB(),dragState=null,touchTimer=null,historyStack=[],redoStack=[],selectionMode=false,selectedLessonIds=new Set(),batchPreviewCache=null,lessonClipboard=[],contextPasteTarget=null,marqueeState=null,pasteClickMode=false;
 const lessonTeacherConflictNamesWithoutCalendarCache=lessonTeacherConflictNames;
-lessonTeacherConflictNames=function(lesson){return calendarTeacherConflictCache instanceof Map?calendarTeacherConflictNames(lesson):lessonTeacherConflictNamesWithoutCalendarCache(lesson)};
+lessonTeacherConflictNames=function(lesson){return calendarTeacherConflictCache instanceof Map&&(!calendarTeacherConflictCacheRange||(lesson?.date>=calendarTeacherConflictCacheRange.start&&lesson?.date<=calendarTeacherConflictCacheRange.end))?calendarTeacherConflictNames(lesson):lessonTeacherConflictNamesWithoutCalendarCache(lesson)};
 const cloneHistoryValue=value=>typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value));
 function pushHistoryEntry(entry){historyStack.push(entry);if(historyStack.length>100)historyStack.shift();redoStack.length=0;updateUndoRedoButtons()}
 function snapshot(){const state=JSON.stringify(db);if(historyStack[historyStack.length-1]!==state)pushHistoryEntry(state)}
@@ -200,13 +200,25 @@ renderWeek=function(date,f){
   const startHours=visibleLessons.map(l=>Number(String(l.start||'08:00').slice(0,2))).filter(Number.isFinite);
   const endHours=visibleLessons.map(l=>{const[h,m]=String(l.end||'22:00').split(':').map(Number);return h+(m?1:0)}).filter(Number.isFinite);
   const startHour=Math.max(0,Math.min(8,...startHours)),endHour=Math.min(24,Math.max(22,...endHours)),totalSlots=(endHour-startHour)*12;
-  const canvas=$('calendarCanvas'),grid=canvas.firstElementChild,gridKey=JSON.stringify([localDate(mon),startHour,endHour,todayStr(),calendarOwnerCanEdit()]);
+  const canvas=$('calendarCanvas'),grid=canvas.firstElementChild,weekStart=localDate(mon),gridKey=JSON.stringify(['date-aware-v2',startHour,endHour,todayStr(),calendarOwnerCanEdit()]);
   const reuseGrid=grid?.classList.contains('week-grid-premium')&&canvas.dataset.weekGridKey===gridKey;
+  if(reuseGrid&&canvas.dataset.weekGridStart!==weekStart){
+    // Keep the expensive five-minute grid when navigating between weeks.
+    // Click/drop handlers must always read the cell's current date, not the
+    // date captured when the grid was first created.
+    const dates=days.map(localDate),today=todayStr();
+    for(const cell of grid.querySelectorAll(':scope > .time-slot')){
+      const ds=dates[Number(cell.style.gridColumnStart)-2];cell.dataset.date=ds;cell.classList.toggle('is-today',ds===today);
+    }
+    for(const [i,head]of [...grid.querySelectorAll(':scope > .week-head[data-date]')].entries()){
+      head.dataset.date=dates[i];head.classList.toggle('is-today',dates[i]===today);head.children[0].textContent=`${days[i].getMonth()+1}/${days[i].getDate()}`;head.children[1].textContent=`週${weekday(dates[i])}`;
+    }
+  }
   let h=reuseGrid?'':'<div class="week-grid week-grid-premium"><div class="week-head week-time-head" style="grid-column:1;grid-row:1">時間</div>'+days.map((d,i)=>{const ds=localDate(d),isToday=ds===todayStr();return `<div class="week-head${isToday?' is-today':''}" data-date="${ds}" style="grid-column:${i+2};grid-row:1"><span>${d.getMonth()+1}/${d.getDate()}</span><small>週${weekday(ds)}</small></div>`}).join('');
   for(let slot=0;!reuseGrid&&slot<totalSlots;slot++){
     const totalMin=startHour*60+slot*5,hr=Math.floor(totalMin/60),min=totalMin%60,time=`${String(hr).padStart(2,'0')}:${String(min).padStart(2,'0')}`,row=slot+2,isHour=min===0,isHalf=min===30;
     h+=`<div class="time-label ${isHour?'hour':isHalf?'half-hour':''}" style="grid-column:1;grid-row:${row}">${time}</div>`;
-    for(let i=0;i<days.length;i++){const ds=localDate(days[i]),lineClass=isHour?'full-hour':isHalf?'half-hour':'';h+=`<div class="time-slot ${lineClass}${ds===todayStr()?' is-today':''}" style="grid-column:${i+2};grid-row:${row}" data-date="${ds}" data-time="${time}" onclick="weekCellClick(event,'${ds}','${time}')"></div>`}
+    for(let i=0;i<days.length;i++){const ds=localDate(days[i]),lineClass=isHour?'full-hour':isHalf?'half-hour':'';h+=`<div class="time-slot ${lineClass}${ds===todayStr()?' is-today':''}" style="grid-column:${i+2};grid-row:${row}" data-date="${ds}" data-time="${time}" onclick="weekCellClick(event,this.dataset.date,this.dataset.time)"></div>`}
   }
   for(let i=0;i<days.length;i++){
     const ds=localDate(days[i]),lessons=visibleLessons.filter(l=>l.date===ds).sort((a,b)=>a.start.localeCompare(b.start));
@@ -217,12 +229,40 @@ renderWeek=function(date,f){
     }
   }
   if(reuseGrid){
-    // Keep the 1,000+ unchanged time cells and their drop listeners. Only
-    // lesson cards are replaced, preserving date/time semantics and scroll.
+    // Keep both the time cells and unchanged card nodes. Rendering a new
+    // selection or cloud confirmation must not destroy/rebind every card.
     const template=document.createElement('template');template.innerHTML=h;
-    grid.querySelectorAll(':scope > .week-event').forEach(el=>el.remove());grid.append(template.content);
+    const existing=new Map([...grid.querySelectorAll(':scope > .week-event')].map(el=>[el.dataset.id,el])),next=[...template.content.children],wanted=new Set(next.map(el=>el.dataset.id));
+    for(const [id,el]of existing)if(!wanted.has(id))el.remove();
+    let cursor=grid.querySelector(':scope > .week-event');
+    for(const fresh of next){
+      const old=existing.get(fresh.dataset.id),node=old||fresh;
+      if(old){
+        // Compare only presentation tokens owned by this renderer. Do not
+        // remove and immediately re-add the controller's selection/drag state.
+        for(const name of ['week-event','week-event--xl','week-event--long','lesson-draft','selected','teacher-overlap','calendar-search-hit'])old.classList.toggle(name,fresh.classList.contains(name));
+        if(canvas.dataset.calendarController==='3')fresh.setAttribute('draggable','false');
+        for(const name of ['title','draggable','data-id','data-duration'])if(old.getAttribute(name)!==fresh.getAttribute(name)){const value=fresh.getAttribute(name);if(value===null)old.removeAttribute(name);else old.setAttribute(name,value)}
+        // Time movement does not change inherited teacher/location variables.
+        // Avoid replacing cssText and invalidating all descendant styles.
+        for(const name of ['grid-column','grid-row','--teacher','--location-bg']){
+          const value=fresh.style.getPropertyValue(name),priority=fresh.style.getPropertyPriority(name);
+          if(old.style.getPropertyValue(name)!==value||old.style.getPropertyPriority(name)!==priority){if(value)old.style.setProperty(name,value,priority);else old.style.removeProperty(name)}
+        }
+        // Keep the time/name/meta nodes when just a lesson's time changes.
+        // Replacing the whole subtree forces every child through CSS again.
+        const a=old.children,b=fresh.children,head=a[0],nextHead=b[0];
+        if(a.length===2&&b.length===2&&head.tagName==='B'&&nextHead.tagName==='B'&&head.children.length===2&&nextHead.children.length===2&&[head,nextHead].every(el=>el.children[0].className==='week-event-time'&&el.children[1].className==='week-event-student')&&a[1].className==='week-event-meta'&&b[1].className==='week-event-meta'){
+          if(head.children[0].textContent!==nextHead.children[0].textContent)head.children[0].textContent=nextHead.children[0].textContent;
+          if(head.children[1].innerHTML!==nextHead.children[1].innerHTML)head.children[1].innerHTML=nextHead.children[1].innerHTML;
+          if(a[1].innerHTML!==b[1].innerHTML)a[1].innerHTML=b[1].innerHTML;
+        }else if(old.innerHTML!==fresh.innerHTML)old.innerHTML=fresh.innerHTML;
+      }
+      if(node===cursor)cursor=cursor.nextElementSibling;else grid.insertBefore(node,cursor);
+    }
   }else{canvas.innerHTML=h+'</div>';canvas.dataset.weekGridKey=gridKey}
-  $('calendarTitle').textContent=`${localDate(days[0])} ～ ${localDate(days[6])}｜每 5 分鐘一格（${String(startHour).padStart(2,'0')}:00–${String(endHour).padStart(2,'0')}:00）`;attachDragHandlers();
+  canvas.dataset.weekGridStart=weekStart;
+  const title=`${localDate(days[0])} ～ ${localDate(days[6])}｜每 5 分鐘一格（${String(startHour).padStart(2,'0')}:00–${String(endHour).padStart(2,'0')}:00）`;if($('calendarTitle').textContent!==title)$('calendarTitle').textContent=title;attachDragHandlers();
 };
 
 

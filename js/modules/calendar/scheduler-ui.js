@@ -128,10 +128,19 @@ function ensureTeacherCalendarMonth(){
   $('calendarDate').value=todayStr();
   document.body.dataset.teacherWeekInitialized='1';
 }
-let calendarAnalysisRenderHandle=null,calendarTeacherConflictCache=null;
+let calendarAnalysisRenderHandle=null,calendarTeacherConflictCache=null,calendarTeacherConflictCacheRange=null;
 function rebuildCalendarTeacherConflictCache(){
+  const date=new Date(($('calendarDate').value||todayStr())+'T00:00:00');
+  let range=null;
+  if(Number.isFinite(date.getTime())){
+    if($('calendarMode').value==='week')range=visibleCalendarRange();
+    else{
+      const first=new Date(date.getFullYear(),date.getMonth(),1),last=new Date(date.getFullYear(),date.getMonth()+1,0),offset=(first.getDay()+6)%7,total=Math.ceil((offset+last.getDate())/7)*7;
+      first.setDate(first.getDate()-offset);const end=new Date(first);end.setDate(first.getDate()+total-1);range={start:localDate(first),end:localDate(end)};
+    }
+  }
   const cache=new Map(),byDate=new Map();
-  for(const lesson of db.lessons||[]){if(!lessonBlocksScheduling(lesson))continue;const rows=byDate.get(lesson.date)||[];rows.push(lesson);byDate.set(lesson.date,rows)}
+  for(const lesson of db.lessons||[]){if(range&&(lesson.date<range.start||lesson.date>range.end))continue;if(!lessonBlocksScheduling(lesson))continue;const rows=byDate.get(lesson.date)||[];rows.push(lesson);byDate.set(lesson.date,rows)}
   for(const rows of byDate.values()){
     rows.sort((a,b)=>a.start.localeCompare(b.start)||a.end.localeCompare(b.end));
     for(let left=0;left<rows.length;left++){
@@ -148,6 +157,7 @@ function rebuildCalendarTeacherConflictCache(){
     }
   }
   calendarTeacherConflictCache=new Map([...cache].map(([id,names])=>[id,[...names]]));
+  calendarTeacherConflictCacheRange=range;
 }
 function calendarTeacherConflictNames(lesson){return calendarTeacherConflictCache?.get(lesson?.id)||[]}
 function scheduleCalendarAnalysisRender(){
@@ -268,17 +278,42 @@ function copySelectedLessons(){
   selectedLessonIds.clear();selectionMode=false;commitScheduleMutation('lesson.copy');
   toast(`已複製 ${added} 堂到 ${toMonth}${skipped?`，略過 ${skipped} 堂`:''}`);
 }
+function requestCalendarDeleteConfirmation(count){
+  if(document.getElementById('calendarDeleteConfirmation'))return Promise.resolve(false);
+  const message=`確定刪除已選取的 ${count} 堂課？`,dialog=document.createElement('dialog');
+  if(typeof dialog.showModal!=='function')return Promise.resolve(confirm(message));
+  dialog.id='calendarDeleteConfirmation';dialog.setAttribute('aria-labelledby','calendarDeleteTitle');
+  const title=document.createElement('h2'),body=document.createElement('p'),actions=document.createElement('div'),cancel=document.createElement('button'),remove=document.createElement('button');
+  title.id='calendarDeleteTitle';title.textContent='刪除課程';body.textContent=message;actions.className='calendar-delete-actions';
+  cancel.type=remove.type='button';cancel.textContent='取消';cancel.autofocus=true;remove.textContent=`刪除 ${count} 堂課`;remove.dataset.confirmDelete='true';
+  actions.append(cancel,remove);dialog.append(title,body,actions);const previousFocus=document.activeElement;
+  return new Promise(resolve=>{
+    let finished=false;
+    const finish=accepted=>{if(finished)return;finished=true;if(dialog.open)dialog.close();dialog.remove();if(previousFocus?.isConnected)previousFocus.focus({preventScroll:true});resolve(accepted)};
+    cancel.addEventListener('click',()=>finish(false));remove.addEventListener('click',()=>finish(true));
+    dialog.addEventListener('keydown',event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();finish(false)}});
+    dialog.addEventListener('cancel',event=>{event.preventDefault();finish(false)});dialog.addEventListener('close',()=>finish(false));
+    document.body.append(dialog);
+    try{dialog.showModal()}catch{finish(false)}
+  });
+}
 async function deleteSelectedLessons(){
   if(!calendarOwnerCanEdit())return alert('目前帳號沒有修改課表的權限。');
   const ids=[...selectedLessonIds];
   if(!ids.length)return alert('請先選取要刪除的課程。');
-  if(!confirm(`確定刪除已選取的 ${ids.length} 堂課？`))return;
+  const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
+  const signature=row=>JSON.stringify(stable(JSON.parse(JSON.stringify(row))));
+  const idSet=new Set(ids),beforeRows=db.lessons.filter(l=>idSet.has(l.id)),expected=new Map(beforeRows.map(row=>[row.id,signature(row)]));
+  if(expected.size!==ids.length)return toast('選取的課程已變更，請重新選取。');
+  if(!await requestCalendarDeleteConfirmation(ids.length))return;
+  if(!calendarOwnerCanEdit())return alert('目前帳號沒有修改課表的權限。');
+  const removed=db.lessons.filter(l=>idSet.has(l.id));
+  if(selectedLessonIds.size!==ids.length||ids.some(id=>!selectedLessonIds.has(id))||removed.length!==ids.length||removed.some(row=>signature(row)!==expected.get(row.id)))return toast('選取的課程已變更，未刪除任何課程，請重新選取。');
   const history=beginScheduleHistory(ids);
-  const idSet=new Set(ids),removed=db.lessons.filter(l=>idSet.has(l.id));
   removed.forEach(l=>{window.syncMakeupForDeletedLesson?.(l);logChange('刪除選取課程',null,l)});
   db.lessons=db.lessons.filter(l=>!idSet.has(l.id));
   finishScheduleHistory(history,ids);
-  selectedLessonIds.clear();selectionMode=false;commitScheduleMutation('lesson.delete');toast(`已刪除 ${removed.length} 堂課`);
+  selectedLessonIds.clear();selectionMode=false;updateSelectionCount();commitScheduleMutation('lesson.delete');toast(`已刪除 ${removed.length} 堂課`);
 }
 function cancelSelectionAndPaste(clearClipboard=false){
   selectedLessonIds.clear();
@@ -396,8 +431,12 @@ function contextPasteLessons(){
     timeDelta=toMin(contextPasteTarget.time)-toMin(first.start);
   }
   const history=beginScheduleHistory();
-  const keys=new Set(db.lessons.map(keyOf));
   const targetTeacherId=$('calendarTeacherFilter')?.value||'';
+  // Preserve the original conflict order, including copies added earlier in
+  // this paste, while skipping unrelated historical dates in the inner loop.
+  const targetDates=new Set(rows.map(old=>shiftDate(old.date,dateDelta))),conflictRows=db.lessons.filter(row=>targetDates.has(row.date));
+  // keyOf includes date: a record on another date cannot be an exact copy.
+  const keys=new Set(conflictRows.map(keyOf));
   let added=0,skipped=0,teacherWarnings=0;const createdIds=[];
   for(const old of rows){
     const targetDateStr=shiftDate(old.date,dateDelta);
@@ -405,9 +444,9 @@ function contextPasteLessons(){
     if(!ns||!ne){skipped++;continue}
     const targetTeacherIds=targetTeacherId?[targetTeacherId]:[...lessonTeacherIds(old)];
     const n=createFreshLessonCopy(old,{date:targetDateStr,start:ns,end:ne,teacherId:targetTeacherIds[0]||'',teacherIds:targetTeacherIds});
-    if(keys.has(keyOf(n))||conflictDetail(n,'')){skipped++;continue}
-    if(teacherConflictDetail(n,''))teacherWarnings++;
-    db.lessons.push(n);createdIds.push(n.id);keys.add(keyOf(n));logChange('依日期間距貼上課程',n,old);added++;
+    if(keys.has(keyOf(n))||conflictDetail(n,'',conflictRows)){skipped++;continue}
+    if(teacherConflictDetail(n,'',conflictRows))teacherWarnings++;
+    db.lessons.push(n);conflictRows.push(n);createdIds.push(n.id);keys.add(keyOf(n));logChange('依日期間距貼上課程',n,old);added++;
   }
   finishScheduleHistory(history,createdIds);
   hideCalendarContextMenu();exitSelectionAfterPaste();cancelPasteClickMode(true);commitScheduleMutation('lesson.copy');
@@ -425,6 +464,7 @@ function resolveKeyboardPasteTarget(){
 }
 function handleCalendarShortcuts(e){
   if(!calendarOwnerCanEdit())return;
+  if(document.getElementById('calendarDeleteConfirmation')?.open)return;
   const tag=(e.target?.tagName||'').toLowerCase();
   if(['input','textarea','select'].includes(tag)||e.target?.isContentEditable)return;
   if(e.key==='Escape'){
@@ -465,13 +505,19 @@ function handleCalendarShortcuts(e){
     contextPasteLessons();
   }
 }
+const calendarLessonBindings=new WeakMap();
 function attachDragHandlers(){
   /* iPad 與桌面一致：移動即拖曳；極小位移門檻只用來保留單點編輯。 */
   const DRAG_START_PX=3;
   const role=document.body.dataset.cloudRole||window.DanbridgeAccess?.getContext?.().role||window.currentCloudRole?.()||'';
   const canMove=calendarOwnerCanEdit();
   document.querySelectorAll('#calendarCanvas [data-id]').forEach(el=>{
-    el.setAttribute('draggable',canMove&&!selectionMode?'true':'false');
+    const draggable=$('calendarCanvas').dataset.calendarController==='3'?'false':canMove&&!selectionMode?'true':'false';
+    if(el.getAttribute('draggable')!==draggable)el.setAttribute('draggable',draggable);
+    const previousBinding=calendarLessonBindings.get(el);
+    if(previousBinding?.canMove===canMove)return;
+    previousBinding?.controller.abort();previousBinding?.cleanup();
+    const controller=new AbortController(),bind=(type,listener,options={})=>el.addEventListener(type,listener,{...options,signal:controller.signal});
     let pointerId=null,startX=0,startY=0,dragStarted=false,suppressClick=false,touchDragIds=[];
     let globalPointerCleanup=null;
     const removeGlobalPointerListeners=()=>{
@@ -484,7 +530,8 @@ function attachDragHandlers(){
       if(!dragStarted){dragState=null;document.body.classList.remove('touch-drag-active')}
       removeGlobalPointerListeners();
     };
-    el.addEventListener('click',e=>{
+    calendarLessonBindings.set(el,{canMove,controller,cleanup:()=>{if(pointerId!==null)try{el.releasePointerCapture(pointerId)}catch{}pointerId=null;dragStarted=false;touchDragIds=[];clearTouchDrag();document.body.classList.remove('touch-drag-active')}});
+    bind('click',e=>{
       e.stopPropagation();
       if(suppressClick){e.preventDefault();suppressClick=false;return}
       if(e.ctrlKey||e.metaKey){e.preventDefault();selectionMode=true;if($('selectionModeBtn'))$('selectionModeBtn').textContent='多選中';toggleLessonSelection(el.dataset.id);return}
@@ -493,9 +540,9 @@ function attachDragHandlers(){
     });
     if(!canMove)return;
     /* 即使目前正在多選也先綁定；複製退出多選後不必重畫就能立刻拖曳。 */
-    el.addEventListener('dragstart',e=>{if(selectionMode){e.preventDefault();return}dragState=el.dataset.id;el.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',dragState)});
-    el.addEventListener('dragend',()=>{el.classList.remove('dragging');dragState=null;document.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'))});
-    el.addEventListener('pointerdown',e=>{
+    bind('dragstart',e=>{if(selectionMode){e.preventDefault();return}dragState=el.dataset.id;el.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',dragState)});
+    bind('dragend',()=>{el.classList.remove('dragging');dragState=null;document.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'))});
+    bind('pointerdown',e=>{
       if(e.pointerType==='mouse'||(selectionMode&&!selectedLessonIds.has(el.dataset.id)))return;
       e.preventDefault();
       removeGlobalPointerListeners();
@@ -503,7 +550,7 @@ function attachDragHandlers(){
       touchDragIds=selectedLessonIds.has(el.dataset.id)?[...selectedLessonIds]:[el.dataset.id];
       try{el.setPointerCapture(pointerId)}catch{}
     },{passive:false});
-    el.addEventListener('pointermove',e=>{
+    bind('pointermove',e=>{
       if(pointerId!==e.pointerId)return;
       const moved=Math.hypot(e.clientX-startX,e.clientY-startY);
       if(!dragStarted&&moved>=DRAG_START_PX){
@@ -534,10 +581,10 @@ function attachDragHandlers(){
       dragState=null;dragStarted=false;pointerId=null;touchDragIds=[];suppressClick=true;
       removeGlobalPointerListeners();
     };
-    el.addEventListener('pointerup',finishPointer);
-    el.addEventListener('pointercancel',cancelPointer);
-    el.addEventListener('lostpointercapture',cancelPointer);
-    el.addEventListener('pointerdown',e=>{
+    bind('pointerup',finishPointer);
+    bind('pointercancel',cancelPointer);
+    bind('lostpointercapture',cancelPointer);
+    bind('pointerdown',e=>{
       if(e.pointerType==='mouse'||selectionMode||pointerId!==e.pointerId)return;
       const onGlobalUp=event=>finishPointer(event);
       const onGlobalCancel=event=>cancelPointer(event);

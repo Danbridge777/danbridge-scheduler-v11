@@ -29,5 +29,6 @@ test('隔離 AA 真實課表介面：新增後立即改日期再刪除，延遲�
  await page.locator('#calendarCanvas [data-id]:visible').first().click();await expect(page.locator('#lessonModal')).toHaveClass(/show/);await page.locator('#lessonDate').fill('2026-10-02');await page.getByRole('button',{name:'儲存課程',exact:true}).click();
  await expect(page.locator('#v181LessonDiffConfirm')).toHaveClass(/show/);await page.locator('#v181LessonDiffConfirm').getByRole('button',{name:'確認儲存',exact:true}).click();await expect(page.locator('#v181LessonDiffConfirm')).toHaveCount(0);
  await page.locator('#calendarCanvas [data-id]:visible').first().click();await expect(page.locator('#lessonModal')).toHaveClass(/show/);await page.locator('#modalDeleteBtn').click();
+ await page.getByRole('dialog',{name:'確認刪除課程',exact:true}).getByRole('button',{name:'確認刪除',exact:true}).click();
  await expect(page.locator('#fixture-queue-state')).toHaveText('complete');await expect(page.locator('body')).toHaveAttribute('data-server-lesson-count','0');await expect(page.locator('#calendarCanvas [data-id]')).toHaveCount(0);expect(unexpectedDialogs).toEqual([]);
 });

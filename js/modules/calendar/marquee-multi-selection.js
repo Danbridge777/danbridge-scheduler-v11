@@ -24,13 +24,13 @@
     cards().forEach(card=>{
       card.classList.toggle('selected',selectedLessonIds.has(card.dataset.id));
       card.classList.toggle('selectable',selecting);
-      card.classList.remove('marquee-hit');
-      card.draggable=false;
+      if(card.classList.contains('marquee-hit'))card.classList.remove('marquee-hit');
+      if(card.getAttribute('draggable')!=='false')card.draggable=false;
     });
   }
 
   function refreshRenderedInteractions(){
-    /* 課表重繪會建立全新的卡片；先恢復 iPad 長按拖曳，再同步桌面多選外觀。 */
+    /* New cards bind once; retained cards keep touch handlers and selection. */
     bindCardDragHandlers?.();
     refresh();
   }

@@ -3,6 +3,7 @@ const {test,expect}=require('@playwright/test');
 const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
 
 test.beforeEach(async({page})=>{
+  page.on('dialog',async dialog=>{if(dialog.type()==='confirm'&&dialog.message().includes('同名家長'))await dialog.accept();else await dialog.dismiss()});
   await isolateApplicationAuth(page);
   await page.goto('/index.html',{waitUntil:'domcontentloaded'});
   await page.addStyleTag({content:'#authScreen{display:none!important;pointer-events:none!important}'});
@@ -26,7 +27,7 @@ test.beforeEach(async({page})=>{
 
 async function showCollections(page){
   await page.getByRole('button',{name:'學生收款 應收與請假',exact:true}).click();
-  await page.locator('.v181-student-details > summary').click();
+  await page.locator('.v181-student-details > summary').filter({hasText:'查看全部學生'}).click();
 }
 
 test('收款後總覽不再依課程未繳旗標顯示錯誤欠款',async({page})=>{
@@ -92,17 +93,20 @@ test('實際勾選手足家庭並標記已收款，應儲存一次正確家庭�
   expect(result.saves).toBe(1);
 });
 
-test('LINE 複製成功後通知紀錄也必須完整儲存，不可只有時間戳',async({page})=>{
+test('LINE 複製記錄家庭與月份，但不冒充已發送或已收款',async({page})=>{
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__auditCopied=text}}}));
   await showCollections(page);
   await page.locator('#studentSettleRows tr').filter({hasText:'王家長'}).filter({hasText:'同名孩子'}).locator('.line-billing-btn').click();
+  await page.locator('#lineFamilyReviewConfirmed').check();
   await page.locator('#v181LineBillingPreview').getByRole('button',{name:'確認複製',exact:true}).click();
   const result=await page.evaluate(()=>({records:db.collectionRecords,saves:window.__auditSaveCalls||0,copied:window.__auditCopied}));
   await test.info().attach('copy-followup-record',{body:JSON.stringify({errors,...result}),contentType:'application/json'});
   expect(result.copied).toContain('9月共計：NT$1,500');
   expect.soft(errors).toEqual([]);
-  expect.soft(result.records[0]).toMatchObject({studentIds:['a','c'],amount:1500,status:'notified'});
+  expect.soft(result.records[0]).toMatchObject({studentIds:['a','c'],month:'2026-09',amount:0,status:'pending',notifiedAt:''});
+  expect(result.records[0].copiedAt).toBeTruthy();
+  expect(await page.evaluate(()=>studentUnpaidTuitionRevenue('2026-09'))).toBe(2700);
   expect(result.saves).toBe(1);
 });
 

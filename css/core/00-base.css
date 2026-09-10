@@ -43,6 +43,9 @@
 
 /* V10 登入與安全設定 */
 .auth-locked>header,.auth-locked>nav,.auth-locked>main,.auth-locked>.floating-actions,.auth-locked>.toast{display:none!important}
+/* Fail closed before the asynchronous authentication module has loaded, including
+ * drawers appended after startup. Cached private content is not a login screen. */
+body.auth-locked>:not(#authScreen):not(script):not(style):not(link){display:none!important}
 .auth-screen{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,#0f3f6e,#1768aa)}
 .auth-screen.hidden{display:none}.auth-card{width:min(440px,100%);background:#fff;border-radius:22px;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,.3)}
 .auth-card h1{margin:0 0 6px;font-size:25px}.auth-card p{margin:0 0 18px;color:var(--muted)}

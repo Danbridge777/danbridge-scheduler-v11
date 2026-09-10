@@ -123,11 +123,11 @@ function lessonBlocksScheduling(l){
   return !inactive.has(status)&&!inactive.has(state)&&state!=='draft';
 }
 
-function teacherConflictDetail(o,ignore=''){
+function teacherConflictDetail(o,ignore='',rows=db.lessons){
   if(!lessonBlocksScheduling(o))return null;
   const ignored=new Set(Array.isArray(ignore)?ignore:[ignore].filter(Boolean));
   const oTeachers=new Set(lessonTeacherIds(o));
-  for(const l of db.lessons){
+  for(const l of rows){
     // Reject unrelated dates/times before allocating status/teacher sets.
     // The same conflict predicates still run for every overlapping lesson.
     if(ignored.has(l.id)||l.date!==o.date||!(o.start<l.end&&o.end>l.start)||!lessonBlocksScheduling(l))continue;
@@ -150,10 +150,10 @@ function lessonTeacherConflictNames(l){
 
 function hasTeacherOverlap(l){return lessonTeacherConflictNames(l).length>0}
 
-function conflictDetail(o,ignore=''){
+function conflictDetail(o,ignore='',rows=db.lessons){
   if(!lessonBlocksScheduling(o))return null;
   const ignored=new Set(Array.isArray(ignore)?ignore:[ignore].filter(Boolean));
-  for(const l of db.lessons){
+  for(const l of rows){
     if(ignored.has(l.id)||l.date!==o.date||!(o.start<l.end&&o.end>l.start)||!lessonBlocksScheduling(l))continue;
     // 老師重疊改為警告，不阻止儲存；學生與教室規則維持原樣。
     if((o.groupStudentIds?.length?o.groupStudentIds:[o.studentId]).some(id=>(l.groupStudentIds?.length?l.groupStudentIds:[l.studentId]).includes(id))&&(o.groupStudentIds?.length||l.groupStudentIds?.length||!isGroupStudentId(o.studentId)))return{type:'學生',name:student(l.studentId).name||'未命名學生',lesson:l};
@@ -162,9 +162,55 @@ function conflictDetail(o,ignore=''){
   return null;
 }
 
-function hasConflict(o,ignore=''){const c=conflictDetail(o,ignore);return c?c.type:''}
+function hasConflict(o,ignore='',rows=db.lessons){const c=conflictDetail(o,ignore,rows);return c?c.type:''}
 
-function deleteCurrentLesson(){const id=$('lessonId').value;if(id&&confirm('確定刪除這堂課？')){const history=beginScheduleHistory([id]);const old=db.lessons.find(x=>x.id===id);window.syncMakeupForDeletedLesson?.(old);db.lessons=db.lessons.filter(x=>x.id!==id);if(old)logChange('刪除課程',null,old);finishScheduleHistory(history,[id]);closeLessonModal();commitScheduleMutation('lesson.delete')}}
+function deleteCurrentLesson(){
+ if(deleteCurrentLesson.pending)return;
+ const allowed=()=>!document.body.classList.contains('auth-locked')&&window.calendarOwnerCanEdit?.()===true&&window.DanbridgeAccess?.getContext?.().readOnly!==true;
+ const id=$('lessonId').value,old=db.lessons.find(x=>x.id===id);
+ if(!id||!old||!allowed())return;
+ const original=JSON.stringify(old);
+ deleteCurrentLesson.pending=true;
+ return (async()=>{
+  try{
+   if(!await confirmCurrentLessonDeletion(old))return;
+   // The dialog does not block cloud listeners. Recheck the identity, data,
+   // permission and active editor before applying this destructive intent.
+   const current=db.lessons.find(x=>x.id===id);
+   if(!allowed()||$('lessonId').value!==id||!$('lessonModal').classList.contains('show')||!current||JSON.stringify(current)!==original){
+    window.toast?.('課程或權限已變更，未刪除；請重新核對。');return;
+   }
+   const history=beginScheduleHistory([id]);
+   window.syncMakeupForDeletedLesson?.(current);
+   db.lessons=db.lessons.filter(x=>x.id!==id);
+   logChange('刪除課程',null,current);finishScheduleHistory(history,[id]);
+   closeLessonModal();commitScheduleMutation('lesson.delete');
+  }finally{deleteCurrentLesson.pending=false}
+ })();
+}
+function confirmCurrentLessonDeletion(lesson){
+ return new Promise(resolve=>{
+  const previousFocus=document.activeElement,backdrop=document.createElement('div'),panel=document.createElement('div');
+  backdrop.id='lessonDeleteConfirmation';backdrop.className='modal-backdrop show';backdrop.style.zIndex='5200';
+  backdrop.setAttribute('role','dialog');backdrop.setAttribute('aria-modal','true');backdrop.setAttribute('aria-labelledby','lessonDeleteConfirmationTitle');
+  panel.className='modal';panel.style.cssText='width:520px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);overflow:auto;box-sizing:border-box;overflow-wrap:anywhere';
+  const title=document.createElement('h2');title.id='lessonDeleteConfirmationTitle';title.textContent='確認刪除課程';
+  const description=document.createElement('p');description.textContent=`${student(lesson.studentId).name||'課程'}｜${lesson.date} ${lesson.start}–${lesson.end}`;
+  const actions=document.createElement('div');actions.className='row-actions';
+  const cancel=document.createElement('button'),approve=document.createElement('button');
+  cancel.type=approve.type='button';cancel.className='btn';approve.className='btn danger';cancel.textContent='取消';approve.textContent='確認刪除';
+  actions.append(cancel,approve);panel.append(title,description,actions);backdrop.append(panel);document.body.append(backdrop);
+  let settled=false;
+  const finish=value=>{if(settled)return;settled=true;document.removeEventListener('keydown',onKey,true);backdrop.remove();if(previousFocus?.isConnected)previousFocus.focus();resolve(value)};
+  const onKey=event=>{
+   if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();finish(false)}
+   else if(event.key==='Tab'){event.preventDefault();(document.activeElement===cancel?approve:cancel).focus()}
+  };
+  cancel.addEventListener('click',()=>finish(false));approve.addEventListener('click',()=>finish(true));
+  backdrop.addEventListener('click',event=>{if(event.target===backdrop)finish(false)});
+  document.addEventListener('keydown',onKey,true);cancel.focus();
+ });
+}
 
 let activeCourseDrawerId='';
 
@@ -251,8 +297,10 @@ function moveLessonsTo(ids,anchorId,date,time=''){
   const dayDelta=Math.round((new Date(date+'T00:00:00')-new Date(anchor.date+'T00:00:00'))/86400000),toMinutes=value=>{const[h,m]=String(value||'').split(':').map(Number);return h*60+m},timeDelta=time?toMinutes(time)-toMinutes(anchor.start):0;
   const candidates=rows.map(old=>({...old,date:shiftDate(old.date,dayDelta),start:shiftTime(old.start,timeDelta),end:shiftTime(old.end,timeDelta)})),candidateById=new Map(candidates.map(row=>[row.id,row])),originalLessons=db.lessons;
   if(candidates.some(row=>!row.start||!row.end)){finishCalendarMoveInteraction();return alert('整批拖曳後有課程超出當日時間範圍，已取消。')}
-  db.lessons=originalLessons.filter(l=>!idSet.has(l.id));let blocking=null,teacherWarnings=0;
-  try{for(const candidate of candidates){const conflict=conflictDetail(candidate,'');if(conflict){blocking={candidate,conflict};break}if(teacherConflictDetail(candidate,''))teacherWarnings++}}finally{db.lessons=originalLessons}
+  // Retain the original conflict order, but scan unrelated historical dates
+  // only once. Never replace the shared DB while inspecting a proposed move.
+  const targetDates=new Set(candidates.map(row=>row.date)),conflictRows=originalLessons.filter(row=>!idSet.has(row.id)&&targetDates.has(row.date));let blocking=null,teacherWarnings=0;
+  for(const candidate of candidates){const conflict=conflictDetail(candidate,'',conflictRows);if(conflict){blocking={candidate,conflict};break}if(teacherConflictDetail(candidate,'',conflictRows))teacherWarnings++}
   if(blocking){finishCalendarMoveInteraction();return alert(`整批拖曳後會造成${blocking.conflict.type}撞課：${blocking.conflict.name}\n${blocking.conflict.lesson.date} ${blocking.conflict.lesson.start}–${blocking.conflict.lesson.end}，已取消。`)}
   if(teacherWarnings&&!confirm(`整批拖曳後有 ${teacherWarnings} 堂老師時間重複。\n仍要移動嗎？重複課程會顯示亮紅色。`)){finishCalendarMoveInteraction();return}
   const history=beginScheduleHistory(ids);for(const old of rows){const before={...old};Object.assign(old,candidateById.get(old.id));logChange('批次移動課程',old,before)}

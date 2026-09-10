@@ -80,14 +80,14 @@
     if(language==='en'){
       if(stored!==undefined&&current===translateExact(stored))return;
       originals.set(node,current);const next=translateExact(current);if(next!==current)node.nodeValue=next;
-    }else if(stored!==undefined){node.nodeValue=stored;originals.delete(node)}
+    }else if(stored!==undefined){if(node.nodeValue!==stored)node.nodeValue=stored;originals.delete(node)}
   }
   function translateAttributes(el){
-    if(!(el instanceof Element))return;let saved=attrOriginals.get(el);if(!saved){saved={};attrOriginals.set(el,saved)}
+    if(!(el instanceof Element))return;let saved=attrOriginals.get(el);if(!saved){if(language!=='en')return;saved={};attrOriginals.set(el,saved)}
     for(const attr of ['placeholder','title','aria-label']){
       const current=el.getAttribute(attr);if(current===null)continue;
       if(language==='en'){if(saved[attr]!==undefined&&current===translateExact(saved[attr]))continue;saved[attr]=current;const next=translateExact(current);if(next!==current)el.setAttribute(attr,next)}
-      else if(saved[attr]!==undefined){el.setAttribute(attr,saved[attr]);delete saved[attr]}
+      else if(saved[attr]!==undefined){if(current!==saved[attr])el.setAttribute(attr,saved[attr]);delete saved[attr]}
     }
   }
   function walk(root=document.body){
@@ -96,14 +96,17 @@
       const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);while(walker.nextNode())translateNode(walker.currentNode);
       if(root.querySelectorAll)root.querySelectorAll('*').forEach(translateAttributes);
     }
-    document.documentElement.lang=language==='en'?'en':'zh-Hant';updateButton();applying=false;
+    // Setting the same lang again still invalidates inherited language styles
+    // throughout the document. A calendar render can invoke walk many times;
+    // only an actual language change may invalidate the entire timetable.
+    const lang=language==='en'?'en':'zh-Hant';if(document.documentElement.lang!==lang)document.documentElement.lang=lang;updateButton();applying=false;
   }
-  function updateButton(){const b=document.getElementById('danbridgeLanguageToggle');if(!b)return;b.textContent=language==='en'?'中文':'EN';b.title=language==='en'?'切換為中文':'Switch to English';b.setAttribute('aria-label',b.title)}
+  function updateButton(){const b=document.getElementById('danbridgeLanguageToggle');if(!b)return;const text=language==='en'?'中文':'EN',title=language==='en'?'切換為中文':'Switch to English';if(b.textContent!==text)b.textContent=text;if(b.title!==title)b.title=title;if(b.getAttribute('aria-label')!==title)b.setAttribute('aria-label',title)}
   function setLanguage(next){language=next==='en'?'en':'zh';localStorage.setItem(KEY,language);walk()}
   function toggle(){setLanguage(language==='en'?'zh':'en')}
   function install(){
     const b=document.createElement('button');b.type='button';b.id='danbridgeLanguageToggle';b.className='danbridge-language-toggle';b.onclick=toggle;
-    const mountButton=()=>{const target=document.querySelector('header .header-auth-actions');if(target){b.classList.remove('is-floating');if(b.parentElement!==target)target.appendChild(b)}else{b.classList.add('is-floating');if(!b.isConnected)document.body.appendChild(b)}};mountButton();updateButton();
+    const mountButton=()=>{const target=document.querySelector('header .header-auth-actions');if(target){if(b.classList.contains('is-floating'))b.classList.remove('is-floating');if(b.parentElement!==target)target.appendChild(b)}else{if(!b.classList.contains('is-floating'))b.classList.add('is-floating');if(!b.isConnected)document.body.appendChild(b)}};mountButton();updateButton();
     const observer=new MutationObserver(records=>{if(applying)return;for(const r of records){if(r.type==='characterData')translateNode(r.target);else r.addedNodes.forEach(n=>{if(n.nodeType===Node.TEXT_NODE)translateNode(n);else if(n.nodeType===Node.ELEMENT_NODE)walk(n)})}mountButton()});observer.observe(document.body,{subtree:true,childList:true,characterData:true});
     if(language==='en')walk();
   }

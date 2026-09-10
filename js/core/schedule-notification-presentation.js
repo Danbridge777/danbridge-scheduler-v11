@@ -42,6 +42,11 @@ export function createScheduleNotificationPresenter({document,button,render,getA
  const open=()=>{cancel();show(notifications)};
  button.addEventListener('click',open);
  return{
+  deferCurrent(){
+   // Local presentation only: keep every unread server record and its badge.
+   // A later, genuinely new notification remains eligible for automatic display.
+   cancel();notifications.forEach(item=>{if(item?.id)seen.add(item.id)});
+  },
   update(items){
    if(stopped)return;
    notifications=[...items];

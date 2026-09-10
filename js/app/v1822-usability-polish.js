@@ -83,6 +83,10 @@
     })).observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
   }
 
-  function init(){installKeyboardConvenience();installSectionMemory();installNavigationVisibility();observeModals()}
+  // Bind keys before a user can reach the first interaction. Layout/section
+  // wrappers may wait for the other modules; keyboard input must not be lost
+  // during that 160 ms installation window.
+  installKeyboardConvenience();
+  function init(){installSectionMemory();installNavigationVisibility();observeModals()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(init,160),{once:true});else setTimeout(init,160);
 })();
