@@ -1,5 +1,5 @@
-import {prepareCanonicalRecordPlan,prepareRecordPlanOffThread} from './cloud-record-plan-executor.js?v=20.26.310';
-import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.310';
+import {prepareCanonicalRecordPlan,prepareRecordPlanOffThread} from './cloud-record-plan-executor.js?v=20.26.311';
+import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.311';
 
 const clone=value=>typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value));
 const revisionConflict=value=>/revision\s*衝突|revision conflict/i.test(String(value||''));
@@ -13,10 +13,11 @@ export async function runActiveRecordSync({journal,readDocuments,send,persistCon
   const started=monotonicNow();
   const trusted=!replace&&trustedDocuments&&verifiedRemote;
   const documents=trusted?trustedDocuments:await readDocuments({force:replace,preferCache:!replace,reason}),options={documentsByCollection:documents,baselineDb,localDb,environment,deviceId,activationEpoch,startSequence:sequence,changedCollections,appendOnlyChangesCount:trusted?appendOnlyChangesCount:0,...(trusted?{authoritativeSourceHash:verifiedRemote.hash,verifiedRemote}:{})};
-  // Isolated acceptance only. Journal ordering, conflict persistence and
-  // trusted server receipts stay in this existing runtime, outside the worker.
+  // Production planning is pure CPU work, independent of the transport gate.
+  // Keep journal ordering, conflict persistence, batch limits and trusted
+  // server receipts in this runtime. Legacy transport also uses the worker.
   const readFinished=monotonicNow();
-  const plan=await (publishedOwnerBatch?prepareRecordPlanOffThread(options,{reuseWorker:true}):prepareCanonicalRecordPlan(options));sequence=plan.nextSequence;
+  const plan=await (environment==='production'?prepareRecordPlanOffThread(options,{reuseWorker:true}):prepareCanonicalRecordPlan(options));sequence=plan.nextSequence;
   const planFinished=monotonicNow();
   let backup=null;if(plan.conflicts.length){if(typeof persistConflicts!=='function')throw new Error('偵測到同筆衝突但缺少不可變備份介面');backup=await persistConflicts(clone(plan.conflicts),{environment,activationEpoch,deviceId,baseHash:plan.baseHash,targetHash:plan.targetHash});if(!backup)throw new Error('同筆衝突備份未完成');conflictBackups.push(clone(backup))}
   const backupFinished=monotonicNow();
