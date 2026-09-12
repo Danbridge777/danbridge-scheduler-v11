@@ -12,8 +12,9 @@ export function transitionSafety(current,mode,at){
  assertProductionRecordRuntimeSafety(current,{activationEpoch:current.activationEpoch});
  if(!['pause','resume'].includes(mode)||current.state!==(mode==='pause'?'active':'paused')||!Number.isFinite(Date.parse(at)))throw Error('Unexpected safety transition');
  const next={...current,state:mode==='pause'?'paused':'active',writeAllowed:mode!=='pause',revision:current.revision+1,previousEventHash:current.lastEventHash,updatedAt:at};
- for(const key of ['lastEventHash','persistedAt','activatedBy','activatedByEmail','updatedBy','updatedByEmail'])delete next[key];
- next.lastEventHash=sha256Canonical(next);
+ const core={...next};
+ for(const key of ['lastEventHash','persistedAt','activatedBy','activatedByEmail','updatedBy','updatedByEmail'])delete core[key];
+ next.lastEventHash=sha256Canonical(core);
  assertProductionRecordRuntimeSafety(next,{activationEpoch:current.activationEpoch});return next;
 }
 async function main(){
