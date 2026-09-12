@@ -1,4 +1,4 @@
-import {createShardedSnapshot,assembleShardedSnapshot,SHARDED_DB_COLLECTION_KEYS} from './cloud-sharded-store.js?v=20.26.307';
+import {createShardedSnapshot,assembleShardedSnapshot,SHARDED_DB_COLLECTION_KEYS} from './cloud-sharded-store.js?v=20.26.309';
 
 export const IMMUTABLE_MIGRATION_BACKUP_SCHEMA='danbridge-immutable-migration-backup-v2';
 export const IMMUTABLE_MIGRATION_BACKUP_CHUNK_SCHEMA='danbridge-immutable-migration-backup-chunk-v2';

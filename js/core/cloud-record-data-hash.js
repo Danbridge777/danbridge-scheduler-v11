@@ -1,4 +1,4 @@
-import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.307';
+import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.309';
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 
 
