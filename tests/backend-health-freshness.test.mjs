@@ -14,3 +14,9 @@ test('daily health result preserves timestamp and explicitly expires after 36 ho
  const stale=a.backendHealthFreshness(snapshot(now-36*3600000-1),now);assert.equal(stale.state,'stale');assert.equal(stale.checkedAt,new Date(now-36*3600000-1).toISOString());
  assert.match(source,/上次檢查：/);assert.match(source,/不能代表目前狀態/);
 });
+test('frequent health refresh expires after its bounded 45-minute freshness window',()=>{
+ const health={...snapshot(now-45*60000),maxAgeMs:45*60000};assert.equal(a.backendHealthFreshness(health,now).state,'current');
+ assert.equal(a.backendHealthFreshness(health,now+1).state,'stale');
+ for(const maxAgeMs of [0,-1,Infinity,'2700000',37*3600000])assert.equal(a.backendHealthFreshness({...snapshot(now),maxAgeMs},now).state,'invalid');
+ assert.match(source,/Owner 未讀通知/);
+});

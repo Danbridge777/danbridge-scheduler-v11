@@ -10,9 +10,11 @@ const {buildNotificationDeliveryProofs}=require('./production-notification-deliv
 // identities. Buffer their writes so the authority, permissions, projections,
 // notifications and success receipt can be committed by ONE native transaction.
 // This runtime is server-gated; constructing it never changes any cloud state.
-async function createPublishedOwnerRuntime({firestore,serverTimestamp,deleteField,primaryOwnerEmail,release,now=()=>Date.now(),onTiming=()=>{},preserveLegacyViews=false}){
+async function createPublishedOwnerRuntime({firestore,serverTimestamp,deleteField,primaryOwnerEmail,release,now=()=>Date.now(),onTiming=()=>{},preserveLegacyViews=false,historyVersionCache=false}){
  if(!firestore||[serverTimestamp,deleteField,now].some(f=>typeof f!=='function')||!/^\d+\.\d+\.\d+$/.test(release||''))throw Error('Invalid Owner publication dependencies');
  if(typeof preserveLegacyViews!=='boolean')throw Error('Invalid Owner legacy compatibility mode');
+ if(typeof historyVersionCache!=='boolean')throw Error('Invalid history version cache configuration');
+ const historyReader=historyVersionCache?require('./transaction-history-version-reader.cjs').createTransactionHistoryVersionReader():null;
  const [full,controlPolicy,contract,adapters,projection,notificationPolicy]=await Promise.all([
   import('../js/core/cloud-full-record-shadow.js'),import('../js/core/cloud-production-record-runtime.js'),import('../js/core/production-trusted-operation-contract.js'),
   import('../js/core/firebase-production-record-runtime-adapter.js'),import('../js/core/production-role-view-projection.js'),import('../js/core/production-notification-policy.js')
@@ -51,7 +53,7 @@ async function createPublishedOwnerRuntime({firestore,serverTimestamp,deleteFiel
      transaction.get(firestore.collection('companyAccess').where('companyId','==','danbridge')),transaction.get(firestore.doc(receiptPath)),
      transaction.get(firestore.collection('companies/danbridge/teacherViews')),transaction.get(firestore.collection('companies/danbridge/schedulerViews')),
      transaction.get(firestore.collection('companies/danbridge/lessonMeta')),
-     ...FULL_RECORD_COLLECTIONS.map(k=>transaction.get(firestore.collection(`${recordPrefix}${k}/records`)))
+     ...FULL_RECORD_COLLECTIONS.map(k=>{const q=firestore.collection(`${recordPrefix}${k}/records`);return k==='changes'&&historyReader?historyReader.read(transaction,q):transaction.get(q)})
     ]);
     mark('authority-read');
     const accessRows=access.docs.map(row=>({...row.data(),email:row.id.toLowerCase()})),member=accessRows.find(row=>row.email===email);

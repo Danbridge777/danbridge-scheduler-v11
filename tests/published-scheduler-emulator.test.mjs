@@ -31,7 +31,7 @@ for(const preserveLegacyViews of [false,true])test(`native Firestore: 40-command
  const control=buildProductionRecordRuntimeControl({activationEpoch:'published-scheduler-isolated-277',legacyVersionHash:'seed:1',recordDataHash:recordDataHash(source),sourceSha256:'a'.repeat(64),documentCount:403,activeCount:403,tombstoneCount:0,roleViewDigest:'b'.repeat(64),rollbackChannel:'emulator-only',activatedAt:'2026-09-11T00:00:00.000Z'});
  try{
   const seed=firestore.batch();seed.set(firestore.doc(PRODUCTION_RECORD_CONTROL_PATH),control);seed.set(firestore.doc(PRODUCTION_RECORD_SAFETY_PATH),buildProductionRecordRuntimeSafety({control,updatedAt:control.activatedAt}));for(const m of members)seed.set(firestore.doc('companyAccess/'+m.email),m);for(const op of buildFullRecordShadowPlan(empty(),source,{environment:'production',sourceHash:'seed'}).operations)seed.set(firestore.doc(op.path),op.payload);await seed.commit();
-  const phases=[];const runtime=await createProductionSchedulerRuntime({firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:'owner@example.test',publishedRoleChunks:true,preserveLegacyViews,onTiming:event=>phases.push(event.phase),now:()=>Date.parse('2026-09-11T00:00:00Z')});
+  const phases=[];const runtime=await createProductionSchedulerRuntime({firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:'owner@example.test',publishedRoleChunks:true,preserveLegacyViews,historyVersionCache:process.env.DANBRIDGE_TEST_HISTORY_VERSION_CACHE==='1',onTiming:event=>phases.push(event.phase),now:()=>Date.parse('2026-09-11T00:00:00Z')});
   let sequence=0;
   const request=changes=>({schema:SCHEDULER_OPERATION_SCHEMA,requestId:'published-277-'+(++sequence),release:'20.26.277',changes});
   const original=Array.from({length:40},(_,i)=>({id:'published-lesson-'+i,studentId:'s1',teacherId:'t1',teacherIds:['t1'],date:new Date(Date.UTC(2026,10,i+1)).toISOString().slice(0,10),start:'08:00',end:'09:00',branchId:'art_museum',status:'未上課'}));
@@ -47,7 +47,7 @@ for(const preserveLegacyViews of [false,true])test(`native Firestore: 40-command
    };return batch};
    const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
   }});
-  const interrupted=await createProductionSchedulerRuntime({firestore:interruptedStore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:'owner@example.test',publishedRoleChunks:true,preserveLegacyViews,now:()=>Date.parse('2026-09-11T00:00:00Z')});
+  const interrupted=await createProductionSchedulerRuntime({firestore:interruptedStore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:'owner@example.test',publishedRoleChunks:true,preserveLegacyViews,historyVersionCache:process.env.DANBRIDGE_TEST_HISTORY_VERSION_CACHE==='1',now:()=>Date.parse('2026-09-11T00:00:00Z')});
   await assert.rejects(interrupted.execute(coldRequest,actor),/injected preparation disconnect/);
   assert.equal((await firestore.doc(COMMIT_LEASE_PATH).get()).exists,false,'failed preparation drains before releasing its lease');
   assert.ok(preparationBatches>=2&&preparationBatches<=4,'failed preparation stops admission and drains bounded in-flight commits');assert.equal((await firestore.collection('productionFullRecordShadows/danbridge/collections/lessons/records').get()).size,0);

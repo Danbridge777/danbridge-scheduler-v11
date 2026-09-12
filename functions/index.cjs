@@ -316,7 +316,7 @@ exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PR
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),trusted=runtimeValue.assertProductionTrustedOperation(request.data);
   if(trusted.actor.uid!==caller.uid||trusted.actor.email!==caller.email)throw new HttpsError('permission-denied','操作身分不一致。');
   if(PUBLISHED_ROLE_TRANSPORT_ENABLED){
-   if(!publishedOwnerRuntimePromise)publishedOwnerRuntimePromise=createPublishedOwnerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,release:'20.26.311'}).catch(error=>{publishedOwnerRuntimePromise=null;throw error});
+   if(!publishedOwnerRuntimePromise)publishedOwnerRuntimePromise=createPublishedOwnerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,release:'20.26.312'}).catch(error=>{publishedOwnerRuntimePromise=null;throw error});
    return await (await publishedOwnerRuntimePromise).execute(request.data,{...caller,emailVerified:true,appVerified:Boolean(request.app)});
   }
   const adapters=runtimeValue.adaptersFor({uid:caller.uid,email:caller.email});
@@ -419,9 +419,29 @@ exports.productionPitrClonePreview=onCall({region:'asia-east1',serviceAccount:PR
  }catch(error){if(error instanceof HttpsError)throw error;console.error('PRODUCTION_PITR_CLONE_PREVIEW_BLOCKED',JSON.stringify({name:String(error?.name||'Error'),message:String(error?.message||'blocked')}));throw new HttpsError('failed-precondition',String(error?.message||'PITR 預覽已安全阻止。').slice(0,200))}
 });
 
+exports.productionHealthRefresh=onSchedule({schedule:'*/15 * * * *',timeZone:'Asia/Taipei',region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,timeoutSeconds:60,memory:'512MiB',retryCount:1,maxRetrySeconds:300},async()=>{
+ const runtimeValue=await productionRuntime();
+ const result=await require('./production-health-refresh.cjs').refreshProductionHealth({firestore:runtimeValue.firestore,primaryOwnerEmail:PRIMARY_OWNER_EMAIL,readProtection:productionDatabaseProtection,serverTimestamp:()=>FieldValue.serverTimestamp()});
+ console.info('PRODUCTION_HEALTH_REFRESH',JSON.stringify(result));return result;
+});
+
 exports.productionDailyMaintenance=onSchedule({schedule:'17 3 * * *',timeZone:'Asia/Taipei',region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,timeoutSeconds:300,memory:'512MiB',retryCount:3,maxRetrySeconds:3600},async()=>{
- const startedAt=Date.now(),runtimeValue=await productionRuntime(),firestore=runtimeValue.firestore,[{shouldDeleteProductionMaintenanceDocument,isResolvedProductionHealthError,buildProductionMaintenanceReceipt,buildProductionHealthAssessment}]=await Promise.all([import('../js/core/production-maintenance-policy.js')]),[errorSnapshot,notificationSnapshot,recentErrorSnapshot,pendingRequestSnapshot,unreadNotificationSnapshot,protection]=await Promise.all([firestore.collection('companies/danbridge/errorEvents').where('occurredAt','<',Timestamp.fromMillis(startedAt-30*86400000)).limit(2000).get(),firestore.collection('companies/danbridge/scheduleNotifications').where('createdAt','<',Timestamp.fromMillis(startedAt-30*86400000)).limit(4000).get(),firestore.collection('companies/danbridge/errorEvents').where('occurredAt','>=',Timestamp.fromMillis(startedAt-86400000)).limit(500).get(),firestore.collection('companies/danbridge/scheduleRequests').where('status','==','pending').limit(500).get(),firestore.collection('companies/danbridge/scheduleNotifications').where('read','==',false).limit(1000).get(),productionDatabaseProtection()]),expiredErrors=errorSnapshot.docs.filter(row=>shouldDeleteProductionMaintenanceDocument('errorEvent',row.data(),startedAt)),expiredNotifications=notificationSnapshot.docs.filter(row=>shouldDeleteProductionMaintenanceDocument('scheduleNotification',row.data(),startedAt)),deleted={errorEvents:await deleteSnapshots(firestore,expiredErrors),scheduleNotifications:await deleteSnapshots(firestore,expiredNotifications)},activeRecentErrors=recentErrorSnapshot.docs.filter(row=>!isResolvedProductionHealthError(row.data())),ownerUnreadNotifications=unreadNotificationSnapshot.docs.filter(row=>String(row.data()?.recipientEmail||'').trim().toLowerCase()===PRIMARY_OWNER_EMAIL),finishedAt=Date.now(),runId=new Date(startedAt).toISOString().slice(0,10),receipt=buildProductionMaintenanceReceipt({runId,startedAt,finishedAt,deleted,scanned:{errorEvents:errorSnapshot.size,scheduleNotifications:notificationSnapshot.size}}),health=buildProductionHealthAssessment({runId,checkedAt:finishedAt,recentErrors:activeRecentErrors.length,pendingRequests:pendingRequestSnapshot.size,unreadNotifications:ownerUnreadNotifications.length,...protection}),payload={...receipt,startedAt:Timestamp.fromMillis(startedAt),finishedAt:Timestamp.fromMillis(finishedAt),updatedAt:FieldValue.serverTimestamp()},healthPayload={...health,checkedAt:Timestamp.fromMillis(finishedAt),updatedAt:FieldValue.serverTimestamp()};
- await Promise.all([firestore.doc('companies/danbridge/systemHealth/maintenance').set(payload,{merge:false}),firestore.doc('companies/danbridge/systemHealth/ownerAlert').set(healthPayload,{merge:false}),firestore.doc(`companies/danbridge/maintenanceRuns/${runId}`).set(payload,{merge:false})]);
+ const startedAt=Date.now(),runtimeValue=await productionRuntime(),firestore=runtimeValue.firestore;
+ const {shouldDeleteProductionMaintenanceDocument,buildProductionMaintenanceReceipt}=await import('../js/core/production-maintenance-policy.js');
+ const [errorSnapshot,notificationSnapshot]=await Promise.all([
+  firestore.collection('companies/danbridge/errorEvents').where('occurredAt','<',Timestamp.fromMillis(startedAt-30*86400000)).limit(2000).get(),
+  firestore.collection('companies/danbridge/scheduleNotifications').where('createdAt','<',Timestamp.fromMillis(startedAt-30*86400000)).limit(4000).get()
+ ]);
+ const expiredErrors=errorSnapshot.docs.filter(row=>shouldDeleteProductionMaintenanceDocument('errorEvent',row.data(),startedAt));
+ const expiredNotifications=notificationSnapshot.docs.filter(row=>shouldDeleteProductionMaintenanceDocument('scheduleNotification',row.data(),startedAt));
+ const deleted={errorEvents:await deleteSnapshots(firestore,expiredErrors),scheduleNotifications:await deleteSnapshots(firestore,expiredNotifications)};
+ const finishedAt=Date.now(),runId=new Date(startedAt).toISOString().slice(0,10);
+ const receipt=buildProductionMaintenanceReceipt({runId,startedAt,finishedAt,deleted,scanned:{errorEvents:errorSnapshot.size,scheduleNotifications:notificationSnapshot.size}});
+ const payload={...receipt,startedAt:Timestamp.fromMillis(startedAt),finishedAt:Timestamp.fromMillis(finishedAt),updatedAt:FieldValue.serverTimestamp()};
+ await Promise.all([firestore.doc('companies/danbridge/systemHealth/maintenance').set(payload,{merge:false}),firestore.doc(`companies/danbridge/maintenanceRuns/${runId}`).set(payload,{merge:false})]);
+ // Both schedules use the same exact counts, freshness and monotonic snapshot
+ // publication; daily cleanup cannot replace it with a legacy health result.
+ await require('./production-health-refresh.cjs').refreshProductionHealth({firestore,primaryOwnerEmail:PRIMARY_OWNER_EMAIL,readProtection:productionDatabaseProtection,serverTimestamp:()=>FieldValue.serverTimestamp()});
  console.info('PRODUCTION_DAILY_MAINTENANCE_VERIFIED',JSON.stringify({runId,deleted,scanned:receipt.scanned}));
 });
 

@@ -18,9 +18,11 @@ function createSchedulerExecutionLane({maxPending=16,maxWaitMs=5000,clock=()=>Da
 
 // Server-only scheduler capability. The caller never supplies raw record
 // operations, paths, role views or notification recipients.
-async function createProductionSchedulerRuntime({firestore,serverTimestamp,primaryOwnerEmail,now=()=>Date.now(),onTiming=()=>{},publishedRoleChunks=false,preserveLegacyViews=false,deleteField}){
+async function createProductionSchedulerRuntime({firestore,serverTimestamp,primaryOwnerEmail,now=()=>Date.now(),onTiming=()=>{},publishedRoleChunks=false,preserveLegacyViews=false,deleteField,historyVersionCache=false}){
  if(typeof publishedRoleChunks!=='boolean'||publishedRoleChunks&&typeof deleteField!=='function')throw Error('Invalid server role transport configuration');
  if(typeof preserveLegacyViews!=='boolean'||preserveLegacyViews&&!publishedRoleChunks)throw Error('Invalid legacy role compatibility configuration');
+ if(typeof historyVersionCache!=='boolean'||historyVersionCache&&!publishedRoleChunks)throw Error('Invalid history version cache configuration');
+ const historyReader=historyVersionCache?require('./transaction-history-version-reader.cjs').createTransactionHistoryVersionReader():null;
  const maxChanges=publishedRoleChunks?40:30;
  const executeInOrder=createSchedulerExecutionLane();
  const [{FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb},{sha256Canonical},{prepareActiveRecordSync},{createFirebaseProductionRecordBatchAdapter},controlPolicy,policy,projection,notificationPolicy]=await Promise.all([
@@ -44,7 +46,7 @@ async function createProductionSchedulerRuntime({firestore,serverTimestamp,prima
    await lease.assertHeld(transaction);
    const [receipt,controlSnapshot,safetySnapshot,accessSnapshot,...collections]=await Promise.all([
     transaction.get(receiptRef),transaction.get(firestore.doc(PRODUCTION_RECORD_CONTROL_PATH)),transaction.get(firestore.doc(PRODUCTION_RECORD_SAFETY_PATH)),transaction.get(firestore.collection('companyAccess').where('companyId','==','danbridge')),
-    ...FULL_RECORD_COLLECTIONS.map(name=>transaction.get(firestore.collection(`productionFullRecordShadows/danbridge/collections/${name}/records`)))
+    ...FULL_RECORD_COLLECTIONS.map(name=>{const q=firestore.collection(`productionFullRecordShadows/danbridge/collections/${name}/records`);return name==='changes'&&historyReader?historyReader.read(transaction,q):transaction.get(q)})
    ]);
    mark('authority-read');
    const accessRows=accessSnapshot.docs.map(row=>({...row.data(),email:row.id.toLowerCase()})),member=accessRows.find(row=>row.email===identity.email),caller=policy.assertProductionSchedulerActor({...member,uid:identity.uid,email:identity.email});
