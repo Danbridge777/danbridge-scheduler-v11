@@ -134,6 +134,9 @@
   }
   function patchSettlement(){const original=window.renderSettlement;if(typeof original!=='function'||original.__v1817)return;function wrapped(){original();decorateCollections();renderMonthTasks()}wrapped.__v1817=true;window.renderSettlement=wrapped}
   function patchFinance(){const original=window.renderFinance;if(typeof original!=='function'||original.__monthTasksRefresh)return;function wrapped(...args){const result=original.apply(this,args);renderMonthTasks();return result}wrapped.__monthTasksRefresh=true;window.renderFinance=wrapped}
-  function init(){records();installLessonDiff();installLineEnhancement();patchSettlement();patchFinance();document.addEventListener('danbridge:line-billing-copied',markCopiedNotified);window.renderSettlement?.();renderMonthTasks()}
+  // Receipt handling must be ready before the deferred presentation setup:
+  // a fast clipboard completion cannot be recovered by a later listener.
+  document.addEventListener('danbridge:line-billing-copied',markCopiedNotified);
+  function init(){records();installLessonDiff();installLineEnhancement();patchSettlement();patchFinance();window.renderSettlement?.();renderMonthTasks()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(init,120));else setTimeout(init,120);
 })();

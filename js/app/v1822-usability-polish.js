@@ -22,7 +22,9 @@
     if(!visible(target)){window.toast?.('目前頁面沒有搜尋欄位');return}
     target.focus({preventScroll:true});
     target.select?.();
-    target.scrollIntoView({behavior:'smooth',block:'center'});
+    // Search is an immediate keyboard action. Do not leave a scrolling
+    // animation moving the filter heading under the user's next click/tap.
+    target.scrollIntoView({behavior:'instant',block:'nearest'});
   }
 
   function closeTopModal(){

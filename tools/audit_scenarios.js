@@ -322,7 +322,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.276'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.302'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -804,8 +804,8 @@ assert.match(schedulingEfficiencySource,/canEdit=\(\)=>window\.calendarOwnerCanE
 assert.match(cloudSource, /'paymentStatus','chargeStudent','payTeacher','campId'/, 'small billing, payroll and camp-code changes trigger schedule notifications');
 assert.match(cloudSource,/function installTeacherReportUI\(\)[\s\S]*cloudRole==='teacher'&&cloudCanManageSchedule[\s\S]*originalEditLesson\?\.\(id\)[\s\S]*cloudRole==='teacher'\)return openTeacherReportModal/,'the final authenticated click override sends Wendy to scheduling edit and ordinary teachers to reporting');
 assert.match(cloudSource, /\['owner','teacher','branch_manager'\]\.includes\(cloudRole\)/, 'Owners, managers and teachers subscribe to large schedule notifications');
-assert(/worker\.state==='activated'\)return reloadAcceptedUpdate\(\)/.test(pwaSource), 'PWA update button must reload immediately when the worker already activated');
-assert(/setTimeout\(reloadAcceptedUpdate,1800\)/.test(pwaSource), 'PWA update button must have a reload fallback for Safari and installed apps');
+assert(pwaSource.includes("acceptedWorker?.state!=='activated'||navigator.serviceWorker.controller!==acceptedWorker"), 'PWA reload must require activation AND control by the accepted worker');
+assert(/setTimeout\(retry,20000\)/.test(pwaSource)&&!/setTimeout\(reloadAcceptedUpdate/.test(pwaSource), 'PWA timeout must offer retry without reloading a page still owned by the old worker');
 assert(/__danbridge_refresh/.test(pwaSource)&&/window\.location\.replace/.test(pwaSource), 'PWA accepted updates must reopen a cache-busted entry URL');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.webmanifest'), 'utf8'));
 assert.equal(manifest.id, './', 'PWA has a stable app identity across future start URL changes');

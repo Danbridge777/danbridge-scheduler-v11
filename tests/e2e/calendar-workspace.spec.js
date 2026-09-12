@@ -44,6 +44,33 @@ for(const role of ['owner','aa','teacher','lucas'])test(`${role}: compact toolba
  else{await expect(page.locator('#calendar .calendar-quick-add')).toBeHidden()}
 });
 
+test('連續搜尋快捷鍵後立刻收合，不因捲動或重複點選而卡住',async({page},testInfo)=>{
+ await open(page);
+ await page.evaluate(()=>{
+  window.__filterInteractionEvidence=[];
+  window.__filterSearchScrolls=[];
+  const originalScroll=Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView=function(options){if(this.id==='calendarSearch')window.__filterSearchScrolls.push(options);return originalScroll.call(this,options)};
+  for(const type of ['pointerdown','pointerup','click','toggle'])document.addEventListener(type,event=>{
+   const entry={type,target:event.target?.tagName,id:event.target?.id,scrollY,open:document.getElementById('calendarFilterPanel').open,x:event.clientX,y:event.clientY};
+   queueMicrotask(()=>{entry.prevented=event.defaultPrevented;entry.openAfter=document.getElementById('calendarFilterPanel').open});
+   window.__filterInteractionEvidence.push(entry);if(window.__filterInteractionEvidence.length>100)window.__filterInteractionEvidence.shift();
+  },true);
+ });
+ try{
+  for(let i=0;i<20;i++){
+   await page.keyboard.press(i%2?'Meta+k':'Control+k');
+   await expect(page.locator('#calendarSearch')).toBeFocused();
+   await page.locator('#calendarFilterPanel > summary').click();
+   await expect(page.locator('#calendarSearch')).toBeHidden();
+  }
+  expect(await page.evaluate(()=>window.__filterSearchScrolls)).toEqual(Array.from({length:20},()=>({behavior:'instant',block:'nearest'})));
+ }catch(error){
+  await testInfo.attach('filter-interaction-events',{body:JSON.stringify(await page.evaluate(()=>window.__filterInteractionEvidence)),contentType:'application/json'});
+  throw error;
+ }
+});
+
 test('320–1920px：展開篩選與長搜尋文字仍保持控制項尺寸及頁面邊界',async({page},testInfo)=>{
  test.skip(!['desktop-chromium','desktop-webkit'].includes(testInfo.project.name),'Desktop engines explicitly resize; mobile device presets are covered above.');
  await open(page);

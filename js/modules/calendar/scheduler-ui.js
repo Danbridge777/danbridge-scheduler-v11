@@ -44,6 +44,19 @@ function installCalendarStudentParentPreview(){
   document.addEventListener('scroll',()=>{if(anchor)position()},true);
   window.addEventListener('blur',hide);window.addEventListener('resize',hide);
   new MutationObserver(()=>{if(anchor&&(!anchor.isConnected||previewText(anchor)!==tooltip?.textContent))hide()}).observe(document.body,{attributes:true,attributeFilter:['class','data-cloud-role']});
+  // Keyed calendar cards survive a live update, so pointerover need not fire
+  // again. Refresh only the active preview after a calendar mutation batch;
+  // detached/revoked targets are hidden. Do not observe the tooltip itself or
+  // add a timer/per-card listener to the rendering/drag path.
+  const canvas=$('calendarCanvas');
+  if(canvas)new MutationObserver(()=>{
+    if(!anchor||!tooltip)return;
+    if(!anchor.isConnected){hide();return}
+    const text=previewText(anchor);
+    if(!text){hide();return}
+    if(tooltip.textContent!==text)tooltip.textContent=text;
+    position();
+  }).observe(canvas,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['title','data-id','data-calendar-student-id']});
 }
 
 function calendarLessonStudentPreview(lesson){

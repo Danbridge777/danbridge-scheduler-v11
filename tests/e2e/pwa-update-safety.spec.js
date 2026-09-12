@@ -24,11 +24,29 @@ for(const blocker of ['pending','student','teacher','dialog'])test(`立即更新
 });
 test('接受更新之後新操作到達，啟用回呼仍重新確認，保留輸入與網址',async({page})=>{
  await open(page);await page.locator('.pwa-update-now').click();expect(await page.evaluate(()=>window.__updatePosts)).toEqual([{type:'SKIP_WAITING'}]);
- await page.evaluate(()=>{window.__syncSafe=false;document.getElementById('studentName').value='不能遺失';window.__updateWorker.state='activated';window.__updateWorker.dispatchEvent(new Event('statechange'))});
+  await page.evaluate(()=>{window.__syncSafe=false;document.getElementById('studentName').value='不能遺失';window.__updateWorker.state='activated';navigator.serviceWorker.controller=window.__updateWorker;window.__updateWorker.dispatchEvent(new Event('statechange'))});
  await expect(page.locator('.pwa-update-now')).toBeEnabled();await expect(page.locator('#studentName')).toHaveValue('不能遺失');expect(page.url()).toContain('update-safety.html');
 });
 test('已確認同步且沒有編輯表單才重新載入',async({page})=>{
  await open(page);await page.locator('.pwa-update-now').click();
- await page.evaluate(()=>{window.__updateWorker.state='activated';window.__updateWorker.dispatchEvent(new Event('statechange'))});
+ await page.evaluate(()=>{window.__updateWorker.state='activated';navigator.serviceWorker.controller=window.__updateWorker;window.__updateWorker.dispatchEvent(new Event('statechange'))});
  await page.waitForURL(/__danbridge_refresh=/);expect(page.url()).toContain('update-safety.html');
+});
+
+test('新版啟用但舊 worker 仍控制分頁時不刷新，接管後才更新',async({page})=>{
+ await open(page);await page.locator('.pwa-update-now').click();
+ await page.evaluate(()=>{window.__updateWorker.state='activated';window.__updateWorker.dispatchEvent(new Event('statechange'))});
+ expect(page.url()).not.toContain('__danbridge_refresh');await expect(page.locator('.pwa-update-now')).toBeDisabled();
+ await page.evaluate(()=>{navigator.serviceWorker.controller=window.__updateWorker;navigator.serviceWorker.dispatchEvent(new Event('controllerchange'))});
+ await page.waitForURL(/__danbridge_refresh=/);
+});
+test('慢速或失效 worker 不以計時器強制刷新，保留分頁並可重試',async({page})=>{
+ await page.clock.install();await open(page);await page.locator('.pwa-update-now').click();
+ await page.clock.fastForward(1900);expect(page.url()).not.toContain('__danbridge_refresh');
+ await expect(page.locator('.pwa-update-now')).toBeDisabled();
+ await page.clock.fastForward(19000);expect(page.url()).not.toContain('__danbridge_refresh');
+ await expect(page.locator('.pwa-update-now')).toBeEnabled();await expect(page.locator('#pwaUpdateBanner')).toContainText('已保留目前畫面');
+ await page.locator('.pwa-update-now').click();
+ await page.evaluate(()=>{window.__updateWorker.state='redundant';window.__updateWorker.dispatchEvent(new Event('statechange'))});
+ await expect(page.locator('.pwa-update-now')).toBeEnabled();expect(page.url()).not.toContain('__danbridge_refresh');
 });

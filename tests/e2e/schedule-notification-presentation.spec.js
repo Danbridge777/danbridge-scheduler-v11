@@ -1,4 +1,33 @@
 const {test,expect}=require('@playwright/test');
+const fs=require('node:fs');
+const path=require('node:path');
+
+test('40 堂及大量通知：實際通知版型的確認按鈕不需捲到底，內容仍可完整閱讀',async({page})=>{
+ const source=fs.readFileSync(path.join(__dirname,'../../js/core/firebase-auth-and-cloud-sync.module.js'),'utf8');
+ const markup=source.slice(source.indexOf('function installScheduleNotificationUI()')).match(/modal\.innerHTML=`([^`]+)`/)[1];
+ const index=fs.readFileSync(path.join(__dirname,'../../index.html'),'utf8');
+ const styles=[...index.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*>/g)].map(match=>match[0]).join('\n');
+ await page.route('**/notification-layout-fixture',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${styles}<body><div class="schedule-notification-backdrop">${markup}</div></body></html>`}));
+ await page.goto('/notification-layout-fixture');
+ for(const count of [40,160]){
+  await page.locator('#scheduleNotificationBody').evaluate((body,count)=>{
+   body.replaceChildren(...Array.from({length:count},(_,i)=>{const p=document.createElement('p');p.textContent=`第 ${i+1} 堂｜隔離測試學生｜2026-10-01 08:00–09:00`;p.style.padding='12px';return p}));
+   body.scrollTop=0;
+  },count);
+  const before=await page.getByRole('button',{name:'知道了',exact:true}).boundingBox();
+  const viewport=page.viewportSize();
+  expect(before.y).toBeGreaterThanOrEqual(0);expect(before.y+before.height).toBeLessThanOrEqual(viewport.height);
+  expect(before.x).toBeGreaterThanOrEqual(0);expect(before.x+before.width).toBeLessThanOrEqual(viewport.width);
+  // Click without Playwright auto-scrolling the target into view.
+  await page.getByRole('button',{name:'知道了',exact:true}).evaluate(button=>{button.onclick=()=>button.dataset.clicked='true'});
+  await page.mouse.click(before.x+before.width/2,before.y+before.height/2);
+  await expect(page.getByRole('button',{name:'知道了',exact:true})).toHaveAttribute('data-clicked','true');
+  await page.locator('#scheduleNotificationBody').evaluate(body=>body.scrollTop=body.scrollHeight);
+  await expect(page.locator('#scheduleNotificationBody p').last()).toBeInViewport();
+  const after=await page.getByRole('button',{name:'知道了',exact:true}).boundingBox();
+  expect(Math.abs(after.y-before.y)).toBeLessThan(1);
+ }
+});
 
 test('真實瀏覽器：新通知不打斷新增、移動、刪除，未讀內容仍能手動查看',async({page})=>{
  await page.route('**/notification-presentation-fixture',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body>

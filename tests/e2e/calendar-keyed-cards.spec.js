@@ -1,5 +1,10 @@
 const {test,expect}=require('@playwright/test');
 const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
+test.beforeEach(async({page},info)=>{
+ const mobile=page.viewportSize().width<=700;
+ test.skip(info.title.startsWith('mobile agenda:')?!mobile:mobile,
+  '桌機 keyed grid 與手機 agenda 使用不同 DOM；各自由相對應案例驗證，不把 null 節點當成重用成功');
+});
 async function openCalendar(page){
  await isolateApplicationAuth(page);await page.goto('/index.html',{waitUntil:'load'});
  await page.evaluate(()=>{
@@ -99,4 +104,29 @@ test('week grid rebuilds for early/late hours and edit permission changes',async
  // Restore the fixture week through the real date control before checking it.
  await page.locator('#calendarMode').selectOption('week');await page.locator('#calendarDate').fill('2026-10-05');await page.locator('#calendarDate').dispatchEvent('change');
  await expect(page.locator('#calendarCanvas [data-id="a"]')).toHaveAttribute('draggable','false');expect(await page.evaluate(()=>window.__keyedWrites)).toEqual([]);
+});
+
+test('mobile agenda: repeated updates preserve exact records, ordering, month navigation and read-only scope',async({page})=>{
+ await openCalendar(page);
+ await expect(page.locator('#calendarCanvas .mobile-week-agenda')).toHaveCount(1);
+ await expect(page.locator('#calendarCanvas .mobile-week-day')).toHaveCount(7);
+ const ids=()=>page.locator('#calendarCanvas [data-id]').evaluateAll(nodes=>nodes.map(n=>n.dataset.id));
+ for(let i=0;i<12;i++){
+  await page.evaluate(i=>{db.lessons[1].start=i%2?'09:00':'12:00';db.lessons[1].end=i%2?'10:00':'13:00';renderCalendar({deferAnalysis:true})},i);
+  expect(await ids()).toEqual(i%2?['b','a']:['a','b']);
+ }
+ await page.evaluate(()=>{db.students[0].name='新學生';db.students[0].parent='新家長';db.teachers[0].name='新老師';db.lessons[0].start='06:00';db.lessons[0].end='07:00';db.lessons[1].start='23:00';db.lessons[1].end='23:55';renderCalendar({deferAnalysis:true})});
+ const a=page.locator('#calendarCanvas [data-id="a"]'),b=page.locator('#calendarCanvas [data-id="b"]');
+ await expect(a).toContainText('06:00–07:00');await expect(b).toContainText('23:00–23:55');
+ await expect(a).toContainText('新學生');await expect(a).toContainText('新老師');await expect(a).toHaveAttribute('title',/新家長/);
+ await a.click({modifiers:['Meta']});expect(await page.evaluate(()=>[...selectedLessonIds])).toEqual(['a']);
+ await page.evaluate(()=>renderCalendar({deferAnalysis:true}));await expect(a).toHaveClass(/selected/);
+ await page.evaluate(()=>{clearLessonSelection();db.lessons=db.lessons.filter(l=>l.id!=='b');db.lessons.push({id:'c',date:'2027-01-04',start:'08:00',end:'09:00',studentId:'s',teacherId:'t',branchId:'art_museum'});renderCalendar({deferAnalysis:true})});
+ expect(await ids()).toEqual(['a']);
+ await page.locator('#calendarDate').fill('2027-01-04');await page.locator('#calendarDate').dispatchEvent('change');
+ expect(await ids()).toEqual(['c']);await expect(page.locator('#calendarTitle')).toHaveText('2027-01-04 ～ 2027-01-10');
+ await page.locator('#calendarDate').fill('2026-10-05');await page.locator('#calendarDate').dispatchEvent('change');expect(await ids()).toEqual(['a']);
+ await page.evaluate(()=>{window.DanbridgeAccess.setContext({role:'teacher',teacherId:'t',canManageSchedule:false});window.currentCloudRole=()=> 'teacher';renderCalendar({deferAnalysis:true})});
+ await page.locator('#calendarMode').selectOption('week');await page.locator('#calendarDate').fill('2026-10-05');await page.locator('#calendarDate').dispatchEvent('change');
+ await expect(a).toHaveAttribute('draggable','false');await expect(page.locator('.mobile-week-add')).toHaveCount(0);expect(await page.evaluate(()=>window.__keyedWrites)).toEqual([]);
 });

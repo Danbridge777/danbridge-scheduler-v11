@@ -1,6 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {automaticScheduleNotifications,createScheduleNotificationPresenter} from '../js/core/schedule-notification-presentation.js';
+
+test('實際頁面：排課永久佇列未完成時不自動蓋住操作畫面',()=>{
+ const source=readFileSync(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');
+ const expression=source.slice(source.indexOf('function subscribeScheduleNotifications()')).match(/isBusy:(\(\)=>\{[^\n]+\}),/)[1];
+ const document={querySelector:()=>null,getElementById:()=>({hidden:true})};
+ const build=new Function('document','productionSchedulerQueue','activeRecordPageController','schedulerRequestWorkerActive',`return (${expression})()`);
+ assert.equal(build(document,null,null,false),false);
+ for(const field of ['inFlight','pending','dirty'])assert.equal(build(document,{diagnostics:()=>({[field]:true})},null,false),true,field);
+ assert.equal(build(document,{diagnostics:()=>({inFlight:false,pending:false,dirty:false})},null,false),false);
+ assert.equal(build(document,null,{diagnostics:()=>({inFlight:true})},false),true);
+ assert.equal(build(document,null,null,true),true);
+});
 
 test('自己的通知保留但不自動遮擋；其他人的未讀通知仍可提示',()=>{
  const rows=[{id:'self',createdBy:'owner'},{id:'email',createdByEmail:' OWNER@EXAMPLE.COM '},{id:'other',createdBy:'teacher'},{id:'seen'}];

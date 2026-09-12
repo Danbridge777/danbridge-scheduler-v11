@@ -2,8 +2,13 @@ const {test,expect}=require('@playwright/test');
 const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
 const bootstrapSource=require('node:fs').readFileSync(require('node:path').join(__dirname,'../../js/core/firebase-auth-and-cloud-sync.module.js'),'utf8');
 const bootstrapUiSource=bootstrapSource.slice(bootstrapSource.indexOf('let cloudStatusHideTimer=null;'),bootstrapSource.indexOf('\nfunction canonicalHashValue('));
-test.beforeEach(async({page})=>{
+test.beforeEach(async({page},testInfo)=>{
  await isolateApplicationAuth(page);
+ if(testInfo.title.includes('before deferred convenience initialization'))await page.route('**/js/app/v18-convenience-suite.js*',async route=>{
+  const response=await route.fetch(),source=await response.text();
+  expect(source.match(/setTimeout\(init,120\)/g)).toHaveLength(2);
+  await route.fulfill({response,body:source.replaceAll('setTimeout(init,120)','(window.__finishConvenienceInit=init)')});
+ });
  await page.clock.setFixedTime(new Date('2026-09-10T01:00:00Z'));
  await page.goto('/index.html',{waitUntil:'domcontentloaded'});
  await page.waitForFunction(()=>typeof withPricingChange==='function'&&typeof window.loadSettlementRecord==='function');
@@ -134,7 +139,7 @@ test('one group lesson counts once while billing each child; original settlement
  expect(await page.evaluate(()=>db.settlementRecords[0].totalRevenue)).toBe(1400);
  const overflow=await modal.evaluate(el=>{const box=el.querySelector('.modal');return box.getBoundingClientRect().right>innerWidth+1||box.getBoundingClientRect().left<0});expect(overflow).toBe(false);
 });
-test('delayed clipboard completion stays with the original family and month',async({page})=>{
+for(const deferred of [false,true])test('delayed clipboard completion stays with the original family and month'+(deferred?' before deferred convenience initialization':''),async({page})=>{
  await page.evaluate(()=>{db.students[0].billingFamilyId='family-a';db.students[1].billingFamilyId='family-b';navigator.clipboard.writeText=()=>new Promise(resolve=>{window.__finishClipboard=resolve});openLineBillingPreview('a','2026-09')});
  await page.locator('#v181LineBillingPreview button').filter({hasText:'確認複製'}).click();
  await page.evaluate(()=>{openLineBillingPreview('b','2026-10');window.__finishClipboard()});
@@ -142,6 +147,7 @@ test('delayed clipboard completion stays with the original family and month',asy
  expect(await page.evaluate(()=>({month:db.collectionRecords[0].month,ids:db.collectionRecords[0].studentIds,notified:db.collectionRecords[0].notifiedAt}))).toEqual({month:'2026-09',ids:['a'],notified:''});
  await expect(page.locator('#v181LineBillingPreview')).toBeVisible();
  await expect(page.locator('#v181LineBillingPreview')).toHaveAttribute('data-student-id','b');
+ if(deferred){await page.evaluate(()=>window.__finishConvenienceInit());expect(await page.evaluate(()=>db.collectionRecords.length)).toBe(1)}
 });
 test('changed household during clipboard completion is not recorded against different children',async({page})=>{
  await page.evaluate(()=>{db.students[0].billingFamilyId='family-a';db.students[1].billingFamilyId='family-b';navigator.clipboard.writeText=()=>new Promise(resolve=>{window.__finishClipboard=resolve});openLineBillingPreview('a','2026-09')});

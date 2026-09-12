@@ -3,6 +3,8 @@
   let deferredInstallPrompt=null;
   let refreshing=false;
   let reloadForAcceptedUpdate=false;
+  let acceptedWorker=null;
+  let updateAttempt=0;
   const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
   const isStandalone=window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
 
@@ -47,6 +49,9 @@
 
   function reloadAcceptedUpdate(){
     if(!reloadForAcceptedUpdate||refreshing)return;
+    // Activation and taking control are separate events. Never navigate on a
+    // timer or while the old worker still owns this page.
+    if(acceptedWorker?.state!=='activated'||navigator.serviceWorker.controller!==acceptedWorker)return;
     if(!allowUpdateNow()){reloadForAcceptedUpdate=false;return;}
     refreshing=true;
     const freshUrl=new URL(window.location.href);
@@ -76,12 +81,23 @@
       updateNow.disabled=true;
       updateNow.textContent='更新中…';
       reloadForAcceptedUpdate=true;
+      acceptedWorker=worker;
+      const attempt=++updateAttempt;
+      const retry=()=>{
+        if(attempt!==updateAttempt||refreshing||!reloadForAcceptedUpdate)return;
+        reloadForAcceptedUpdate=false;acceptedWorker=null;
+        banner.hidden=false;
+        banner.querySelector('span').textContent='新版尚未完成接管；已保留目前畫面與資料，請稍後重試更新。';
+        updateNow.disabled=false;updateNow.textContent='立即更新';
+      };
       worker.addEventListener('statechange',()=>{
+        if(attempt!==updateAttempt)return;
         if(worker.state==='activated')reloadAcceptedUpdate();
+        else if(worker.state==='redundant')retry();
       });
-      if(worker.state==='activated')return reloadAcceptedUpdate();
-      try{worker.postMessage({type:'SKIP_WAITING'})}catch(error){console.warn('Service Worker 更新訊息失敗：',error)}
-      setTimeout(reloadAcceptedUpdate,1800);
+      if(worker.state==='activated')reloadAcceptedUpdate();
+      else try{worker.postMessage({type:'SKIP_WAITING'})}catch(error){console.warn('Service Worker 更新訊息失敗：',error);retry()}
+      setTimeout(retry,20000);
     };
   }
 
@@ -136,7 +152,7 @@
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
         reloadAcceptedUpdate();
       });
-      navigator.serviceWorker.register('./sw.js?v=20.26.276',{scope:'./'}).then(reg=>{
+      navigator.serviceWorker.register('./sw.js?v=20.26.302',{scope:'./'}).then(reg=>{
         if(!reg)return;
         reg.update().catch(()=>{});
         if(reg.waiting&&navigator.serviceWorker.controller)offerUpdate(reg.waiting);

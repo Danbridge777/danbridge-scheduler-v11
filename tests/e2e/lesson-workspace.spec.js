@@ -21,8 +21,29 @@ test('團課懸停讀取本堂學生、不帶費用，角色切換及拖曳隱�
  await expect(page.locator('#calendarStudentParentPreview')).toHaveCount(0);
  await page.mouse.move(0,0);await card.hover();await expect(page.locator('#calendarStudentParentPreview')).toHaveCount(0);
  await page.evaluate(()=>{window.DanbridgeAccess.setContext({role:'owner'});window.currentCloudRole=()=> 'owner';document.body.dataset.cloudRole='owner';db.lessons[0].groupStudentIds=['c'];renderCalendar()});
- await card.hover();await expect(page.locator('#calendarStudentParentPreview')).toHaveText('英文團課\n學生：小晴');
+ // A retained card does not generate pointerover merely because its data changed.
+ // Leave and re-enter, as in each preceding role check; keep the exact roster assertion.
+ await page.mouse.move(0,0);await card.hover();await expect(page.locator('#calendarStudentParentPreview')).toHaveText('英文團課\n學生：小晴');
  await page.mouse.down();await expect(page.locator('#calendarStudentParentPreview')).toHaveCount(0);await page.mouse.up();
+});
+test('滑鼠不移動時，雲端重畫的團課名單更新且移除課程立即隱藏預覽',async({page})=>{
+ const card=page.locator('#calendarCanvas [data-id="l"]').first();
+ await card.hover();
+ await expect(page.locator('#calendarStudentParentPreview')).toHaveText('英文團課\n學生：小安、小安');
+ await page.evaluate(()=>{db.lessons[0].groupStudentIds=['c'];renderCalendar()});
+ // No pointer movement or second hover: a live update must not leave old names.
+ if(page.viewportSize().width<=700){
+  // Mobile replaces its cards. Chromium may emit pointerover on the new card;
+  // WebKit may not. Neither may retain the old roster on a detached anchor.
+  await expect.poll(async()=>JSON.stringify(await page.locator('#calendarStudentParentPreview').allTextContents())).toMatch(/^(?:\[\]|\["英文團課\\n學生：小晴"\])$/);
+  await page.mouse.move(0,0);await card.hover();
+ }
+ await expect(page.locator('#calendarStudentParentPreview')).toHaveText('英文團課\n學生：小晴');
+ await page.evaluate(()=>{db.students.find(row=>row.id==='c').name='小晴改名';renderCalendar()});
+ if(page.viewportSize().width<=700){await expect.poll(async()=>JSON.stringify(await page.locator('#calendarStudentParentPreview').allTextContents())).toMatch(/^(?:\[\]|\["英文團課\\n學生：小晴改名"\])$/);await page.mouse.move(0,0);await card.hover()}
+ await expect(page.locator('#calendarStudentParentPreview')).toHaveText('英文團課\n學生：小晴改名');
+ await page.evaluate(()=>{db.lessons=[];renderCalendar()});
+ await expect(page.locator('#calendarStudentParentPreview')).toHaveCount(0);
 });
 test('排課家教團課切換、搜尋、收合名單、建立團課與統一尺寸',async({page},info)=>{
  await page.evaluate(()=>openLessonModal('2026-09-08','17:00'));
