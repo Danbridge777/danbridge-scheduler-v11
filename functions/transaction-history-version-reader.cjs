@@ -9,12 +9,15 @@ const HISTORY='productionFullRecordShadows/danbridge/collections/changes/records
 function createTransactionHistoryVersionReader({maxBytes=16*1024*1024,maxRecords=10000}={}){
  if(!Number.isSafeInteger(maxBytes)||maxBytes<0||!Number.isSafeInteger(maxRecords)||maxRecords<0)throw Error('Invalid history cache budget');
  let cached=new Map(),ready=false;
+ const snapshotBytes=new WeakMap();
  const versionEqual=(a,b)=>!!a?.updateTime&&!!b?.updateTime&&a.updateTime.isEqual(b.updateTime);
  const remember=docs=>{
   let bytes=0;const next=new Map();
   for(const row of docs){
    if(!row.exists||!row.updateTime||next.has(row.id))throw Error('Invalid history snapshot identity');
-   bytes+=Buffer.byteLength(JSON.stringify(row.data()));
+   let size=snapshotBytes.get(row);
+   if(size===undefined){size=Buffer.byteLength(JSON.stringify(row.data()));snapshotBytes.set(row,size)}
+   bytes+=size;
    if(bytes>maxBytes||docs.length>maxRecords){cached.clear();ready=false;return}
    next.set(row.id,row);
   }

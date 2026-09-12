@@ -20,6 +20,8 @@ async function createPublishedOwnerRuntime({firestore,serverTimestamp,deleteFiel
   import('../js/core/firebase-production-record-runtime-adapter.js'),import('../js/core/production-role-view-projection.js'),import('../js/core/production-notification-policy.js')
  ]);
  const {FULL_RECORD_COLLECTIONS}=full;
+ const historyMaterializer=historyVersionCache?require('./immutable-history-materializer.cjs').createImmutableHistoryMaterializer():null;
+ const sharedImmutableRebuilder=historyVersionCache?full.createImmutableFullRecordShadowRebuilder():null;
  const {PRODUCTION_RECORD_CONTROL_PATH,PRODUCTION_RECORD_SAFETY_PATH}=controlPolicy;
  const recordPrefix='productionFullRecordShadows/danbridge/collections/';
  const executeInOrder=createSchedulerExecutionLane();
@@ -64,10 +66,12 @@ async function createPublishedOwnerRuntime({firestore,serverTimestamp,deleteFiel
     if(receipt.exists){const saved=receipt.data();if(saved.fingerprint!==fingerprint||saved.uid!==identity.uid||saved.email!==email)throw Error('Owner publication receipt identity conflict');return saved.response}
     const control=controlPolicy.assertProductionRecordRuntimeControl(controlRow.data()),safety=controlPolicy.assertProductionRecordRuntimeSafety(safetyRow.data(),{activationEpoch:control.activationEpoch});
     if(safety.state!=='active'||safety.readAllowed!==true||safety.writeAllowed!==true)throw Error('Owner authority is safely paused');
-    // Fresh for each native retry. Only detached, recursively frozen records
-    // can share validation/serialization between this source and its target.
-    const rebuilder=full.createImmutableFullRecordShadowRebuilder(),hashMemo=new WeakMap();
-    const documents=Object.fromEntries(FULL_RECORD_COLLECTIONS.map((k,i)=>[k,records[i].docs.map(row=>({id:row.id,data:row.data()}))])),source=rebuilder.rebuild(documents,{environment:'production'});
+    // Hash the full current authority on every attempt. Only history bodies
+    // whose native version was rechecked above can reuse frozen decoding and
+    // canonical bytes; live membership/counts/order and all fences stay fresh.
+    const rebuilder=sharedImmutableRebuilder||full.createImmutableFullRecordShadowRebuilder(),hashMemo=new WeakMap();
+    const documents=Object.fromEntries(FULL_RECORD_COLLECTIONS.map((k,i)=>[k,records[i].docs.map(row=>({id:row.id,data:k==='changes'&&historyMaterializer?historyMaterializer.materialize(row):row.data()}))])),source=rebuilder.rebuild(documents,{environment:'production'});
+    if(historyMaterializer)historyMaterializer.seedHashMemo(documents.changes,hashMemo);
     verify(source,safety,'source',hashMemo);
     mark('source-verified');
     const writes=[],read=createProductionTransactionReader(firestore,transaction,[controlRow,safetyRow,...access.docs,...records.flatMap(snapshot=>snapshot.docs)]);
