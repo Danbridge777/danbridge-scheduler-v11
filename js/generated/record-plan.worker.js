@@ -263,7 +263,7 @@ function freezeRecordGraph(value, seen = /* @__PURE__ */ new WeakSet()) {
   Object.freeze(value);
 }
 
-// js/core/cloud-sharded-store.js?v=20.26.317
+// js/core/cloud-sharded-store.js?v=20.26.318
 var SHARDED_DB_COLLECTION_KEYS2 = Object.freeze([
   "students",
   "teachers",
@@ -415,7 +415,7 @@ function activeRecordSaveEnvelopeHash(value) {
   return `record-item-v1:${sha256Canonical({ schema: ACTIVE_RECORD_SAVE_RECORD_HASH_SCHEMA, collection: core.collection, recordId: core.recordId, exists: core.exists, deleted: core.deleted, record: clone2(core.record) })}`;
 }
 
-// js/core/cloud-full-record-shadow.js?v=20.26.317
+// js/core/cloud-full-record-shadow.js?v=20.26.318
 var FULL_RECORD_COLLECTIONS2 = Object.freeze([...SHARDED_DB_COLLECTION_KEYS]);
 var clone3 = (value) => typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value));
 var validId2 = (value) => {
@@ -461,7 +461,7 @@ function recordDataHash(db) {
   return `record-v1:${recordDataDigest(db)}`;
 }
 
-// js/core/cloud-record-three-way-merge.js?v=20.26.317
+// js/core/cloud-record-three-way-merge.js?v=20.26.318
 var APPEND_ONLY_COLLECTIONS = /* @__PURE__ */ new Set(["changes"]);
 var clone4 = (value) => value === void 0 ? void 0 : JSON.parse(JSON.stringify(value));
 var stable3 = (value) => Array.isArray(value) ? value.map(stable3) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable3(value[key])])) : value;
@@ -745,7 +745,7 @@ async function canonicalizeActiveRecordPlanHeads(plan, documentsByCollection, { 
   return { ...plan, operations };
 }
 
-// js/core/cloud-record-plan-executor.js?v=20.26.317
+// js/core/cloud-record-plan-executor.js?v=20.26.318
 var RECORD_PLAN_WORKER_PROTOCOL = "danbridge-record-plan-worker-v1";
 async function prepareCanonicalRecordPlan(options) {
   const plan = prepareActiveRecordSync(options);

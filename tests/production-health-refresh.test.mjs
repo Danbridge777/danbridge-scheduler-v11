@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url),{refreshProductionHealth}=require('../functions/production-health-refresh.cjs');
 const at=Date.parse('2026-09-12T07:00:00Z'),path='companies/danbridge/systemHealth/ownerAlert';
-function fixture({errors=[],pending=0,unread=178,previous=null,protection={pitrEnabled:true,deleteProtectionEnabled:true},fail=null}={}){
+function fixture({errors=[],pending=0,unread=178,previous=null,protection={pitrEnabled:true,deleteProtectionEnabled:true},fail=null,capacity={schema:'danbridge-role-capacity-v1',roleCount:7,maximumBytes:100000,budgetBytes:800000,truncated:false}}={}){
  const writes=[],queries=[];
  const firestore={
   collection(name){assert.ok(['errorEvents','scheduleRequests','scheduleNotifications'].some(k=>name==='companies/danbridge/'+k));const q={name,filters:[],fields:[],limit:null};queries.push(q);const query={where(...args){q.filters.push(args);return query},select(...fields){q.fields=fields;return query},limit(n){q.limit=n;return query},async get(){if(fail)throw Error(fail);assert.equal(name,'companies/danbridge/errorEvents');return{docs:errors.map(row=>({data:()=>row}))}},count(){return{get:async()=>({data:()=>({count:name.endsWith('/scheduleRequests')?pending:unread})})}}};return query},
   doc(value){assert.equal(value,path);return{path:value}},
   async runTransaction(fn){return fn({get:async ref=>{assert.equal(ref.path,path);return{data:()=>previous}},set(ref,value,options){assert.equal(ref.path,path);assert.deepEqual(options,{merge:false});writes.push(value)}})}
  };
- return{writes,queries,run:()=>refreshProductionHealth({firestore,primaryOwnerEmail:'owner@example.com',readProtection:async()=>protection,serverTimestamp:()=>null,now:()=>at})};
+ return{writes,queries,run:()=>refreshProductionHealth({firestore,primaryOwnerEmail:'owner@example.com',readProtection:async()=>protection,readRoleCapacity:async()=>capacity,serverTimestamp:()=>null,now:()=>at})};
 }
 test('unread delivered notifications remain reminders, and health refresh writes only one metadata snapshot',async()=>{
  const f=fixture(),r=await f.run();assert.equal(r.state,'healthy');assert.equal(r.formalDataWrites,0);assert.equal(r.healthWrites,1);assert.deepEqual(r.alerts,[]);assert.deepEqual(r.reminders,['178 筆通知待閱讀']);assert.equal(r.metrics.unreadNotifications,178);
@@ -34,3 +34,11 @@ test('failed reads or invalid aggregate never overwrite the last health snapshot
 test('an older overlapping health run cannot overwrite a later sample',async()=>{
  const f=fixture({previous:{sampleStartedAt:new Date(at+1000)}}),r=await f.run();assert.equal(r.state,'superseded');assert.equal(r.healthWrites,0);assert.equal(f.writes.length,0);
 });
+test('capacity warning is distinct from failure; critical capacity or incomplete sample needs attention',async()=>{
+ for(const [maximumBytes,truncated,state] of [[559999,false,'healthy'],[560000,false,'healthy'],[720000,false,'attention'],[100,true,'attention']]){
+  const f=fixture({capacity:{schema:'danbridge-role-capacity-v1',roleCount:7,maximumBytes,budgetBytes:800000,truncated}}),r=await f.run();assert.equal(r.state,state);
+  assert.equal(f.writes[0].roleCapacity.maximumBytes,maximumBytes);
+  if(maximumBytes===560000)assert.ok(r.reminders.some(x=>x.includes('容量遷移')));
+ }
+});
+test('invalid capacity metadata cannot overwrite healthy or failed previous evidence',async()=>{const f=fixture({capacity:{schema:'danbridge-role-capacity-v1',roleCount:7,maximumBytes:NaN,budgetBytes:800000,truncated:false}});await assert.rejects(f.run(),/Invalid role capacity/);assert.equal(f.writes.length,0)});

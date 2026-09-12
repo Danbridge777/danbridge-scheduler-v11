@@ -2,8 +2,8 @@ import {createRoleViewTransportSession} from './role-view-transport-session.js';
 
 // A server-published manifest, not a URL flag, enables the new reader. The
 // existing authorized role document remains the subscription boundary.
-export function createPublishedRoleViewConsumer({identity,readCurrentHead,readPart,readParts=null,isActive,apply,onState=()=>{},schedule=setTimeout,cancel=clearTimeout}){
- let closed=false,enabled=false,timer=null,serial=0,retries=0;
+export function createPublishedRoleViewConsumer({identity,readCurrentHead,readPart,readParts=null,isActive,apply,onState=()=>{},schedule=setTimeout,cancel=clearTimeout,now=Date.now}){
+ let closed=false,enabled=false,timer=null,serial=0,retries=0,refreshWork=null,lastRefreshAt=-Infinity;
  const active=()=>!closed&&isActive();
  const clear=()=>{if(timer!==null){cancel(timer);timer=null}};
  const session=createRoleViewTransportSession({identity,readCurrentHead,readPart,readParts,isActive:active,apply,onState:event=>{if(active())onState(event)}});
@@ -30,6 +30,21 @@ export function createPublishedRoleViewConsumer({identity,readCurrentHead,readPa
  return Object.freeze({
   invalidate(){closed=true;serial++;clear();session.invalidate()},
   diagnostics(){return{...session.diagnostics(),enabled,retries,retryPending:timer!==null}},
+  // Wake a suspended listener using the same server-authorized read and
+  // integrity checks. Never reload the page or replace the operation journal.
+  refresh(){
+   if(!active()||!enabled)return Promise.resolve(false);
+   if(refreshWork)return refreshWork;
+   const timestamp=now();
+   if(timestamp-lastRefreshAt<1000)return Promise.resolve(false);
+   lastRefreshAt=timestamp;clear();const token=++serial;
+   onState({state:'loading',reason:'foreground-verification'});
+   const work=(async()=>{
+    try{const head=await readCurrentHead();if(!active()||token!==serial)return false;await consume(head,token);return active()&&token===serial}
+    catch(error){retry(error,token);return false}
+   })();
+   refreshWork=work.finally(()=>{refreshWork=null});return refreshWork;
+  },
   async receiveSnapshot({exists=true,data,fromCache=false,hasPendingWrites=false}){
    if(!active())return true;
    if(hasPendingWrites||fromCache)return enabled||Object.hasOwn(data||{},'roleChunkManifest');

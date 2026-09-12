@@ -1,0 +1,21 @@
+// Generates local review artifacts from exact live Rules. Never deploys.
+import {createRequire} from 'node:module';
+import {mkdtemp,writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import assert from 'node:assert/strict';
+import {patchProductionNotificationScopeRules,patchStagingNotificationScopeRules} from './production-notification-scope-rules-patch.mjs';
+const project=process.argv[2];assert.ok(['danbridge-d8877','danbridge-d8877-staging'].includes(project));
+const require=createRequire(import.meta.url),cli='/usr/local/lib/node_modules/firebase-tools/lib';
+const account=require(cli+'/auth.js').getGlobalDefaultAccount();
+await require(cli+'/requireAuth.js').requireAuth({project,user:account.user,tokens:account.tokens});
+const {Client}=require(cli+'/apiv2.js'),api=require(cli+'/api.js'),client=new Client({auth:true,apiVersion:'v1',urlPrefix:api.rulesOrigin()});
+const release=(await client.get(`/projects/${project}/releases/cloud.firestore`)).body;
+assert.ok(release.rulesetName?.startsWith(`projects/${project}/rulesets/`));
+const files=(await client.get('/'+release.rulesetName,{skipLog:{resBody:true}})).body.source.files;assert.equal(files.length,1);
+const patch=(project.endsWith('-staging')?patchStagingNotificationScopeRules:patchProductionNotificationScopeRules)(files[0].content);
+const directory=await mkdtemp('/private/tmp/danbridge-318-notification-rules-');
+await writeFile(join(directory,'baseline.rules'),files[0].content);
+await writeFile(join(directory,'candidate.rules'),patch.source);
+const evidence={project,baseRuleset:release.rulesetName,baseSha256:patch.baseSha256,candidateSha256:patch.afterSha256,changedScope:'notification-current-role-read-only-boundary',dataWrites:0,rulesDeployed:false};
+await writeFile(join(directory,'evidence.json'),JSON.stringify(evidence,null,2));
+console.log(JSON.stringify({directory,...evidence}));

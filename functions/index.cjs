@@ -150,18 +150,8 @@ exports.stagingPublishedWorkspaceOperation=onCall({region:'asia-east1',serviceAc
 
 exports.stagingAcknowledgeScheduleNotification=onCall({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:30,memory:'256MiB',concurrency:40,minInstances:1,maxInstances:10},async request=>{
  try{
-  const [{normalizeProductionNotificationAcknowledgeRequest,normalizeProductionNotificationActor,assertProductionNotificationRecipient}]=await Promise.all([import('../js/core/production-notification-policy.js')]),actor=normalizeProductionNotificationActor({uid:request.auth?.uid,email:request.auth?.token?.email,emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)}),{notificationIds}=normalizeProductionNotificationAcknowledgeRequest(request.data),app=getApps().find(row=>row.options?.projectId===PROJECT_ID)??initializeApp({projectId:PROJECT_ID,credential:applicationDefault()}),firestore=getFirestore(app);
-  const result=await firestore.runTransaction(async transaction=>{
-   const refs=notificationIds.map(id=>firestore.doc(`companies/danbridge/scheduleNotifications/${id}`)),snapshots=await Promise.all(refs.map(ref=>transaction.get(ref)));let updatedCount=0,alreadyReadCount=0;
-   for(let index=0;index<snapshots.length;index++){
-    const snapshot=snapshots[index];
-    if(!snapshot.exists)throw new Error('找不到通知，請重新整理');
-    assertProductionNotificationRecipient(snapshot.data(),actor);
-    if(snapshot.data()?.read===true){alreadyReadCount++;continue}
-    transaction.update(refs[index],{read:true,acknowledgedAt:FieldValue.serverTimestamp(),acknowledgedBy:actor.uid});updatedCount++;
-   }
-   return{updatedCount,alreadyReadCount};
-  });
+  const {normalizeProductionNotificationAcknowledgeRequest,normalizeProductionNotificationActor}=await import('../js/core/production-notification-policy.js'),actor=normalizeProductionNotificationActor({uid:request.auth?.uid,email:request.auth?.token?.email,emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)}),{notificationIds}=normalizeProductionNotificationAcknowledgeRequest(request.data),app=getApps().find(row=>row.options?.projectId===PROJECT_ID)??initializeApp({projectId:PROJECT_ID,credential:applicationDefault()}),firestore=getFirestore(app);
+  const result=await require('./production-notification-acknowledge.cjs').acknowledgeScheduleNotifications({firestore,actor,notificationIds,serverTimestamp:()=>FieldValue.serverTimestamp()});
   return{schema:'danbridge-staging-schedule-notification-acknowledge-response-v1',ok:true,...result};
  }catch(error){if(error instanceof HttpsError)throw error;console.error('STAGING_NOTIFICATION_ACK_BLOCKED',JSON.stringify({name:String(error?.name||'Error'),message:String(error?.message||'blocked')}));throw new HttpsError('failed-precondition',String(error?.message||'通知確認已安全阻止。').slice(0,200))}
 });
@@ -250,18 +240,8 @@ exports.productionTeacherLeaveOperation=onCall({region:'asia-east1',serviceAccou
 
 exports.productionAcknowledgeScheduleNotification=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:30,memory:'256MiB',concurrency:40,minInstances:0,maxInstances:20},async request=>{
  try{
-  const runtimeValue=await productionRuntime(),firestore=runtimeValue.firestore,{normalizeProductionNotificationAcknowledgeRequest,normalizeProductionNotificationActor,assertProductionNotificationRecipient}=await import('../js/core/production-notification-policy.js'),actor=normalizeProductionNotificationActor({uid:request.auth?.uid,email:request.auth?.token?.email,emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)}),{notificationIds}=normalizeProductionNotificationAcknowledgeRequest(request.data);
-  const result=await firestore.runTransaction(async transaction=>{
-   const refs=notificationIds.map(id=>firestore.doc(`companies/danbridge/scheduleNotifications/${id}`)),snapshots=await Promise.all(refs.map(ref=>transaction.get(ref)));let updatedCount=0,alreadyReadCount=0;
-   for(let index=0;index<snapshots.length;index++){
-    const snapshot=snapshots[index];
-    if(!snapshot.exists)throw new Error('找不到通知，請重新整理');
-    assertProductionNotificationRecipient(snapshot.data(),actor);
-    if(snapshot.data()?.read===true){alreadyReadCount++;continue}
-    transaction.update(refs[index],{read:true,acknowledgedAt:FieldValue.serverTimestamp(),acknowledgedBy:actor.uid});updatedCount++;
-   }
-   return{updatedCount,alreadyReadCount};
-  });
+  const runtimeValue=await productionRuntime(),firestore=runtimeValue.firestore,{normalizeProductionNotificationAcknowledgeRequest,normalizeProductionNotificationActor}=await import('../js/core/production-notification-policy.js'),actor=normalizeProductionNotificationActor({uid:request.auth?.uid,email:request.auth?.token?.email,emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)}),{notificationIds}=normalizeProductionNotificationAcknowledgeRequest(request.data);
+  const result=await require('./production-notification-acknowledge.cjs').acknowledgeScheduleNotifications({firestore,actor,notificationIds,serverTimestamp:()=>FieldValue.serverTimestamp()});
   return{schema:'danbridge-schedule-notification-acknowledge-response-v1',ok:true,notificationCount:notificationIds.length,...result};
  }catch(error){
   if(error instanceof HttpsError)throw error;
@@ -316,7 +296,7 @@ exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PR
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),trusted=runtimeValue.assertProductionTrustedOperation(request.data);
   if(trusted.actor.uid!==caller.uid||trusted.actor.email!==caller.email)throw new HttpsError('permission-denied','操作身分不一致。');
   if(PUBLISHED_ROLE_TRANSPORT_ENABLED){
-   if(!publishedOwnerRuntimePromise)publishedOwnerRuntimePromise=createPublishedOwnerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,historyVersionCache:true,release:'20.26.317'}).catch(error=>{publishedOwnerRuntimePromise=null;throw error});
+   if(!publishedOwnerRuntimePromise)publishedOwnerRuntimePromise=createPublishedOwnerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,historyVersionCache:true,release:'20.26.318'}).catch(error=>{publishedOwnerRuntimePromise=null;throw error});
    return await (await publishedOwnerRuntimePromise).execute(request.data,{...caller,emailVerified:true,appVerified:Boolean(request.app)});
   }
   const adapters=runtimeValue.adaptersFor({uid:caller.uid,email:caller.email});

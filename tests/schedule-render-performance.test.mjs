@@ -5,6 +5,30 @@ import vm from 'node:vm';
 
 const source=path=>readFile(new URL(path,import.meta.url),'utf8');
 
+test('從總覽新增課程或在下一幀前換頁，必須更新實際可見頁面且只保存一次',async()=>{
+ const code=await source('../js/modules/calendar/scheduler-ui.js');
+ const commit=code.slice(code.indexOf('let schedulePersistenceFrame='),code.indexOf('function updateSelectionCount('));
+ for(const [initial,visible] of [['dashboard','dashboard'],['calendar','dashboard'],['dashboard','calendar'],['finance','finance']]){
+  const frames=[],timers=[],renders=[],saves=[],document={body:{dataset:{activeSection:initial}}};
+  const context={document,Date,performance:{now:()=>0},calendarTeacherConflictCache:new Map(),requestAnimationFrame:fn=>{frames.push(fn);return 1},setTimeout:fn=>{timers.push(fn);return 2},calendarSectionIsActive:()=>document.body.dataset.activeSection==='calendar',renderCalendar:options=>renders.push(['calendar',options]),saveDB:options=>saves.push(options),window:{renderVisibleWorkspace:()=>renders.push([document.body.dataset.activeSection])}};
+  vm.createContext(context);vm.runInContext(commit,context);
+  context.commitScheduleMutation('lesson.create');context.commitScheduleMutation('lesson.create');
+  assert.equal(renders.length,0);assert.equal(frames.length,1);
+  document.body.dataset.activeSection=visible;frames.shift()();
+  assert.equal(renders.length,1);assert.equal(renders[0][0],visible);assert.equal(saves.length,0);
+  timers.shift()();assert.equal(saves.length,1);assert.equal(saves[0].skipRender,true);assert.equal(saves[0].scheduleAction,'lesson.create');
+ }
+});
+
+test('畫面渲染失敗仍保存已完成的課表操作，不丟失下一步同步',async()=>{
+ const code=await source('../js/modules/calendar/scheduler-ui.js');
+ const commit=code.slice(code.indexOf('let schedulePersistenceFrame='),code.indexOf('function updateSelectionCount('));
+ const frames=[],timers=[],saves=[],errors=[],context={document:{body:{dataset:{activeSection:'dashboard'}}},Date,performance:{now:()=>0},console:{error:(...args)=>errors.push(args)},calendarTeacherConflictCache:null,requestAnimationFrame:fn=>{frames.push(fn);return 1},setTimeout:fn=>{timers.push(fn);return 2},calendarSectionIsActive:()=>false,renderCalendar:()=>{},saveDB:options=>saves.push(options),window:{renderVisibleWorkspace:()=>{throw Error('synthetic render failure')}}};
+ vm.createContext(context);vm.runInContext(commit,context);context.commitScheduleMutation('lesson.create');
+ assert.doesNotThrow(()=>frames.shift()());assert.equal(timers.length,1);timers.shift()();
+ assert.equal(saves.length,1);assert.equal(saves[0].scheduleAction,'lesson.create');assert.equal(errors.length,1);
+});
+
 test('實際角色 UI 包裝保留課表延後分析參數、this 與回傳值',async()=>{
  const code=await source('../js/app/v20014-role-responsive-ux.js');
  const calls=[],receiver={},options={deferAnalysis:true},result={rendered:true};

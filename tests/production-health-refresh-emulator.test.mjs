@@ -15,12 +15,17 @@ test('Firestore emulator: exact owner aggregates, timestamp freshness, no busine
   batch.set(db.doc(base+'/scheduleRequests/request'),{status:'completed'});
   batch.set(db.doc(base+'/errorEvents/old'),{occurredAt:Timestamp.fromMillis(clock-2*86400000),area:'unknown',code:'broken'});
   batch.set(db.doc(base+'/lessons/sentinel'),{id:'sentinel',note:'must remain unchanged'});
+  batch.set(db.doc('companyAccess/capacity-teacher@example.test'),{companyId:'danbridge',active:true,role:'teacher'});
+  batch.set(db.doc(base+'/teacherViews/capacity-teacher@example.test'),{roleChunkManifest:{digest:'test-capacity'},db:{notes:'x'.repeat(570000)}});
+  batch.set(db.doc('companyAccess/archived@example.test'),{companyId:'danbridge',active:false,role:'teacher'});
+  batch.set(db.doc(base+'/teacherViews/archived@example.test'),{roleChunkManifest:{digest:'test-capacity'},db:{notes:'x'.repeat(750000)}});
   await batch.commit();
-  const paths=['scheduleNotifications','scheduleRequests','errorEvents','lessons'];
+  const paths=['scheduleNotifications','scheduleRequests','errorEvents','lessons','teacherViews'];
   const snapshot=async()=>Promise.all(paths.map(async path=>(await db.collection(base+'/'+path).get()).docs.map(d=>({id:d.id,updateTime:d.updateTime.toMillis(),data:d.data()}))));
   const before=await snapshot(),result=await run();
   assert.equal(result.state,'healthy');assert.equal(result.metrics.unreadNotifications,7);assert.equal(result.formalDataWrites,0);assert.equal(result.healthWrites,1);
   const saved=(await health.get()).data();assert.equal(saved.checkedAt.toMillis(),clock);assert.equal(saved.sampleStartedAt.toMillis(),clock);assert.equal(saved.maxAgeMs,2700000);assert.ok(saved.updatedAt instanceof Timestamp);
+  assert.equal(saved.roleCapacity.roleCount,1);assert.ok(saved.roleCapacity.maximumBytes>=570000&&saved.roleCapacity.maximumBytes<600000);assert.ok(saved.reminders.some(text=>text.includes('容量遷移')));assert.doesNotMatch(JSON.stringify(saved.roleCapacity),/example.test|test-capacity/);
   assert.deepEqual(await snapshot(),before);
   clock-=1000;assert.equal((await run()).state,'superseded');assert.deepEqual((await health.get()).data(),saved);
   clock+=2000;await assert.rejects(run({readProtection:async()=>{throw Error('protection unavailable')}}),/protection unavailable/);assert.deepEqual((await health.get()).data(),saved);

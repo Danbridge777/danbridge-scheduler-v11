@@ -43,7 +43,7 @@ async function executePublishedWorkspace({native,serverTimestamp,deleteField,ide
   const current=verifyMembers(rows.slice(0,4));
   current.forEach((member,index)=>{if(JSON.stringify(roleCore(member))!==JSON.stringify(roleCore(rows[index+4].data())))throw Error('Workspace live role revision changed')});
  });
- const dependencies={firestore,serverTimestamp,deleteField,primaryOwnerEmail:MEMBERS[0],release:'20.26.317',preserveLegacyViews,historyVersionCache:true,onTiming:sample=>console.info('ISOLATED_OWNER_TIMING',JSON.stringify(sample))};
+ const dependencies={firestore,serverTimestamp,deleteField,primaryOwnerEmail:MEMBERS[0],release:'20.26.318',preserveLegacyViews,historyVersionCache:true,onTiming:sample=>console.info('ISOLATED_OWNER_TIMING',JSON.stringify(sample))};
  const read=async()=>Object.fromEntries(await Promise.all(FULL_RECORD_COLLECTIONS.map(async key=>[key,(await firestore.collection(`productionFullRecordShadows/danbridge/collections/${key}/records`).get()).docs.map(row=>({id:row.id,data:row.data()}))])));
  if(data.action==='seed'){
   const empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(k=>[k,[]]));
@@ -62,7 +62,7 @@ async function executePublishedWorkspace({native,serverTimestamp,deleteField,ide
   const state=(await root.get()).data();
   if(state.state==='active')return{state:'ready',replayed:true,runId:data.runId,formalDataWrites:0};
   const publisher=await createPublishedRolePublisher(dependencies);
-  await publisher.execute({schema:'danbridge-production-role-view-publish-v1',requestId:'workspace-seed-'+data.runId,sourceHash,release:'20.26.317'},identity);
+  await publisher.execute({schema:'danbridge-production-role-view-publish-v1',requestId:'workspace-seed-'+data.runId,sourceHash,release:'20.26.318'},identity);
   await firestore.runTransaction(async tx=>{await tx.get(firestore.doc(policy.PRODUCTION_RECORD_SAFETY_PATH));/* role and root checks above */});
   await root.update({state:'active',readyAt:serverTimestamp()});
   return{state:'ready',runId:data.runId,syntheticRecords:count,formalDataWrites:0};
@@ -91,13 +91,9 @@ async function executePublishedWorkspace({native,serverTimestamp,deleteField,ide
   if(data.action==='publishRoles')return await(await createPublishedRolePublisher(dependencies)).execute(data.payload,identity);
   if(data.action==='publishNotifications')return await(await createProductionNotificationPublisher(dependencies)).execute(data.payload,identity);
   if(data.action==='acknowledge'){
-   const {normalizeProductionNotificationAcknowledgeRequest,assertProductionNotificationRecipient}=await import('../js/core/production-notification-policy.js');
+   const {normalizeProductionNotificationAcknowledgeRequest}=await import('../js/core/production-notification-policy.js');
    const {notificationIds}=normalizeProductionNotificationAcknowledgeRequest(data.payload);
-   const result=await firestore.runTransaction(async tx=>{
-    const refs=notificationIds.map(id=>firestore.doc('companies/danbridge/scheduleNotifications/'+id)),rows=await tx.getAll(...refs);let updatedCount=0,alreadyReadCount=0;
-    rows.forEach((row,index)=>{if(!row.exists)throw Error('Notification missing');assertProductionNotificationRecipient(row.data(),identity);if(row.data().read===true)alreadyReadCount++;else{tx.update(refs[index],{read:true,acknowledgedAt:serverTimestamp(),acknowledgedBy:identity.uid});updatedCount++}});
-    return{updatedCount,alreadyReadCount};
-   });
+   const result=await require('./production-notification-acknowledge.cjs').acknowledgeScheduleNotifications({firestore,actor:identity,notificationIds,serverTimestamp});
    return{schema:'danbridge-schedule-notification-acknowledge-response-v1',ok:true,notificationCount:notificationIds.length,...result};
   }
   throw Error('Unsupported workspace operation');

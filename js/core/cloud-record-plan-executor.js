@@ -22,7 +22,7 @@ export async function prepareRecordPlanOffThread(options,{WorkerClass=globalThis
  // capture their own immutable input; no command waits behind another here.
  // No Auth, business data, plan or request identity is retained in this slot.
  if(reuseWorker&&idlePlanner?.WorkerClass===WorkerClass){const slot=idlePlanner;idlePlanner=null;clearTimeout(slot.timer);worker=slot.worker}
- try{worker??=new WorkerClass(new URL('../generated/record-plan.worker.js?v=20.26.317',import.meta.url),{type:'module',name:'danbridge-record-plan'})}
+ try{worker??=new WorkerClass(new URL('../generated/record-plan.worker.js?v=20.26.318',import.meta.url),{type:'module',name:'danbridge-record-plan'})}
  catch{return prepareCanonicalRecordPlan(input)}
  const requestId=++sequence;
  return new Promise((resolve,reject)=>{

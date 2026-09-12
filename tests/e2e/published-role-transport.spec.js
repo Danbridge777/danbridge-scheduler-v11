@@ -3,6 +3,7 @@ const path=require('node:path');
 const {test,expect}=require('@playwright/test');
 const cloudSource=fs.readFileSync(path.join(__dirname,'../../js/core/firebase-auth-and-cloud-sync.module.js'),'utf8');
 const helper=cloudSource.slice(cloudSource.indexOf('function createPublishedRoleConsumer('),cloudSource.indexOf('async function subscribeTeacherLegacy('));
+const foregroundHooks=cloudSource.slice(cloudSource.indexOf('function verifyForegroundRole(){'),cloudSource.indexOf('\n\nsetAuthCard();'));
 
 // Real browser engines execute the actual page helper and receiver modules.
 // Server reads are isolated fixtures; this is NOT cloud latency or login proof.
@@ -10,7 +11,7 @@ for(const kind of ['teacher','scheduler','branch_manager'])test(`${kind}: actual
  await page.route('**/role-transport-lab',route=>route.fulfill({contentType:'text/html',body:'<button id="next">下一批 40 堂</button><output id="count">0</output><output id="revision">0</output><output id="state"></output><div id="cards"></div>'}));
  await page.goto('/role-transport-lab');
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
- await page.evaluate(async({helper,kind})=>{
+ await page.evaluate(async({helper,kind,foregroundHooks})=>{
   const {createPublishedRoleViewConsumer}=await import('/js/core/published-role-view-consumer.js');
   const {buildRoleViewChunks}=await import('/js/core/role-view-chunks.js');
   const {FULL_RECORD_COLLECTIONS}=await import('/js/core/cloud-full-record-shadow.js');
@@ -29,6 +30,8 @@ for(const kind of ['teacher','scheduler','branch_manager'])test(`${kind}: actual
   // The helper is extracted verbatim from the production page, not reimplemented.
   const create=eval('('+helper.trim()+')');
   const receive=create('head',identity,apply);
+  const cloudRole=kind==='scheduler'?'teacher':kind;
+  eval(foregroundHooks);
   const empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(k=>[k,[]]));
   let revision=0;
   const build=()=>{
@@ -38,8 +41,8 @@ for(const kind of ['teacher','scheduler','branch_manager'])test(`${kind}: actual
    head={roleChunkManifest:value.manifest,sourceRecordRevision:revision,sourceRecordHash:value.manifest.sourceHash,scopedSourceRecordRevision:revision,scopedSourceRecordHash:value.manifest.sourceHash,active:true,companyId:COMPANY_ID,signature:'scope-1'};
   };
   document.getElementById('next').onclick=async()=>{build();await receive(snap(head));document.getElementById('revision').textContent=String(revision)};
-  window.fixture={applied,get reads(){return reads},get diagnostics(){return activePublishedRoleConsumer.diagnostics()},async revoke(){cloudRoleAccessSignature='scope-2';await receive(snap(head))},async corrupt(){head={...head,roleChunkManifest:null};await receive(snap(head))},async legacy(){return receive(snap({db:empty()}))},close(){activePublishedRoleConsumer.invalidate()}};
- },{helper,kind});
+  window.fixture={applied,get reads(){return reads},get diagnostics(){return activePublishedRoleConsumer.diagnostics()},wake(){build();window.dispatchEvent(new Event('pageshow'));window.dispatchEvent(new Event('online'));document.dispatchEvent(new Event('visibilitychange'))},async revoke(){cloudRoleAccessSignature='scope-2';await receive(snap(head))},async corrupt(){head={...head,roleChunkManifest:null};await receive(snap(head))},async legacy(){return receive(snap({db:empty()}))},close(){activePublishedRoleConsumer.invalidate()}};
+ },{helper,kind,foregroundHooks});
  // Before a server marker, the actual existing listener remains responsible.
  expect(await page.evaluate(()=>fixture.legacy())).toBe(false);
  expect(await page.evaluate(()=>fixture.reads)).toBe(0);
@@ -50,7 +53,13 @@ for(const kind of ['teacher','scheduler','branch_manager'])test(`${kind}: actual
  const state=await page.evaluate(()=>({applied:fixture.applied,diagnostics:fixture.diagnostics}));
  expect(state.applied).toHaveLength(12);expect(state.diagnostics.revision).toBe(12);
  for(let i=0;i<12;i++){expect(new Set(state.applied[i].ids).size).toBe(state.applied[i].ids.length);expect(state.applied[i].revision).toBe(i+1);expect(state.applied[i].times.every(t=>t===(i%4===0?'08:00':'09:00'))).toBe(true)}
- await page.evaluate(()=>fixture.corrupt());expect(await page.evaluate(()=>fixture.applied.length)).toBe(12);
- await page.evaluate(()=>fixture.revoke());expect(await page.evaluate(()=>fixture.applied.length)).toBe(12);
+ // Miss a subscription update while suspended, then use the actual application
+ // pageshow/online/visibility hooks. The burst must apply the new head once.
+ await page.evaluate(()=>fixture.wake());
+ await expect(page.locator('#count')).toHaveText('40');
+ expect(await page.evaluate(()=>fixture.applied.length)).toBe(13);
+ expect(await page.evaluate(()=>fixture.diagnostics.revision)).toBe(13);
+ await page.evaluate(()=>fixture.corrupt());expect(await page.evaluate(()=>fixture.applied.length)).toBe(13);
+ await page.evaluate(()=>fixture.revoke());expect(await page.evaluate(()=>fixture.applied.length)).toBe(13);
  await page.evaluate(()=>fixture.close());expect(errors).toEqual([]);
 });

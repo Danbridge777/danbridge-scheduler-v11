@@ -23,7 +23,7 @@
  function normalizeIdList(values=[]){return [...new Set(values.filter(Boolean))]}
  function repairCampRegistration(x,season){const dates=[...new Set(Array.isArray(x.dates)?x.dates:[])].filter(d=>typeof d==='string'&&(!x.month||d.startsWith(x.month+'-'))).sort(),month=x.month||(dates[0]||'').slice(0,7),record={...x,id:x.id||uid(),season,branchId:x.branchId||((db.students||[]).find(s=>s.id===x.studentId)?.branchIds||[])[0]||'unassigned',month,dates,pricingMode:x.pricingMode||'daily',dailyRate:+x.dailyRate||0,weeklyRate:+x.weeklyRate||0,monthlyRate:+x.monthlyRate||0,frontWeeks:+x.frontWeeks||0,frontWeeklyRate:+x.frontWeeklyRate||0,backWeeklyRate:+x.backWeeklyRate||0};record.totalFee=summerRegistrationTotal(record);return record}
  function repairDataIntegrity(){
-  if(window.DanbridgeAccess?.getContext?.().role==='branch_manager')return alert('校區管理者為唯讀，資料整理只能由 Owner 執行。');
+  if(window.DanbridgeAccess?.getContext?.().role!=='owner')return alert('資料整理只能由 Owner 執行。');
   snapshot?.();
   db=normalizeBranchData(db);
   const lessonByStudent=new Map(),lessonByTeacher=new Map();

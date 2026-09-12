@@ -2,6 +2,19 @@ const {test,expect}=require('@playwright/test');
 const fs=require('node:fs'),path=require('node:path');
 const source=fs.readFileSync(path.resolve(__dirname,'../../js/core/firebase-auth-and-cloud-sync.module.js'),'utf8');
 const line=source.split('\n').find(line=>line.trimStart().startsWith('metrics.innerHTML='));
+const capacitySource=source.slice(source.indexOf(' const capacity=ownerHealthData?.roleCapacity;'),source.indexOf('\n',source.indexOf("alerts.push({level:'pending',message:`${healthFreshness.state")));
+for(const freshness of ['current','stale'])test(`capacity reminder renders without reporting sync failure (${freshness})`,async({page})=>{
+ await page.goto('/tests/fixtures/native-display-cadence.html');
+ await page.evaluate(({capacitySource,freshness})=>{
+  const ownerHealthData={roleCapacity:{schema:'danbridge-role-capacity-v1',maximumBytes:622865,budgetBytes:800000}},healthFreshness={state:freshness},alerts=[];
+  new Function('ownerHealthData','healthFreshness','alerts',capacitySource)(ownerHealthData,healthFreshness,alerts);
+  const output=document.createElement('output');output.id='capacity-reminder';output.textContent=alerts.map(row=>row.message).join('\n');document.body.append(output);
+ },{capacitySource,freshness});
+ await expect(page.locator('#capacity-reminder')).toContainText('78% 安全預算');
+ await expect(page.locator('#capacity-reminder')).toContainText('不會自動刪除資料');
+ await expect(page.locator('#capacity-reminder')).not.toContainText('同步失敗');
+ if(freshness==='stale')await expect(page.locator('#capacity-reminder')).toContainText('上次檢查：');
+});
 test('health dashboard keeps delivered unread notices separate from unsent batches',async({page})=>{
  await page.goto('/tests/fixtures/native-display-cadence.html');
  await page.evaluate(({line})=>{

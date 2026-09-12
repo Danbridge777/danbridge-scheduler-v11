@@ -9,6 +9,28 @@ test.beforeEach(async({page})=>{
   saveDB=()=>{};renderAll();switchTab('calendar');$('calendarDate').value='2026-09-08';$('calendarMode').value='week';renderCalendar();
  });
 });
+test('從總覽實際新增課程後，課程數立即更新且不重畫隱藏頁面',async({page})=>{
+ await page.evaluate(()=>{
+  monthNow=()=> '2026-09';todayStr=()=> '2026-09-12';switchTab('dashboard');renderDashboard();
+  window.__dashboardSaves=[];saveDB=options=>window.__dashboardSaves.push(options);
+  window.__hiddenCalendarRenders=0;window.__fullRenders=0;
+  renderCalendar=()=>window.__hiddenCalendarRenders++;renderAll=()=>window.__fullRenders++;
+ });
+ await expect(page.locator('#mLessons')).toHaveText('1');
+ await page.locator('#dashboard').getByRole('button',{name:'＋ 新增課程',exact:true}).click();
+ await page.getByRole('combobox',{name:'搜尋學生',exact:true}).fill('小晴');
+ await page.getByRole('option').filter({hasText:'小晴'}).click();
+ await page.locator('#lessonTeacher').selectOption('t');
+ await page.locator('#lessonBranch').selectOption('art_museum');
+ await page.locator('#lessonDate').fill('2026-09-12');
+ await page.locator('#lessonTitle').fill('總覽即時更新驗收');
+ await page.getByRole('button',{name:'儲存課程',exact:true}).click();
+ await expect(page.locator('#lessonModal')).not.toBeVisible();
+ await expect(page.locator('#mLessons')).toHaveText('2');
+ await expect.poll(()=>page.evaluate(()=>window.__dashboardSaves.length)).toBe(1);
+ expect(await page.evaluate(()=>({full:window.__fullRenders,hidden:window.__hiddenCalendarRenders,lessons:db.lessons.length,saves:window.__dashboardSaves}))).toEqual({full:0,hidden:0,lessons:2,saves:[{skipRender:true,scheduleAction:'lesson.create'}]});
+});
+
 test('團課懸停讀取本堂學生、不帶費用，角色切換及拖曳隱藏預覽',async({page})=>{
  const card=page.locator('#calendarCanvas [data-id="l"]').first();
  for(const role of ['owner','teacher','branch_manager']){

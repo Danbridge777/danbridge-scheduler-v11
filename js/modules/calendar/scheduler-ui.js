@@ -195,7 +195,12 @@ function commitScheduleMutation(scheduleAction='lesson.update.fields'){
   if(scheduleRenderFrame!==null)return;
   const render=()=>{
     scheduleRenderFrame=null;const renderStarted=typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();
-    renderCalendar({deferAnalysis:true});
+    // The lesson dialog also opens from dashboard/finance. Resolve the visible
+    // workspace at frame time, so a quick tab switch cannot leave its data stale.
+    try{
+      if(!calendarSectionIsActive()&&typeof window.renderVisibleWorkspace==='function')window.renderVisibleWorkspace();
+      else renderCalendar({deferAnalysis:true});
+    }catch(error){console.error('Schedule view rendering failed; preserving queued save:',error)}
     const renderFinished=typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();
     if(document.body?.dataset)document.body.dataset.lastScheduleRenderMs=String(Math.max(0,renderFinished-renderStarted).toFixed(1));
     if(schedulePersistenceFrame!==null)return;
