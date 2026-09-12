@@ -5,6 +5,7 @@ const {createPublishedOwnerRuntime}=require('./published-owner-runtime.cjs');
 const {createProductionSchedulerRuntime}=require('./production-scheduler-runtime.cjs');
 const {createPublishedRolePublisher}=require('./published-role-publisher.cjs');
 const {createProductionNotificationPublisher}=require('./production-notification-publisher.cjs');
+const runtimePool=require('./staging-workspace-runtime-pool.cjs').createWorkspaceRuntimePool();
 const PROJECT='danbridge-d8877-staging',PURPOSE='normal-ui-published-280-synthetic-only';
 const MEMBERS=['a0965487920@gmail.com','catherine890202@gmail.com','aa0966626336@gmail.com','yamiiii8549@gmail.com'];
 const ACTIONS=['seed','status','cleanup','owner','scheduler','publishRoles','publishNotifications','acknowledge'];
@@ -42,7 +43,7 @@ async function executePublishedWorkspace({native,serverTimestamp,deleteField,ide
   const current=verifyMembers(rows.slice(0,4));
   current.forEach((member,index)=>{if(JSON.stringify(roleCore(member))!==JSON.stringify(roleCore(rows[index+4].data())))throw Error('Workspace live role revision changed')});
  });
- const dependencies={firestore,serverTimestamp,deleteField,primaryOwnerEmail:MEMBERS[0],release:'20.26.312',preserveLegacyViews,historyVersionCache:true,onTiming:sample=>console.info('ISOLATED_OWNER_TIMING',JSON.stringify(sample))};
+ const dependencies={firestore,serverTimestamp,deleteField,primaryOwnerEmail:MEMBERS[0],release:'20.26.313',preserveLegacyViews,historyVersionCache:true,onTiming:sample=>console.info('ISOLATED_OWNER_TIMING',JSON.stringify(sample))};
  const read=async()=>Object.fromEntries(await Promise.all(FULL_RECORD_COLLECTIONS.map(async key=>[key,(await firestore.collection(`productionFullRecordShadows/danbridge/collections/${key}/records`).get()).docs.map(row=>({id:row.id,data:row.data()}))])));
  if(data.action==='seed'){
   const empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(k=>[k,[]]));
@@ -61,7 +62,7 @@ async function executePublishedWorkspace({native,serverTimestamp,deleteField,ide
   const state=(await root.get()).data();
   if(state.state==='active')return{state:'ready',replayed:true,runId:data.runId,formalDataWrites:0};
   const publisher=await createPublishedRolePublisher(dependencies);
-  await publisher.execute({schema:'danbridge-production-role-view-publish-v1',requestId:'workspace-seed-'+data.runId,sourceHash,release:'20.26.312'},identity);
+  await publisher.execute({schema:'danbridge-production-role-view-publish-v1',requestId:'workspace-seed-'+data.runId,sourceHash,release:'20.26.313'},identity);
   await firestore.runTransaction(async tx=>{await tx.get(firestore.doc(policy.PRODUCTION_RECORD_SAFETY_PATH));/* role and root checks above */});
   await root.update({state:'active',readyAt:serverTimestamp()});
   return{state:'ready',runId:data.runId,syntheticRecords:count,formalDataWrites:0};
@@ -84,9 +85,9 @@ async function executePublishedWorkspace({native,serverTimestamp,deleteField,ide
   }
   if(data.action==='owner'){
    if(!['record.apply','record.batch.apply','record.batch.preview'].includes(data.payload?.kind))throw Error('Only isolated record operations allowed');
-   return await(await createPublishedOwnerRuntime(dependencies)).execute(data.payload,identity);
+   return await(await runtimePool.get(native,{prefix,kind:'owner',preserveLegacyViews},()=>createPublishedOwnerRuntime(dependencies))).execute(data.payload,identity);
   }
-  if(data.action==='scheduler')return await(await createProductionSchedulerRuntime({...dependencies,publishedRoleChunks:true})).execute(data.payload,identity);
+  if(data.action==='scheduler')return await(await runtimePool.get(native,{prefix,kind:'scheduler',preserveLegacyViews},()=>createProductionSchedulerRuntime({...dependencies,publishedRoleChunks:true}))).execute(data.payload,identity);
   if(data.action==='publishRoles')return await(await createPublishedRolePublisher(dependencies)).execute(data.payload,identity);
   if(data.action==='publishNotifications')return await(await createProductionNotificationPublisher(dependencies)).execute(data.payload,identity);
   if(data.action==='acknowledge'){

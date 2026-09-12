@@ -10,7 +10,7 @@ test('native module worker preserves all 40 changes and audit order while input 
   // Use the exact module URL imported by the application runtime; an
   // unversioned URL creates a separate JS module and therefore a different
   // idle pool even when its source bytes are identical.
-  const executor=await import('/js/core/cloud-record-plan-executor.js?v=20.26.312');
+  const executor=await import('/js/core/cloud-record-plan-executor.js?v=20.26.313');
   const NativeWorker=window.Worker;window.__workerSuccess=0;window.__workerErrors=0;
   window.Worker=class extends NativeWorker{constructor(...args){super(...args);this.addEventListener('message',event=>{if(event.data?.ok===true)window.__workerSuccess++});this.addEventListener('error',()=>window.__workerErrors++)}};
   const empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(k=>[k,[]])),db=empty(),documents=empty();
@@ -29,7 +29,7 @@ test('native module worker preserves all 40 changes and audit order while input 
  });
  await page.getByLabel('下一步備註').fill('後續操作保留');await page.getByRole('button',{name:'下一步修改'}).click();
  const result=await page.evaluate(async()=>{const plan=await window.__workerResult;return{same:JSON.stringify(plan)===JSON.stringify(window.__expectedPlan),operations:plan.operationCount,room:plan.db.lessons[0].room,nextRoom:window.__workerInput.localDb.lessons[0].room,frames:window.__frames,chained:plan.operations.every((op,i)=>!i||op.baseHash===plan.operations[i-1].targetHash)}});
- expect(workers).toBe(1);expect(workerUrls[0]).toMatch(/\/js\/generated\/record-plan\.worker\.js\?v=20\.26\.312$/);expect(result.same).toBe(true);expect(result.operations).toBe(80);expect(result.room).toBe('B');expect(result.nextRoom).toBe('C');expect(result.frames).toBeGreaterThan(0);expect(result.chained).toBe(true);await expect(page.getByLabel('下一步備註')).toHaveValue('後續操作保留');
+ expect(workers).toBe(1);expect(workerUrls[0]).toMatch(/\/js\/generated\/record-plan\.worker\.js\?v=20\.26\.313$/);expect(result.same).toBe(true);expect(result.operations).toBe(80);expect(result.room).toBe('B');expect(result.nextRoom).toBe('C');expect(result.frames).toBeGreaterThan(0);expect(result.chained).toBe(true);await expect(page.getByLabel('下一步備註')).toHaveValue('後續操作保留');
  const committed=await page.evaluate(async()=>{
   const {runActiveRecordSync}=await import('/js/core/cloud-active-record-runtime.js');
   const {createOperationJournal}=await import('/js/core/cloud-operation-journal.js');
