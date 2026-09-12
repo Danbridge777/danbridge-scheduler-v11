@@ -14,6 +14,10 @@ test('legacy compatibility is server-gated consistently across scheduler, Owner 
  }
  const endpoint=source.slice(source.indexOf('exports.stagingPublishedWorkspaceOperation='),source.indexOf('exports.stagingAcknowledgeScheduleNotification='));
  assert.match(endpoint,/projectId:project,preserveLegacyViews:true/,'isolated real-UI acceptance exercises compatibility without enabling formal deployment');
+ const scheduler=source.split('\n').find(line=>line.includes('productionSchedulerRuntimePromise=createProductionSchedulerRuntime'));
+ assert.ok(scheduler.includes('historyVersionCache:PUBLISHED_ROLE_TRANSPORT_ENABLED'),'history reuse cannot run on legacy scheduler transport');
+ const owner=source.split('\n').find(line=>line.includes('publishedOwnerRuntimePromise=createPublishedOwnerRuntime'));
+ assert.ok(owner.includes('historyVersionCache:true'),'published Owner uses the staging-verified version reader');
 });
 test('published Owner production and isolated acceptance stamp the same release as the frontend',async()=>{
  const [entry,workspace,client]=await Promise.all(['../functions/index.cjs','../functions/staging-published-workspace.cjs','../js/core/firebase-auth-and-cloud-sync.module.js'].map(path=>readFile(new URL(path,import.meta.url),'utf8')));

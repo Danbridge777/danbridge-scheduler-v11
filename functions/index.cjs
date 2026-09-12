@@ -305,7 +305,7 @@ exports.productionPublishScheduleNotifications=onCall({region:'asia-east1',servi
 exports.productionSchedulerOperation=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'1GiB',concurrency:4,minInstances:1,maxInstances:10},async request=>{
  try{
   const runtimeValue=await productionRuntime();
-  if(!productionSchedulerRuntimePromise)productionSchedulerRuntimePromise=createProductionSchedulerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,publishedRoleChunks:PUBLISHED_ROLE_TRANSPORT_ENABLED,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY}).catch(error=>{productionSchedulerRuntimePromise=null;throw error});
+  if(!productionSchedulerRuntimePromise)productionSchedulerRuntimePromise=createProductionSchedulerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,publishedRoleChunks:PUBLISHED_ROLE_TRANSPORT_ENABLED,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,historyVersionCache:PUBLISHED_ROLE_TRANSPORT_ENABLED}).catch(error=>{productionSchedulerRuntimePromise=null;throw error});
   const runtime=await productionSchedulerRuntimePromise;
   return await runtime.execute(request.data,{uid:request.auth?.uid,email:String(request.auth?.token?.email||'').trim().toLowerCase(),emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)});
  }catch(error){if(error instanceof HttpsError)throw error;console.error('PRODUCTION_SCHEDULER_BLOCKED',String(error?.message||'blocked'));throw new HttpsError(productionSchedulerErrorCode(error),String(error?.message||'排課操作未完成，資料已保留').slice(0,240))}
@@ -316,7 +316,7 @@ exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PR
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),trusted=runtimeValue.assertProductionTrustedOperation(request.data);
   if(trusted.actor.uid!==caller.uid||trusted.actor.email!==caller.email)throw new HttpsError('permission-denied','操作身分不一致。');
   if(PUBLISHED_ROLE_TRANSPORT_ENABLED){
-   if(!publishedOwnerRuntimePromise)publishedOwnerRuntimePromise=createPublishedOwnerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,release:'20.26.317'}).catch(error=>{publishedOwnerRuntimePromise=null;throw error});
+   if(!publishedOwnerRuntimePromise)publishedOwnerRuntimePromise=createPublishedOwnerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,historyVersionCache:true,release:'20.26.317'}).catch(error=>{publishedOwnerRuntimePromise=null;throw error});
    return await (await publishedOwnerRuntimePromise).execute(request.data,{...caller,emailVerified:true,appVerified:Boolean(request.app)});
   }
   const adapters=runtimeValue.adaptersFor({uid:caller.uid,email:caller.email});
