@@ -25,20 +25,20 @@ test('published Owner production and isolated acceptance stamp the same release 
  assert.ok(workspaceReleases.length>=2,'both seed and runtime release must be checked');
  assert.ok(workspaceReleases.every(value=>value===release),'isolated and production runtime release must agree');
 });
-test('REST client is lazy, staging-only and isolated from the default Admin app',()=>{
+test('gRPC comparison client is lazy, staging-only and isolated from the default Admin app',()=>{
  const {createStagingWorkspaceFirestore}=require('../functions/staging-workspace-firestore.cjs');
  const apps=[{name:'[DEFAULT]',options:{projectId:'danbridge-d8877'}}],calls=[],sentinel={client:true};
  const deps={getApps:()=>apps,applicationDefault:()=>({credential:true}),initializeApp:(options,name)=>{calls.push(['app',name,options.projectId]);const app={name,options};apps.push(app);return app},initializeFirestore:(app,settings)=>{calls.push(['firestore',app.name,settings]);return sentinel}};
  const get=createStagingWorkspaceFirestore(deps);assert.equal(calls.length,0);
  assert.throws(()=>get('danbridge-d8877'),/Exact staging/);assert.equal(calls.length,0);
  assert.equal(get('danbridge-d8877-staging'),sentinel);assert.equal(get('danbridge-d8877-staging'),sentinel);
- assert.deepEqual(calls,[['app','danbridge-published-workspace-rest','danbridge-d8877-staging'],['firestore','danbridge-published-workspace-rest',{preferRest:true}]]);
+ assert.deepEqual(calls,[['app','danbridge-published-workspace-grpc','danbridge-d8877-staging'],['firestore','danbridge-published-workspace-grpc',{preferRest:false}]]);
  assert.deepEqual(apps[0],{name:'[DEFAULT]',options:{projectId:'danbridge-d8877'}});
  assert.throws(()=>get('danbridge-d8877'),/Exact staging/,'cached client cannot bypass project validation');
- const wrong=createStagingWorkspaceFirestore({...deps,getApps:()=>[{name:'danbridge-published-workspace-rest',options:{projectId:'danbridge-d8877'}}]});
+ const wrong=createStagingWorkspaceFirestore({...deps,getApps:()=>[{name:'danbridge-published-workspace-grpc',options:{projectId:'danbridge-d8877'}}]});
  assert.throws(()=>wrong('danbridge-d8877-staging'),/project mismatch/);
 });
-test('only the published staging workspace endpoint opts into its dedicated REST client',async()=>{
+test('only the published staging workspace endpoint opts into its dedicated comparison client',async()=>{
  const source=await readFile(new URL('../functions/index.cjs',import.meta.url),'utf8');
  assert.equal(source.match(/stagingWorkspaceFirestore\(project\)/g)?.length,1);
  const endpoint=source.slice(source.indexOf('exports.stagingPublishedWorkspaceOperation='),source.indexOf('exports.stagingAcknowledgeScheduleNotification='));
