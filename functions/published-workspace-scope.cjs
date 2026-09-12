@@ -12,12 +12,20 @@ function createPublishedWorkspaceScope(native, prefix, beforeTransaction=async()
   return `${prefix}/${value}`;
  };
  const unwrap=ref=>{const raw=nativeByProxy.get(ref);if(!raw)throw Error('Foreign workspace reference');return raw};
- const snapshot=row=>new Proxy(row,{get(t,key){
+ // Preserve identity only for the SAME immutable native snapshot, within this
+ // exact scope. A fresh transaction/version produces a fresh native object.
+ // Re-wrapping query.docs used to defeat version-reader materialization reuse.
+ const snapshotByNative=new WeakMap();
+ const snapshot=row=>{
+  if(snapshotByNative.has(row))return snapshotByNative.get(row);
+  const result=new Proxy(row,{get(t,key){
   if(key==='ref')return wrap(t.ref);
   if(key==='docs')return t.docs.map(snapshot);
   if(key==='forEach')return fn=>t.docs.forEach(row=>fn(snapshot(row)));
   const value=Reflect.get(t,key,t);return typeof value==='function'?value.bind(t):value;
  }});
+  snapshotByNative.set(row,result);return result;
+ };
  const wrap=raw=>{
   if(proxyByNative.has(raw))return proxyByNative.get(raw);
   const result=new Proxy(raw,{get(t,key){
