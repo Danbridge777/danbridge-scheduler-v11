@@ -40,7 +40,7 @@ function buildBatchCandidates(){
     status=$('batchStatus').value,
     pay=$('batchPayment').value,
     branch=branchId?batchBranches().find(b=>b.id===branchId):null;
-  return db.lessons.filter(l=>selectedLessonIds.has(l.id)).map(l=>{
+  const rows=db.lessons.filter(l=>selectedLessonIds.has(l.id)).map(l=>{
     const start=shiftTime(l.start,tm),end=shiftTime(l.end,tm);
     const currentTeacherIds=lessonTeacherIds(l),nextTeacherIds=tid?[tid,...currentTeacherIds.filter(id=>id!==l.teacherId&&id!==tid)]:currentTeacherIds;
     const n={...l,date:shiftDate(l.date,dd),start,end,teacherId:tid||l.teacherId,teacherIds:nextTeacherIds,status:status||l.status,paymentStatus:pay||l.paymentStatus};
@@ -56,14 +56,31 @@ function buildBatchCandidates(){
     else if(roomChoice)n.room=roomChoice;
     let error='',warning='';
     if(!start||!end)error='時間超出當日範圍';
-    else{
-      const c=hasConflict(n,l.id);
-      if(c)error=`${c}撞課`;
-      const tw=teacherConflictDetail(n,l.id);
-      if(tw)warning=`老師時間重複：${tw.name}`;
-    }
     return{old:l,next:n,error,warning};
   });
+  // Check the resulting timetable, not the old positions of lessons moving
+  // together. Rejected lessons stay put, so propagate those conflicts until
+  // the remaining partial batch is also safe to apply.
+  let rejected;
+  do{
+    const replacements=new Map(rows.filter(x=>!x.error).map(x=>[x.old.id,x.next]));
+    const projected=db.lessons.map(l=>replacements.get(l.id)||l);
+    rejected=[];
+    for(const x of rows){
+      if(x.error)continue;
+      const c=hasConflict(x.next,x.old.id,projected);
+      if(c)rejected.push({row:x,error:`${c}撞課`});
+    }
+    for(const x of rejected)x.row.error=x.error;
+  }while(rejected.length);
+  const replacements=new Map(rows.filter(x=>!x.error).map(x=>[x.old.id,x.next]));
+  const projected=db.lessons.map(l=>replacements.get(l.id)||l);
+  for(const x of rows){
+    if(x.error)continue;
+    const tw=teacherConflictDetail(x.next,x.old.id,projected);
+    if(tw)x.warning=`老師時間重複：${tw.name}`;
+  }
+  return rows;
 }
 function previewBatch(){
   const rows=buildBatchCandidates();batchPreviewCache=rows;
@@ -71,7 +88,9 @@ function previewBatch(){
   $('batchPreview').innerHTML=`<p><span class="ok-text">可套用 ${ok} 堂</span>｜<span class="danger-text">衝突／無效 ${bad} 堂</span></p>`+rows.map(x=>`<div><span data-calendar-student-id="${esc(x.old.studentId)}">${esc(student(x.old.studentId).name)}</span>：${x.old.date} ${x.old.start} → ${x.next.date} ${x.next.start}｜${esc(locationLabel(x.next))}｜${esc(x.next.room||'未指定教室')} ${x.error?`<span class="danger-text">（${x.error}）</span>`:x.warning?`<span class="danger-text">（${x.warning}，允許套用）</span>`:''}</div>`).join('');
 }
 function applyBatch(){
-  const rows=batchPreviewCache||buildBatchCandidates();
+  // Inputs and live cloud records can change after preview. Never write the
+  // cached whole lesson over newer data.
+  const rows=buildBatchCandidates();
   if(rows.some(x=>x.error)&&!confirm('部分課程有衝突，系統將略過衝突課程，只套用其餘課程。繼續？'))return;
   const affectedIds=rows.filter(x=>!x.error).map(x=>x.old.id),history=beginScheduleHistory(affectedIds);let done=0;
   for(const x of rows){
