@@ -39,7 +39,8 @@ async function main(){
    if(patch.changed){
     const compiled=await rules.testRuleset(PROJECT,desired);
     if(compiled.status!==200||(compiled.body?.issues||[]).some(issue=>issue.severity==='ERROR'))throw Error('Rules compilation failed');
-    const created=await rules.createRuleset(PROJECT,desired,'cloud.firestore');
+    // The default Firestore database must omit attachment_point (CLI parity).
+    const created=await rules.createRuleset(PROJECT,desired);
     if((await client.get(releasePath)).body.rulesetName!==before.rulesetName)throw Error('Rules changed concurrently; created version retained, not activated');
     if(typeof created!=='string'||!created.startsWith('projects/'+PROJECT+'/rulesets/'))throw Error('Unexpected created ruleset name');
     await rules.updateRelease(PROJECT,created,'cloud.firestore');

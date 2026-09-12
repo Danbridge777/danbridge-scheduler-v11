@@ -10,7 +10,7 @@ const targetOrigin=process.argv[3]||`https://${project}.web.app`,target=new URL(
 if(target.protocol!=='https:'||target.username||target.password||target.port||target.pathname!=='/'||target.search||target.hash||!(target.hostname===`${project}.web.app`||target.hostname.startsWith(`${project}--`)&&target.hostname.endsWith('.web.app')))throw Error('Exact project Hosting or isolated preview origin required');
 const release=/const APP_RELEASE='([0-9.]+)'/.exec(fs.readFileSync('js/core/firebase-auth-and-cloud-sync.module.js','utf8'))?.[1];
 if(!release)throw Error('Missing release stamp');
-const paths=[...new Set([...execFileSync('git',['diff','e1c3c9a','--name-only'],{encoding:'utf8'}).trim().split('\n'),...execFileSync('git',['ls-files','--others','--exclude-standard','js','css'],{encoding:'utf8'}).trim().split('\n'),'js/core/pricing-history-policy.js'])].filter(p=>/^(js\/|css\/|index\.html$|sw\.js$)/.test(p)&&fs.existsSync(p));
+const paths=[...new Set([...execFileSync('git',['ls-files'],{encoding:'utf8'}).trim().split('\n'),...execFileSync('git',['ls-files','--others','--exclude-standard','js','css','assets'],{encoding:'utf8'}).trim().split('\n')])].filter(p=>/^(js\/|css\/|assets\/|(?:index|404)\.html$|sw\.js$|manifest\.webmanifest$|icon[^/]*\.png$)/.test(p)&&fs.existsSync(p));
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex'),assets=[];
 for(let i=0;i<paths.length;i+=8)await Promise.all(paths.slice(i,i+8).map(async path=>{
  const response=await fetch(`${target.origin}/${path}?verify=repair-${release}`,{cache:'no-store'}),body=Buffer.from(await response.arrayBuffer()),sha256=hash(body),match=response.ok&&sha256===hash(fs.readFileSync(path));assets.push({path,status:response.status,sha256,match});if(!match)process.exitCode=1;
