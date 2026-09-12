@@ -3,59 +3,59 @@ import { getAuth, initializeAuth, indexedDBLocalPersistence, browserPopupRedirec
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getLimitedUseToken, getToken as getAppCheckToken } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app-check.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js';
 import { initializeFirestore, memoryLocalCache, doc as firebaseDoc, getDoc, getDocFromServer, setDoc, deleteDoc, deleteField, onSnapshot, collection as firebaseCollection, query, where, getDocs, getDocsFromServer, serverTimestamp, Timestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
-import {bootstrapDanbridgeFirebase} from './firebase-environment-bootstrap.js?v=20.26.318';
-import {createScheduleNotificationPresenter} from './schedule-notification-presentation.js?v=20.26.318';
-import {scheduleNotificationReadFilters,scheduleNotificationMatchesFilters} from './schedule-notification-read-scope.js?v=20.26.318';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.318';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.318';
-import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.318';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore,canonicalLegacyRecordShadowCore,extractFullRecordShadowSyncResult,buildFullRecordShadowRunIdentity} from './cloud-record-shadow-run.js?v=20.26.318';
-import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.318';
-import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.318';
-import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.318';
-import {verifyOwnRoleViewCandidateReadback} from './cloud-role-view-candidate.js?v=20.26.318';
-import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest as buildLegacyRoleViewCandidateManifest,buildAtomicRecordActivation,evaluateAtomicRecordActivation} from './cloud-record-activation.js?v=20.26.318';
-import {decideRecordReadTakeover} from './cloud-record-read-takeover.js?v=20.26.318';
-import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js?v=20.26.318';
-import {recordDataDigest,recordDataHash} from './cloud-record-data-hash.js?v=20.26.318';
-import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.318';
-import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.318';
-import {createOwnerDraftStore} from './cloud-owner-draft-store.js?v=20.26.318';
-import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from './production-scheduler-queue.js?v=20.26.318';
-import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.318';
-import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.318';
-import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.318';
-import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.318';
-import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.318';
-import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.318';
-import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.318';
-import {createFirebaseActiveRecordStreamAdapter} from './firebase-active-record-stream-adapter.js?v=20.26.318';
-import {createFirebaseRoleRecordViewAdapter} from './firebase-role-record-view-adapter.js?v=20.26.318';
-import {createFirebaseRoleRecordStreamAdapter} from './firebase-role-record-stream-adapter.js?v=20.26.318';
-import {createActiveRoleRecordPublishQueue} from './cloud-active-role-record-publish-queue.js?v=20.26.318';
-import {decideOwnerActiveSaveIntent} from './cloud-owner-active-save-intent.js?v=20.26.318';
-import {createRecordSyncActiveFailureResume} from './record-sync-active-failure-resume.js?v=20.26.318';
-import {dailyBackupChunkCore,prepareDailyShardedBackup,sealDailyShardedBackup,verifyDailyShardedBackupReadback} from './cloud-daily-sharded-backup.js?v=20.26.318';
-import {createFirebaseRecordSyncCandidateAdapter} from './firebase-record-sync-candidate-adapter.js?v=20.26.318';
-import {buildRecordSyncRoleEvidence,RECORD_SYNC_ROLE_SCENARIOS} from './cloud-record-sync-role-evidence.js?v=20.26.318';
-import {buildRecordSyncActivationManifest,buildActiveRecordSyncControl,evaluateActiveRecordSyncControl} from './cloud-record-sync-control.js?v=20.26.318';
-import {createFirebaseRecordSyncActivationAdapter} from './firebase-record-sync-activation-adapter.js?v=20.26.318';
-import {verifyRoleViewCandidateSourceBinding,buildRoleViewCandidateSourceAudit,buildRoleViewCandidateManifest as buildVerifiedRoleViewCandidateManifest,assertRoleViewCandidateManifest,buildRoleViewVerificationReceipt,assertRoleViewVerificationReceipt,verifyRoleViewReceiptSet} from './cloud-role-view-verification.js?v=20.26.318';
-import {loadProfileAfterAuthReady} from './cloud-auth-profile-bootstrap.js?v=20.26.318';
-import {RECORD_SYNC_V2_TAKEOVER_CANDIDATE_CONTROL_PATH,RECORD_SYNC_V2_TAKEOVER_CANDIDATE_HEAD_PATH,createFirebaseRecordSyncV2TakeoverCandidateAdapter} from './firebase-record-sync-v2-takeover-candidate-adapter.js?v=20.26.318';
-import {createStagingV2AuthorityReadLoader} from './staging-v2-authority-read-loader.js?v=20.26.318';
-import {createStagingV2AuthoritySaveBrowserClient} from './staging-v2-authority-save-browser-client.js?v=20.26.318';
-import {createStagingV2ActiveRecordOperationSender,normalizeStagingV2FirestoreValue,stagingV2H0GenesisBaselineDocuments} from './staging-v2-active-record-browser-bridge.js?v=20.26.318';
-import {createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.318';
-import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.318';
-import {CLOUD_BOOTSTRAP_STAGES,createCloudBootstrapProgress} from './cloud-bootstrap-progress.js?v=20.26.318';
-import {createProductionTrustedOperationClient} from './production-trusted-operation-client.js?v=20.26.318';
-import {prepareActiveRecordSync} from './cloud-active-record-sync.js?v=20.26.318';
-import {createFirebaseCallableHttpClient} from './firebase-callable-http-client.js?v=20.26.318';
-import {createLimitedUseAppCheckTokenPool,takeFreshLimitedUseAppCheckToken} from './app-check-limited-use-token.js?v=20.26.318';
-import {createPublishedRoleViewConsumer} from './published-role-view-consumer.js?v=20.26.318';
-import {createFirestoreRolePartBatchReader} from './firestore-role-part-batch-reader.js?v=20.26.318';
-import {createPublishedSchedulerReceiptReader,PUBLISHED_SCHEDULER_RESPONSE_SCHEMA} from './published-scheduler-receipt.js?v=20.26.318';
+import {bootstrapDanbridgeFirebase} from './firebase-environment-bootstrap.js?v=20.26.319';
+import {createScheduleNotificationPresenter} from './schedule-notification-presentation.js?v=20.26.319';
+import {scheduleNotificationReadFilters,scheduleNotificationMatchesFilters} from './schedule-notification-read-scope.js?v=20.26.319';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.319';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.319';
+import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.319';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore,canonicalLegacyRecordShadowCore,extractFullRecordShadowSyncResult,buildFullRecordShadowRunIdentity} from './cloud-record-shadow-run.js?v=20.26.319';
+import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.319';
+import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.319';
+import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.319';
+import {verifyOwnRoleViewCandidateReadback} from './cloud-role-view-candidate.js?v=20.26.319';
+import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest as buildLegacyRoleViewCandidateManifest,buildAtomicRecordActivation,evaluateAtomicRecordActivation} from './cloud-record-activation.js?v=20.26.319';
+import {decideRecordReadTakeover} from './cloud-record-read-takeover.js?v=20.26.319';
+import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js?v=20.26.319';
+import {recordDataDigest,recordDataHash} from './cloud-record-data-hash.js?v=20.26.319';
+import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.319';
+import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.319';
+import {createOwnerDraftStore} from './cloud-owner-draft-store.js?v=20.26.319';
+import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from './production-scheduler-queue.js?v=20.26.319';
+import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.319';
+import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.319';
+import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.319';
+import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.319';
+import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.319';
+import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.319';
+import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.319';
+import {createFirebaseActiveRecordStreamAdapter} from './firebase-active-record-stream-adapter.js?v=20.26.319';
+import {createFirebaseRoleRecordViewAdapter} from './firebase-role-record-view-adapter.js?v=20.26.319';
+import {createFirebaseRoleRecordStreamAdapter} from './firebase-role-record-stream-adapter.js?v=20.26.319';
+import {createActiveRoleRecordPublishQueue} from './cloud-active-role-record-publish-queue.js?v=20.26.319';
+import {decideOwnerActiveSaveIntent} from './cloud-owner-active-save-intent.js?v=20.26.319';
+import {createRecordSyncActiveFailureResume} from './record-sync-active-failure-resume.js?v=20.26.319';
+import {dailyBackupChunkCore,prepareDailyShardedBackup,sealDailyShardedBackup,verifyDailyShardedBackupReadback} from './cloud-daily-sharded-backup.js?v=20.26.319';
+import {createFirebaseRecordSyncCandidateAdapter} from './firebase-record-sync-candidate-adapter.js?v=20.26.319';
+import {buildRecordSyncRoleEvidence,RECORD_SYNC_ROLE_SCENARIOS} from './cloud-record-sync-role-evidence.js?v=20.26.319';
+import {buildRecordSyncActivationManifest,buildActiveRecordSyncControl,evaluateActiveRecordSyncControl} from './cloud-record-sync-control.js?v=20.26.319';
+import {createFirebaseRecordSyncActivationAdapter} from './firebase-record-sync-activation-adapter.js?v=20.26.319';
+import {verifyRoleViewCandidateSourceBinding,buildRoleViewCandidateSourceAudit,buildRoleViewCandidateManifest as buildVerifiedRoleViewCandidateManifest,assertRoleViewCandidateManifest,buildRoleViewVerificationReceipt,assertRoleViewVerificationReceipt,verifyRoleViewReceiptSet} from './cloud-role-view-verification.js?v=20.26.319';
+import {loadProfileAfterAuthReady} from './cloud-auth-profile-bootstrap.js?v=20.26.319';
+import {RECORD_SYNC_V2_TAKEOVER_CANDIDATE_CONTROL_PATH,RECORD_SYNC_V2_TAKEOVER_CANDIDATE_HEAD_PATH,createFirebaseRecordSyncV2TakeoverCandidateAdapter} from './firebase-record-sync-v2-takeover-candidate-adapter.js?v=20.26.319';
+import {createStagingV2AuthorityReadLoader} from './staging-v2-authority-read-loader.js?v=20.26.319';
+import {createStagingV2AuthoritySaveBrowserClient} from './staging-v2-authority-save-browser-client.js?v=20.26.319';
+import {createStagingV2ActiveRecordOperationSender,normalizeStagingV2FirestoreValue,stagingV2H0GenesisBaselineDocuments} from './staging-v2-active-record-browser-bridge.js?v=20.26.319';
+import {createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.319';
+import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.319';
+import {CLOUD_BOOTSTRAP_STAGES,createCloudBootstrapProgress} from './cloud-bootstrap-progress.js?v=20.26.319';
+import {createProductionTrustedOperationClient} from './production-trusted-operation-client.js?v=20.26.319';
+import {prepareActiveRecordSync} from './cloud-active-record-sync.js?v=20.26.319';
+import {createFirebaseCallableHttpClient} from './firebase-callable-http-client.js?v=20.26.319';
+import {createLimitedUseAppCheckTokenPool,takeFreshLimitedUseAppCheckToken} from './app-check-limited-use-token.js?v=20.26.319';
+import {createPublishedRoleViewConsumer} from './published-role-view-consumer.js?v=20.26.319';
+import {createFirestoreRolePartBatchReader} from './firestore-role-part-batch-reader.js?v=20.26.319';
+import {createPublishedSchedulerReceiptReader,PUBLISHED_SCHEDULER_RESPONSE_SCHEMA} from './published-scheduler-receipt.js?v=20.26.319';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -91,7 +91,7 @@ if(publishedWorkspace)document.body.dataset.publishedWorkspace=publishedWorkspac
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.318';
+const APP_RELEASE='20.26.319';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -135,7 +135,7 @@ const stagingNotificationAcknowledgeCall=DANBRIDGE_ENVIRONMENT==='staging'&&stag
 const stagingSchedulerOperationCall=DANBRIDGE_ENVIRONMENT==='staging'&&stagingV2AppCheck?createFirebaseCallableHttpClient({projectId:firebaseConfig.projectId,functionName:'stagingSchedulerOperation',getCurrentUser:()=>auth.currentUser,getIdToken:(user,force)=>user.getIdToken(force),getLimitedUseAppCheckToken:takeStagingV2LimitedUseToken,fetch:globalThis.fetch.bind(globalThis),timeoutMs:60000}).call:null;
 const productionTrustedOperationClient=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?createProductionTrustedOperationClient({call:publishedWorkspace?workspaceCall('owner'):httpsCallable(productionFunctions,'productionTrustedOperation',{limitedUseAppCheckTokens:true}),getIdentity:()=>({uid:cloudUid,email:cloudEmailKey})}):null;
 const productionRoleViewPublishCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?(publishedWorkspace?workspaceCall('publishRoles'):httpsCallable(productionFunctions,'productionPublishRoleViews',{limitedUseAppCheckTokens:true})):null;
-const productionTeacherLeaveCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck&&!publishedWorkspace?httpsCallable(productionFunctions,'productionTeacherLeaveOperation',{limitedUseAppCheckTokens:true}):null;
+const productionTeacherLeaveCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?(publishedWorkspace?workspaceCall('teacherLeave'):httpsCallable(productionFunctions,'productionTeacherLeaveOperation',{limitedUseAppCheckTokens:true})):null;
 const productionNotificationAcknowledgeCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?(publishedWorkspace?workspaceCall('acknowledge'):createFirebaseCallableHttpClient({projectId:firebaseConfig.projectId,functionName:'productionAcknowledgeScheduleNotification',getCurrentUser:()=>auth.currentUser,getIdToken:(user,force)=>user.getIdToken(force),getLimitedUseAppCheckToken:takeProductionNotificationLimitedUseToken,fetch:globalThis.fetch.bind(globalThis),timeoutMs:30000}).call):null;
 const scheduleNotificationAcknowledgeCall=productionNotificationAcknowledgeCall||stagingNotificationAcknowledgeCall;
 const productionScheduleNotificationPublishCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?(publishedWorkspace?workspaceCall('publishNotifications'):httpsCallable(productionFunctions,'productionPublishScheduleNotifications',{limitedUseAppCheckTokens:true})):null;
@@ -379,6 +379,7 @@ function deepCopy(x){
  const value=x||emptyDB();
  return typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value));
 }
+let refreshWorkspaceTeacherLeaves=null;
 function teacherLeaveOperationId(){return`leaveop-${globalThis.crypto?.randomUUID?.().replaceAll('-','')||`${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`}`}
 async function executeTeacherLeaveOperation(payload={}){
  if(DANBRIDGE_ENVIRONMENT!=='production'||!productionTeacherLeaveCall)throw new Error('請假操作只允許正式環境的受保護後端');
@@ -386,13 +387,27 @@ async function executeTeacherLeaveOperation(payload={}){
  const operationId=String(payload.operationId||teacherLeaveOperationId()),leaveId=String(payload.leaveId||`leave-${globalThis.crypto?.randomUUID?.().replaceAll('-','')||Date.now().toString(36)}`),request={...payload,operationId,leaveId},result=await productionTeacherLeaveCall(request);
  if(auth.currentUser!==user||auth.currentUser?.uid!==uid||String(auth.currentUser?.email||'').trim().toLowerCase()!==email)throw new Error('請假同步完成時登入身分已改變，請重新整理確認');
  if(result?.data?.ok!==true)throw new Error('請假後端未回傳完成確認');
+ if(publishedWorkspace&&result.data.record){teacherLeaveDocuments=[...teacherLeaveDocuments.filter(row=>(row.leaveId||row.id)!==result.data.record.leaveId),result.data.record];window.__danbridgeSetTeacherLeaves?.(teacherLeaveDocuments);refreshWorkspaceTeacherLeaves?.()}
  return result.data;
 }
 window.__danbridgeSaveTeacherLeave=payload=>executeTeacherLeaveOperation(payload);
 window.__danbridgeCancelTeacherLeave=payload=>executeTeacherLeaveOperation({...payload,action:'cancel'});
 function subscribeTeacherLeaves(){
- unsubscribeTeacherLeaves?.();unsubscribeTeacherLeaves=null;teacherLeaveDocuments=[];window.__danbridgeSetTeacherLeaves?.([]);
+ unsubscribeTeacherLeaves?.();unsubscribeTeacherLeaves=null;refreshWorkspaceTeacherLeaves=null;teacherLeaveDocuments=[];window.__danbridgeSetTeacherLeaves?.([]);
  if(DANBRIDGE_ENVIRONMENT!=='production'||!['owner','teacher'].includes(cloudRole))return;
+ if(publishedWorkspace){
+  // Test-only transport: no Rules expansion and no access to formal leave data.
+  const user=auth.currentUser;let stopped=false,busy=false,timer;
+  const refresh=async()=>{if(stopped||busy||document.hidden||auth.currentUser!==user)return;busy=true;
+   try{const result=await workspaceCall('readTeacherLeaves')();if(stopped||auth.currentUser!==user)return;if(result?.data?.ok!==true||!Array.isArray(result.data.records))throw Error('請假紀錄讀回未完成');teacherLeaveDocuments=result.data.records;window.__danbridgeSetTeacherLeaves?.(teacherLeaveDocuments)}
+   catch(error){if(!stopped&&auth.currentUser===user)window.__danbridgeSetTeacherLeaveError?.(String(error?.message||error))}finally{busy=false}
+  };
+  const visible=()=>{if(!document.hidden)refresh()};
+  refreshWorkspaceTeacherLeaves=refresh;document.addEventListener('visibilitychange',visible);
+  timer=setInterval(()=>{if(document.getElementById('teacherLeave')?.getClientRects().length)refresh()},5000);
+  unsubscribeTeacherLeaves=()=>{stopped=true;clearInterval(timer);document.removeEventListener('visibilitychange',visible)};
+  refresh();return;
+ }
  let leaveQuery=query(collection(cloud,'productionTeacherLeaveRecords'),where('companyId','==',COMPANY_ID));
  if(cloudRole==='teacher'&&!cloudCanManageSchedule){if(!cloudTeacherId)return;leaveQuery=query(collection(cloud,'productionTeacherLeaveRecords'),where('companyId','==',COMPANY_ID),where('teacherId','==',cloudTeacherId))}
  unsubscribeTeacherLeaves=onSnapshot(leaveQuery,{includeMetadataChanges:true},snapshot=>{if(snapshot.metadata.hasPendingWrites)return;teacherLeaveDocuments=snapshot.docs.map(row=>({id:row.id,...row.data()})).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.start||'').localeCompare(String(a.start||'')));window.__danbridgeSetTeacherLeaves?.(teacherLeaveDocuments)},error=>{console.error('Teacher leave listener failed',error);window.__danbridgeSetTeacherLeaveError?.(String(error?.message||error));cloudStatus('請假紀錄讀取失敗：'+String(error?.message||error),'error')});
@@ -2169,6 +2184,7 @@ function renderScheduleNotification(notification){
  const modal=document.getElementById('scheduleNotificationModal');
  const body=document.getElementById('scheduleNotificationBody');
  if(!modal||!body||!notification)return;
+ modal.querySelector('[data-ack-error]')?.remove();
  const details=Array.isArray(notification.details)?notification.details:[];
  currentScheduleNotification=notification;
  if(notification.notificationType==='teacher-leave')body.innerHTML=`<p class="schedule-notification-lead"><b>老師請假異動</b><span>${escapeHTML(notification.message||'請假紀錄已更新')}</span></p><div class="schedule-notification-table-wrap"><table class="schedule-notification-table"><thead><tr><th>老師</th><th>日期</th><th>時間</th><th>類別</th><th>時數</th><th>狀態</th></tr></thead><tbody>${details.map(item=>`<tr><td><b>${escapeHTML(item.teacherName||'老師')}</b></td><td>${escapeHTML(item.date||'')}</td><td>${escapeHTML(`${item.start||''}–${item.end||''}`)}</td><td>${escapeHTML(item.leaveTypeLabel||'')}</td><td>${escapeHTML(String(item.hours??''))}</td><td>${item.status==='cancelled'?'已取消':'有效'}</td></tr>`).join('')}</tbody></table></div><div class="schedule-notification-actions"><button type="button" class="btn" data-leave-notification-open>查看請假紀錄</button></div><div class="schedule-notification-time">更新時間：${escapeHTML(formatNotificationTimestamp(notification.createdAt)||'剛剛')}</div>`;
@@ -2194,13 +2210,25 @@ async function acknowledgeCurrentScheduleNotification(){
  let ids=[];try{ids=JSON.parse(modal?.dataset.notificationIds||'[]')}catch{}
  if(!ids.length&&modal?.dataset.notificationId)ids=[modal.dataset.notificationId];
  if(!ids.length)return;
+ const acknowledgingUid=cloudUid,acknowledgingEmail=cloudEmailKey;
  const button=document.getElementById('scheduleNotificationAcknowledge');
  try{
    if(button){button.disabled=true;button.textContent='處理中…'}
    if(modal)modal.hidden=true;
    if(!scheduleNotificationAcknowledgeCall)throw new Error('通知確認服務尚未就緒');
    for(let offset=0;offset<ids.length;offset+=20){const result=await scheduleNotificationAcknowledgeCall({notificationIds:ids.slice(offset,offset+20)});if(result?.data?.ok!==true)throw new Error(`通知確認未完成（${offset+1}–${Math.min(offset+20,ids.length)}）`)}
- }catch(e){console.error('Acknowledge schedule notification failed',e);cloudStatus('通知確認失敗：'+(e?.message||e),'error')}
+ }catch(e){
+   console.error('Acknowledge schedule notification failed',e);
+   const message=String(e?.code||'').startsWith('appCheck/')?'安全驗證未完成，通知仍保留未讀。請先儲存其他表單，再重新開啟此頁；若仍失敗，請保留錯誤畫面。':'通知確認失敗：'+(e?.message||e);
+   cloudStatus(message,'error');
+   // Do not make a failed acknowledgement look successful by hiding its dialog.
+   let currentIds=[];try{currentIds=JSON.parse(modal?.dataset.notificationIds||'[]')}catch{}
+   if(modal&&cloudUid===acknowledgingUid&&cloudEmailKey===acknowledgingEmail&&JSON.stringify(currentIds)===JSON.stringify(ids)){
+    modal.hidden=false;let status=modal.querySelector('[data-ack-error]');
+    if(!status){status=document.createElement('p');status.dataset.ackError='';status.setAttribute('role','alert');modal.querySelector('.schedule-notification-actions')?.before(status)}
+    status.textContent=message;
+   }
+ }
  finally{if(button){button.disabled=false;button.textContent='知道了'}}
 }
 function subscribeScheduleNotifications(){

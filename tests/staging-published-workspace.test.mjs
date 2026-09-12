@@ -142,6 +142,13 @@ test('deployed-workspace bridge uses native Owner runtime, live-role fence, atom
    }
   }
   assert.equal(requests.length,7);assert.equal(requests.filter(row=>row.batch?.operations.length===80).length,6);controller.stop();
+  const leaveActor={...owner,uid:'workspace-teacher',email:MEMBERS[3]},leaveRequest={action:'create',operationId:'workspace_leave_create',leaveId:'workspace_leave_record',expectedRevision:0,input:{teacherId:'teacher1',leaveType:'personal',date:'2026-09-13',start:'09:00',end:'10:30',note:'isolated'}};
+  const createdLeave=await execute({action:'teacherLeave',payload:leaveRequest},leaveActor);assert.equal(createdLeave.record.hours,1.5);
+  for(const email of MEMBERS){const result=await execute({action:'readTeacherLeaves'},{...owner,email});assert.equal(result.records.length,1);assert.equal(result.records[0].leaveId,leaveRequest.leaveId)}
+  assert.equal((await native.collection('productionTeacherLeaveRecords').get()).size,0,'No unscoped/formal leave writes');
+  assert.equal((await native.collection(prefix+'/companies/danbridge/scheduleNotifications').where('notificationType','==','teacher-leave').get()).size,4,'Every Owner plus AA and the teacher receive one notice');
+  assert.equal((await execute({action:'teacherLeave',payload:leaveRequest},leaveActor)).duplicate,true);
+  const cancelledLeave=await execute({action:'teacherLeave',payload:{...leaveRequest,action:'cancel',operationId:'workspace_leave_cancel',expectedRevision:1}},leaveActor);assert.equal(cancelledLeave.record.status,'cancelled');
   await native.doc('companyAccess/'+MEMBERS[1]).update({accessRevision:1});
   await assert.rejects(execute({action:'owner',payload}),/live role revision changed/);
   await native.doc('companyAccess/'+MEMBERS[1]).update({accessRevision:0});
