@@ -1,5 +1,5 @@
 const CACHE_NAME='danbridge-v11-scheduler-privacy-349';
-const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png?v=20.26.315','./icon-512.png?v=20.26.315','./icon-1024.png?v=20.26.315','./icon-maskable-192.png?v=20.26.315','./icon-maskable-512.png?v=20.26.315','./css/core/77-pwa-install-and-update.css?v=20.26.315','./js/core/pwa-installation.js?v=20.26.315'];
+const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png?v=20.26.316','./icon-512.png?v=20.26.316','./icon-1024.png?v=20.26.316','./icon-maskable-192.png?v=20.26.316','./icon-maskable-512.png?v=20.26.316','./css/core/77-pwa-install-and-update.css?v=20.26.316','./js/core/pwa-installation.js?v=20.26.316'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(
