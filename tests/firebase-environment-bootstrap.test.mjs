@@ -10,6 +10,7 @@ const configs={
 const canonical=new Map([
  ['danbridge-d8877-staging.web.app',['staging','danbridge-d8877-staging']],
  ['danbridge-d8877-staging.firebaseapp.com',['staging','danbridge-d8877-staging']],
+ ['danbridge-d8877-staging--history-315-j6rlu5ds.web.app',['staging','danbridge-d8877-staging']],
  ['danbridge-d8877.web.app',['production','danbridge-d8877']],
  ['danbridge-d8877.firebaseapp.com',['production','danbridge-d8877']]
 ]);
@@ -36,6 +37,7 @@ const blocked=[
  'danbridge-d8877.web.app.','danbridge-d8877-staging.firebaseapp.com.',
  'evil-danbridge-d8877.web.app','danbridge-d8877.web.app.evil.test',
  'danbridge-d8877-staging.firebaseapp.com.evil.test','DANBRIDGE-D8877.WEB.APP','unknown.example'
+ ,'danbridge-d8877-staging--history-315-j6rlu5ds.web.app.evil.test','danbridge-d8877--history-315-j6rlu5ds.web.app'
 ];
 for(const hostname of blocked)test(`blocked Firebase host ${String(hostname)}`,()=>{
  const spy=spies();

@@ -12,6 +12,9 @@ test('no opt-in means no changes; production/foreign hosts cannot activate the a
  assert.throws(()=>profileFor('danbridge-d8877-staging.web.app','?publishedAcceptance=../bad'));
  const profile=profileFor('danbridge-d8877-staging.firebaseapp.com',query);
  assert.equal(profileFor('danbridge-d8877-staging--draft-308-q72vphsd.web.app',query).runId,profile.runId);
+ assert.equal(profileFor('danbridge-d8877-staging--history-315-j6rlu5ds.web.app',query).runId,profile.runId);
+ assert.throws(()=>profileFor('danbridge-d8877-staging--history-315-j6rlu5ds.web.app.evil.test',query));
+ assert.throws(()=>profileFor('danbridge-d8877--history-315-j6rlu5ds.web.app',query));
  assert.throws(()=>profileFor('danbridge-d8877-staging--draft-308-q72vphsd.web.app.evil',query));
  assert.match(profile.path('productionFullRecordShadows/danbridge/collections/lessons/records'),/^acceptancePublishedTransport\/workspace-280-/);
  assert.match(profile.path('companyAccess/aa@example.test'),/^acceptancePublishedTransport\/workspace-280-/);

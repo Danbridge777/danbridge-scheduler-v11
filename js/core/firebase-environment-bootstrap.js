@@ -3,6 +3,7 @@ const HOST_ENVIRONMENTS=Object.freeze({
  'danbridge-d8877-staging.firebaseapp.com':'staging',
  'danbridge-d8877-staging--published-280-f5wzlzb9.web.app':'staging',
  'danbridge-d8877-staging--draft-308-q72vphsd.web.app':'staging',
+ 'danbridge-d8877-staging--history-315-j6rlu5ds.web.app':'staging',
  'danbridge-d8877.web.app':'production',
  'danbridge-d8877.firebaseapp.com':'production'
 });

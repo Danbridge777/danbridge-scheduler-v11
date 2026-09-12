@@ -3,7 +3,7 @@
  function profileFor(hostname,search){
   const params=new URLSearchParams(search),runId=params.get('publishedAcceptance');
   if(!runId)return null;
-  if(!['danbridge-d8877-staging.web.app','danbridge-d8877-staging.firebaseapp.com','danbridge-d8877-staging--published-280-f5wzlzb9.web.app','danbridge-d8877-staging--draft-308-q72vphsd.web.app'].includes(hostname))throw Error('Published acceptance requires the staging host');
+  if(!['danbridge-d8877-staging.web.app','danbridge-d8877-staging.firebaseapp.com','danbridge-d8877-staging--published-280-f5wzlzb9.web.app','danbridge-d8877-staging--draft-308-q72vphsd.web.app','danbridge-d8877-staging--history-315-j6rlu5ds.web.app'].includes(hostname))throw Error('Published acceptance requires the staging host');
   if(!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(runId))throw Error('Invalid published acceptance run');
   const actor=params.get('workspaceActor')||'daniel';
   if(!['daniel','catherine','aa','teacher'].includes(actor))throw Error('Invalid workspace browser identity');

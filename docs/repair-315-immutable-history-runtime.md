@@ -8,7 +8,7 @@
 - 對應 gRPC revision `stagingpublishedworkspaceoperation-00034-wag`，後端交易總計 2473／3009 ms，authority-read 1396／1411 ms。
 - 這些結果仍不符合 1–10 堂 2.5 秒。不得把後端單一分段或本機測試當作端到端達標。
 - 復原後 revision 4421，124 堂完整課程雜湊 `record-v1:0d47c04eb61d9c924d88003608bbc58de9235a0b110b5e5f0845c75bbaceb8c5` 與基準一致；16 集合、角色投影與相容視圖核對成功，formalDataWrites 0。
-- 本輪 16:21 復原通知已於 Daniel／Catherine／AA／張毅四個原生 Safari 分頁讀取並按已讀；獨立雲端已讀核對另記。
+- 本輪 16:21 復原通知已於 Daniel／Catherine／AA／張毅四個原生 Safari 分頁讀取並按已讀；獨立雲端核對四人同為 revision 4421、同 sourceHash、每人 1 個唯一課程 ID、read=true。證據 `/private/tmp/danbridge-314-four-role-ack.json`。
 
 ## 315 修改界線
 
