@@ -43,15 +43,17 @@ function mergeCollection(baseRows,localRows,remoteRows,collection,conflicts){
 }
 
 function mergeAppendOnly(baseRows=[],localRows=[],remoteRows=[]){
- const baseCounts=new Map(),result=[],resultCounts=new Map(),localCounts=new Map();
+ const baseCounts=new Map(),result=[],additions=[],resultCounts=new Map(),localCounts=new Map();
  for(const row of baseRows){const key=fingerprint(row);baseCounts.set(key,(baseCounts.get(key)||0)+1)}
  for(const row of remoteRows){const key=fingerprint(row);result.push(clone(row));resultCounts.set(key,(resultCounts.get(key)||0)+1)}
  for(const row of localRows){
   const key=fingerprint(row),seen=(localCounts.get(key)||0)+1;localCounts.set(key,seen);
   const target=Math.max(resultCounts.get(key)||0,seen,baseCounts.get(key)||0);
-  if((resultCounts.get(key)||0)<target){result.push(clone(row));resultCounts.set(key,(resultCounts.get(key)||0)+1)}
+  if((resultCounts.get(key)||0)<target){additions.push(clone(row));resultCounts.set(key,(resultCounts.get(key)||0)+1)}
  }
- return result;
+ // UI history is newest-first. Preserve the exact committed tail and place
+ // later local actions before it; never rewrite committed record indexes.
+ return [...additions,...result];
 }
 
 export function mergeConcurrentRecordDb(baseDb={},localDb={},remoteDb={}){
