@@ -32,4 +32,14 @@ authorityVerified=true、formalDataWrites=0。證據 `/private/tmp/danbridge-316
 
 - 身分／版本／跨 scope 拒絕與歷程測試：6 通過、0 失敗。
 - 原生 Firestore 模擬器：11 通過、0 失敗、0 略過，包含 40 堂原子提交、目前角色撤銷、隔離範圍與歷程修改／刪除／重建。
-- 此修補尚待部署及原生重測，不將本機通過當作 2.5 秒達標。
+- 相關 health/history/scope 套件：16 通過、0 失敗、0 略過。
+- 已部署 staging revision `stagingpublishedworkspaceoperation-00036-fuh`，2026-09-12T09:04:14.040667140Z，ACTIVE，提交 `00c9171`。未增加 CPU、記憶體或常駐執行個體。
+- 新後端真實八堂重做 7122 ms，復原 5092 ms。第二筆傳送與日誌 2817 ms，但收尾 1368 ms；不得只取某分段宣稱達標。
+- 復原後 revision 4525，124 堂完整課程雜湊仍與基準相同，authorityVerified=true、formalDataWrites=0；證據 `/private/tmp/danbridge-316-scope-restored.json`。
+
+## 四帳號實際通知
+
+修補部署前 revision 4493 的八堂復原通知，已分別由 Daniel／AA／Catherine／張毅原生 Safari 頁面看到 8 堂、17:00 更新時間，並按「知道了」。
+獨立讀回四人同 sourceHash、revision 4493、details=8、uniqueLessonIds=8、read=true：`/private/tmp/danbridge-316-eight-four-role-ack.json`。
+Catherine／張毅的舊背景頁切回後先顯示 16:21 批次，後續才更新為 17:00；不得把這輪當成背景即時繪製測速通過。
+新後端 revision 4525 的後續通知尚未全部按已讀，不與 4493 證據混用。

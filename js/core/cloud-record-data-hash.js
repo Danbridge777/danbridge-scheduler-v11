@@ -1,5 +1,6 @@
-import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.316';
-import {sha256Canonical} from './cloud-immutable-migration-backup.js';
+import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.317';
+import {sha256Canonical,sha256Text,canonicalJSONString} from './cloud-immutable-migration-backup.js';
+import {changeRecordCanonicalFingerprint} from './cloud-change-record-identity.js';
 
 
 export function normalizeRecordDb(db,{cloneRecords=true}={}){
@@ -17,9 +18,17 @@ export function normalizeRecordDb(db,{cloneRecords=true}={}){
 }
 
 export function recordDataDigest(db){
- // sha256Canonical already sorts every map recursively. A second canonical
- // tree was identical, but cloned the entire database on every stream event.
- return sha256Canonical(normalizeRecordDb(db));
+ // Integrity hashes never contain the generated history document IDs. Keep
+ // strict lossless history validation, but reuse its canonical bytes instead
+ // of generating unused FNV IDs, cloning and canonicalizing history again.
+ // No body, hash, or validation result survives this call.
+ const changes=db?.changes;
+ if(!Array.isArray(changes))return sha256Canonical(normalizeRecordDb(db));
+ // Preserve the historical normalizer's behavior for sparse outer arrays.
+ for(let i=0;i<changes.length;i++)if(!(i in changes))return sha256Canonical(normalizeRecordDb(db));
+ const normalized=normalizeRecordDb({...db,changes:[]});
+ const history='['+[...changes].reverse().map(changeRecordCanonicalFingerprint).join(',')+']';
+ return sha256Text('{'+Object.keys(normalized).sort().map(key=>JSON.stringify(key)+':'+(key==='changes'?history:canonicalJSONString(normalized[key]))).join(',')+'}');
 }
 
 export function recordDataHash(db){

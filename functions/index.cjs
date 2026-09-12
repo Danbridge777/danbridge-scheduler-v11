@@ -316,7 +316,7 @@ exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PR
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),trusted=runtimeValue.assertProductionTrustedOperation(request.data);
   if(trusted.actor.uid!==caller.uid||trusted.actor.email!==caller.email)throw new HttpsError('permission-denied','操作身分不一致。');
   if(PUBLISHED_ROLE_TRANSPORT_ENABLED){
-   if(!publishedOwnerRuntimePromise)publishedOwnerRuntimePromise=createPublishedOwnerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,release:'20.26.316'}).catch(error=>{publishedOwnerRuntimePromise=null;throw error});
+   if(!publishedOwnerRuntimePromise)publishedOwnerRuntimePromise=createPublishedOwnerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,release:'20.26.317'}).catch(error=>{publishedOwnerRuntimePromise=null;throw error});
    return await (await publishedOwnerRuntimePromise).execute(request.data,{...caller,emailVerified:true,appVerified:Boolean(request.app)});
   }
   const adapters=runtimeValue.adaptersFor({uid:caller.uid,email:caller.email});

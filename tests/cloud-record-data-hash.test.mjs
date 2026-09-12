@@ -6,6 +6,22 @@ import {sha256Canonical} from '../js/core/cloud-immutable-migration-backup.js';
 
 const empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,[]]));
 
+test('history canonical bytes retain the exact existing complete hash and strict rejection rules',()=>{
+ const db=empty();db.changes=Array.from({length:2005},(_,i)=>({at:i,action:'修改',nested:{'10':'ten','2':'two',z:[null,true,0],a:'中文'}}));
+ const before=structuredClone(db),expected=sha256Canonical(normalizeRecordDb(db));
+ assert.equal(recordDataDigest(db),expected);assert.deepEqual(db,before);
+ const sparse=empty();sparse.changes=new Array(2);sparse.changes[1]={action:'A'};
+ assert.throws(()=>sha256Canonical(normalizeRecordDb(sparse)),/格式無效/);
+ assert.throws(()=>recordDataDigest(sparse),/格式無效/);
+ for(const value of [undefined,NaN,Infinity,-0,1n,new Date(),()=>0,Symbol('x')]){
+  const invalid=empty();invalid.changes=[{value}];
+  assert.throws(()=>sha256Canonical(normalizeRecordDb(invalid)));
+  assert.throws(()=>recordDataDigest(invalid));
+ }
+ let reads=0;const accessor={};Object.defineProperty(accessor,'value',{enumerable:true,get(){reads++;return 1}});
+ assert.throws(()=>recordDataDigest({...empty(),changes:[accessor]}),/accessor/);assert.equal(reads,0);
+});
+
 test('移除重複 canonical 複製後，30000 堂與巢狀資料仍逐位元等於原雜湊',()=>{
  const db=empty();db.lessons=Array.from({length:30000},(_,i)=>({id:`l-${i}`,date:'2026-10-05',start:'09:00',end:'10:00',note:'中文',nested:{z:[null,true,0,{b:'B',a:'A'}],a:i}}));db.changes=[{action:'add',at:'2026-10-05'},{action:'move',value:0}];
  const oldCanonical=value=>Array.isArray(value)?value.map(oldCanonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,oldCanonical(value[key])])):value;
