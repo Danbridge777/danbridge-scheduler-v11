@@ -32,6 +32,7 @@ async function createPublishedOwnerRuntime({firestore,serverTimestamp,deleteFiel
   if(!identity?.uid||identity.emailVerified!==true||identity.appVerified!==true||typeof identity.email!=='string')throw Error('Owner authentication required');
   const startedAt=Date.now();let previousAt=startedAt;
   const mark=phase=>{const at=Date.now();try{onTiming({phase,elapsedMs:at-startedAt,phaseMs:at-previousAt})}catch{}previousAt=at};
+  const timedRead=async(input,read)=>{const start=Date.now();const result=await read();try{onTiming({phase:'input-read',input,elapsedMs:Date.now()-start,documents:result.size??(result.exists?1:0)})}catch{}return result};
   const request=contract.assertProductionTrustedOperation(raw),email=identity.email.trim().toLowerCase();
   if(request.actor.uid!==identity.uid||request.actor.email!==email)throw Error('Owner operation identity mismatch');
   const fingerprint=nativeCanonicalSha256(request),receiptPath=`companies/danbridge/productionOwnerPublicationReceipts/${nativeCanonicalSha256({uid:identity.uid,requestId:request.requestId})}`;
@@ -50,10 +51,10 @@ async function createPublishedOwnerRuntime({firestore,serverTimestamp,deleteFiel
     const [,controlRow,safetyRow,access,receipt,teachers,schedulers,meta,...records]=await Promise.all([
      lease.assertHeld(transaction),
      transaction.get(firestore.doc(PRODUCTION_RECORD_CONTROL_PATH)),transaction.get(firestore.doc(PRODUCTION_RECORD_SAFETY_PATH)),
-     transaction.get(firestore.collection('companyAccess').where('companyId','==','danbridge')),transaction.get(firestore.doc(receiptPath)),
-     transaction.get(firestore.collection('companies/danbridge/teacherViews')),transaction.get(firestore.collection('companies/danbridge/schedulerViews')),
-     transaction.get(firestore.collection('companies/danbridge/lessonMeta')),
-     ...FULL_RECORD_COLLECTIONS.map(k=>{const q=firestore.collection(`${recordPrefix}${k}/records`);return k==='changes'&&historyReader?historyReader.read(transaction,q):transaction.get(q)})
+     timedRead('access',()=>transaction.get(firestore.collection('companyAccess').where('companyId','==','danbridge'))),transaction.get(firestore.doc(receiptPath)),
+     timedRead('teacherViews',()=>transaction.get(firestore.collection('companies/danbridge/teacherViews'))),timedRead('schedulerViews',()=>transaction.get(firestore.collection('companies/danbridge/schedulerViews'))),
+     timedRead('lessonMeta',()=>transaction.get(firestore.collection('companies/danbridge/lessonMeta'))),
+     ...FULL_RECORD_COLLECTIONS.map(k=>{const q=firestore.collection(`${recordPrefix}${k}/records`);return timedRead(k,()=>k==='changes'&&historyReader?historyReader.read(transaction,q):transaction.get(q))})
     ]);
     mark('authority-read');
     const accessRows=access.docs.map(row=>({...row.data(),email:row.id.toLowerCase()})),member=accessRows.find(row=>row.email===email);
