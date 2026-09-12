@@ -2,6 +2,22 @@
 
 日期：2026-09-12。正式基線：20.26.309，Git `52c3e18be191d5a03290481f24aa122935f2b711`。
 
+## 前端先行正式發布完成
+
+以下為本紀錄建立後完成的發布結果，取代下一節中當時「只有 preview」的前端狀態；後端未切換的界線不變。
+
+- 310 前端已部署 staging 主 Hosting 與 production Hosting，兩次 CLI 均 `Deploy complete`。
+- 發布程式提交 `1fbeae8f407d3a82746d28871622ebefa1fe2be5` 已正常快轉推送 GitHub main，並從遠端讀回相同 SHA。
+- staging／production 各 61 個候選瀏覽器資產皆 HTTP 200，SHA-256 與乾淨發布目錄全部相同，0 mismatch。
+- staging／production 各自的 Chromium／WebKit 未登入遠端入口檢查均 6 pass、0 fail；這不是登入後雲端速度驗收。
+- production 的 `staging-transport-acceptance.html` 實際 HTTP 404。
+- production Rules 仍為 `ad7ddf44-0ef1-42d4-b534-bb03291f9e87`；trusted revision `productiontrustedoperation-00006-vuh`、scheduler revision `productionscheduleroperation-00007-guf` 與部署前完全相同。
+- 正式 control／safety 仍 active 且 writeAllowed／writeTakeover 為 true。ownerAlert 仍是 2026-09-11 19:17 UTC 的舊 attention 快照，不宣稱現在 healthy。
+- 另唯讀取得目前正式 Rules，以精確基線補丁僅送本機 Emulator 驗證：1 pass、0 skip、0 fail。教師／AA／校區主管的相互隔離、撤權、未發布片段與禁止寫入均符合斷言；沒有部署此補丁。
+- 已請使用者確認 Daniel、Catherine 所有正式 Owner 分頁儲存、待同步清空及可安全重新開啟。未得到確認並核實新版前端前，不啟用正式原子後端，避免舊中間雜湊命令被拒絕。
+
+正式證據：`/private/tmp/danbridge-310-production-readback.json`、`danbridge-310-production-hosting-deploy.log`、`danbridge-310-production-remote-entry.log`；staging 證據為同前綴 `staging-main-readback.json`、`staging-hosting-deploy.log`、`staging-remote-entry.log`。Rules 證據：`danbridge-310-current-production-rules-emulator.log`。
+
 ## 發布界線
 
 - 310 後端目前僅部署到 staging 的 `stagingPublishedWorkspaceOperation`，revision `stagingpublishedworkspaceoperation-00030-tav`。
