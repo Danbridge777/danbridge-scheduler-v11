@@ -1,5 +1,7 @@
 import {FULL_RECORD_COLLECTIONS} from './cloud-full-record-shadow.js';
 
+export const RECORD_HISTORY_MERGE_SCHEMA='newest-first-v1';
+
 const APPEND_ONLY_COLLECTIONS=new Set(['changes']);
 const clone=value=>value===undefined?undefined:JSON.parse(JSON.stringify(value));
 const stable=value=>Array.isArray(value)?value.map(stable):(value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value);
@@ -51,8 +53,9 @@ function mergeAppendOnly(baseRows=[],localRows=[],remoteRows=[]){
   const target=Math.max(resultCounts.get(key)||0,seen,baseCounts.get(key)||0);
   if((resultCounts.get(key)||0)<target){additions.push(clone(row));resultCounts.set(key,(resultCounts.get(key)||0)+1)}
  }
- // UI history is newest-first. Preserve the exact committed tail and place
- // later local actions before it; never rewrite committed record indexes.
+ // History is newest-first. New local actions must precede the immutable
+ // committed tail; appending them after it rewrites record-index identities
+ // at the next trusted save, especially after a delayed receipt and undo.
  return [...additions,...result];
 }
 

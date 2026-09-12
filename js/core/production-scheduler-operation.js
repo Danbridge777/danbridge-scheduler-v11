@@ -1,4 +1,4 @@
-import {PRODUCTION_SCHEDULER_EMAILS,projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.309';
+import {PRODUCTION_SCHEDULER_EMAILS,projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.310';
 
 export const SCHEDULER_OPERATION_SCHEMA='danbridge-production-scheduler-operation-v1';
 export const SCHEDULER_OPERATION_RESPONSE_SCHEMA='danbridge-production-scheduler-operation-response-v1';
@@ -35,9 +35,10 @@ function assertSafeLesson(value,id,{complete=false}={}){
  if(value.teacherId&&(!token(value.teacherId)||!teacherIds(value).includes(value.teacherId)))throw new Error('主要老師與授課老師不一致');
 }
 
-export function normalizeProductionSchedulerRequest(input){
+export function normalizeProductionSchedulerRequest(input,{maxChanges=30}={}){
+ if(![30,40].includes(maxChanges))throw new Error('排課協定上限無效');
  exact(input,['schema','requestId','release','changes'],'排課請求');
- if(input.schema!==SCHEDULER_OPERATION_SCHEMA||!token(input.requestId)||input.requestId.length<12||!/^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(input.release||'')||!Array.isArray(input.changes)||!input.changes.length||input.changes.length>30||JSON.stringify(input).length>250000)throw new Error('排課請求識別碼或筆數無效');
+ if(input.schema!==SCHEDULER_OPERATION_SCHEMA||!token(input.requestId)||input.requestId.length<12||!/^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(input.release||'')||!Array.isArray(input.changes)||!input.changes.length||input.changes.length>maxChanges||JSON.stringify(input).length>250000)throw new Error('排課請求識別碼或筆數無效');
  const seen=new Set(),changes=input.changes.map(change=>{
   exact(change,['lessonId','before','after','student'],'排課異動');const id=change.lessonId;
   if(!token(id)||seen.has(id)||change.before===null&&change.after===null)throw new Error('排課異動 ID 重複或無效');seen.add(id);
@@ -51,11 +52,11 @@ export function normalizeProductionSchedulerRequest(input){
 
 // This function receives only safe timetable fields. Raw operation envelopes,
 // access changes, finance values and arbitrary document paths are not accepted.
-export function buildProductionSchedulerTarget(source,input,actor,{nowIso}={}){
+export function buildProductionSchedulerTarget(source,input,actor,{nowIso,maxChanges=30}={}){
  // Copy the four mutable arrays, then clone only records that this request
  // actually changes. Untouched authoritative rows keep identity so append-only
  // history can be verified in O(n) without repeatedly serializing years of data.
- const caller=assertProductionSchedulerActor(actor),request=normalizeProductionSchedulerRequest(input),target={...source,lessons:[...source.lessons],students:[...source.students],makeups:[...source.makeups],changes:[...source.changes]};
+ const caller=assertProductionSchedulerActor(actor),request=normalizeProductionSchedulerRequest(input,{maxChanges}),target={...source,lessons:[...source.lessons],students:[...source.students],makeups:[...source.makeups],changes:[...source.changes]};
  if(!/^\d{4}-\d{2}-\d{2}T/.test(nowIso||'')||!Number.isFinite(Date.parse(nowIso)))throw new Error('伺服器時間無效');
  const events=[];
  for(const change of request.changes){

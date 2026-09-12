@@ -1,6 +1,6 @@
 const REGION='asia-east1';
 const ALLOWED=Object.freeze({
- 'danbridge-d8877-staging':Object.freeze(new Set(['stagingSchedulerOperation','stagingAcknowledgeScheduleNotification'])),
+ 'danbridge-d8877-staging':Object.freeze(new Set(['stagingSchedulerOperation','stagingAcknowledgeScheduleNotification','stagingPublishedWorkspaceOperation'])),
  'danbridge-d8877':Object.freeze(new Set(['productionSchedulerOperation','productionAcknowledgeScheduleNotification']))
 });
 const encoder=new TextEncoder();

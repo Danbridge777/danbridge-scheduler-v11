@@ -1,6 +1,147 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Normal-UI acceptance runs use the production protocol without reopening
+    // the retired staging V1 namespace. No business write is granted here.
+    match /acceptancePublishedTransport/{run} {
+      function workspaceSignedIn() { return request.auth != null && request.auth.token.email is string; }
+      function workspaceEmail() { return request.auth.token.email.lower(); }
+      function workspaceAccess() { return get(/databases/$(database)/documents/companyAccess/$(workspaceEmail())).data; }
+      function workspaceOpen() {
+        let root = get(/databases/$(database)/documents/acceptancePublishedTransport/$(run)).data;
+        return run.matches('^workspace-280-[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$')
+          && root.purpose == 'normal-ui-published-280-synthetic-only' && root.state == 'active';
+      }
+      function workspaceMember(email) {
+        let live = get(/databases/$(database)/documents/companyAccess/$(email)).data;
+        let saved = get(/databases/$(database)/documents/acceptancePublishedTransport/$(run)/companyAccess/$(email)).data;
+        return email in ['a0965487920@gmail.com','catherine890202@gmail.com','aa0966626336@gmail.com','yamiiii8549@gmail.com']
+          && live.companyId == 'danbridge' && live.active == true
+          && live.get('role', null) == saved.get('role', null)
+          && live.get('teacherId', null) == saved.get('teacherId', null)
+          && live.get('canManageSchedule', null) == saved.get('canManageSchedule', null)
+          && live.get('branchId', null) == saved.get('branchId', null)
+          && live.get('branchIds', null) == saved.get('branchIds', null)
+          && live.get('accessRevision', null) == saved.get('accessRevision', null)
+          && saved.active == true && saved.companyId == 'danbridge';
+      }
+      function workspaceCaller() { return workspaceSignedIn() && request.auth.token.email_verified == true && workspaceOpen() && workspaceMember(workspaceEmail()); }
+      function workspaceOwner() { return workspaceCaller() && workspaceEmail() in ['a0965487920@gmail.com','catherine890202@gmail.com'] && workspaceAccess().role == 'owner'; }
+      function workspaceRoleHead(head, scope) {
+        let identity = head.identity;
+        let member = get(/databases/$(database)/documents/companyAccess/$(identity.email)).data;
+        let view = identity.kind == 'scheduler'
+          ? get(/databases/$(database)/documents/acceptancePublishedTransport/$(run)/companies/danbridge/schedulerViews/$(identity.email)).data
+          : get(/databases/$(database)/documents/acceptancePublishedTransport/$(run)/companies/danbridge/teacherViews/$(identity.email)).data;
+        return workspaceCaller() && identity.email == workspaceEmail() && identity.kind in ['teacher','scheduler']
+          && member.role == 'teacher' && identity.teacherId == member.teacherId
+          && (identity.kind == 'scheduler' ? member.get('canManageSchedule', false) == true : member.get('canManageSchedule', false) == false)
+          && head.scope == scope && head.schema in ['danbridge-role-chunks-experiment-v2','danbridge-role-chunks-experiment-v3']
+          && head.chunkIds is list && head.chunkIds.size() <= 4096
+          && view.roleChunkManifest.digest == head.digest
+          && view.sourceRecordRevision == head.sourceRevision && view.sourceRecordHash == head.sourceHash;
+      }
+    match /dailyShardedBackups/{companyId}/days/{day} {
+      allow read: if workspaceOwner() && companyId == 'danbridge';
+      allow create: if workspaceOwner()
+        && companyId == 'danbridge'
+        && request.resource.data.keys().hasOnly([
+          'schema','environment','companyId','day','state','sourceHash','collectionOrder',
+          'collections','chunkCount','recordCount','maxChunkBytes','counts','verifiedHash',
+          'verifiedAt','verifiedBy','verifiedByEmail'
+        ])
+        && request.resource.data.schema == 'danbridge-daily-sharded-backup-v2'
+        && request.resource.data.environment == 'production'
+        && request.resource.data.companyId == companyId
+        && request.resource.data.day == day
+        && day.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && request.resource.data.state == 'verified'
+        && request.resource.data.sourceHash.matches('record-v1:[0-9a-f]{64}')
+        && request.resource.data.verifiedHash == request.resource.data.sourceHash
+        && request.resource.data.collectionOrder == [
+          'students','teachers','lessons','makeups','changes','teacherGroups',
+          'winterTeacherGroups','summerCampClasses','summerCampRegistrations',
+          'winterCampRegistrations','winterCampClasses','settlementRecords',
+          'fixedExpenses','oneTimeExpenses','collectionRecords','branches'
+        ]
+        && request.resource.data.collections is map
+        && request.resource.data.collections.keys().hasOnly(request.resource.data.collectionOrder)
+        && request.resource.data.collections.keys().hasAll(request.resource.data.collectionOrder)
+        && request.resource.data.chunkCount is int
+        && request.resource.data.chunkCount > 0
+        && request.resource.data.recordCount is int
+        && request.resource.data.recordCount >= 0
+        && request.resource.data.maxChunkBytes is int
+        && request.resource.data.maxChunkBytes >= 10000
+        && request.resource.data.maxChunkBytes <= 180000
+        && request.resource.data.counts is map
+        && request.resource.data.counts.keys().hasOnly(['students','teachers','lessons','makeups'])
+        && request.resource.data.counts.keys().hasAll(['students','teachers','lessons','makeups'])
+        && request.resource.data.counts.students is int
+        && request.resource.data.counts.students >= 0
+        && request.resource.data.counts.teachers is int
+        && request.resource.data.counts.teachers >= 0
+        && request.resource.data.counts.lessons is int
+        && request.resource.data.counts.lessons >= 0
+        && request.resource.data.counts.makeups is int
+        && request.resource.data.counts.makeups >= 0
+        && request.resource.data.verifiedAt == request.time
+        && request.resource.data.verifiedBy == request.auth.uid
+        && request.resource.data.verifiedByEmail == workspaceEmail();
+      allow update, delete: if false;
+    }
+
+    match /dailyShardedBackups/{companyId}/days/{day}/chunks/{chunkId} {
+      allow read: if workspaceOwner() && companyId == 'danbridge';
+      allow create: if workspaceOwner()
+        && companyId == 'danbridge'
+        && request.resource.data.keys().hasOnly([
+          'schema','environment','companyId','day','chunkId','collection','index','items',
+          'sourceHash','createdAt','createdBy','createdByEmail'
+        ])
+        && request.resource.data.schema == 'danbridge-daily-sharded-backup-chunk-v2'
+        && request.resource.data.environment == 'production'
+        && request.resource.data.companyId == companyId
+        && request.resource.data.day == day
+        && day.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && request.resource.data.chunkId == chunkId
+        && request.resource.data.collection in [
+          'students','teachers','lessons','makeups','changes','teacherGroups',
+          'winterTeacherGroups','summerCampClasses','summerCampRegistrations',
+          'winterCampRegistrations','winterCampClasses','settlementRecords',
+          'fixedExpenses','oneTimeExpenses','collectionRecords','branches'
+        ]
+        && request.resource.data.index is int
+        && request.resource.data.index >= 0
+        && request.resource.data.items is list
+        && request.resource.data.sourceHash.matches('record-v1:[0-9a-f]{64}')
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdByEmail == workspaceEmail();
+      allow update, delete: if false;
+    }
+      allow get: if workspaceOwner();
+      allow list, write: if false;
+      match /{top}/{rest=**} { allow read: if top != 'productionRoleChunkViews' && workspaceOwner(); allow write: if false; }
+      match /companyAccess/{email} { allow get: if workspaceCaller() && email == workspaceEmail(); }
+      match /companies/danbridge/teacherViews/{email} {
+        allow get: if workspaceCaller() && email == workspaceEmail() && workspaceAccess().role == 'teacher' && resource.data.teacherId == workspaceAccess().teacherId;
+      }
+      match /companies/danbridge/schedulerViews/{email} {
+        allow get: if workspaceCaller() && email == workspaceEmail() && workspaceAccess().role == 'teacher' && workspaceAccess().get('canManageSchedule', false) == true;
+      }
+      match /companies/danbridge/scheduleNotifications/{id} { allow read: if workspaceCaller() && resource.data.recipientEmail == workspaceEmail(); }
+      match /productionRoleChunkViews/{scope} {
+        allow get: if workspaceRoleHead(resource.data, scope);
+        match /parts/{partId} {
+          function currentPart() {
+            let head = get(/databases/$(database)/documents/acceptancePublishedTransport/$(run)/productionRoleChunkViews/$(scope)).data;
+            return workspaceRoleHead(head, scope) && partId in head.chunkIds && resource.data.id == partId && resource.data.scope == scope;
+          }
+          allow get: if currentPart();
+        }
+      }
+    }
     function signedIn() { return request.auth != null && request.auth.token.email is string; }
     function emailKey() { return request.auth.token.email.lower(); }
     function isPrimaryOwner() { return signedIn() && emailKey() == 'a0965487920@gmail.com'; }
@@ -3851,6 +3992,42 @@ service cloud.firestore {
     match /companies/{companyId}/syncConflictBackups/{backupPartId} {
       allow read: if isOwner();
       allow write: if isOwner() && legacyV1WriteOpen(companyId);
+    }
+
+    // Immutable role parts are visible only while referenced by BOTH current
+    // published heads, under a currently active and exact role identity.
+    match /productionRoleChunkViews/{scope} {
+      function publishedRoleLinked(head) {
+        let identity = head.identity;
+        let branch = identity.kind == 'branch_manager';
+        let view = branch
+          ? get(/databases/$(database)/documents/companyAccess/$(identity.email)).data
+          : (identity.kind == 'scheduler'
+            ? get(/databases/$(database)/documents/companies/danbridge/schedulerViews/$(identity.email)).data
+            : get(/databases/$(database)/documents/companies/danbridge/teacherViews/$(identity.email)).data);
+        return head.scope == scope
+          && head.schema in ['danbridge-role-chunks-experiment-v2','danbridge-role-chunks-experiment-v3']
+          && head.digest is string
+          && head.sourceRevision is int && head.sourceRevision >= 0
+          && head.chunkIds is list && head.chunkIds.size() <= 4096
+          && view.roleChunkManifest.digest == head.digest
+          && (branch
+            ? (view.scopedSourceRecordRevision == head.sourceRevision && view.scopedSourceRecordHash == head.sourceHash)
+            : (view.sourceRecordRevision == head.sourceRevision && view.sourceRecordHash == head.sourceHash))
+          && roleRecordTargetScopeMatches('danbridge', identity.email, identity)
+          && (isOwner() || identity.email == emailKey());
+      }
+      allow get: if signedIn() && publishedRoleLinked(resource.data);
+      allow list, write: if false;
+      match /parts/{partId} {
+        function partIsPublished() {
+          let head = get(/databases/$(database)/documents/productionRoleChunkViews/$(scope)).data;
+          return publishedRoleLinked(head) && partId in head.chunkIds
+            && resource.data.id == partId && resource.data.scope == scope;
+        }
+        allow get: if signedIn() && partIsPublished();
+        allow list, write: if false;
+      }
     }
 
     match /companies/{companyId}/teacherViews/{email} {

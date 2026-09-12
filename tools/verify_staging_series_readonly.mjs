@@ -1,0 +1,23 @@
+// Read only: independently inspect the explicitly named acceptance series.
+import {createRequire} from 'node:module';
+const title=process.argv[2];
+if(!/^AUDIT\d+[-_][A-Z0-9_-]+$/.test(title||''))throw Error('An exact acceptance series title is required');
+const require=createRequire(import.meta.url),root='/usr/local/lib/node_modules/firebase-tools/lib',project='danbridge-d8877-staging';
+const account=require(root+'/auth.js').getGlobalDefaultAccount();
+await require(root+'/requireAuth.js').requireAuth({project,user:account.user,tokens:account.tokens});
+const {Client}=require(root+'/apiv2.js');
+const cloud=new Client({auth:true,apiVersion:'v1',urlPrefix:require(root+'/api.js').firestoreOrigin()});
+const decode=v=>v?.stringValue??v?.timestampValue??v?.booleanValue??(v?.integerValue!==undefined?Number(v.integerValue):v?.doubleValue!==undefined?Number(v.doubleValue):v?.arrayValue?(v.arrayValue.values||[]).map(decode):v?.mapValue?Object.fromEntries(Object.entries(v.mapValue.fields||{}).map(([k,x])=>[k,decode(x)])):null);
+const unwrap=fields=>Object.fromEntries(Object.entries(fields||{}).map(([k,v])=>[k,decode(v)]));
+const base=`projects/${project}/databases/(default)/documents`;
+const fence=unwrap((await cloud.get(`${base}/stagingRecordSyncV1PermanentFences/danbridge`,{skipLog:{resBody:true}})).body.fields);
+const epoch=fence.targetV2Epoch;
+if(!/^[A-Za-z0-9_.:-]{8,128}$/.test(epoch||''))throw Error('Invalid active staging epoch');
+const response=await cloud.post(`${base}/stagingActiveRecordV2Records/danbridge/epochs/${epoch}/collections/lessons:runQuery`,{structuredQuery:{from:[{collectionId:'records'}]}},{skipLog:{reqBody:true,resBody:true}});
+const records=response.body.filter(x=>x.document).map(x=>unwrap(x.document.fields));
+const matches=records.filter(x=>x.record?.title===title||x.record?.courseName===title||x.record?.subject===title);
+const result={project,dataWrites:0,title,readTime:response.body.find(x=>x.readTime)?.readTime,matched:matches.length,active:matches.filter(x=>!x.deleted).length,deleted:matches.filter(x=>x.deleted).length,records:matches.map(x=>({id:x.recordId,deleted:x.deleted,revision:x.revision,date:x.record?.date,start:x.record?.start,end:x.record?.end}))};
+const notices=await cloud.post(`${base}/companies/danbridge:runQuery`,{structuredQuery:{from:[{collectionId:'scheduleNotifications'}],orderBy:[{field:{fieldPath:'createdAt'},direction:'DESCENDING'}],limit:100}},{skipLog:{reqBody:true,resBody:true}});
+const ids=new Set(matches.map(x=>x.recordId));
+result.notifications=notices.body.filter(x=>x.document).map(x=>unwrap(x.document.fields)).filter(x=>Array.isArray(x.details)&&x.details.some(d=>ids.has(d.lessonId))).map(x=>({recipient:x.recipientEmail,changeCount:x.changeCount,matchedLessonCount:new Set(x.details.filter(d=>ids.has(d.lessonId)).map(d=>d.lessonId)).size,types:[...new Set(x.details.filter(d=>ids.has(d.lessonId)).map(d=>d.type))]}));
+console.log(JSON.stringify(result,null,2));

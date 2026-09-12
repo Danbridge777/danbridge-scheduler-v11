@@ -2,6 +2,7 @@
   "hosting": {
     "public": ".",
     "ignore": [
+      "staging-transport-acceptance.html",
       "firebase.json",
       "firebase.production.json",
       "firebase-debug*.log",

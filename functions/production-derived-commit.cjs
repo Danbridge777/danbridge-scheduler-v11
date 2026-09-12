@@ -31,10 +31,12 @@ async function commitProductionDerivedWrites(firestore,writes,{sourceHash,access
  for(let offset=0;offset<writes.length;offset+=400)chunks.push(writes.slice(offset,offset+400));
  for(let offset=0;offset<chunks.length;offset+=3){
   await Promise.all(chunks.slice(offset,offset+3).map(chunk=>firestore.runTransaction(async transaction=>{
-   const [safetySnapshot,...accessRows]=await transaction.getAll(safetyRef,...expectedAccess.map(row=>row.ref));
+   const roleHeads=chunk.filter(write=>write.type!=='delete'&&/^(companyAccess\/[^/]+|companies\/danbridge\/(teacherViews|schedulerViews)\/[^/]+)$/.test(write.ref.path));
+   const [safetySnapshot,...checkedRows]=await transaction.getAll(safetyRef,...expectedAccess.map(row=>row.ref),...roleHeads.map(write=>write.ref)),accessRows=checkedRows.slice(0,expectedAccess.length);
    const safety=safetySnapshot.exists?safetySnapshot.data():null;
    if(!safety||safety.state!=='active'||safety.readAllowed!==true||safety.writeAllowed!==true||safety.recordDataHash!==sourceHash)throw new Error('衍生發布權威版本已改變，未寫入舊視圖');
    if(accessRows.some((row,index)=>accessIdentity(row.exists?row.data():null)!==expectedAccess[index].identity))throw new Error('衍生發布角色範圍已改變，未寫入舊視圖');
+   if(checkedRows.slice(expectedAccess.length).some(row=>row.exists&&row.data()?.roleChunkManifest))throw new Error('角色傳輸已升級，拒絕舊發布格式，未寫入舊視圖');
    for(const write of chunk){if(write.type==='delete')transaction.delete(write.ref);else transaction.set(write.ref,write.value,write.options||{merge:false})}
   })));
  }

@@ -1,5 +1,5 @@
-import {projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.309';
-import {mergeConcurrentRecordDb} from './cloud-record-three-way-merge.js?v=20.26.309';
+import {projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.310';
+import {mergeConcurrentRecordDb} from './cloud-record-three-way-merge.js?v=20.26.310';
 import {SCHEDULER_OPERATION_SCHEMA,SCHEDULER_OPERATION_RESPONSE_SCHEMA,normalizeProductionSchedulerRequest} from './production-scheduler-operation.js';
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 import {assertScheduleCommand,buildScheduleCommand} from './schedule-collaboration-command.js';
@@ -34,7 +34,7 @@ export async function acquireProductionSchedulerLease(locks,key){
 // One durable queue per authenticated browser tab. A request is immutable from
 // its first send until its exact receipt returns, including across reloads.
 export function createProductionSchedulerQueue({storage,send,createRequestId,release,maxChangesPerRequest=30,onApply=()=>{},onState=()=>{}}){
- if(!storage?.load||!storage?.save||typeof send!=='function'||typeof createRequestId!=='function'||!Number.isSafeInteger(maxChangesPerRequest)||maxChangesPerRequest<1||maxChangesPerRequest>30)throw new Error('排課永久佇列設定無效');
+ if(!storage?.load||!storage?.save||typeof send!=='function'||typeof createRequestId!=='function'||!Number.isSafeInteger(maxChangesPerRequest)||maxChangesPerRequest<1||maxChangesPerRequest>40)throw new Error('排課永久佇列設定無效');
  let state=null,persistence=Promise.resolve(),persistenceWorker=null,persistenceRequested=0,persistenceCompleted=0,persistenceUrgent=false,flight=null,buffered=null,stopped=false,lastError='',dirtyHint=false,desiredVersion=0;
  const yieldToInput=()=>new Promise(resolve=>setTimeout(resolve,0));
  // Rapid timetable edits only need the newest durable desired state. Coalesce
@@ -51,7 +51,7 @@ export function createProductionSchedulerQueue({storage,send,createRequestId,rel
   const before=map(state.baseline.lessons),after=map(state.desired.lessons),changes=[];let truncated=false;
   for(const id of new Set([...before.keys(),...after.keys()])){const a=before.get(id),b=after.get(id);if(same(a,b))continue;if(changes.length===maxChangesPerRequest){truncated=true;break}const student=b?state.desired.students.find(row=>row.id===b.studentId):null;changes.push({lessonId:id,before:a||null,after:b||null,...(student?{student}:{})})}
   if(!changes.length){dirtyHint=false;return null}
-  const requestId=createRequestId(),request=normalizeProductionSchedulerRequest({schema:SCHEDULER_OPERATION_SCHEMA,requestId,release,changes}),createdAt=new Date().toISOString(),commands=changes.map((change,index)=>buildScheduleCommand({before:change.before,after:change.after,deviceId:'scheduler-queue',sequence:index+1,batchId:requestId,commandId:`${requestId}:${index+1}`,actionHint:state.actionHint||'',createdAt})),submitted=clone(state.baseline),submittedLessons=map(submitted.lessons);
+  const requestId=createRequestId(),request=normalizeProductionSchedulerRequest({schema:SCHEDULER_OPERATION_SCHEMA,requestId,release,changes},{maxChanges:maxChangesPerRequest>30?40:30}),createdAt=new Date().toISOString(),commands=changes.map((change,index)=>buildScheduleCommand({before:change.before,after:change.after,deviceId:'scheduler-queue',sequence:index+1,batchId:requestId,commandId:`${requestId}:${index+1}`,actionHint:state.actionHint||'',createdAt})),submitted=clone(state.baseline),submittedLessons=map(submitted.lessons);
   for(const change of changes){if(change.after)submittedLessons.set(change.lessonId,clone(change.after));else submittedLessons.delete(change.lessonId);if(change.student&&!submitted.students.some(row=>row.id===change.student.id))submitted.students.push(clone(change.student))}
   submitted.lessons=[...submittedLessons.values()];return{request,submitted,commands,desiredVersion,completeDesired:!truncated};
  };
@@ -67,7 +67,7 @@ export function createProductionSchedulerQueue({storage,send,createRequestId,rel
  return{
   async start({baselineDb,sourceRecordRevision=0}){
    if(state)throw new Error('排課佇列已啟動');const saved=await storage.load();
-   if(saved){if(saved.schema!==SCHEMA||!Number.isSafeInteger(saved.sourceRecordRevision)||saved.sourceRecordRevision<0)throw new Error('排課復原日誌無效，未覆蓋原資料');saved.baseline=normalizedSavedDb(saved.baseline,'排課復原基準');saved.desired=normalizedSavedDb(saved.desired,'排課復原內容');desiredVersion=Number.isSafeInteger(saved.desiredVersion)&&saved.desiredVersion>=0?saved.desiredVersion:0;saved.desiredVersion=desiredVersion;if(saved.pending){const pendingRequest=normalizeProductionSchedulerRequest(saved.pending.request);saved.pending.submitted=normalizedSavedDb(saved.pending.submitted,'排課待送快照');if(saved.pending.commands)for(const command of saved.pending.commands)assertScheduleCommand(command);if(pendingRequest.changes.length>maxChangesPerRequest){saved.rechunkedRequestIds=[...(Array.isArray(saved.rechunkedRequestIds)?saved.rechunkedRequestIds:[]),pendingRequest.requestId].slice(-30);saved.pending=null}}state=clone(saved);dirtyHint=Boolean(state.pending)||!same(state.baseline.lessons,state.desired.lessons);await persist()}
+   if(saved){if(saved.schema!==SCHEMA||!Number.isSafeInteger(saved.sourceRecordRevision)||saved.sourceRecordRevision<0)throw new Error('排課復原日誌無效，未覆蓋原資料');saved.baseline=normalizedSavedDb(saved.baseline,'排課復原基準');saved.desired=normalizedSavedDb(saved.desired,'排課復原內容');desiredVersion=Number.isSafeInteger(saved.desiredVersion)&&saved.desiredVersion>=0?saved.desiredVersion:0;saved.desiredVersion=desiredVersion;if(saved.pending){const pendingRequest=normalizeProductionSchedulerRequest(saved.pending.request,{maxChanges:40});saved.pending.submitted=normalizedSavedDb(saved.pending.submitted,'排課待送快照');if(saved.pending.commands)for(const command of saved.pending.commands)assertScheduleCommand(command);if(pendingRequest.changes.length>maxChangesPerRequest){throw new Error('待送批次超過目前協定上限，原 requestId 與日誌已保留；請更新後續傳')}}state=clone(saved);dirtyHint=Boolean(state.pending)||!same(state.baseline.lessons,state.desired.lessons);await persist()}
    else{const baseline=projectProductionSchedulerDb(baselineDb);state={schema:SCHEMA,sourceRecordRevision,baseline,desired:clone(baseline),pending:null,actionHint:'',desiredVersion};await persist()}
    apply();status(state.pending||dirty()?'pending':'ready');return{restored:Boolean(saved),pending:Boolean(state.pending)||Boolean(dirty())};
   },
@@ -101,6 +101,6 @@ export function createProductionSchedulerQueue({storage,send,createRequestId,rel
    return flight;
   },
   stop(){stopped=true;status('stopped');return (flight||persistence).catch(()=>{})},
-  diagnostics:()=>({ready:Boolean(state),inFlight:Boolean(flight),pending:Boolean(state?.pending),dirty:Boolean(dirty()),sourceRecordRevision:state?.sourceRecordRevision??0,error:lastError,commandCount:state?.pending?.commands?.length||0,commandKinds:[...new Set((state?.pending?.commands||[]).map(command=>command.kind))]})
+  diagnostics:()=>({ready:Boolean(state),maxChangesPerRequest,inFlight:Boolean(flight),pending:Boolean(state?.pending),dirty:Boolean(dirty()),sourceRecordRevision:state?.sourceRecordRevision??0,error:lastError,commandCount:state?.pending?.commands?.length||0,commandKinds:[...new Set((state?.pending?.commands||[]).map(command=>command.kind))]})
  };
 }

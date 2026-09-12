@@ -18,12 +18,13 @@ function validateReceipt(operation,receipt){
 export async function enqueueOperationPlan(journal,plan){
  if(!journal||typeof journal.appendMany!=='function')throw new Error('操作日誌不支援原子批次加入');
  if(!['danbridge-live-operation-plan-v1','danbridge-active-record-plan-v1'].includes(plan?.schema)||!Array.isArray(plan.operations)||plan.operationCount!==plan.operations.length)throw new Error('待加入的逐筆操作計畫無效');
+ if(typeof journal.appendManyWithCounts==='function'){const {entries,counts}=await journal.appendManyWithCounts(plan.operations);return{enqueued:entries.length,counts}}
  const entries=await journal.appendMany(plan.operations),counts=await journal.counts();return{enqueued:entries.length,counts};
 }
 
 export async function runOperationWorker({journal,send,recoverInterrupted=true,maxOperations=1000,maxBatchOperations=8,maxBatchRecords=maxBatchOperations,maxBatchAudits=maxBatchOperations,onProgress=()=>{},classifyError=classifyOperationError}={}){
  if(!journal||typeof journal.claimNext!=='function'||typeof journal.confirm!=='function'||typeof journal.fail!=='function'||typeof journal.counts!=='function'||typeof journal.list!=='function'||typeof journal.recoverInterrupted!=='function')throw new Error('操作工作程序缺少日誌介面');
- if(typeof send!=='function'||(send.batch!==undefined&&typeof send.batch!=='function')||typeof onProgress!=='function'||typeof classifyError!=='function'||!Number.isSafeInteger(maxOperations)||maxOperations<1||!Number.isSafeInteger(maxBatchOperations)||maxBatchOperations<1||maxBatchOperations>120||!Number.isSafeInteger(maxBatchRecords)||maxBatchRecords<0||maxBatchRecords>90||!Number.isSafeInteger(maxBatchAudits)||maxBatchAudits<0||maxBatchAudits>30)throw new Error('操作工作程序設定無效');
+ if(typeof send!=='function'||(send.batch!==undefined&&typeof send.batch!=='function')||typeof onProgress!=='function'||typeof classifyError!=='function'||!Number.isSafeInteger(maxOperations)||maxOperations<1||!Number.isSafeInteger(maxBatchOperations)||maxBatchOperations<1||maxBatchOperations>120||!Number.isSafeInteger(maxBatchRecords)||maxBatchRecords<0||maxBatchRecords>90||!Number.isSafeInteger(maxBatchAudits)||maxBatchAudits<0||maxBatchAudits>40)throw new Error('操作工作程序設定無效');
  const notify=async payload=>{try{await onProgress(payload)}catch{}};
  const recovery=recoverInterrupted?await journal.recoverInterrupted():{recovered:0};let processed=0;
  while(processed<maxOperations){
@@ -45,7 +46,7 @@ export async function runOperationWorker({journal,send,recoverInterrupted=true,m
   try{const receipt=validateReceipt(entry.operation,await send(entry.operation));await journal.confirm(entry.operationId,receipt);processed++;await notify({kind:'confirmed',entry,receipt,processed})}
   catch(error){const policy=classifyError(error);await journal.fail(entry.operationId,error,policy);await notify({kind:policy.retryable?'failed':'quarantined',entry,error,processed});break}
  }
- const counts=await journal.counts(),rows=await journal.list(),head=rows.find(row=>!['confirmed','superseded'].includes(row.status))??null;
+ const snapshot=typeof journal.snapshot==='function'?await journal.snapshot():{counts:await journal.counts(),rows:await journal.list()},counts=snapshot.counts,rows=snapshot.rows,head=rows.find(row=>!['confirmed','superseded'].includes(row.status))??null;
  const state=counts.quarantined?'blocked':counts.failed?'waiting':counts.sending?'sending':counts.pending?(processed>=maxOperations?'paused':'pending'):'complete';
  return{state,processed,recovered:recovery.recovered||0,counts,head};
 }

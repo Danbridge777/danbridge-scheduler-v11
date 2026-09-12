@@ -1,6 +1,5 @@
 import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js';
-const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
-const canonicalJSONString=value=>JSON.stringify(stable(value));
+import {canonicalJSONString} from './cloud-immutable-migration-backup.js';
 
 // Recover intent, never permission: the normal planner must still compare
 // current server revisions and preserve any concurrent conflict before writes.

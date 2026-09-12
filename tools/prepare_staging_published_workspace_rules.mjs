@@ -1,0 +1,25 @@
+import {createRequire} from 'node:module';
+import {readFile,writeFile,mkdtemp} from 'node:fs/promises';
+import {join} from 'node:path';
+import {patchPublishedWorkspaceRules,revisePublishedWorkspaceRules,digest} from './staging-published-workspace-rules-patch.mjs';
+const project='danbridge-d8877-staging',require=createRequire(import.meta.url),cli='/usr/local/lib/node_modules/firebase-tools/lib';
+const account=require(cli+'/auth.js').getGlobalDefaultAccount();
+await require(cli+'/requireAuth.js').requireAuth({project,user:account.user,tokens:account.tokens});
+const {Client}=require(cli+'/apiv2.js'),api=require(cli+'/api.js'),client=new Client({auth:true,apiVersion:'v1',urlPrefix:api.rulesOrigin()});
+const release=(await client.get(`/projects/${project}/releases/cloud.firestore`)).body;
+if(!release.rulesetName?.startsWith(`projects/${project}/rulesets/`))throw Error('Unexpected staging Rules release');
+const files=(await client.get('/'+release.rulesetName,{skipLog:{resBody:true}})).body.source.files;
+if(files.length!==1)throw Error('Expected one Rules source');
+const template=await readFile(new URL('../firebase/firestore.rules',import.meta.url),'utf8');
+let patch;
+if(process.argv[2]){
+ const reviewed=process.argv[2];if(!/^\/private\/tmp\/danbridge-280-rules-[A-Za-z0-9]+$/.test(reviewed))throw Error('Exact reviewed staging Rules directory required');
+ const evidence=JSON.parse(await readFile(join(reviewed,'evidence.json'),'utf8'));
+ if(evidence.project!==project||evidence.candidateSha256!==digest(files[0].content))throw Error('Live Rules differ from reviewed candidate');
+ const baseline=await readFile(join(reviewed,'baseline.rules'),'utf8');if(digest(baseline)!==evidence.baseSha256)throw Error('Reviewed baseline was changed');
+ patch=revisePublishedWorkspaceRules(files[0].content,baseline,await readFile(join(reviewed,'candidate.rules'),'utf8'),template,evidence.candidateSha256);
+}else patch=patchPublishedWorkspaceRules(files[0].content,template,digest(files[0].content));
+const directory=await mkdtemp('/private/tmp/danbridge-280-rules-');
+await writeFile(join(directory,'baseline.rules'),files[0].content);await writeFile(join(directory,'candidate.rules'),patch.source);
+await writeFile(join(directory,'evidence.json'),JSON.stringify({project,rulesetName:release.rulesetName,baseSha256:patch.baseSha256,candidateSha256:patch.candidateSha256,changedScope:patch.changedScope,dataWrites:0,rulesDeployed:false},null,2));
+console.log(JSON.stringify({directory,project,rulesetName:release.rulesetName,baseSha256:patch.baseSha256,candidateSha256:patch.candidateSha256,dataWrites:0,rulesDeployed:false}));

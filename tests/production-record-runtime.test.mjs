@@ -5,6 +5,9 @@ import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl
 import {createFirebaseProductionRecordOperationAdapter,createFirebaseProductionRecordBatchAdapter,createFirebaseProductionAccessMutationAdapter,createFirebaseProductionRecordStreamAdapter} from '../js/core/firebase-production-record-runtime-adapter.js';
 import {buildFullRecordShadowPlan,FULL_RECORD_COLLECTIONS} from '../js/core/cloud-full-record-shadow.js';
 import {prepareActiveRecordSync} from '../js/core/cloud-active-record-sync.js';
+import {createActiveRecordPageController} from '../js/core/cloud-active-record-page-controller.js';
+import {createOperationJournal} from '../js/core/cloud-operation-journal.js';
+import {applyActiveRecordOperation} from '../js/core/cloud-active-record-sync.js';
 
 const empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]));
 const target=()=>({...empty(),students:[{id:'student-1',name:'A'}]});
@@ -77,6 +80,21 @@ test('production stream 即使 safety 先抵達，仍須全 16 集合精確讀�
  for(const collection of FULL_RECORD_COLLECTIONS)app.emitCollection(collection,documents[collection]);
  await app.settle();assert.equal(app.adapter.diagnostics().state,'ready');assert.equal(app.adapter.diagnostics().initialVerified,true);assert.equal(app.applies.length,1);assert.equal(app.applies[0].hash,control.recordDataHash);assert.equal(app.applies[0].writeAllowed,true);
  app.emitDocument(PRODUCTION_RECORD_CONTROL_PATH,control);await app.settle();assert.equal(app.adapter.diagnostics().state,'ready');assert.equal(app.applies.length,1);
+});
+
+test('verified stream snapshot carries detached matching documents into the real page controller fast path',async()=>{
+ const {db,control,safety}=activation(),app=streamHarness(),documents=productionDocuments(db);app.adapter.start();
+ app.emitDocument(PRODUCTION_RECORD_CONTROL_PATH,control);app.emitDocument(PRODUCTION_RECORD_SAFETY_PATH,safety);
+ for(const collection of FULL_RECORD_COLLECTIONS)app.emitCollection(collection,documents[collection]);
+ await app.settle();const received=app.applies[0];assert.deepEqual(received.documents,documents);
+ let stored=null,local=structuredClone(db);const statuses=[],journal=createOperationJournal({storage:{load:async()=>structuredClone(stored),save:async value=>{stored=structuredClone(value)}}});
+ const page=createActiveRecordPageController({environment:'production',publishedOwnerBatch:true,role:'owner',deviceId:'stream-integration',journal,trustCommittedPlan:true,setTimer:()=>1,clearTimer:()=>{},readDocuments:async()=>{throw Error('verified snapshot must not be reread')},send:async op=>{const rows=documents[op.collection],index=rows.findIndex(row=>row.id===op.recordId),receipt=applyActiveRecordOperation(index<0?null:rows[index].data,op);if(receipt.write){const row={id:op.recordId,data:receipt.payload};if(index<0)rows.push(row);else rows[index]=row}return receipt},persistConflicts:async()=>({id:'conflict-proof'}),getLocalDb:()=>local,applyCloudDb:value=>{local=structuredClone(value)},onStatus:value=>statuses.push(value)});
+ await page.acceptCloudSnapshot(received);
+ for(const name of ['B','C']){local.students[0].name=name;page.queueLocalSave({changedCollections:['students']});const result=await page.flush();assert.equal(result.state,'complete');assert.equal(documents.students[0].data.record.name,name);assert.equal(statuses.findLast(row=>row.state==='planned').planningDiagnostics.trustedSource,true);}
+ // Consumers cannot mutate the stream's internal authority map by retaining
+ // this newly exposed snapshot. It also cannot be swapped by a later event.
+ received.documents.students[0].data.record.name='mutated-consumer';assert.equal(app.adapter.readDocuments().students[0].data.record.name,'A');
+ page.stop();app.adapter.stop();
 });
 
 test('production stream 原子啟用時 control 與 safety 回呼順序不同不會產生假性 blocked',async()=>{

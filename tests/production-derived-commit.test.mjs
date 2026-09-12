@@ -27,6 +27,10 @@ test('延遲舊發布、中央暫停與撤銷角色都在任何寫入前拒絕',
  }
 });
 test('缺少來源版本不可啟動衍生資料交易',async()=>{const f=fixture();await assert.rejects(commitProductionDerivedWrites(f.firestore,writes(1)),/有效權威版本/);assert.equal(f.committed.length,0)});
+test('a previously published chunk view cannot be overwritten by an older publisher',async()=>{
+ const f=fixture(),path='companies/danbridge/teacherViews/teacher@example.com';f.rows.set(path,{roleChunkManifest:{digest:'published'}});
+ await assert.rejects(commitProductionDerivedWrites(f.firestore,[{type:'set',ref:{path},value:{db:{lessons:[]}}}],{sourceHash}),/拒絕舊發布格式/);assert.equal(f.committed.length,0);
+});
 
 test('來源與既有視圖同步起讀，保留所有結果並拒絕任一讀取失敗',async()=>{
  const pending=[];

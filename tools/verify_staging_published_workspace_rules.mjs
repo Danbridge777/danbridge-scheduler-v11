@@ -1,0 +1,18 @@
+import {createRequire} from 'node:module';
+import {readFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import {digest} from './staging-published-workspace-rules-patch.mjs';
+const [directory,phase]=process.argv.slice(2);
+if(!/^\/private\/tmp\/danbridge-280-rules-[A-Za-z0-9]+$/.test(directory||'')||!['before','after'].includes(phase))throw Error('Exact prepared directory and before/after required');
+const evidence=JSON.parse(await readFile(join(directory,'evidence.json'),'utf8')),project='danbridge-d8877-staging';
+if(evidence.project!==project)throw Error('Staging project required');
+const require=createRequire(import.meta.url),cli='/usr/local/lib/node_modules/firebase-tools/lib',account=require(cli+'/auth.js').getGlobalDefaultAccount();
+await require(cli+'/requireAuth.js').requireAuth({project,user:account.user,tokens:account.tokens});
+const {Client}=require(cli+'/apiv2.js'),api=require(cli+'/api.js'),client=new Client({auth:true,apiVersion:'v1',urlPrefix:api.rulesOrigin()});
+const release=(await client.get(`/projects/${project}/releases/cloud.firestore`)).body;
+if(!release.rulesetName?.startsWith(`projects/${project}/rulesets/`))throw Error('Unexpected Rules target');
+const files=(await client.get('/'+release.rulesetName,{skipLog:{resBody:true}})).body.source.files;
+if(files.length!==1)throw Error('Expected exact Rules file');
+const sha256=digest(files[0].content),expected=phase==='before'?evidence.baseSha256:evidence.candidateSha256;
+if(sha256!==expected)throw Error('Live Rules hash differs from prepared '+phase+' hash: '+sha256);
+console.log(JSON.stringify({state:'verified',project,phase,rulesetName:release.rulesetName,sha256,dataWrites:0}));

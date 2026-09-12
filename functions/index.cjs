@@ -6,14 +6,17 @@ const {onInit}=require('firebase-functions/v2/core');
 const {applicationDefault,getApps,initializeApp}=require('firebase-admin/app');
 const {getAuth}=require('firebase-admin/auth');
 const {getAppCheck}=require('firebase-admin/app-check');
-const {getFirestore,FieldValue,Timestamp}=require('firebase-admin/firestore');
+const {getFirestore,initializeFirestore,FieldValue,Timestamp}=require('firebase-admin/firestore');
 const {GoogleAuth}=require('google-auth-library');
 const {createHash}=require('node:crypto');
 const {commitProductionDerivedWrites,readProductionRoleViewInputs}=require('./production-derived-commit.cjs');
 const {createProductionSchedulerRuntime,productionSchedulerErrorCode}=require('./production-scheduler-runtime.cjs');
 const {withProductionCommitLease}=require('./production-commit-lease.cjs');
 const {createProductionTransactionReader}=require('./production-transaction-reads.cjs');
+const {createPublishedRolePublisher}=require('./published-role-publisher.cjs');
+const {createPublishedOwnerRuntime}=require('./published-owner-runtime.cjs');
 const {createStagingDerivedDeliveryRuntime}=require('./staging-derived-delivery-runtime.cjs');
+const stagingWorkspaceFirestore=require('./staging-workspace-firestore.cjs').createStagingWorkspaceFirestore({getApps,initializeApp,initializeFirestore,applicationDefault});
 
 const PROJECT_ID='danbridge-d8877-staging';
 const SERVICE_ACCOUNT='danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com';
@@ -24,6 +27,12 @@ let runtimePromise=null;
 let stagingSchedulerRuntimePromise=null;
 let productionRuntimePromise=null;
 let productionSchedulerRuntimePromise=null;
+let publishedRolePublisherPromise=null;
+let publishedOwnerRuntimePromise=null;
+// Server rollout only. Browser input cannot activate a new transport. Both
+// scheduler commits and Owner publication must use the same deployment gate.
+const PUBLISHED_ROLE_LEGACY_COMPATIBILITY=process.env.DANBRIDGE_ROLE_TRANSPORT==='published-v1-compatible';
+const PUBLISHED_ROLE_TRANSPORT_ENABLED=process.env.DANBRIDGE_ROLE_TRANSPORT==='published-v1'||PUBLISHED_ROLE_LEGACY_COMPATIBILITY;
 
 function reportRuntimeBlocked(error){
  const name=error instanceof Error&&typeof error.name==='string'?error.name:'UnknownError';
@@ -116,6 +125,28 @@ async function verifiedStagingOwner(request){
  if(row?.active!==true||row?.companyId!=='danbridge'||row?.role!=='owner')throw new HttpsError('permission-denied','只有有效 Owner 可以保存 staging 衝突證據。');
  return Object.freeze({uid,email});
 }
+
+// Temporary, explicit staging acceptance endpoint. No caller-supplied business
+// paths or data are accepted; the production runtime is namespace-isolated.
+exports.stagingPublishedTransportAcceptance=onCall({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:120,memory:'512MiB',concurrency:1,minInstances:0,maxInstances:1},async request=>{
+ try{
+  const project=process.env.GCLOUD_PROJECT||process.env.GOOGLE_CLOUD_PROJECT;
+  if(project!==PROJECT_ID||[process.env.GCLOUD_PROJECT,process.env.GOOGLE_CLOUD_PROJECT].some(value=>value&&value!==PROJECT_ID))throw new HttpsError('failed-precondition','Only the exact staging project is allowed.');
+  const actor=await verifiedStagingOwner(request),identity={...actor,emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)};
+  const app=getApps().find(row=>row.options?.projectId===PROJECT_ID)??initializeApp({projectId:PROJECT_ID,credential:applicationDefault()});
+  const {executeAcceptance}=require('./staging-published-acceptance.cjs');
+  return await executeAcceptance({native:getFirestore(app),serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),identity,data:request.data,projectId:project});
+ }catch(error){if(error instanceof HttpsError)throw error;throw new HttpsError('failed-precondition',String(error?.message||'Acceptance blocked').slice(0,200))}
+});
+
+exports.stagingPublishedWorkspaceOperation=onCall({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:120,memory:'1GiB',cpu:1,concurrency:4,minInstances:0,maxInstances:2},async request=>{
+ try{
+  const project=process.env.GCLOUD_PROJECT||process.env.GOOGLE_CLOUD_PROJECT;
+  if(project!==PROJECT_ID||[process.env.GCLOUD_PROJECT,process.env.GOOGLE_CLOUD_PROJECT].some(value=>value&&value!==PROJECT_ID))throw new HttpsError('failed-precondition','Exact staging project required');
+  const identity={uid:request.auth?.uid,email:String(request.auth?.token?.email||'').trim().toLowerCase(),emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)};
+  return await require('./staging-published-workspace.cjs').executePublishedWorkspace({native:stagingWorkspaceFirestore(project),serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),identity,data:request.data,projectId:project,preserveLegacyViews:true});
+ }catch(error){if(error instanceof HttpsError)throw error;throw new HttpsError(productionSchedulerErrorCode(error),String(error?.message||'Workspace operation blocked').slice(0,240))}
+});
 
 exports.stagingAcknowledgeScheduleNotification=onCall({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:30,memory:'256MiB',concurrency:40,minInstances:1,maxInstances:10},async request=>{
  try{
@@ -241,6 +272,12 @@ exports.productionAcknowledgeScheduleNotification=onCall({region:'asia-east1',se
 
 exports.productionPublishScheduleNotifications=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:30,memory:'256MiB',concurrency:40,minInstances:1,maxInstances:20},async request=>{
  try{
+  if(PUBLISHED_ROLE_TRANSPORT_ENABLED){
+   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue);
+   const {createProductionNotificationPublisher}=require('./production-notification-publisher.cjs');
+   const publisher=await createProductionNotificationPublisher({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL});
+   return await publisher.execute(request.data,caller);
+  }
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),firestore=runtimeValue.firestore,{normalizeProductionScheduleNotificationPublishRequest,assertProductionScheduleNotificationAccess}=await import('../js/core/production-notification-policy.js'),input=normalizeProductionScheduleNotificationPublishRequest(request.data),fingerprint=createHash('sha256').update(JSON.stringify(input)).digest('hex'),safetyRef=firestore.doc('companies/danbridge/productionRecordRuntime/safety'),receiptRef=firestore.doc(`companies/danbridge/productionScheduleNotificationReceipts/${input.requestId}`),notificationRefs=input.notifications.map(item=>firestore.doc(`companies/danbridge/scheduleNotifications/${item.id}`)),accessRefs=input.notifications.map(item=>item.payload.recipientEmail===PRIMARY_OWNER_EMAIL?null:firestore.doc(`companyAccess/${item.payload.recipientEmail}`));
   const result=await firestore.runTransaction(async transaction=>{
    const [safetySnapshot,receiptSnapshot,...memberAndNotificationSnapshots]=await Promise.all([transaction.get(safetyRef),transaction.get(receiptRef),...accessRefs.map(ref=>ref?transaction.get(ref):Promise.resolve(null)),...notificationRefs.map(ref=>transaction.get(ref))]),safety=safetySnapshot.exists?safetySnapshot.data():null,receipt=receiptSnapshot.exists?receiptSnapshot.data():null,accessSnapshots=memberAndNotificationSnapshots.slice(0,accessRefs.length),notificationSnapshots=memberAndNotificationSnapshots.slice(accessRefs.length);
@@ -268,7 +305,7 @@ exports.productionPublishScheduleNotifications=onCall({region:'asia-east1',servi
 exports.productionSchedulerOperation=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'1GiB',concurrency:4,minInstances:1,maxInstances:10},async request=>{
  try{
   const runtimeValue=await productionRuntime();
-  if(!productionSchedulerRuntimePromise)productionSchedulerRuntimePromise=createProductionSchedulerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL}).catch(error=>{productionSchedulerRuntimePromise=null;throw error});
+  if(!productionSchedulerRuntimePromise)productionSchedulerRuntimePromise=createProductionSchedulerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,publishedRoleChunks:PUBLISHED_ROLE_TRANSPORT_ENABLED,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY}).catch(error=>{productionSchedulerRuntimePromise=null;throw error});
   const runtime=await productionSchedulerRuntimePromise;
   return await runtime.execute(request.data,{uid:request.auth?.uid,email:String(request.auth?.token?.email||'').trim().toLowerCase(),emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)});
  }catch(error){if(error instanceof HttpsError)throw error;console.error('PRODUCTION_SCHEDULER_BLOCKED',String(error?.message||'blocked'));throw new HttpsError(productionSchedulerErrorCode(error),String(error?.message||'排課操作未完成，資料已保留').slice(0,240))}
@@ -278,6 +315,10 @@ exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PR
  try{
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),trusted=runtimeValue.assertProductionTrustedOperation(request.data);
   if(trusted.actor.uid!==caller.uid||trusted.actor.email!==caller.email)throw new HttpsError('permission-denied','操作身分不一致。');
+  if(PUBLISHED_ROLE_TRANSPORT_ENABLED){
+   if(!publishedOwnerRuntimePromise)publishedOwnerRuntimePromise=createPublishedOwnerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,release:'20.26.310'}).catch(error=>{publishedOwnerRuntimePromise=null;throw error});
+   return await (await publishedOwnerRuntimePromise).execute(request.data,{...caller,emailVerified:true,appVerified:Boolean(request.app)});
+  }
   const adapters=runtimeValue.adaptersFor({uid:caller.uid,email:caller.email});
   let result;
   if(trusted.kind==='record.apply')result=await adapters.record.apply(trusted.operation);
@@ -292,6 +333,11 @@ exports.productionPublishRoleViews=onCall({region:'asia-east1',serviceAccount:PR
  const startedAt=Date.now(),timingsMs={},inputReadTimingsMs={};let phaseAt=startedAt;
  const mark=phase=>{const now=Date.now();timingsMs[phase]=now-phaseAt;phaseAt=now};
  try{
+  if(PUBLISHED_ROLE_TRANSPORT_ENABLED){
+   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue);
+   if(!publishedRolePublisherPromise)publishedRolePublisherPromise=createPublishedRolePublisher({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY}).catch(error=>{publishedRolePublisherPromise=null;throw error});
+   return await (await publishedRolePublisherPromise).execute(request.data,{...caller,emailVerified:true,appVerified:Boolean(request.app)});
+  }
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),firestore=runtimeValue.firestore,[projection,fullRecord,recordHash]=await Promise.all([import('../js/core/production-role-view-projection.js'),import('../js/core/cloud-full-record-shadow.js'),import('../js/core/cloud-record-data-hash.js')]),input=projection.assertProductionRoleViewPublishRequest(request.data),receiptRef=firestore.doc(`productionRoleViewPublishReceipts/${input.requestId}`),existingReceipt=await receiptRef.get();
   if(existingReceipt.exists){const saved=existingReceipt.data()||{};if(saved.sourceHash!==input.sourceHash||saved.createdByUid!==caller.uid)throw new Error('production 角色檢視發布 receipt identity 衝突');return{...saved,result:{...(saved.result||{}),kind:'duplicate'}}}
   mark('bootstrap');

@@ -7,6 +7,25 @@ import {runActiveRecordSync} from '../js/core/cloud-active-record-runtime.js';
 import {recordDataHash} from '../js/core/cloud-record-data-hash.js';
 
 const empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]));
+test('isolated published Owner supports 40 records plus 40 audits in one causal batch; legacy defaults remain unchanged',async()=>{
+ for(const enabled of [false,true]){
+  const before=empty(),after=empty(),documents=empty();after.lessons=Array.from({length:40},(_,i)=>({id:`lesson-${i}`,room:'A'}));after.changes=Array.from({length:40},(_,i)=>({at:i,event:'create'}));
+  let rows=null;const journal=createOperationJournal({storage:{load:async()=>structuredClone(rows),save:async value=>{rows=structuredClone(value)}}}),sizes=[];
+  const send=async op=>{const list=documents[op.collection],index=list.findIndex(row=>row.id===op.recordId),result=applyActiveRecordOperation(index<0?null:list[index].data,op);if(result.write){const row={id:op.recordId,data:result.payload};if(index<0)list.push(row);else list[index]=row}return result};
+  send.batch=async operations=>{sizes.push(operations.length);for(const op of operations)await send(op);assert.equal(recordDataHash(rebuildFullRecordShadowDb(documents,{environment:'production'}).db),operations.at(-1).targetHash);return{kind:'batch',write:true,operationCount:operations.length,targetHash:operations.at(-1).targetHash}};
+  const progress=[];
+  const result=await runActiveRecordSync({journal,readDocuments:async()=>structuredClone(documents),send,baselineDb:before,localDb:after,environment:'production',deviceId:'large-batch',activationEpoch:'batch-test-283',publishedOwnerBatch:enabled,onProgress:event=>progress.push(event)});
+  assert.equal(result.state,'complete');assert.equal(result.worker.processed,80);assert.equal(result.worker.counts.pending+result.worker.counts.failed+result.worker.counts.quarantined,0);
+  if(enabled)assert.deepEqual(sizes,[80]);else assert.ok(sizes.every(size=>size<=8));
+  const diagnostics=progress.find(event=>event.kind==='planned')?.planningDiagnostics;
+  if(enabled){
+   assert.deepEqual(Object.keys(diagnostics).sort(),['recoveryMs','readMs','plannerMs','conflictBackupMs','journalMs','trustedSource','appendOnlyChangesCount','operationCount'].sort());
+   for(const key of ['recoveryMs','readMs','plannerMs','conflictBackupMs','journalMs'])assert.ok(Number.isFinite(diagnostics[key])&&diagnostics[key]>=0);
+   assert.equal(diagnostics.trustedSource,false);assert.equal(diagnostics.operationCount,80);assert.equal(diagnostics.appendOnlyChangesCount,0);
+  }else assert.equal(diagnostics,undefined);
+ }
+ await assert.rejects(runActiveRecordSync({environment:'staging',publishedOwnerBatch:true}),/configuration invalid/);
+});
 const db=()=>{const value=empty();value.lessons=[{id:'lesson-1',room:'A',date:'2026-08-15'},{id:'lesson-2',room:'A',date:'2026-08-16'}];return value};
 function setup(){let journalRows=null,time=1000;const documents=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]])),seed=buildFullRecordShadowPlan(documents,db(),{sourceHash:'seed'});for(const operation of seed.operations){const [,collection,id]=operation.path.match(/collections\/([^/]+)\/records\/(.+)$/);documents[collection].push({id,data:structuredClone(operation.payload)})}const storage={load:async()=>structuredClone(journalRows),save:async value=>{journalRows=structuredClone(value)}},journal=createOperationJournal({storage,now:()=>time}),readDocuments=async()=>structuredClone(documents),send=async operation=>{const rows=documents[operation.collection],index=rows.findIndex(row=>row.id===operation.recordId),current=index<0?null:rows[index].data,result=applyActiveRecordOperation(current,operation);if(result.write){const row={id:operation.recordId,data:structuredClone(result.payload)};if(index<0)rows.push(row);else rows[index]=row}return result};return{documents,journal,readDocuments,send,advance:value=>time+=value}};
 const run=(source,local,overrides={})=>runActiveRecordSync({journal:source.journal,readDocuments:source.readDocuments,send:source.send,baselineDb:db(),localDb:local,environment:'staging',deviceId:'device-a',activationEpoch:'epoch-12345678',...overrides});

@@ -1,0 +1,26 @@
+<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Staging 隔離同步驗收</title>
+<style>body{font:16px system-ui;max-width:1000px;margin:40px auto;padding:20px;color:#193047}button,input{font:inherit;padding:12px;margin:6px;border:1px solid #a8b1ba;border-radius:8px;background:white}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f6f8;padding:16px}button:disabled{opacity:.4}</style>
+<h1>Staging 隔離同步驗收</h1><p>只操作合成命名空間，不是正式課表。全程保留 Auth、App Check；此頁不會修改正式網站或原有 staging 課程。</p>
+<p id="identity">登入驗證中</p><button id="login">登入</button><label>驗收批號<input id="run" size="40"></label>
+<div><button data-action="seed">建立隔離資料</button><button data-step="0">新增 40 堂</button><button data-step="1">移動 40 堂</button><button data-step="2">再移動 40 堂</button><button data-step="3">複製 40 堂</button><button data-step="4">刪除原 40 堂</button><button data-step="5">刪除複本 40 堂</button><button data-action="status">獨立回讀</button><button data-action="cleanup">清除本批隔離資料</button></div>
+<p>端到端時間包含登入令牌、App Check、呼叫、後端準備／提交及額外驗證回讀；commitMs 只計 runtime 交易，不能混用。</p><pre id="output">尚未執行</pre>
+<script type="module">
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js';
+import {getAuth,onAuthStateChanged,GoogleAuthProvider,signInWithPopup} from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
+import {initializeAppCheck,ReCaptchaEnterpriseProvider} from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app-check.js';
+import {getFunctions,httpsCallable} from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js';
+const output=document.querySelector('#output'),field=document.querySelector('#run'),buttons=[...document.querySelectorAll('[data-action],[data-step]')];
+if(!['danbridge-d8877-staging.web.app','danbridge-d8877-staging.firebaseapp.com'].includes(location.hostname)){buttons.forEach(b=>b.disabled=true);throw Error('Only staging is allowed')}
+const app=initializeApp({apiKey:'AIzaSyDD1zt1Zc8n8Rzk6Vf1hYhanRWHzfrmGeI',authDomain:'danbridge-d8877-staging.firebaseapp.com',projectId:'danbridge-d8877-staging',appId:'1:883029466360:web:c45a0a2164d4c897aaef0d'});
+const auth=getAuth(app);initializeAppCheck(app,{provider:new ReCaptchaEnterpriseProvider('6LfvKqItAAAAALRIut991852bJzOP3Aekm8WeXB9'),isTokenAutoRefreshEnabled:true});
+const call=httpsCallable(getFunctions(app,'asia-east1'),'stagingPublishedTransportAcceptance',{timeout:120000,limitedUseAppCheckTokens:true});
+field.value=localStorage.getItem('staging-published-279-run')||crypto.randomUUID();
+let busy=false;const update=()=>{buttons.forEach(b=>b.disabled=busy||!auth.currentUser);field.disabled=busy};
+onAuthStateChanged(auth,user=>{document.querySelector('#identity').textContent=user?'已登入：'+user.email:'尚未登入';update()});
+document.querySelector('#login').onclick=async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){output.textContent=e.message}};
+for(const button of buttons)button.onclick=async()=>{
+ const runId=field.value.trim(),payload={runId,action:button.dataset.action||'step'};if(button.dataset.step!==undefined)payload.step=Number(button.dataset.step);
+ localStorage.setItem('staging-published-279-run',runId);busy=true;update();const start=performance.now();output.textContent='正在執行 '+JSON.stringify(payload);
+ try{const response=await call(payload);output.textContent=JSON.stringify({endToEndIncludingVerificationMs:Math.round(performance.now()-start),...response.data},null,2)}catch(e){output.textContent=JSON.stringify({state:'blocked',code:e.code,message:e.message,elapsedMs:Math.round(performance.now()-start)},null,2)}finally{busy=false;update()}
+};
+</script></html>

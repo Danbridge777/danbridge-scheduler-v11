@@ -34,6 +34,31 @@ test('Firestore map key順序不影響 fingerprint、shortHash 與 ID，array �
  assert.notEqual(buildChangeRecordId(7,{...first,array:[null,{z:2,a:1}]}),buildChangeRecordId(7,first));
 });
 
+test('single-pass serializer preserves numeric keys, null prototypes, shared graphs and unusual Unicode byte-for-byte',()=>{
+ const shared={z:'\ud800',a:'\udfff',emoji:'😀\u2028\u2029',escaped:'"\\\n\u0000'},odd=Object.create(null);
+ for(const key of ['10','2','4294967294','4294967295','01','-0','__proto__','constructor','toJSON',''])Object.defineProperty(odd,key,{value:shared,enumerable:true});
+ const records=[{odd,shared,alias:shared},{array:[odd,shared],limits:[Number.MIN_VALUE,Number.MAX_VALUE,1e-7,1e21]}];
+ let seed=93417;const next=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed};
+ const value=depth=>depth===0?[null,true,false,next()/1000,'中文😀\ud800'][next()%5]:next()%2?Array.from({length:next()%5},()=>value(depth-1)):Object.fromEntries(Array.from({length:next()%8},()=>[['z','2','10','a','__proto__',''][next()%6]+(next()%3),value(depth-1)]));
+ for(let i=0;i<250;i++)records.push({i,data:value(4)});
+ for(const [index,record]of records.entries()){
+  assert.equal(changeRecordCanonicalFingerprint(record),JSON.stringify(legacyStable(record)));
+  assert.equal(changeRecordShortHash(record),legacyShortHash(record));
+  assert.equal(buildChangeRecordId(index,record),`seq_${String(index).padStart(8,'0')}_${legacyShortHash(record)}`);
+ }
+ shared.a='changed';assert.equal(changeRecordCanonicalFingerprint({shared}),JSON.stringify(legacyStable({shared})),'does not reuse an earlier mutable value');
+});
+
+test('single-pass serializer rejects nested descriptors, array symbols and cycles without executing accessors',()=>{
+ let reads=0;const getterArray=[1];Object.defineProperty(getterArray,'0',{get(){reads++;return 1},enumerable:true});
+ const symbolArray=[1];symbolArray[Symbol('extra')]=true;
+ const hiddenArray=[1];Object.defineProperty(hiddenArray,'0',{value:1,enumerable:false});
+ const nested=Object.create(null);Object.defineProperty(nested,'__proto__',{get(){reads++;return{}},enumerable:true});
+ const cycle=[];cycle.push(cycle);
+ for(const value of [getterArray,symbolArray,hiddenArray,nested,cycle])assert.throws(()=>changeRecordCanonicalFingerprint({value}),/accessor|symbol|non-enumerable|cycle/);
+ assert.equal(reads,0);
+});
+
 test('recordIndex 保留 legacy 任意 nonnegative safe integer 與 padStart(8) 語意',()=>{
  const record={type:'safe'};
  assert.match(buildChangeRecordId(99_999_999,record),/^seq_99999999_[0-9a-f]{8}$/);

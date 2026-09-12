@@ -105,7 +105,7 @@ export function validateConfigValues({ firebaserc, firebaseConfig, productionCon
   exactKeys(productionConfig, ['hosting'], 'firebase.production.json');
   exactKeys(productionConfig.hosting, ['ignore', 'public'], 'production.hosting');
   if (productionConfig.hosting.public !== '.') fail('production hosting public must be repo root');
-  exactArray(productionConfig.hosting.ignore, HOSTING_IGNORE, 'production.hosting.ignore');
+  exactArray(productionConfig.hosting.ignore, ['staging-transport-acceptance.html', ...HOSTING_IGNORE], 'production.hosting.ignore');
 
   if (!isPlainObject(packageConfig) || !isPlainObject(packageConfig.scripts)) fail('package scripts missing');
   if (packageConfig.scripts['predeploy:staging'] !== PREFLIGHT_SCRIPT) fail('predeploy:staging mismatch');
@@ -183,6 +183,7 @@ if (isDirectExecution()) {
   try {
     if (process.argv.length !== 2) fail('CLI arguments are forbidden');
     validateRepository();
+    await (await import('./build_record_plan_worker.mjs')).buildRecordPlanWorker({check:true});
     process.stdout.write('TARGET_CONFIG_VALID\n');
   } catch (error) {
     process.stderr.write(`${error.message}\n`);

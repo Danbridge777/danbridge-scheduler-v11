@@ -33,12 +33,12 @@ function selectedCollections(raw){
  if(seen.size!==result.length||result.some(collection=>!FULL_RECORD_COLLECTIONS.includes(collection)))throw new Error('全資料影子集合範圍無效');
  return result;
 }
-function readCurrent(documentsByCollection,environment='staging',collections=FULL_RECORD_COLLECTIONS,{trustedAppendOnlyChanges=false}={}){
+function readCurrent(documentsByCollection,environment='staging',collections=FULL_RECORD_COLLECTIONS,{trustedAppendOnlyChanges=false,validatedRows=null}={}){
  if(!['staging','production'].includes(environment))throw new Error('全資料影子環境無效');
  if(typeof trustedAppendOnlyChanges!=='boolean')throw new Error('全資料影子受信 changes 設定無效');
  const active={},revisions={},tombstones={};
  for(const collection of collections){active[collection]=new Map();revisions[collection]={};tombstones[collection]=new Map();const seen=new Set();
-  for(const row of documentsByCollection?.[collection]??[]){const id=String(row?.id??''),data=row?.data;let changeValid=true;if(collection==='changes'&&!trustedAppendOnlyChanges){try{assertChangeRecordIdentity({recordIndex:data?.recordIndex,recordId:id,record:data?.record})}catch{changeValid=false}}const identified=collection==='changes'||String(data?.record?.id??'')===id;if(!(validId(id)&&!seen.has(id)&&data&&data.schema===FULL_RECORD_SHADOW_SCHEMA&&data.companyId==='danbridge'&&data.collection===collection&&data.recordId===id&&data.environment===environment&&Number.isSafeInteger(data.revision)&&data.revision>=1&&typeof data.deleted==='boolean'&&changeValid&&identified))throw new Error(`${collection}/${id} 全資料影子格式無效`);seen.add(id);revisions[collection][id]=data.revision;(data.deleted?tombstones[collection]:active[collection]).set(id,data)}
+  for(const row of documentsByCollection?.[collection]??[]){const id=String(row?.id??''),data=row?.data;const checked=data&&validatedRows?.get(data),alreadyChecked=checked?.id===id&&checked?.collection===collection&&checked?.environment===environment;let changeValid=true;if(collection==='changes'&&!trustedAppendOnlyChanges&&!alreadyChecked){try{assertChangeRecordIdentity({recordIndex:data?.recordIndex,recordId:id,record:data?.record})}catch{changeValid=false}}const identified=collection==='changes'||String(data?.record?.id??'')===id;if(!(validId(id)&&!seen.has(id)&&data&&data.schema===FULL_RECORD_SHADOW_SCHEMA&&data.companyId==='danbridge'&&data.collection===collection&&data.recordId===id&&data.environment===environment&&Number.isSafeInteger(data.revision)&&data.revision>=1&&typeof data.deleted==='boolean'&&changeValid&&identified))throw new Error(`${collection}/${id} 全資料影子格式無效`);if(validatedRows&&!alreadyChecked){freezeRecordGraph(data.record);Object.freeze(data);validatedRows.set(data,{id,collection,environment})}seen.add(id);revisions[collection][id]=data.revision;(data.deleted?tombstones[collection]:active[collection]).set(id,data)}
  }
  return{active,revisions,tombstones};
 }
@@ -52,7 +52,7 @@ function trustedReferences(collection,targetRows,baselineRows){
 }
 export function buildFullRecordShadowPlan(documentsByCollection,targetDb,{sourceHash,batchSize=400,environment='staging',collections=FULL_RECORD_COLLECTIONS,appendOnlyChangesCount=0,trustedBaselineDb=null}={}){
  if(typeof sourceHash!=='string'||!sourceHash.trim())throw new Error('全資料影子缺少 sourceHash');if(!Number.isSafeInteger(batchSize)||batchSize<1||batchSize>400)throw new Error('全資料影子 batchSize 無效');
- if(!Number.isSafeInteger(appendOnlyChangesCount)||appendOnlyChangesCount<0||appendOnlyChangesCount>30)throw new Error('changes 追加提示無效');
+ if(!Number.isSafeInteger(appendOnlyChangesCount)||appendOnlyChangesCount<0||appendOnlyChangesCount>40)throw new Error('changes 追加提示無效');
  if(trustedBaselineDb!==null&&(!trustedBaselineDb||typeof trustedBaselineDb!=='object'||Array.isArray(trustedBaselineDb)))throw new Error('全資料影子權威結構參照無效');
  const trustedAppendOnlyChanges=Boolean(appendOnlyChangesCount&&trustedBaselineDb!==null),scope=selectedCollections(collections),current=readCurrent(documentsByCollection,environment,scope,{trustedAppendOnlyChanges});if(appendOnlyChangesCount){if(!scope.includes('changes'))throw new Error('changes 追加提示與權威資料不符');const active=[...current.active.changes.values()].sort((a,b)=>a.recordIndex-b.recordIndex);active.forEach((row,index)=>{if(row.recordIndex!==index)throw new Error('changes 追加提示與權威序號不符')});if(trustedAppendOnlyChanges&&(!Array.isArray(trustedBaselineDb.changes)||trustedBaselineDb.changes.length!==active.length))throw new Error('changes 追加提示與權威資料不符')}
  const unchangedByCollection=Object.fromEntries(scope.map(collection=>[collection,trustedReferences(collection,targetDb?.[collection],trustedBaselineDb?.[collection])]));
@@ -65,10 +65,27 @@ export function buildFullRecordShadowPlan(documentsByCollection,targetDb,{source
  const batches=[];for(let offset=0;offset<operations.length;offset+=batchSize)batches.push({index:batches.length,operations:operations.slice(offset,offset+batchSize)});
  return{schema:'danbridge-full-record-shadow-plan-v1',sourceHash,collectionCount:scope.length,operations,batches,writes:operations.length};
 }
-export function rebuildFullRecordShadowDb(documentsByCollection,{environment='staging'}={}){
- const current=readCurrent(documentsByCollection,environment),db={};let documentCount=0,activeCount=0,tombstoneCount=0;
- for(const collection of FULL_RECORD_COLLECTIONS){const rows=[...current.active[collection].values()];documentCount+=rows.length+current.tombstones[collection].size;activeCount+=rows.length;tombstoneCount+=current.tombstones[collection].size;if(collection==='changes'){rows.sort((a,b)=>a.recordIndex-b.recordIndex);rows.forEach((row,index)=>{if(row.recordIndex!==index)throw new Error('changes 影子序號不連續')});db[collection]=rows.map(row=>clone(row.record)).reverse()}else{rows.sort((a,b)=>String(a.recordId).localeCompare(String(b.recordId)));db[collection]=rows.map(row=>clone(row.record))}}
+function rebuildShadow(documentsByCollection,environment,validatedRows=null){
+ const current=readCurrent(documentsByCollection,environment,FULL_RECORD_COLLECTIONS,{validatedRows}),db={};let documentCount=0,activeCount=0,tombstoneCount=0;
+ const record=row=>validatedRows?row.record:clone(row.record);
+ for(const collection of FULL_RECORD_COLLECTIONS){const rows=[...current.active[collection].values()];documentCount+=rows.length+current.tombstones[collection].size;activeCount+=rows.length;tombstoneCount+=current.tombstones[collection].size;if(collection==='changes'){rows.sort((a,b)=>a.recordIndex-b.recordIndex);rows.forEach((row,index)=>{if(row.recordIndex!==index)throw new Error('changes 影子序號不連續')});db[collection]=rows.map(record).reverse()}else{rows.sort((a,b)=>String(a.recordId).localeCompare(String(b.recordId)));db[collection]=rows.map(record)}}
  return{db,documentCount,activeCount,tombstoneCount,revisions:current.revisions};
+}
+export function rebuildFullRecordShadowDb(documentsByCollection,{environment='staging'}={}){return rebuildShadow(documentsByCollection,environment)}
+function freezeRecordGraph(value,seen=new WeakSet()){
+ if(!value||typeof value!=='object'||seen.has(value))return;
+ seen.add(value);
+ for(const descriptor of Object.values(Object.getOwnPropertyDescriptors(value))){if(!('value'in descriptor))throw new Error('Immutable authority cannot contain accessors');freezeRecordGraph(descriptor.value,seen)}
+ Object.freeze(value);
+}
+// Server-only opt-in for detached snapshots within ONE transaction attempt.
+// Its private cache cannot be seeded by callers. Every new/changed wrapper is
+// fully validated; remembered payloads are recursively frozen before reuse.
+// IDs, counts, duplicate detection and contiguous history checks still run.
+// The ordinary rebuild API continues returning independent mutable clones.
+export function createImmutableFullRecordShadowRebuilder(){
+ const validatedRows=new WeakMap();
+ return Object.freeze({rebuild:(documents,{environment='staging'}={})=>rebuildShadow(documents,environment,validatedRows)});
 }
 export function verifyFullRecordShadowReadback(documentsByCollection,targetDb,{environment='staging'}={}){
  const rebuilt=rebuildFullRecordShadowDb(documentsByCollection,{environment}),expected=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>[collection,collection==='changes'?clone(targetDb[collection]):[...targetDb[collection]].sort((a,b)=>String(a.id).localeCompare(String(b.id)))]));

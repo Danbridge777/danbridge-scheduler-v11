@@ -1,0 +1,40 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {randomUUID} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+const require=createRequire(import.meta.url),{profileFor,isolatedStorage}=require('../js/core/staging-published-workspace-bootstrap.js');
+test('no opt-in means no changes; production/foreign hosts cannot activate the acceptance protocol',()=>{
+ const query='?publishedAcceptance='+randomUUID();
+ assert.equal(profileFor('danbridge-d8877.web.app',''),null);
+ assert.equal(profileFor('danbridge-d8877-staging.web.app','?acceptance=teacher-receiver-279'),null);
+ for(const host of ['danbridge-d8877.web.app','danbridge-d8877.firebaseapp.com','localhost','danbridge-d8877-staging.web.app.evil'])assert.throws(()=>profileFor(host,query));
+ assert.throws(()=>profileFor('danbridge-d8877-staging.web.app','?publishedAcceptance=../bad'));
+ const profile=profileFor('danbridge-d8877-staging.firebaseapp.com',query);
+ assert.equal(profileFor('danbridge-d8877-staging--draft-308-q72vphsd.web.app',query).runId,profile.runId);
+ assert.throws(()=>profileFor('danbridge-d8877-staging--draft-308-q72vphsd.web.app.evil',query));
+ assert.match(profile.path('productionFullRecordShadows/danbridge/collections/lessons/records'),/^acceptancePublishedTransport\/workspace-280-/);
+ assert.match(profile.path('companyAccess/aa@example.test'),/^acceptancePublishedTransport\/workspace-280-/);
+ assert.equal(profile.path('users/my-uid'),'users/my-uid');
+ assert.throws(()=>profile.path('companies/../users/x'));
+});
+test('draft, clipboard and recovery storage cannot read/write another run or normal staging; Firebase persistence is preserved',()=>{
+ const map=new Map([['danbridge_scheduler_v1','real staging data'],['firebase:authUser:stage','existing auth']]);
+ const storage={get length(){return map.size},key:i=>[...map.keys()][i]??null,getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,v),removeItem:k=>map.delete(k)};
+ const a=isolatedStorage(storage,'run-a:'),b=isolatedStorage(storage,'run-b:');
+ assert.equal(a.getItem('danbridge_scheduler_v1'),null);assert.equal(a.getItem('firebase:authUser:stage'),'existing auth');
+ a.setItem('danbridge_scheduler_v1','isolated');a.setItem('clipboard','copy');assert.equal(b.getItem('danbridge_scheduler_v1'),null);
+ assert.equal(map.get('danbridge_scheduler_v1'),'real staging data');assert.equal(a.length,2);assert.equal(a.key(0),'danbridge_scheduler_v1');
+ a.clear();assert.equal(a.length,0);assert.equal(map.get('danbridge_scheduler_v1'),'real staging data');assert.equal(map.get('firebase:authUser:stage'),'existing auth');
+});
+test('cache isolation precedes application scripts; physical Firebase bootstrap stays exact and staging-only',()=>{
+ const html=readFileSync('index.html','utf8'),module=readFileSync('js/core/firebase-auth-and-cloud-sync.module.js','utf8');
+ assert.ok(html.indexOf('staging-published-workspace-bootstrap.js')<html.indexOf('js/core/constants.js'));
+ assert.match(module,/DEPLOYMENT_ENVIRONMENT!=='staging'\|\|firebaseConfig.projectId!=='danbridge-d8877-staging'/);
+ assert.match(module,/document.body.dataset.environment=DEPLOYMENT_ENVIRONMENT/);
+ assert.match(module,/publishedWorkspace\?STAGING_V2_APP_CHECK_SITE_KEY:PRODUCTION_APP_CHECK_SITE_KEY/);
+ assert.match(module,/publishedWorkspace\?workspaceCall\('scheduler'\)/);
+ assert.match(module,/readParts:publishedWorkspace\?createFirestoreRolePartBatchReader/);
+ assert.match(module,/const publishedWorkspaceTokenPool=publishedWorkspace\?createLimitedUseAppCheckTokenPool/);
+ assert.match(module,/getLimitedUseAppCheckToken:\(\)=>publishedWorkspaceTokenPool.take\(\)/);
+});

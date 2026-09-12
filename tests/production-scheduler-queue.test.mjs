@@ -10,13 +10,22 @@ const base=()=>({...Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]
 const lesson={id:'queue-test-lesson',studentId:'student-1',teacherId:'teacher-1',teacherIds:['teacher-1'],date:'2026-10-01',start:'20:00',end:'20:30',branchId:'art_museum',status:'未上課'};
 const actor={uid:'scheduler-test-uid',email:'aa0966626336@gmail.com',role:'teacher',active:true,companyId:'danbridge',teacherId:'teacher-aa',canManageSchedule:true};
 const defer=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve}};
-function fixture(db=base()){
+function fixture(db=base(),maxChanges=30){
  let server=clone(db),stored=null,ui=null,sequence=0,revision=0,lostOnce=false,gate=null;const calls=[],receipts=new Map(),states=[];
  const storage={load:async()=>clone(stored),save:async value=>{stored=clone(value)}};
- const send=async request=>{calls.push(clone(request));const pause=gate;gate=null;if(pause)await pause.promise;let response=receipts.get(request.requestId);if(!response){const result=buildProductionSchedulerTarget(server,request,actor,{nowIso:'2026-09-03T15:00:00Z'});server=result.db;response={schema:SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:request.requestId,state:'committed',sourceHash:recordDataHash(server),sourceRecordRevision:++revision,operationCount:result.events.length*2,schedulerDb:projectProductionSchedulerDb(server)};receipts.set(request.requestId,clone(response))}if(lostOnce){lostOnce=false;throw Error('lost reply')}return clone(response)};
- const create=()=>createProductionSchedulerQueue({storage,send,release:'20.26.164',createRequestId:()=>`queue-request-${++sequence}`,onApply:db=>{ui=db},onState:value=>states.push(value)});
+ const send=async request=>{calls.push(clone(request));const pause=gate;gate=null;if(pause)await pause.promise;let response=receipts.get(request.requestId);if(!response){const result=buildProductionSchedulerTarget(server,request,actor,{nowIso:'2026-09-03T15:00:00Z',maxChanges});server=result.db;response={schema:SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:request.requestId,state:'committed',sourceHash:recordDataHash(server),sourceRecordRevision:++revision,operationCount:result.events.length*2,schedulerDb:projectProductionSchedulerDb(server)};receipts.set(request.requestId,clone(response))}if(lostOnce){lostOnce=false;throw Error('lost reply')}return clone(response)};
+ const create=(options={})=>createProductionSchedulerQueue({storage,send,maxChangesPerRequest:maxChanges,...options,release:'20.26.164',createRequestId:()=>`queue-request-${++sequence}`,onApply:db=>{ui=db},onState:value=>states.push(value)});
  return{create,calls,states,get server(){return clone(server)},get stored(){return clone(stored)},get ui(){return clone(ui)},pause(){gate=defer();return gate},lose(){lostOnce=true}};
 }
+test('40 筆已提交但回條遺失：降級不拆 requestId，升級後同一筆回放無重複',async()=>{
+ const f=fixture(base(),40),q=f.create();await q.start({baselineDb:base()});
+ const rows=Array.from({length:40},(_,i)=>({...lesson,id:'forty-'+i,date:new Date(Date.UTC(2030,0,i+1)).toISOString().slice(0,10)}));
+ await q.queue({...base(),lessons:rows});f.lose();await assert.rejects(q.flush(),/lost reply/);
+ const saved=f.stored;assert.equal(saved.pending.request.changes.length,40);assert.equal(f.server.lessons.length,40);await q.stop();
+ const downgraded=f.create({maxChangesPerRequest:30});await assert.rejects(downgraded.start({baselineDb:base()}),/原 requestId/);assert.deepEqual(f.stored,saved);
+ const restored=f.create();await restored.start({baselineDb:base()});await restored.flush();assert.equal(f.calls.length,2);assert.equal(f.calls[0].requestId,f.calls[1].requestId);assert.equal(f.server.lessons.length,40);assert.equal(restored.diagnostics().dirty,false);
+ await restored.queue(base());await restored.flush();assert.equal(f.calls.at(-1).changes.length,40);assert.equal(f.server.lessons.length,0);
+});
 test('新增送出時馬上刪除：保留刪除意圖，先確認新增再刪，不復活',async()=>{
  const f=fixture(),q=f.create();await q.start({baselineDb:base()});await q.queue({...base(),lessons:[lesson]});const gate=f.pause(),flight=q.flush();await new Promise(r=>setTimeout(r,0));await q.queue(base());gate.resolve();await flight;
  assert.equal(f.calls.length,2);assert.equal(f.calls[0].changes[0].before,null);assert.equal(f.calls[1].changes[0].after,null);assert.equal(f.server.lessons.length,0);assert.equal(f.ui.lessons.length,0);assert.equal(q.diagnostics().dirty,false);

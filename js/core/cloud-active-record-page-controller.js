@@ -1,17 +1,18 @@
 import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js';
 import {recordDataHash} from './cloud-record-data-hash.js';
-import {mergeConcurrentRecordDb} from './cloud-record-three-way-merge.js?v=20.26.309';
-import {runActiveRecordSync} from './cloud-active-record-runtime.js?v=20.26.309';
-import {recoverPendingOwnerIntent} from './cloud-pending-owner-recovery.js?v=20.26.309';
+import {mergeConcurrentRecordDb,RECORD_HISTORY_MERGE_SCHEMA} from './cloud-record-three-way-merge.js?v=20.26.310';
+import {runActiveRecordSync} from './cloud-active-record-runtime.js?v=20.26.310';
+import {recoverPendingOwnerIntent} from './cloud-pending-owner-recovery.js?v=20.26.310';
 
 const clone=value=>typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value));
 const token=value=>typeof value==='string'&&value.trim()===value&&value.length>0&&value.length<=128&&!value.includes('/');
 
 export function createActiveRecordPageController({
- environment='staging',role,deviceId,journal,draftStore=null,readDocuments,send,sendBatch=null,persistConflicts,getLocalDb,applyCloudDb,ensureCloudBackup=async()=>true,publishRoleViews=async()=>{},onStatus=()=>{},
+ environment='staging',publishedOwnerBatch=false,role,deviceId,journal,draftStore=null,readDocuments,send,sendBatch=null,persistConflicts,getLocalDb,applyCloudDb,ensureCloudBackup=async()=>true,publishRoleViews=async()=>{},onStatus=()=>{},
  setTimer=(callback,delay)=>setTimeout(callback,delay),clearTimer=timer=>clearTimeout(timer),sleep=delay=>new Promise(resolve=>setTimeout(resolve,delay)),saveDelay=120,maxOperations=1000,maxRebases=5,convergenceTimeoutMs=20000,strictConvergence=false,trustCommittedPlan=false
 }={}){
  if(!['staging','production'].includes(environment)||role!=='owner'||!token(deviceId)||!journal||typeof journal.list!=='function'||typeof journal.counts!=='function'||typeof readDocuments!=='function'||typeof send!=='function'||(sendBatch!==null&&typeof sendBatch!=='function')||typeof persistConflicts!=='function'||typeof getLocalDb!=='function'||typeof applyCloudDb!=='function'||typeof ensureCloudBackup!=='function'||typeof publishRoleViews!=='function'||typeof onStatus!=='function'||typeof setTimer!=='function'||typeof clearTimer!=='function'||typeof sleep!=='function'||!Number.isSafeInteger(saveDelay)||saveDelay<0||!Number.isSafeInteger(maxOperations)||maxOperations<1||!Number.isSafeInteger(maxRebases)||maxRebases<0||!Number.isSafeInteger(convergenceTimeoutMs)||convergenceTimeoutMs<1000||typeof strictConvergence!=='boolean'||typeof trustCommittedPlan!=='boolean')throw new Error('日常逐筆頁面控制器設定無效');
+ if(typeof publishedOwnerBatch!=='boolean'||(publishedOwnerBatch&&environment!=='production'))throw Error('Published Owner batch configuration invalid');
  if(draftStore&&['load','save','clear'].some(key=>typeof draftStore[key]!=='function'))throw Error('Owner draft store invalid');
  let activationEpoch='',writeAllowed=false,baselineDb=null,baselineHash='',latestCloudDb=null,trustedDocuments=null,trustedRemote=null,acceptedSnapshotVersion=0,dirty=false,queued=false,inFlight=false,retryPending=false,stopped=false,timer=null,mutationVersion=0,nextSequence=0,lastState='idle',lastError='',lastCounts=null,pendingCollections=null;
  let draftLoaded=false,draftRecovery=null,draftWrite=Promise.resolve(),inFlightLocal=null;
@@ -46,7 +47,7 @@ export function createActiveRecordPageController({
   if(!trustCommittedPlan||!batch||batch.activationEpoch!==activationEpoch||!Array.isArray(batch.operations)||!batch.operations.length||!((receipt?.kind==='batch'&&receipt.write===true)||(receipt?.kind==='duplicate-batch'&&receipt.write===false))||receipt.operationCount!==batch.operations.length||receipt.targetHash!==batch.operations.at(-1).targetHash||batch.operations.some(operation=>operation.environment!==environment||operation.activationEpoch!==activationEpoch||!FULL_RECORD_COLLECTIONS.includes(operation.collection)||operation.payload?.recordId!==operation.recordId||operation.payload?.revision!==operation.nextRevision))throw new Error('批次已提交回條格式無效');
   remember(batch.operations);
  }
- const status=payload=>{lastState=payload.state||lastState;lastError=payload.error||'';lastCounts=payload.counts||lastCounts;try{onStatus({...payload,dirty,queued,inFlight,writeAllowed,activationEpoch})}catch{}}
+ const status=payload=>{lastState=payload.state||lastState;lastError=payload.error||'';lastCounts=payload.counts||lastCounts;try{onStatus({...payload,historyMergeSchema:RECORD_HISTORY_MERGE_SCHEMA,dirty,queued,inFlight,writeAllowed,activationEpoch})}catch{}}
  const schedule=delay=>{if(stopped||timer!==null)return;timer=setTimer(()=>{timer=null;flush().catch(error=>status({state:'blocked',error:String(error?.message||error)}))},delay)};
  const loadSequence=async()=>{if(nextSequence>0)return nextSequence;let highest=0;for(const row of await journal.list()){const id=String(row?.operationId||''),prefix=`${deviceId}:`;if(!id.startsWith(prefix))continue;const sequence=Number(id.slice(prefix.length));if(Number.isSafeInteger(sequence)&&sequence>highest)highest=sequence}nextSequence=highest+1;return nextSequence};
  const savePostSyncConflicts=async(conflicts,base,target)=>{if(!conflicts.length)return null;const backup=await persistConflicts(clone(conflicts),{environment,activationEpoch,deviceId,baseHash:recordDataHash(base),targetHash:recordDataHash(target)});if(!backup)throw new Error('同步完成後的同筆衝突備份未完成');return backup};
@@ -112,7 +113,7 @@ export function createActiveRecordPageController({
   let appendOnlyChangesCount=0;
   if(trustCommittedPlan&&scope?.includes('changes')){
    const before=base?.changes,after=currentLocal?.changes,added=Array.isArray(before)&&Array.isArray(after)?after.length-before.length:0;
-   if(Number.isSafeInteger(added)&&added>0&&added<=30&&JSON.stringify(after.slice(added))===JSON.stringify(before))appendOnlyChangesCount=added;
+   if(Number.isSafeInteger(added)&&added>0&&added<=(publishedOwnerBatch?40:30)&&JSON.stringify(after.slice(added))===JSON.stringify(before))appendOnlyChangesCount=added;
   }
   const local=scope?Object.fromEntries(FULL_RECORD_COLLECTIONS.map(collection=>{
    if(!scope.includes(collection))return[collection,base?.[collection]||[]];
@@ -125,7 +126,7 @@ export function createActiveRecordPageController({
    // `base` is already detached by the clone above; avoid copying the full database twice.
    if(await ensureCloudBackup(base)!==true)throw new Error('逐筆寫入前的雲端分片備份尚未完成');status({state:'syncing'});
    const verified=trustCommittedPlan&&trustedRemote&&trustedRemote.db===base&&trustedRemote.hash===baselineHash?trustedRemote:null;
-   const result=await runActiveRecordSync({journal,readDocuments:readConfirmedDocuments,send:sendWithReceipt,persistConflicts,baselineDb:base,localDb:local,environment,deviceId,activationEpoch,startSequence:await loadSequence(),maxOperations,maxRebases,changedCollections:scope,appendOnlyChangesCount,trustedDocuments:verified?trustedDocuments:null,verifiedRemote:verified,onProgress:progress=>status({state:progress.kind,counts:progress.counts})});nextSequence=Math.max(nextSequence,result.nextSequence||nextSequence);
+   const result=await runActiveRecordSync({journal,readDocuments:readConfirmedDocuments,send:sendWithReceipt,persistConflicts,baselineDb:base,localDb:local,environment,deviceId,activationEpoch,startSequence:await loadSequence(),maxOperations,maxRebases,publishedOwnerBatch,changedCollections:scope,appendOnlyChangesCount,trustedDocuments:verified?trustedDocuments:null,verifiedRemote:verified,onProgress:progress=>status({state:progress.kind,counts:progress.counts,...(progress.planningDiagnostics?{planningDiagnostics:progress.planningDiagnostics}:{})})});nextSequence=Math.max(nextSequence,result.nextSequence||nextSequence);
    if(result.state!=='complete'){
     dirty=true;const counts=result.worker?.counts||await journal.counts();lastCounts=counts;
     if(result.state==='waiting'){queued=true;const retryAt=Number(result.worker?.head?.nextRetryAt)||Date.now()+1000;schedule(Math.max(0,retryAt-Date.now()))}

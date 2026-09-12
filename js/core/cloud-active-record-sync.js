@@ -1,9 +1,9 @@
 import {FULL_RECORD_COLLECTIONS,buildFullRecordShadowPlan,rebuildFullRecordShadowDb,FULL_RECORD_SHADOW_SCHEMA} from './cloud-full-record-shadow.js';
 import {ACTIVE_RECORD_SAVE_RECORD_HASH_SCHEMA,activeRecordSaveEnvelopeHash,isStrictActiveRecordSaveTimestamp} from './cloud-active-record-save-plan.js';
-import {recordDataHash} from './cloud-record-data-hash.js';
-import {mergeConcurrentRecordDb} from './cloud-record-three-way-merge.js?v=20.26.309';
+import {recordDataHash,normalizeRecordDb} from './cloud-record-data-hash.js';
+import {mergeConcurrentRecordDb} from './cloud-record-three-way-merge.js?v=20.26.310';
 import {canonicalizeLiveTargetDb} from './cloud-live-operation-plan.js';
-import {sha256Canonical} from './cloud-immutable-migration-backup.js';
+import {sha256Canonical,sha256Text,canonicalJSONString} from './cloud-immutable-migration-backup.js';
 
 const clone=value=>typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value));
 const stable=value=>Array.isArray(value)?value.map(stable):(value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value);
@@ -39,9 +39,10 @@ function v2Envelope({environment,activationEpoch,collection,recordId,exists,revi
  return{environment,companyId:'danbridge',activationEpoch,...core,recordHash};
 }
 
-export function prepareActiveRecordSync({documentsByCollection,baselineDb,localDb,environment,deviceId,activationEpoch,startSequence=1,createdAt=new Date().toISOString(),authoritativeSourceHash,hashRecordDb=recordDataHash,hashCanonical=null,verifiedRemote=null,compactResult=false,changedCollections=null,appendOnlyChangesCount=0}={}){
+export function prepareActiveRecordSync({documentsByCollection,baselineDb,localDb,environment,deviceId,activationEpoch,startSequence=1,createdAt=new Date().toISOString(),authoritativeSourceHash,hashRecordDb=recordDataHash,hashCanonical=null,verifiedRemote=null,compactResult=false,changedCollections=null,appendOnlyChangesCount=0,canonicalIntermediateHashes=false}={}){
  if(!allowedEnvironment.has(environment)||!validText(deviceId)||!validText(activationEpoch)||!Number.isSafeInteger(startSequence)||startSequence<1||!isStrictActiveRecordSaveTimestamp(createdAt)||typeof hashRecordDb!=='function'||hashCanonical!==null&&typeof hashCanonical!=='function')throw new Error('日常逐筆同步設定無效');
  if(typeof compactResult!=='boolean')throw new Error('日常逐筆同步精簡結果設定無效');
+ if(typeof canonicalIntermediateHashes!=='boolean')throw new Error('日常逐筆中間權威雜湊設定無效');
  const trusted=verifiedRemote!==null;
  if(trusted&&(!verifiedRemote||typeof verifiedRemote!=='object'||Array.isArray(verifiedRemote)||verifiedRemote.db!==baselineDb||verifiedRemote.hash!==authoritativeSourceHash||!validRecordHash(verifiedRemote.hash)||!Number.isSafeInteger(verifiedRemote.documentCount)||verifiedRemote.documentCount<0||!Number.isSafeInteger(verifiedRemote.activeCount)||verifiedRemote.activeCount<0||!Number.isSafeInteger(verifiedRemote.tombstoneCount)||verifiedRemote.tombstoneCount<0||verifiedRemote.documentCount!==verifiedRemote.activeCount+verifiedRemote.tombstoneCount||!verifiedRemote.revisions||typeof verifiedRemote.revisions!=='object'))throw new Error('日常逐筆已驗證遠端快照無效');
  const remote=trusted?verifiedRemote:rebuildFullRecordShadowDb(documentsByCollection,{environment}),baseHash=trusted?verifiedRemote.hash:hashRecordDb(remote.db);
@@ -58,7 +59,7 @@ export function prepareActiveRecordSync({documentsByCollection,baselineDb,localD
  // trusted server hash; it still rebuilds and merges the complete remote model
  // above, while refusing any local collection outside the declared command.
  if(scoped)for(const collection of FULL_RECORD_COLLECTIONS)if(!scopeSet.has(collection)&&baselineDb?.[collection]!==localDb?.[collection])throw new Error(`日常逐筆未授權集合未沿用權威參照：${collection}`);
- if(!Number.isSafeInteger(appendOnlyChangesCount)||appendOnlyChangesCount<0||appendOnlyChangesCount>30||appendOnlyChangesCount&&(!trusted||!scoped||!scopeSet.has('changes')))throw new Error('日常逐筆 changes 追加提示無效');
+ if(!Number.isSafeInteger(appendOnlyChangesCount)||appendOnlyChangesCount<0||appendOnlyChangesCount>40||appendOnlyChangesCount&&(!trusted||!scoped||!scopeSet.has('changes')))throw new Error('日常逐筆 changes 追加提示無效');
  if(appendOnlyChangesCount){const before=baselineDb?.changes,after=localDb?.changes;if(!Array.isArray(before)||!Array.isArray(after)||after.length!==before.length+appendOnlyChangesCount)throw new Error('日常逐筆 changes 追加數量不符');for(let index=0;index<before.length;index++)if(before[index]!==after[index+appendOnlyChangesCount])throw new Error('日常逐筆 changes 舊歷史未沿用權威參照')}
  const canonicalLocalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(baselineDb,localDb):(trusted&&appendOnlyChangesCount?localDb:authoritativeTarget(remote.db,localDb,{cloneResult:!trusted})),merged=authoritativeSourceHash===undefined?mergeConcurrentRecordDb(baselineDb,canonicalLocalDb,remote.db):{db:canonicalLocalDb,conflicts:[]},canonicalDb=authoritativeSourceHash===undefined?canonicalizeLiveTargetDb(remote.db,merged.db):canonicalLocalDb,targetHash=hashRecordDb(canonicalDb),raw=buildFullRecordShadowPlan(documentsByCollection,canonicalDb,{sourceHash:targetHash,batchSize:1,environment,collections:scope,appendOnlyChangesCount,trustedBaselineDb:trusted&&scoped?baselineDb:null});
  if(!validRecordHash(targetHash))throw new Error('日常逐筆目標雜湊無效');
@@ -66,17 +67,84 @@ export function prepareActiveRecordSync({documentsByCollection,baselineDb,localD
  let counts={documentCount:remote.documentCount,activeCount:remote.activeCount,tombstoneCount:remote.tombstoneCount};
  let sequence=startSequence;
  const currentByCollection=Object.fromEntries(scope.map(collection=>[collection,new Map((documentsByCollection?.[collection]??[]).map(item=>[String(item?.id??''),item?.data??null]))]));
+ // A command may be split at ANY worker boundary. An operation-chain digest
+ // is not the canonical database digest and must never become a published
+ // authority head. Materialize each intermediate state without mutating the
+ // verified source, so even a one-operation retry has a verifiable target.
+ const intermediate=canonicalIntermediateHashes?{...remote.db}:null;
+ const intermediateRecords=canonicalIntermediateHashes?Object.fromEntries(scope.map(collection=>[collection,new Map([...currentByCollection[collection]].filter(([,row])=>row&&!row.deleted))])):null;
+ // This cache lives for ONE synchronous plan over detached/verified records.
+ // Reuse serialized immutable records, never a digest across user mutations.
+ // The bytes remain identical to recordDataHash; only redundant cloning and
+ // recursive serialization are removed. Custom hash implementations retain
+ // the full materialized path and are not silently replaced.
+ const textCache=intermediate&&hashRecordDb===recordDataHash?new WeakMap():null;
+ const recordText=record=>{let text=textCache.get(record);if(text===undefined){text=canonicalJSONString(record);textCache.set(record,text)}return text};
+ const collectionTexts=textCache?Object.fromEntries(Object.entries(normalizeRecordDb(remote.db,{cloneRecords:false})).map(([key,records])=>[key,'['+records.map(recordText).join(',')+']'])):null;
+ const canonicalKeys=collectionTexts?Object.keys(collectionTexts).sort():null;
  const operations=raw.operations.map((row,index)=>{
   const collection=operationCollection(row.path),recordId=operationRecordId(row.path),operationId=`${deviceId}:${sequence++}`;
   if(!FULL_RECORD_COLLECTIONS.includes(collection)||!validText(recordId)||!validText(operationId))throw new Error('日常逐筆操作路徑無效');
   const current=currentByCollection[collection].get(recordId)??null,baseRevision=row.payload.revision-1,baselineRecord=v2Envelope({environment,activationEpoch,collection,recordId,exists:current!==null,revision:current?.revision??0,deleted:current?.deleted??false,record:current?.record??null},hashCanonical),localRecord=v2Envelope({environment,activationEpoch,collection,recordId,exists:true,revision:baseRevision,deleted:row.payload.deleted,record:row.payload.record},hashCanonical);
   if(baselineRecord.revision!==baseRevision)throw new Error('日常逐筆 V2 基準 revision 不符');
   const operation={schema:'danbridge-active-record-operation-v1',environment,companyId:'danbridge',activationEpoch,operationId,deviceId,createdAt,collection,recordId,type:row.type,baseRevision,nextRevision:row.payload.revision};
-  const baseHash=incrementalHash;counts=advanceCounts(counts,row.type);incrementalHash=index===raw.operations.length-1?targetHash:operationChainHash(baseHash,operation,hashCanonical??sha256Canonical);
+  const baseHash=incrementalHash;counts=advanceCounts(counts,row.type);
+  if(intermediate){
+   const records=intermediateRecords[collection];if(row.payload.deleted)records.delete(recordId);else records.set(recordId,row.payload);
+   intermediate[collection]=collection==='changes'?[...records.values()].sort((a,b)=>b.recordIndex-a.recordIndex).map(item=>item.record):[...records.values()].map(item=>item.record);
+  }
+  if(collectionTexts){const records=intermediateRecords[collection],ordered=collection==='changes'?[...records.values()].sort((a,b)=>a.recordIndex-b.recordIndex):[...records.values()].sort((a,b)=>String(a.recordId).localeCompare(String(b.recordId)));collectionTexts[collection]='['+ordered.map(item=>recordText(item.record)).join(',')+']'}
+  incrementalHash=index===raw.operations.length-1?targetHash:collectionTexts?`record-v1:${sha256Text('{'+canonicalKeys.map(key=>JSON.stringify(key)+':'+collectionTexts[key]).join(',')+'}')}`:intermediate?hashRecordDb(intermediate):operationChainHash(baseHash,operation,hashCanonical??sha256Canonical);
+  if(!validRecordHash(incrementalHash))throw new Error('日常逐筆中間權威雜湊無效');
   return{...operation,baseHash,targetHash:incrementalHash,targetDocumentCount:counts.documentCount,targetActiveCount:counts.activeCount,targetTombstoneCount:counts.tombstoneCount,baselineRecord,localRecord,payload:clone(row.payload),path:row.path};
  });
  if(incrementalHash!==targetHash)throw new Error('日常逐筆逐操作 head 與目標雜湊不一致');
  return{schema:'danbridge-active-record-plan-v1',environment,companyId:'danbridge',activationEpoch,deviceId,startSequence,nextSequence:sequence,baseHash,targetHash,operationCount:operations.length,operations,conflicts:clone(merged.conflicts),db:compactResult?canonicalDb:clone(canonicalDb),remoteDb:compactResult?remote.db:clone(remote.db),revisions:compactResult?remote.revisions:clone(remote.revisions)};
+}
+
+// WebCrypto performs the expensive digest outside the JavaScript execution
+// stack. Each await also lets the calendar process new gestures. All command
+// and source bytes are frozen before the first await; a later UI mutation
+// belongs to the next command, not this one.
+export async function canonicalizeActiveRecordPlanHeads(plan,documentsByCollection,{digestText=null,maxInFlight=4}={}){
+ if(plan?.schema!=='danbridge-active-record-plan-v1'||plan.environment!=='production'||!Array.isArray(plan.operations)||plan.operationCount!==plan.operations.length||digestText!==null&&typeof digestText!=='function'||!Number.isSafeInteger(maxInFlight)||maxInFlight<1||maxInFlight>4)throw new Error('逐筆非同步權威計畫無效');
+ const digest=digestText|| (async text=>{
+  if(globalThis.crypto?.subtle){const bytes=await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(bytes)].map(value=>value.toString(16).padStart(2,'0')).join('')}
+  await new Promise(resolve=>setTimeout(resolve,0));return sha256Text(text);
+ });
+ const normalized=normalizeRecordDb(plan.remoteDb,{cloneRecords:false}),texts=Object.fromEntries(Object.entries(normalized).map(([key,records])=>[key,'['+records.map(canonicalJSONString).join(',')+']'])),keys=Object.keys(texts).sort();
+ const collections=[...new Set(plan.operations.map(row=>row.collection))],records=Object.fromEntries(collections.map(key=>[key,new Map((documentsByCollection[key]||[]).filter(row=>!row.data.deleted).map(row=>[row.id,{id:row.id,index:row.data.recordIndex,text:canonicalJSONString(row.data.record)}]))]));
+ const operations=clone(plan.operations),updates=operations.map(row=>({id:row.recordId,index:row.payload.recordIndex,text:canonicalJSONString(row.payload.record)}));
+ const targetHash=plan.targetHash;
+ let previousHash=plan.baseHash,pending=[],pendingChars=0;
+ const flush=async()=>{
+  // Digests may finish out of order, but command dependencies NEVER do.
+  // Drain every started promise, even on rejection, before returning/failing.
+  const batch=pending;pending=[];pendingChars=0;
+  const results=await Promise.all(batch.map(item=>item.result));
+  for(let i=0;i<results.length;i++){
+   const result=results[i];if(result.error)throw result.error;
+   const hash='record-v1:'+result.value;
+   if(!validRecordHash(hash))throw new Error('日常逐筆中間權威雜湊無效');
+   batch[i].operation.baseHash=previousHash;batch[i].operation.targetHash=hash;previousHash=hash;
+  }
+ };
+ for(let index=0;index<operations.length;index++){
+  const operation=operations[index],collection=operation.collection,rows=records[collection];
+  if(operation.payload.deleted)rows.delete(operation.recordId);else rows.set(operation.recordId,updates[index]);
+  const ordered=[...rows.values()].sort(collection==='changes'?(a,b)=>a.index-b.index:(a,b)=>String(a.id).localeCompare(String(b.id)));
+  texts[collection]='['+ordered.map(row=>row.text).join(',')+']';
+  const text='{'+keys.map(key=>JSON.stringify(key)+':'+texts[key]).join(',')+'}';
+  // Bound extra simultaneous strings/UTF-8 buffers; an individually large
+  // authority is still hashed in full, alone, never sampled or truncated.
+  if(pending.length&&pendingChars+text.length>2*1024*1024)await flush();
+  const result=Promise.resolve().then(()=>digest(text)).then(value=>({value}),error=>({error:error||new Error('逐筆雜湊計算失敗')}));
+  pending.push({operation,result});pendingChars+=text.length;
+  if(pending.length===maxInFlight||pendingChars>=2*1024*1024)await flush();
+ }
+ if(pending.length)await flush();
+ if(previousHash!==targetHash)throw new Error('非同步逐筆目標與完整權威雜湊不符');
+ return{...plan,operations};
 }
 
 export function applyActiveRecordOperation(current,operation){

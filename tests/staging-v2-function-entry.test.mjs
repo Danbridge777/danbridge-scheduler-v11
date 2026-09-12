@@ -4,6 +4,51 @@ import {createRequire} from 'node:module';
 import {readFile} from 'node:fs/promises';
 
 const require=createRequire(import.meta.url);
+test('legacy compatibility is server-gated consistently across scheduler, Owner and role publisher',async()=>{
+ const source=await readFile(new URL('../functions/index.cjs',import.meta.url),'utf8');
+ assert.match(source,/const PUBLISHED_ROLE_LEGACY_COMPATIBILITY=process\.env\.DANBRIDGE_ROLE_TRANSPORT==='published-v1-compatible';/);
+ assert.match(source,/const PUBLISHED_ROLE_TRANSPORT_ENABLED=process\.env\.DANBRIDGE_ROLE_TRANSPORT==='published-v1'\|\|PUBLISHED_ROLE_LEGACY_COMPATIBILITY;/);
+ for(const constructor of ['createProductionSchedulerRuntime','createPublishedOwnerRuntime','createPublishedRolePublisher']){
+  const construction=source.split('\n').find(line=>line.includes(constructor+'({')&&line.includes('Promise='));
+  assert.ok(construction?.includes('preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY'),constructor+' must share the server-only compatibility gate');
+ }
+ const endpoint=source.slice(source.indexOf('exports.stagingPublishedWorkspaceOperation='),source.indexOf('exports.stagingAcknowledgeScheduleNotification='));
+ assert.match(endpoint,/projectId:project,preserveLegacyViews:true/,'isolated real-UI acceptance exercises compatibility without enabling formal deployment');
+});
+test('published Owner production and isolated acceptance stamp the same release as the frontend',async()=>{
+ const [entry,workspace,client]=await Promise.all(['../functions/index.cjs','../functions/staging-published-workspace.cjs','../js/core/firebase-auth-and-cloud-sync.module.js'].map(path=>readFile(new URL(path,import.meta.url),'utf8')));
+ const release=client.match(/const APP_RELEASE='(\d+\.\d+\.\d+)'/)?.[1];
+ assert.ok(release,'frontend release must be explicit');
+ const owner=entry.slice(entry.indexOf('exports.productionTrustedOperation='),entry.indexOf('exports.productionPublishRoleViews='));
+ assert.equal(owner.match(/createPublishedOwnerRuntime\(\{[^\n]*release:'([^']+)'/)?.[1],release,'production receipts cannot carry a stale release');
+ const workspaceReleases=[...workspace.matchAll(/release:'(\d+\.\d+\.\d+)'/g)].map(match=>match[1]);
+ assert.ok(workspaceReleases.length>=2,'both seed and runtime release must be checked');
+ assert.ok(workspaceReleases.every(value=>value===release),'isolated and production runtime release must agree');
+});
+test('REST client is lazy, staging-only and isolated from the default Admin app',()=>{
+ const {createStagingWorkspaceFirestore}=require('../functions/staging-workspace-firestore.cjs');
+ const apps=[{name:'[DEFAULT]',options:{projectId:'danbridge-d8877'}}],calls=[],sentinel={client:true};
+ const deps={getApps:()=>apps,applicationDefault:()=>({credential:true}),initializeApp:(options,name)=>{calls.push(['app',name,options.projectId]);const app={name,options};apps.push(app);return app},initializeFirestore:(app,settings)=>{calls.push(['firestore',app.name,settings]);return sentinel}};
+ const get=createStagingWorkspaceFirestore(deps);assert.equal(calls.length,0);
+ assert.throws(()=>get('danbridge-d8877'),/Exact staging/);assert.equal(calls.length,0);
+ assert.equal(get('danbridge-d8877-staging'),sentinel);assert.equal(get('danbridge-d8877-staging'),sentinel);
+ assert.deepEqual(calls,[['app','danbridge-published-workspace-rest','danbridge-d8877-staging'],['firestore','danbridge-published-workspace-rest',{preferRest:true}]]);
+ assert.deepEqual(apps[0],{name:'[DEFAULT]',options:{projectId:'danbridge-d8877'}});
+ assert.throws(()=>get('danbridge-d8877'),/Exact staging/,'cached client cannot bypass project validation');
+ const wrong=createStagingWorkspaceFirestore({...deps,getApps:()=>[{name:'danbridge-published-workspace-rest',options:{projectId:'danbridge-d8877'}}]});
+ assert.throws(()=>wrong('danbridge-d8877-staging'),/project mismatch/);
+});
+test('only the published staging workspace endpoint opts into its dedicated REST client',async()=>{
+ const source=await readFile(new URL('../functions/index.cjs',import.meta.url),'utf8');
+ assert.equal(source.match(/stagingWorkspaceFirestore\(project\)/g)?.length,1);
+ const endpoint=source.slice(source.indexOf('exports.stagingPublishedWorkspaceOperation='),source.indexOf('exports.stagingAcknowledgeScheduleNotification='));
+ assert.match(endpoint,/native:stagingWorkspaceFirestore\(project\)/);
+ assert.match(endpoint,/enforceAppCheck:true,consumeAppCheckToken:true/);
+});
+test('published workspace acceptance explicitly restores bounded non-warm resources after profiling',()=>{
+ const endpoint=require('../functions/index.cjs').stagingPublishedWorkspaceOperation.__endpoint;
+ assert.equal(endpoint.cpu,1);assert.equal(endpoint.minInstances,0);assert.equal(endpoint.maxInstances,2);assert.equal(endpoint.availableMemoryMb,1024);assert.equal(endpoint.concurrency,4);
+});
 test('Gen2 function entry固定 Node22、region、service account、public transport與精確 Hosting rewrite',async()=>{const exported=require('../functions/index.cjs'),endpoint=exported.stagingV2AuthoritySave?.__endpoint,[pkg,firebase]=await Promise.all([readFile(new URL('../package.json',import.meta.url),'utf8').then(JSON.parse),readFile(new URL('../firebase.json',import.meta.url),'utf8').then(JSON.parse)]);assert.ok(endpoint);assert.equal(endpoint.platform,'gcfv2');assert.deepEqual(endpoint.region,['asia-east1']);assert.equal(endpoint.serviceAccountEmail,'danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com');assert.deepEqual(endpoint.httpsTrigger.invoker,['public']);assert.equal(endpoint.minInstances,1);assert.equal(endpoint.maxInstances,10);assert.equal(endpoint.availableMemoryMb,1024);assert.equal(endpoint.cpu,2);assert.equal(endpoint.concurrency,4);assert.equal(pkg.main,'functions/index.cjs');assert.equal(pkg.engines.node,'22');assert.equal(pkg.dependencies.firebase,'12.17.1');assert.equal(Object.hasOwn(pkg.devDependencies,'firebase'),false);assert.equal(pkg.dependencies['firebase-functions'],'7.3.2');assert.equal(pkg.dependencies['firebase-admin'],'14.2.0');assert.equal(firebase.functions.source,'.');assert.equal(firebase.functions.runtime,'nodejs22');assert.deepEqual(firebase.hosting.rewrites,[{source:'/api/staging-v2/authority-save',function:{functionId:'stagingV2AuthoritySave',region:'asia-east1'}}])});
 
 test('staging V2 衝突備份固定為 App Check callable 且沿用隔離 service account',async()=>{const endpoint=require('../functions/index.cjs').stagingV2ConflictBackup?.__endpoint,source=await readFile(new URL('../functions/index.cjs',import.meta.url),'utf8');assert.ok(endpoint);assert.equal(endpoint.platform,'gcfv2');assert.deepEqual(endpoint.region,['asia-east1']);assert.equal(endpoint.serviceAccountEmail,'danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com');assert.match(source,/exports\.stagingV2ConflictBackup=onCall\(\{[^}]*enforceAppCheck:true,consumeAppCheckToken:true/)});
@@ -12,7 +57,7 @@ test('staging 通知確認固定走受 App Check 保護的後端且只能確認�
 
 test('staging 排課固定走 App Check 後端與 V2 authority，前端不直寫舊 scheduleRequests',async()=>{const exported=require('../functions/index.cjs'),endpoint=exported.stagingSchedulerOperation?.__endpoint,source=await readFile(new URL('../functions/index.cjs',import.meta.url),'utf8'),client=await readFile(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');assert.ok(endpoint);assert.equal(endpoint.platform,'gcfv2');assert.deepEqual(endpoint.region,['asia-east1']);assert.equal(endpoint.serviceAccountEmail,'danbridge-staging-v2@danbridge-d8877-staging.iam.gserviceaccount.com');assert.equal(endpoint.minInstances,1);assert.match(source,/exports\.stagingSchedulerOperation=onCall\(\{[^}]*enforceAppCheck:true,consumeAppCheckToken:true/);assert.match(source,/executeStagingAuthorityPayload/);assert.match(client,/stagingSchedulerOperationCall/);assert.match(client,/createFirebaseCallableHttpClient/);assert.doesNotMatch(client,/httpsCallable\(stagingFunctions,'stagingSchedulerOperation'/);assert.doesNotMatch(client,/httpsCallable\(productionFunctions,'productionSchedulerOperation'/);assert.match(client,/DANBRIDGE_ENVIRONMENT==='staging'\?stagingSchedulerOperationCall:productionSchedulerOperationCall/)});
 
-test('staging 排課 30 堂不再重切 8 堂或逐筆送 audit',async()=>{const [runtime,client]=await Promise.all([readFile(new URL('../functions/staging-scheduler-runtime.cjs',import.meta.url),'utf8'),readFile(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8')]);assert.match(runtime,/records\.length>90\|\|audits\.length>30\|\|plan\.operations\.length>120/);assert.match(runtime,/sender\.applyBatch\(plan\.operations\)/);assert.doesNotMatch(runtime,/for\(const audit of audits\)/);assert.match(client,/maxChangesPerRequest:30/);assert.doesNotMatch(client,/maxChangesPerRequest:DANBRIDGE_ENVIRONMENT==='staging'\?8:30/)});
+test('staging 排課 30 堂不再重切 8 堂或逐筆送 audit',async()=>{const [runtime,client]=await Promise.all([readFile(new URL('../functions/staging-scheduler-runtime.cjs',import.meta.url),'utf8'),readFile(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8')]);assert.match(runtime,/records\.length>90\|\|audits\.length>30\|\|plan\.operations\.length>120/);assert.match(runtime,/sender\.applyBatch\(plan\.operations\)/);assert.doesNotMatch(runtime,/for\(const audit of audits\)/);assert.match(client,/maxChangesPerRequest:published\?40:30/);assert.doesNotMatch(client,/maxChangesPerRequest:DANBRIDGE_ENVIRONMENT==='staging'\?8:30/)});
 
 test('staging V2 正式頁面不再載入 V1 衝突備份或 operation fallback',async()=>{const source=await readFile(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');assert.doesNotMatch(source,/from '\.\/firebase-record-sync-conflict-backup-adapter\.js/);assert.match(source,/stagingV2ConflictBackup/);assert.match(source,/legacy fallback forbidden/)});
 
@@ -22,7 +67,7 @@ test('Gen2 authority endpoint將混合批次中的changes送往單次 immutable 
 
 test('staging authority endpoint 在回傳完成前只做一次角色檢視、課程索引與通知讀回',async()=>{const source=await readFile(new URL('../functions/index.cjs',import.meta.url),'utf8');assert.match(source,/createStagingDerivedDeliveryRuntime/);assert.match(source,/const completion=publicCompletion\(recordCompletion,auditCompletion\),derived=await derivedDelivery\.deliver\(payload,completion,trustedHashes\)/);assert.doesNotMatch(source,/derivedDelivery\.deliver\(recordPayload/);assert.doesNotMatch(source,/derivedDelivery\.deliver\(auditPayload/)});
 
-test('staging derived 完整雜湊保留 SHA-256、逐集合串流並重用未變更 record 的 canonical 字串',async()=>{const [source,native]=await Promise.all([readFile(new URL('../functions/staging-derived-delivery-runtime.cjs',import.meta.url),'utf8'),readFile(new URL('../functions/native-canonical-sha256.cjs',import.meta.url),'utf8')]);assert.match(source,/const canonicalRecordMemo=new WeakMap\(\),canonicalOrderMemo=new WeakMap\(\)/);assert.match(source,/nativeCanonicalRecordDbSha256\(db,FULL_RECORD_COLLECTIONS,\{memo:canonicalRecordMemo,orderMemo:canonicalOrderMemo\}\)/);assert.match(native,/function nativeCanonicalRecordDbSha256/);assert.match(native,/hash\.update\(canonicalJson\(record,memo\),'utf8'\)/)});
+test('staging derived 完整雜湊保留 SHA-256、逐集合串流並重用未變更 record 的 canonical 字串',async()=>{const [source,native]=await Promise.all([readFile(new URL('../functions/staging-derived-delivery-runtime.cjs',import.meta.url),'utf8'),readFile(new URL('../functions/native-canonical-sha256.cjs',import.meta.url),'utf8')]);assert.match(source,/const canonicalRecordMemo=new WeakMap\(\),canonicalOrderMemo=new WeakMap\(\)/);assert.match(source,/nativeCanonicalRecordDbSha256\(db,FULL_RECORD_COLLECTIONS,\{memo:canonicalRecordMemo,orderMemo:canonicalOrderMemo\}\)/);assert.match(native,/function nativeCanonicalRecordDbSha256/);assert.match(native,/write\(canonicalJson\(record,memo\)\)/);assert.match(native,/hash\.update\(buffered,'utf8'\)/);assert.match(native,/buffered\.length>=32768/)});
 
 test('staging 排課沿用同一後端計畫已核對的前後 record hash、快照、永久柵欄與即時 head',async()=>{const scheduler=await readFile(new URL('../functions/staging-scheduler-runtime.cjs',import.meta.url),'utf8'),entry=await readFile(new URL('../functions/index.cjs',import.meta.url),'utf8'),derived=await readFile(new URL('../functions/staging-derived-delivery-runtime.cjs',import.meta.url),'utf8'),adapter=await readFile(new URL('../js/core/firebase-active-record-authority-save-chain-v2-adapter.js',import.meta.url),'utf8');assert.match(scheduler,/changedCollections:\['lessons','students','makeups','changes'\]/);assert.match(scheduler,/trustedHashes=Object\.freeze\(\{sourceHash:plan\.targetHash,previousSourceHash:sourceHash,sourceDb:target\.db,previousDb:source\.db,authorityFence:fence,authorityHead:liveHead\}\)/);assert.match(scheduler,/executeAuthorityPayload\(payload,trustedHashes\)/);assert.match(entry,/recordBinder\.execute\(recordPayload,trustedHashes\)/);assert.match(entry,/derivedDelivery\.deliver\(payload,completion,trustedHashes\)/);assert.match(derived,/trustedDbPair=lessonOnly&&trustedHashPair/);assert.match(derived,/sourceDb=trustedSourceDb;previousDb=trustedPreviousDb;sourceHash=trustedSourceHash/);assert.match(adapter,/trustedBootstrap:hasTrustedBootstrap/);assert.match(adapter,/verifyDurablePrewrite\(fence,head\)/);assert.match(adapter,/hasTrustedBootstrap\?TRUSTED_TRANSACTION_SNAPSHOT_ONLY:null/);assert.match(adapter,/assertActiveRecordAuthoritySaveChainV2Integrity/);assert.match(adapter,/fresh durable bundle does not match committed transaction/);assert.doesNotMatch(adapter,/freshPlan=plan\(req,fresh\)/)});
 

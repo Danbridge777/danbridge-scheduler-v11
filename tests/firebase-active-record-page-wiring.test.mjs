@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 
 const source=fs.readFileSync(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');
 const limitedUseTokenSource=fs.readFileSync(new URL('../js/core/app-check-limited-use-token.js',import.meta.url),'utf8');
@@ -10,6 +11,26 @@ const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const camps=fs.readFileSync(new URL('../js/modules/camps/camp-management.js',import.meta.url),'utf8');
 const block=(from,to)=>source.slice(source.indexOf(from),source.indexOf(to,source.indexOf(from)));
 const sourceBlock=(text,from,to)=>text.slice(text.indexOf(from),text.indexOf(to,text.indexOf(from)));
+
+test('isolated Owner phase timing preserves duplicate complete but never reuses it for the next flush or production',()=>{
+ const helper=block('let publishedWorkspaceOwnerTiming=null;','function handleActiveOwnerControllerStatus(status)');
+ const make=publishedWorkspace=>vm.runInNewContext(helper+';recordPublishedWorkspaceOwnerTiming',{publishedWorkspace});
+ const off=make(null);for(const state of ['backing-up','syncing','planned','confirmed-batch','complete'])assert.equal(off(state,100),null);
+ const measure=make({});assert.equal(measure('complete',99),null);
+ for(const [state,at]of [['backing-up',100],['syncing',103],['planned',123],['confirmed-batch',623]])assert.equal(measure(state,at),null);
+ assert.deepEqual(JSON.parse(JSON.stringify(measure('complete',630))),{backupMs:3,planMs:20,transportAndJournalMs:500,finalizeMs:7});
+ assert.deepEqual(JSON.parse(JSON.stringify(measure('complete',999))),{backupMs:3,planMs:20,transportAndJournalMs:500,finalizeMs:7});
+ measure('backing-up',1000);measure('syncing',1001);assert.equal(measure('complete',1100),null,'missing receipt cannot become a timing success');
+ measure('planned',1200);measure('confirmed-batch',1199);assert.equal(measure('complete',1300),null,'invalid clock ordering is not accepted');
+});
+
+test('isolated verified publication avoids repeat hashing only with matching receipt and empty retry queues',()=>{
+ const code=block('function acceptIsolatedAtomicPublication(','function ensureActiveOwnerPageController('),hash='record-v1:'+'a'.repeat(64),db={lessons:[{id:'confirmed'}]};
+ const make=(overrides={})=>{const context={publishedWorkspace:{},DANBRIDGE_ENVIRONMENT:'production',cloudRole:'owner',productionTrustedOperationClient:{hasAtomicPublication:h=>h===hash},roleViewPublishQueued:false,roleViewPublishInFlight:false,roleViewPublishSourceDB:null,roleViewRetryCount:0,scheduleNotificationDeliveryJobs:new Map(),deepCopy:structuredClone,lastPublishedOwnerDB:null,ownerBaselineReady:false,document:{body:{dataset:{}}},...overrides};return{context,accept:vm.runInNewContext(code+';acceptIsolatedAtomicPublication',context)}};
+ const good=make();assert.equal(good.accept(db,hash),true);db.lessons[0].id='later-local-edit';assert.equal(good.context.lastPublishedOwnerDB.lessons[0].id,'confirmed');assert.equal(good.context.document.body.dataset.scheduleNotificationDelivery,'server-verified');
+ for(const overrides of [{publishedWorkspace:null},{DANBRIDGE_ENVIRONMENT:'staging'},{cloudRole:'teacher'},{productionTrustedOperationClient:null},{roleViewPublishQueued:true},{roleViewPublishInFlight:true},{roleViewPublishSourceDB:{}},{roleViewRetryCount:1},{scheduleNotificationDeliveryJobs:new Map([['latest',{}]])},{scheduleNotificationDeliveryJobs:new Map([['older',{}]])}]){const blocked=make(overrides);assert.equal(blocked.accept(db,hash),false);assert.equal(blocked.context.lastPublishedOwnerDB,null);assert.equal(blocked.context.ownerBaselineReady,false)}
+ for(const invalid of [null,'','record-v1:'+'b'.repeat(64),'unverified'])assert.equal(make().accept(db,invalid),false);
+});
 
 test('staging auth uses the registered Firebase OAuth redirect origin',()=>{
  assert.match(source,/staging:\{[^\n]*authDomain:"danbridge-d8877-staging\.firebaseapp\.com"/);
@@ -61,12 +82,12 @@ test('Firestore 查詢協調使用有界記憶體快取，耐久操作仍由獨�
  assert.match(source,/\^firestore_\(\?:clients\|mutations\|targets\|sequence_number\|bundle_loaded\|zombie\)_/);
  assert.match(source,/localStorage\.removeItem\(key\)/);
  assert.match(source,/purgeRetiredFirestoreWebStorage\(\);/);
- assert.match(source,/bootstrapDanbridgeFirebase\(\{hostname:location\.hostname,configs:firebaseConfigs,initializeApp,getAuth,initializeFirestore,firestoreOptions:\{localCache:memoryLocalCache\(\)\}\}\)/);
+ assert.match(source,/bootstrapDanbridgeFirebase\(\{hostname:location\.hostname,configs:firebaseConfigs,initializeApp:config=>publishedWorkspace\?initializeApp\(config,'published-workspace-280-'\+publishedWorkspace.runId\+'-'\+publishedWorkspace.actor\):initializeApp\(config\),getAuth:firebaseApp=>publishedWorkspace\?initializeAuth\(firebaseApp,\{persistence:indexedDBLocalPersistence,popupRedirectResolver:browserPopupRedirectResolver\}\):getAuth\(firebaseApp\),initializeFirestore,firestoreOptions:\{localCache:memoryLocalCache\(\)\}\}\)/);
  assert.doesNotMatch(source,/persistentLocalCache|persistentMultipleTabManager|enableIndexedDbPersistence|getFirestore\(app\)/);
 });
 
 test('同帳號雙分頁登入權限初始化會串行化並使用有限權杖重試',()=>{
- assert.match(source,/import \{loadProfileAfterAuthReady\} from '\.\/cloud-auth-profile-bootstrap\.js\?v=20\.26\.309'/);
+ assert.match(source,/import \{loadProfileAfterAuthReady\} from '\.\/cloud-auth-profile-bootstrap\.js\?v=20\.26\.310'/);
  const auth=block('async function loadSignedInProfile','function loginTimeValue');
  assert.match(auth,/loadProfileAfterAuthReady\(\{user,loadProfile:\(\)=>ensureProfile\(user\)\}\)/);
  assert.match(auth,/navigator\.locks\?\.request\? navigator\.locks\.request\(lockName,load\):load\(\)/);
@@ -102,7 +123,7 @@ test('角色證據不能自動填通過，完整實測後才可在記憶體準�
 });
 
 test('角色候選 manifest 與每位本人收據不可變，URL 只顯示按鈕不會自動寫入',()=>{
- assert.match(source,/cloud-role-view-verification\.js\?v=20\.26\.309/);
+ assert.match(source,/cloud-role-view-verification\.js\?v=20\.26\.310/);
  assert.match(source,/stagingRoleViewCandidateManifests/);
  assert.match(source,/stagingRoleViewVerificationReceipts/);
  assert.match(source,/persistStagingRoleCandidateManifest/);
@@ -172,7 +193,8 @@ test('Owner 啟用後 upload 與 save 先走永久日誌逐筆流程，不再落
 
 test('Owner 逐筆寫入前必須用已確認的雲端基準建立當日分片備份',()=>{
  const controller=block('function ensureActiveOwnerPageController','async function acceptActiveOwnerSnapshot');
- assert.match(controller,/ensureCloudBackup:activeOwnerV2OperationSender\?\(\)=>confirmStagingV2DurablePrewriteBackup\(\):confirmedDb=>createCloudSafetyBackup\(false,confirmedDb\)/);
+ assert.match(controller,/ensureCloudBackup:confirmedDb=>\{if\(publishedWorkspace&&isolatedOwnerBackupFailure\)throw new Error\([^;]+\);return activeOwnerV2OperationSender\?confirmStagingV2DurablePrewriteBackup\(\):createCloudSafetyBackup\(false,confirmedDb\)\}/);
+ assert.match(controller,/draftStore,/);
  const status=block('function handleActiveOwnerControllerStatus','function ensureActiveOwnerPageController');
  assert.match(status,/['\"]backing-up['\"]/);
  assert.match(status,/寫入前的雲端分片備份/);
@@ -190,7 +212,7 @@ test('核心逐筆已完成但角色發布仍在執行時，串流快照不會�
 
 test('Owner active save 依資料 hash 合併相同意圖，但不同 hash 仍排入下一輪',()=>{
  const queue=block('function queueOwnerCloudSave','function lessonMap');
- assert.match(source,/import \{decideOwnerActiveSaveIntent\} from '\.\/cloud-owner-active-save-intent\.js\?v=20\.26\.309'/);
+ assert.match(source,/import \{decideOwnerActiveSaveIntent\} from '\.\/cloud-owner-active-save-intent\.js\?v=20\.26\.310'/);
  assert.match(queue,/scheduleMutation.+queueLocalSave\(\{changedCollections:\['lessons','makeups','changes'\]\}\)/s);
  assert.ok(queue.indexOf("if(scheduleMutation&&['staging','production'].includes")<queue.indexOf('const nextHash=dataHash'));
  assert.match(queue,/decideOwnerActiveSaveIntent\(\{nextHash,localDirtyHash,lastUploadedHash,diagnostics,applyingCloud\}\)/);

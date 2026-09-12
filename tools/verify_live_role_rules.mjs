@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {initializeTestEnvironment,assertSucceeds,assertFails} from '@firebase/rules-unit-testing';
 import {doc,getDoc,setDoc,updateDoc,deleteDoc} from 'firebase/firestore';
+import {patchProductionRoleChunkRules} from './production-role-chunk-rules-patch.mjs';
 const endpoint=process.env.FIRESTORE_EMULATOR_HOST||'';
 if(!/^(127\.0\.0\.1|localhost):[0-9]+$/.test(endpoint))throw new Error('Requires explicit loopback Firestore emulator');
 const require=createRequire(import.meta.url),root='/usr/local/lib/node_modules/firebase-tools/lib';
@@ -16,7 +17,9 @@ const release=(await rulesClient.get('/projects/danbridge-d8877/releases/cloud.f
 assert.match(release.rulesetName,/^projects\/danbridge-d8877\/rulesets\/[a-zA-Z0-9-]+$/);
 const files=(await rulesClient.get('/'+release.rulesetName,{skipLog:{resBody:true}})).body.source.files;
 assert.equal(files.length,1);
-const rules=files[0].content,rulesSha=createHash('sha256').update(rules).digest('hex');
+const sourceRules=files[0].content,patch=process.env.DANBRIDGE_VERIFY_PUBLISHED_PRODUCTION_RULES==='278'?patchProductionRoleChunkRules(sourceRules):null;
+const rules=patch?.source||sourceRules,rulesSha=createHash('sha256').update(rules).digest('hex');
+if(patch)console.log('PRODUCTION_RULES_PATCH_EMULATOR_ONLY '+JSON.stringify({baseSha256:patch.baseSha256,candidateSha256:patch.afterSha256,formalDataWrites:0,rulesDeployment:false}));
 const cloud=new Client({auth:true,apiVersion:'v1',urlPrefix:api.firestoreOrigin()});
 const decode=v=>v?.stringValue??v?.timestampValue??v?.booleanValue??(v?.integerValue!==undefined?Number(v.integerValue):v?.arrayValue?(v.arrayValue.values||[]).map(decode):v?.mapValue?Object.fromEntries(Object.entries(v.mapValue.fields||{}).map(([k,x])=>[k,decode(x)])):null);
 const response=await cloud.post('projects/danbridge-d8877/databases/(default)/documents:runQuery',{structuredQuery:{from:[{collectionId:'companyAccess'}],limit:100}});

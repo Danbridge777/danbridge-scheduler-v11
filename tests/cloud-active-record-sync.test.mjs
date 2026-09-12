@@ -1,12 +1,83 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {FULL_RECORD_COLLECTIONS,buildFullRecordShadowPlan} from '../js/core/cloud-full-record-shadow.js';
-import {prepareActiveRecordSync,applyActiveRecordOperation} from '../js/core/cloud-active-record-sync.js';
+import {prepareActiveRecordSync,applyActiveRecordOperation,canonicalizeActiveRecordPlanHeads} from '../js/core/cloud-active-record-sync.js';
 import {rebuildFullRecordShadowDb} from '../js/core/cloud-full-record-shadow.js';
 import {recordDataHash} from '../js/core/cloud-record-data-hash.js';
 import {createRequire} from 'node:module';
 
 const require=createRequire(import.meta.url);
+
+test('bounded parallel digests preserve every command head despite reversed completion',async()=>{
+ const baseline=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]])),documents=structuredClone(baseline);
+ const local=structuredClone(baseline);local.lessons=Array.from({length:12},(_,i)=>({id:'parallel-'+i,note:'繁體 😀',amount:i}));
+ const options={documentsByCollection:documents,baselineDb:baseline,localDb:local,environment:'production',deviceId:'parallel-test',activationEpoch:'parallel-epoch',createdAt:'2026-09-11T00:00:00.000Z'};
+ const normal=prepareActiveRecordSync(options),expected=prepareActiveRecordSync({...options,canonicalIntermediateHashes:true});
+ const {sha256Text}=await import('../js/core/cloud-immutable-migration-backup.js');
+ for(const maxInFlight of [1,2,4]){
+  let active=0,peak=0,sequence=0;const completed=[];
+  const actual=await canonicalizeActiveRecordPlanHeads(normal,documents,{maxInFlight,digestText:async text=>{
+   const index=sequence++;active++;peak=Math.max(peak,active);
+   await new Promise(resolve=>setTimeout(resolve,(maxInFlight-index%maxInFlight)*4));
+   completed.push(index);active--;return sha256Text(text);
+  }});
+  assert.equal(active,0);assert.equal(peak,maxInFlight);assert.deepEqual(actual.operations,expected.operations);
+  if(maxInFlight>1)assert.notEqual(completed[0],0);
+ }
+ for(const maxInFlight of [0,5,1.5,Infinity])await assert.rejects(canonicalizeActiveRecordPlanHeads(normal,documents,{maxInFlight}),/計畫無效/);
+});
+
+test('a failed digest drains its bounded batch and never mutates or returns a partial command plan',async()=>{
+ const baseline=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]])),local=structuredClone(baseline);
+ local.lessons=Array.from({length:8},(_,i)=>({id:'fail-'+i}));
+ const normal=prepareActiveRecordSync({documentsByCollection:baseline,baselineDb:baseline,localDb:local,environment:'production',deviceId:'failed-digest',activationEpoch:'failed-epoch',createdAt:'2026-09-11T00:00:00.000Z'}),before=JSON.stringify(normal);
+ let started=0,settled=0;
+ await assert.rejects(canonicalizeActiveRecordPlanHeads(normal,baseline,{digestText:async()=>{
+  const index=started++;try{if(index===0)throw Error('digest unavailable');await new Promise(resolve=>setTimeout(resolve,10));return 'a'.repeat(64)}finally{settled++}
+ }}),/digest unavailable/);
+ assert.equal(started,4);assert.equal(settled,4);assert.equal(JSON.stringify(normal),before);
+});
+
+test('async WebCrypto heads equal every synchronous canonical head and freeze pending command bytes',async()=>{
+ const baseline=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]));
+ baseline.lessons=Array.from({length:40},(_,i)=>({id:'async-'+i,note:'繁體 😀 \\ "\n',metadata:{'10':'十','2':'二',z:false,a:null},amount:i+0.25}));
+ const documents=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]));
+ for(const row of buildFullRecordShadowPlan(documents,baseline,{environment:'production',sourceHash:'seed'}).operations)documents[row.payload.collection].push({id:row.payload.recordId,data:row.payload});
+ const local=structuredClone(baseline);local.lessons.forEach(row=>row.amount+=1);local.changes=[{type:'async-new',note:'中文'}];
+ const options={documentsByCollection:documents,baselineDb:baseline,localDb:local,environment:'production',deviceId:'async-test',activationEpoch:'async-epoch',createdAt:'2026-09-11T00:00:00.000Z'};
+ const normal=prepareActiveRecordSync(options),expected=prepareActiveRecordSync({...options,canonicalIntermediateHashes:true}),before=JSON.stringify(normal);
+ const asyncPlan=await canonicalizeActiveRecordPlanHeads(normal,documents);assert.deepEqual(asyncPlan.operations,expected.operations);assert.equal(JSON.stringify(normal),before);
+ let release;const held=new Promise(resolve=>{release=resolve});let first=true;
+ const {sha256Text}=await import('../js/core/cloud-immutable-migration-backup.js');
+ const pending=canonicalizeActiveRecordPlanHeads(normal,documents,{digestText:async text=>{if(first){first=false;await held}return sha256Text(text)}});
+ normal.operations.at(-1).payload.record.note='later edit';documents.lessons[0].data.record.note='changed after snapshot';release();
+ assert.deepEqual((await pending).operations,expected.operations);
+ await assert.rejects(canonicalizeActiveRecordPlanHeads(asyncPlan,documents,{digestText:async()=> 'invalid'}),/雜湊無效/);
+});
+
+test('published authority: every partial create/update/delete/revive batch has its actual database hash',()=>{
+ const environment='production',empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]));
+ let current=empty();current.students=[{id:'student',name:'Same name',parent:'Parent'}];
+ let documents=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]));
+ for(const row of buildFullRecordShadowPlan(documents,current,{environment,sourceHash:'seed'}).operations)documents[row.payload.collection].push({id:row.payload.recordId,data:row.payload});
+ const lessons=Array.from({length:40},(_,i)=>({id:'lesson-'+i,studentId:'student',date:'2026-09-11',start:'16:00',end:'17:00',room:'A'}));
+ let nextSequence=1;
+ for(const action of ['create','update','delete','revive']){
+  const target=structuredClone(current);target.lessons=action==='delete'?[]:lessons.map(row=>({...row,room:action}));target.changes=[{action,at:'2026-09-11'},...target.changes];
+  const before=JSON.stringify({documents,current,target});
+  const plan=prepareActiveRecordSync({documentsByCollection:documents,baselineDb:current,localDb:target,environment,deviceId:'partial-test',activationEpoch:'partial-epoch',startSequence:nextSequence,canonicalIntermediateHashes:true});nextSequence=plan.nextSequence;
+  assert.equal(JSON.stringify({documents,current,target}),before);
+  for(const operation of plan.operations){
+   assert.equal(operation.baseHash,recordDataHash(rebuildFullRecordShadowDb(documents,{environment}).db));
+   const rows=documents[operation.collection],index=rows.findIndex(row=>row.id===operation.recordId),result=applyActiveRecordOperation(index<0?null:rows[index].data,operation),row={id:operation.recordId,data:result.payload};
+   if(index<0)rows.push(row);else rows[index]=row;
+   const rebuilt=rebuildFullRecordShadowDb(documents,{environment});
+   assert.equal(operation.targetHash,recordDataHash(rebuilt.db),action+' '+operation.recordId);
+   assert.equal(operation.targetActiveCount,rebuilt.activeCount);assert.equal(operation.targetDocumentCount,rebuilt.documentCount);assert.equal(operation.targetTombstoneCount,rebuilt.tombstoneCount);
+  }
+  current=rebuildFullRecordShadowDb(documents,{environment}).db;assert.equal(recordDataHash(current),recordDataHash(plan.db));
+ }
+});
 const {nativeCanonicalSha256}=require('../functions/native-canonical-sha256.cjs');
 
 const empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]));

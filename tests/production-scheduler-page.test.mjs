@@ -15,7 +15,7 @@ function harness(){
  let local=base(),stored=null,loadPause=null;const applied=[],held=new Set(),session=new Map(),statuses=[];
  const locks={request:async(name,options,work)=>{if(held.has(name))return work(null);held.add(name);try{return await work({name})}finally{held.delete(name)}}};
  const context=vm.createContext({productionSchedulerGeneration:0,productionSchedulerQueue:null,productionSchedulerQueueInit:null,productionSchedulerLease:null,productionSchedulerViewChain:Promise.resolve(),schedulerUploadRetryTimer:null,schedulerUploadRetryCount:0,
-  DANBRIDGE_ENVIRONMENT:'production',stagingSchedulerOperationCall:null,
+  DANBRIDGE_ENVIRONMENT:'production',stagingSchedulerOperationCall:null,activePublishedRoleConsumer:null,activePublishedSchedulerReceiptReader:null,PUBLISHED_SCHEDULER_RESPONSE_SCHEMA:'danbridge-production-scheduler-chunk-response-v1',
   cloudUid:'fixture-aa',cloudEmailKey:'aa0966626336@gmail.com',cloudRole:'teacher',cloudCanManageSchedule:true,schedulerRecoveryHold:false,schedulerStartupRecoveryChecked:false,applyingCloud:false,
   APP_RELEASE:'20.26.164',crypto:{randomUUID},navigator:{locks},sessionStorage:{getItem:k=>session.get(k),setItem:(k,v)=>session.set(k,v)},
   window:{indexedDB:{},__danbridgeGetDB:()=>clone(local),__danbridgeSetDB:db=>{local=clone(db);applied.push(clone(db))},renderAll:()=>{}},

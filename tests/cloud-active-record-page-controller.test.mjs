@@ -12,6 +12,72 @@ const baseDb=()=>{const db=empty();db.lessons=[{id:'lesson-1',room:'A'},{id:'les
 const memoryJournal=(source={rows:null,time:1000})=>createOperationJournal({storage:{load:async()=>structuredClone(source.rows),save:async rows=>{source.rows=structuredClone(rows)}},now:()=>source.time});
 function cloudSource(environment='staging',initialDb=baseDb()){const documents=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]));for(const operation of buildFullRecordShadowPlan(documents,initialDb,{sourceHash:'seed',environment}).operations){const match=operation.path.match(/collections\/([^/]+)\/records\/(.+)$/);documents[match[1]].push({id:match[2],data:structuredClone(operation.payload)})}return{documents,read:async()=>structuredClone(documents),send:async operation=>{const rows=documents[operation.collection],index=rows.findIndex(row=>row.id===operation.recordId),current=index<0?null:rows[index].data,result=applyActiveRecordOperation(current,operation);if(result.write){const next={id:operation.recordId,data:structuredClone(result.payload)};if(index<0)rows.push(next);else rows[index]=next}return result},db:()=>rebuildFullRecordShadowDb(documents,{environment}).db}}
 const snapshot=source=>({db:source.db(),hash:recordDataHash(source.db()),activationEpoch:epoch,writeAllowed:true});
+
+for(const count of [8,20])test(`${count} lessons: delayed receipt preserves every undo/redo audit in newest-first order`,async()=>{
+ const initial=baseDb();initial.lessons=Array.from({length:count},(_,i)=>({id:`lesson-${i}`,room:'A'}));initial.changes=[{id:'historic',type:'original'}];
+ const source=cloudSource('production',initial);let app,injected=false;
+ const edit=(room,action)=>{const next=app.ui;for(const row of next.lessons){row.room=room;next.changes.unshift({id:`${action}-${row.id}`,type:action})}app.setUi(next);app.controller.queueLocalSave({changedCollections:['lessons','changes']})};
+ app=makeController({source,local:initial,environment:'production',trustCommittedPlan:true,send:async operation=>{
+  if(!injected){injected=true;edit('A','undo');edit('B','redo');edit('A','undo-again')}
+  return source.send(operation);
+ }});
+ await app.controller.acceptCloudSnapshot({...snapshot(source),documents:structuredClone(source.documents)});
+ edit('B','move');assert.equal((await app.controller.flush()).state,'pending');
+ const expected=app.ui.changes;assert.equal(expected.length,count*4+1);assert.equal(expected.at(-1).id,'historic');
+ assert.equal((await app.controller.flush()).state,'complete');
+ assert.deepEqual(source.db().changes,expected);assert.ok(source.db().lessons.every(row=>row.room==='A'));
+ assert.ok(app.statuses.every(row=>row.historyMergeSchema==='newest-first-v1'));
+ edit('C','next-move');assert.equal((await app.controller.flush()).state,'complete');assert.equal(source.db().changes.length,count*5+1);
+});
+
+test('delayed receipt followed by undo/redo keeps new history before the exact committed tail',async()=>{
+ const initial=baseDb();initial.changes=[{id:'historic',type:'original'}];
+ const source=cloudSource('production',initial);let app,injected=false;
+ app=makeController({source,local:initial,environment:'production',trustCommittedPlan:true,send:async operation=>{
+  if(!injected){injected=true;const next=app.ui;next.lessons[0].room='A';next.changes.unshift({id:'undo',type:'undo'});app.setUi(next);app.controller.queueLocalSave({changedCollections:['lessons','changes']})}
+  return source.send(operation);
+ }});
+ await app.controller.acceptCloudSnapshot({...snapshot(source),documents:structuredClone(source.documents)});
+ const moved=app.ui;moved.lessons[0].room='B';moved.changes.unshift({id:'move',type:'move'});app.setUi(moved);app.controller.queueLocalSave({changedCollections:['lessons','changes']});
+ assert.equal((await app.controller.flush()).state,'pending');
+ assert.deepEqual(app.ui.changes.map(r=>r.id),['undo','move','historic']);
+ assert.equal((await app.controller.flush()).state,'complete');
+ assert.equal(source.db().lessons[0].room,'A');assert.deepEqual(source.db().changes.map(r=>r.id),['undo','move','historic']);
+ const redo=app.ui;redo.lessons[0].room='B';redo.changes.unshift({id:'redo',type:'redo'});app.setUi(redo);app.controller.queueLocalSave({changedCollections:['lessons','changes']});
+ assert.equal((await app.controller.flush()).state,'complete');assert.deepEqual(source.db().changes.map(r=>r.id),['redo','undo','move','historic']);
+});
+
+test('publication context follows verified cloud state, never a newer queued local edit',async()=>{
+ const source=cloudSource('production'),published=[];let ui=baseDb(),later=false,controller;
+ controller=createActiveRecordPageController({environment:'production',role:'owner',deviceId:'device-123',journal:memoryJournal(),readDocuments:source.read,send:async operation=>{
+  if(!later){later=true;ui.lessons[0].room='C';controller.queueLocalSave()}
+  return source.send(operation);
+ },persistConflicts:async()=>({backupId:'test'}),getLocalDb:()=>structuredClone(ui),applyCloudDb:async db=>{ui=structuredClone(db)},ensureCloudBackup:async()=>true,publishRoleViews:async(db,context)=>{published.push({db:structuredClone(db),...context})},setTimer:()=>1,clearTimer:()=>{},saveDelay:0,trustCommittedPlan:true});
+ await controller.acceptCloudSnapshot(snapshot(source));ui.lessons[0].room='B';controller.queueLocalSave();
+ assert.equal((await controller.flush()).state,'pending');assert.equal(ui.lessons[0].room,'C');assert.equal(published[0].db.lessons[0].room,'B');assert.equal(published[0].confirmedHash,recordDataHash(published[0].db));assert.notEqual(published[0].confirmedHash,recordDataHash(ui));
+ assert.equal((await controller.flush()).state,'complete');assert.equal(published[1].db.lessons[0].room,'C');assert.equal(published[1].confirmedHash,recordDataHash(source.db()));
+});
+
+test('重新整理時 40 堂隔離操作仍從日誌恢復，即使快取補上預設欄位也不被空雲端覆蓋',async()=>{
+ const initial=empty();initial.students=[{id:'student-1',name:'Test'}];
+ const source=cloudSource('production',initial),journal=memoryJournal(),target=structuredClone(initial);
+ target.lessons=Array.from({length:40},(_,i)=>({id:`recovery-${i}`,room:'A'}));
+ target.changes=[{message:'create 40',at:'2026-09-11'}];
+ const {prepareActiveRecordSync}=await import('../js/core/cloud-active-record-sync.js');
+ const plan=prepareActiveRecordSync({documentsByCollection:source.documents,baselineDb:initial,localDb:target,environment:'production',deviceId:'device-123',activationEpoch:epoch});
+ await journal.appendMany(plan.operations);const claimed=await journal.claimNextMany({causal:true,max:8});
+ await journal.failMany(claimed.map(row=>row.operationId),new Error('Owner authority verification failed'),{retryable:false});
+ const normalized=structuredClone(initial);normalized.students[0].homeAddress='';
+ const app=makeController({source,journal,local:normalized,environment:'production',trustCommittedPlan:true});
+ await app.controller.acceptCloudSnapshot(snapshot(source));
+ assert.equal(app.ui.lessons.length,40);assert.equal(app.ui.students[0].homeAddress,'');assert.equal(app.ui.changes.length,1);
+ assert.equal(source.db().lessons.length,0);assert.equal(app.controller.diagnostics().dirty,true);
+ app.controller.queueLocalSave();assert.equal((await app.controller.flush()).state,'complete');
+ assert.equal(source.db().lessons.length,40);assert.equal(source.db().changes.length,1);
+ assert.equal((await journal.counts()).quarantined,0);
+ const again=makeController({source,journal,local:app.ui,environment:'production'});
+ await again.controller.acceptCloudSnapshot(snapshot(source));assert.equal(again.ui.lessons.length,40);assert.equal(again.controller.diagnostics().dirty,false);
+});
 function makeController({source=cloudSource(),journal=memoryJournal(),local=baseDb(),deviceId='device-123',publish=[],backups=[],statuses=[],send,sendBatch,applyHook,publishHook,ensureBackup=async()=>true,strictConvergence=false,environment='staging',trustCommittedPlan=false,maxOperations=1000}={}){let ui=structuredClone(local),controller;const api=createActiveRecordPageController({environment,role:'owner',deviceId,journal,readDocuments:source.read,send:send||source.send,sendBatch,persistConflicts:async(conflicts,context)=>{backups.push({conflicts:structuredClone(conflicts),context});return{backupId:`backup-${backups.length}`}},getLocalDb:()=>structuredClone(ui),applyCloudDb:async db=>{ui=structuredClone(db);await applyHook?.(ui,controller)},ensureCloudBackup:ensureBackup,publishRoleViews:async db=>{publish.push(structuredClone(db));await publishHook?.(db,controller)},onStatus:status=>statuses.push(structuredClone(status)),setTimer:()=>1,clearTimer:()=>{},saveDelay:0,strictConvergence,trustCommittedPlan,maxOperations});controller=api;return{controller,source,journal,statuses,get ui(){return structuredClone(ui)},setUi(value){ui=structuredClone(value)}}}
 
 test('production 八堂課同批移動會以單一可信批次送出並立即全部確認',async()=>{

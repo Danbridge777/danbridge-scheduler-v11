@@ -6,7 +6,10 @@ test('隔離 AA 真實課表介面：新增後立即改日期再刪除，延遲�
  // drawer and save/delete buttons; only authentication/backend are fixtures.
  await page.route('**/js/core/firebase-auth-and-cloud-sync.module.js*',route=>route.fulfill({contentType:'text/javascript',body:'/* isolated test identity */'}));
  await page.goto('/index.html',{waitUntil:'load'});
- await page.evaluate(async()=>{
+ // Retain asynchronous setup on the page, instead of leaving its promise
+ // reachable only through a browser-protocol evaluation. Completion/error are
+ // explicit; a real reload or initialization failure still fails this test.
+ await page.evaluate(()=>{window.__schedulerFixtureSetup=(async()=>{
   const [{createProductionSchedulerQueue},{buildProductionSchedulerTarget,SCHEDULER_OPERATION_RESPONSE_SCHEMA},{FULL_RECORD_COLLECTIONS},{recordDataHash}]=await Promise.all([import('/js/core/production-scheduler-queue.js'),import('/js/core/production-scheduler-operation.js'),import('/js/core/cloud-full-record-shadow.js'),import('/js/core/cloud-record-data-hash.js')]);
   const seed={...Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]])),branches:[{id:'art_museum',name:'美術東四路',rooms:['A']}],students:[{id:'fixture-student',name:'隔離測試學生',courseType:'1對1',status:'在讀'}],teachers:[{id:'fixture-teacher',name:'張毅',color:'#345'}]};
   let server=structuredClone(seed),stored=null,revision=0,serial=0;const receipts=new Map();
@@ -21,7 +24,9 @@ test('隔離 AA 真實課表介面：新增後立即改日期再刪除，延遲�
   window.DanbridgeAccess.setContext({role:'teacher',email:'aa0966626336@gmail.com',teacherId:'teacher-aa',canManageSchedule:true});window.currentCloudRole=()=> 'teacher';
   db=structuredClone(seed);await queue.start({baselineDb:seed});window.saveDB=()=>{const desired=structuredClone(db);renderAll();queue.queue(desired).then(()=>queue.flush()).catch(error=>output.textContent='error:'+error.message)};
   window.DanbridgeRoleResponsive?.apply();document.getElementById('calendarDate').value='2026-10-01';window.switchTab('calendar');renderAll();
- });
+ })().then(()=>{window.__schedulerFixtureReady=true},error=>{window.__schedulerFixtureError=String(error?.stack||error)});});
+ await page.waitForFunction(()=>window.__schedulerFixtureReady||window.__schedulerFixtureError);
+ expect(await page.evaluate(()=>window.__schedulerFixtureError)).toBeUndefined();
  await page.locator('#calendarDate').fill('2026-10-01');await page.locator('#calendarMode').selectOption('week');
  await page.locator('#calendar').getByRole('button',{name:'＋ 新增課程',exact:true}).first().click();
  await page.locator('#lessonDate').fill('2026-10-01');await page.locator('#startTime').selectOption('20:00');await page.locator('#endTime').selectOption('20:30');await page.locator('#lessonStudent').selectOption('fixture-student');await page.locator('#lessonTeacher').selectOption('fixture-teacher');await page.locator('#lessonBranch').selectOption('art_museum');await page.locator('#lessonTitle').fill('隔離連續操作');
