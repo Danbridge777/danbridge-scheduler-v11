@@ -9,6 +9,7 @@ const empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(k=>[k,[]]));
 const source={...empty(),students:[{id:'s1',name:'學生',rate:800,parentContact:'PRIVATE'}],teachers:[{id:'t1',name:'老師',rate:400}],lessons:Array.from({length:40},(_,i)=>({id:'l'+i,studentId:'s1',teacherId:'t1',date:'2026-10-01',start:'08:00',end:'09:00',branchId:i%2?'hexi':'art_museum',paymentStatus:'paid'}))};
 const accessRows=[{email:'teacher@example.test',teacherId:'t1',role:'teacher',active:true,companyId:'danbridge'},{email:'aa0966626336@gmail.com',teacherId:'aa',role:'teacher',canManageSchedule:true,active:true,companyId:'danbridge'},{email:'branch@example.test',teacherId:'branch',role:'branch_manager',branchIds:['art_museum'],active:true,companyId:'danbridge'}];
 const options={source,accessRows,sourceRevision:80,sourceHash:recordDataHash(source),release:'20.26.277',now:Date.parse('2026-09-11T00:00:00Z')},deleted=Object.freeze({testOnlyDeleteField:true}),deps={deleteField:()=>deleted};
+const persisted=value=>Object.fromEntries(Object.entries(value).filter(([,v])=>v!==deleted));
 test('compatibility heads and chunk readers receive identical current permission-filtered data',async()=>{
  const plan=await planPublishedRoleChunks({...options,preserveLegacyViews:true},async()=>({db:{lessons:[{id:'obsolete'}]},role:'teacher',active:true}),deps);
  for(const view of plan.views){
@@ -40,7 +41,23 @@ test('all role heads and immutable indexes share the exact authority generation'
   if(view.kind==='branch_manager'){assert.equal(db.lessons.length,20);assert.ok(db.lessons.every(l=>l.branchId==='art_museum'))}else{assert.equal(db.lessons.length,40);assert.equal(db.students[0].rate,undefined);assert.equal(db.students[0].parentContact,undefined);assert.equal(db.teachers[0].rate,undefined);assert.ok(db.lessons.every(l=>l.paymentStatus===undefined))}
  }
 });
-test('duplicate plan is empty; unchanged rows advance only paired heads',async()=>{const first=await planPublishedRoleChunks(options,async()=>null,deps),store=new Map(first.headWrites.map(w=>[w.path,w.value]));assert.equal((await planPublishedRoleChunks(options,async p=>store.get(p),deps)).writes.length,0);const next=await planPublishedRoleChunks({...options,sourceRevision:81},async p=>store.get(p),deps);assert.equal(next.parts.length,0);assert.equal(next.headWrites.length,6)});
+test('duplicate plan is empty; unchanged rows advance only paired heads',async()=>{const first=await planPublishedRoleChunks(options,async()=>null,deps),store=new Map(first.headWrites.map(w=>[w.path,persisted(w.value)]));assert.equal((await planPublishedRoleChunks(options,async p=>store.get(p),deps)).writes.length,0);const next=await planPublishedRoleChunks({...options,sourceRevision:81},async p=>store.get(p),deps);assert.equal(next.parts.length,0);assert.equal(next.headWrites.length,6)});
+test('same-revision compact cutover preserves every record, permission and part; repeat is empty and compatibility can be restored',async()=>{
+ const first=await planPublishedRoleChunks({...options,preserveLegacyViews:true},async()=>null,deps);
+ const store=new Map(first.headWrites.map(w=>[w.path,{...w.value,active:true,role:'unchanged',customPermission:'keep'}]));
+ const compact=await planPublishedRoleChunks({...options,preserveLegacyViews:false},async p=>store.get(p),deps);
+ assert.equal(compact.parts.length,0);assert.equal(compact.headWrites.length,6);assert.equal(compact.formalRecordWrites,0);
+ for(const view of compact.views){
+  const key=view.kind==='branch_manager'?'scopedDb':'db',before=store.get(view.headPath),write=compact.headWrites.find(w=>w.path===view.headPath);
+  assert.deepEqual(write.value.roleChunkManifest,before.roleChunkManifest);assert.equal(write.value[key],deleted);
+  assert.equal(recordDataHash(assembleRoleViewChunks(view.manifest,first.parts.filter(p=>p.value.scope===view.manifest.scope).map(p=>p.value),{identity:view.manifest.identity})),recordDataHash(before[key]));
+  const next=persisted({...before,...write.value});assert.equal(next.active,true);assert.equal(next.role,'unchanged');assert.equal(next.customPermission,'keep');assert.equal(Object.hasOwn(next,key),false);store.set(view.headPath,next);
+ }
+ assert.equal((await planPublishedRoleChunks(options,async p=>store.get(p),deps)).writes.length,0);
+ const restore=await planPublishedRoleChunks({...options,preserveLegacyViews:true},async p=>store.get(p),deps);
+ assert.equal(restore.parts.length,0);assert.equal(restore.headWrites.length,6);
+ for(const view of restore.views){const key=view.kind==='branch_manager'?'scopedDb':'db';assert.deepEqual(restore.headWrites.find(w=>w.path===view.headPath).value[key],first.headWrites.find(w=>w.path===view.headPath).value[key]);}
+});
 test('unpublished preparation touches only content-addressed parts; final heads fit atomically',async()=>{
  const plan=await planPublishedRoleChunks({...options,reservedWrites:400},async()=>null,deps);assert.equal(plan.needsPreparation,true);
  const writes=[],store={doc:p=>p,batch:()=>({set:(p,v)=>writes.push({path:p,value:v}),commit:async()=>{}})},prepared=await stagePublishedRoleParts(store,plan);assert.ok(writes.length>0);assert.ok(writes.every(w=>w.path.includes('/parts/')));

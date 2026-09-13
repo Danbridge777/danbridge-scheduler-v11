@@ -13,8 +13,10 @@ test('only active exact role paths; no archive inventory or personal data return
  const f=fixture([['aa@example.test',{role:'teacher',canManageSchedule:true}],['teacher@example.test',{role:'teacher'}],['branch@example.test',b],['owner@example.test',{role:'owner'}]],{'companies/danbridge/schedulerViews/aa@example.test':t,'companies/danbridge/teacherViews/teacher@example.test':t,'companyAccess/branch@example.test':b});
  const result=await f.run();assert.equal(result.roleCount,3);assert.equal(result.maximumBytes,Math.max(Buffer.byteLength(JSON.stringify(t)),Buffer.byteLength(JSON.stringify(b)))+2048);assert.equal(result.budgetBytes,800000);assert.equal(result.truncated,false);assert.doesNotMatch(JSON.stringify(result),/PRIVATE|example.test/);assert.deepEqual(f.filters,[['companyId','==','danbridge'],['active','==',true]]);assert.equal(f.limit,101);assert.equal(f.paths.length,3);
 });
-test('empty, missing or already chunk-only heads are not counted as compatible payloads',async()=>{
+test('chunk-only heads still report real capacity, never a misleading zero after cutover',async()=>{
  assert.equal((await fixture([],{}).run()).roleCount,0);
- const f=fixture([['one',{role:'teacher'}],['two',{role:'teacher'}]],{'companies/danbridge/teacherViews/two':{roleChunkManifest:{digest:'test'}}});assert.equal((await f.run()).maximumBytes,0);
+ const head={roleChunkManifest:{digest:'test'}};
+ const f=fixture([['one',{role:'teacher'}],['two',{role:'teacher'}]],{'companies/danbridge/teacherViews/two':head});
+ const result=await f.run();assert.equal(result.maximumBytes,Buffer.byteLength(JSON.stringify(head))+2048);assert.equal(result.roleCount,1);assert.equal(result.chunkOnlyRoleCount,1);assert.equal(result.compatibleRoleCount,0);
 });
 test('bounded sample marks incompleteness instead of reporting a complete capacity audit',async()=>{const rows=Array.from({length:101},(_,i)=>['t'+i,{role:'teacher'}]),f=fixture(rows,{});assert.equal((await f.run()).truncated,true);assert.equal(f.paths.length,100)});

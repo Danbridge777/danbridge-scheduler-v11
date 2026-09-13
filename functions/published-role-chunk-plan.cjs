@@ -42,7 +42,10 @@ async function planPublishedRoleChunks({source,accessRows,sourceRevision,sourceH
   if(prepared&&(prepared.sourceRevision!==sourceRevision||prepared.sourceHash!==sourceHash||prepared.manifests[c.headPath]!==c.manifest.digest))throw Object.assign(Error('Authority or role scope changed during preparation'),{code:10});
   const legacyKey=c.view.kind==='branch_manager'?'scopedDb':'db';
   const legacyCurrent=preserveLegacyViews&&heads[i]?.[legacyKey]&&nativeCanonicalSha256(heads[i][legacyKey])===nativeCanonicalSha256(c.view.db);
-  if(previous?.digest===c.manifest.digest&&!forcedHeads.has(c.headPath)&&(!preserveLegacyViews||legacyCurrent))continue;
+  // A transport-only cutover still has work at the same authority generation:
+  // remove the embedded compatibility field, even if its manifest is unchanged.
+  const transportCurrent=preserveLegacyViews?legacyCurrent:!Object.hasOwn(heads[i]||{},legacyKey);
+  if(previous?.digest===c.manifest.digest&&!forcedHeads.has(c.headPath)&&transportCurrent)continue;
   const oldIds=new Set(previous?.chunkIds||[]);
   for(const part of c.chunks){const path=`${ROOT}/${c.manifest.scope}/parts/${part.id}`;if(!oldIds.has(part.id)&&!prepared?.paths.has(path))parts.push({path,value:part,merge:false})}
   const common={roleChunkManifest:c.manifest,release},value=c.view.kind==='branch_manager'?{...common,scopedDb:deleteField(),scopedSourceRecordRevision:sourceRevision,scopedSourceRecordHash:sourceHash}:{...common,db:deleteField(),email:c.view.email,...(c.view.kind==='teacher'?{teacherId:c.view.teacherId}:{}),sourceRecordRevision:sourceRevision,sourceRecordHash:sourceHash};

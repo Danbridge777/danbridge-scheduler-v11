@@ -16,7 +16,7 @@ async function createPublishedRolePublisher({firestore,serverTimestamp,deleteFie
   const input=projection.assertProductionRoleViewPublishRequest(raw),email=identity.email.trim().toLowerCase(),receiptRef=firestore.doc(`productionRoleViewPublishReceipts/${input.requestId}`);
   let prepared=null;
   for(let attempt=0;attempt<3;attempt++){
-   try{return await withProductionCommitLease(firestore,lease=>firestore.runTransaction(async transaction=>{
+   try{const response=await withProductionCommitLease(firestore,lease=>firestore.runTransaction(async transaction=>{
     await lease.assertHeld(transaction);
     const [controlRow,safetyRow,access,receipt,teachers,schedulers,meta,...records]=await Promise.all([
      transaction.get(firestore.doc(policy.PRODUCTION_RECORD_CONTROL_PATH)),transaction.get(firestore.doc(policy.PRODUCTION_RECORD_SAFETY_PATH)),
@@ -47,7 +47,10 @@ async function createPublishedRolePublisher({firestore,serverTimestamp,deleteFie
     for(const write of metaWrites){if(write.remove)transaction.delete(firestore.doc(write.path));else transaction.set(firestore.doc(write.path),write.value)}
     transaction.set(receiptRef,response);
     return response;
-   }))}catch(error){
+   }));
+   if(input.verifyReadback===true){const audit=await require('./audit-published-role-readback.cjs').auditPublishedRoleReadback({firestore,sourceHash:input.sourceHash,identity:{...identity,email},primaryOwnerEmail});return{...response,result:{...response.result,audit}}}
+   return response;
+   }catch(error){
     if(attempt===2)throw error;
     if(prepared&&error.code===10){prepared=null;continue}
     if(!error.roleChunkPreparation)throw error;

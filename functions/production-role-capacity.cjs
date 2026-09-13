@@ -7,14 +7,15 @@ async function readProductionRoleCapacity(firestore){
  const candidates=access.docs.slice(0,MAX_ROLES).filter(doc=>['teacher','branch_manager'].includes(doc.data().role));
  const references=candidates.map(doc=>{const row=doc.data();return row.role==='branch_manager'?doc.ref:firestore.doc(`companies/danbridge/${row.canManageSchedule===true?'schedulerViews':'teacherViews'}/${doc.id}`)});
  const heads=references.length?await firestore.getAll(...references):[];
- let maximumBytes=0,roleCount=0,truncated=access.docs.length>MAX_ROLES;
+ let maximumBytes=0,roleCount=0,compatibleRoleCount=0,chunkOnlyRoleCount=0,truncated=access.docs.length>MAX_ROLES;
  for(let i=0;i<heads.length;i++){
    const row=heads[i].data(),branch=candidates[i].data().role==='branch_manager';
-   if(!row?.roleChunkManifest||!Object.hasOwn(row,branch?'scopedDb':'db'))continue;
+   if(!row?.roleChunkManifest)continue;
+   if(Object.hasOwn(row,branch?'scopedDb':'db'))compatibleRoleCount++;else chunkOnlyRoleCount++;
    const bytes=Buffer.byteLength(JSON.stringify(row),'utf8')+2048;
    if(!Number.isSafeInteger(bytes)||bytes<2048)throw Error('Invalid role capacity sample');
    maximumBytes=Math.max(maximumBytes,bytes);roleCount++;
  }
- return{schema:'danbridge-role-capacity-v1',roleCount,maximumBytes,budgetBytes:LIMIT,ratio:maximumBytes/LIMIT,truncated};
+ return{schema:'danbridge-role-capacity-v1',roleCount,compatibleRoleCount,chunkOnlyRoleCount,maximumBytes,budgetBytes:LIMIT,ratio:maximumBytes/LIMIT,truncated};
 }
 module.exports={readProductionRoleCapacity};

@@ -144,7 +144,8 @@ exports.stagingPublishedWorkspaceOperation=onCall({region:'asia-east1',serviceAc
   const project=process.env.GCLOUD_PROJECT||process.env.GOOGLE_CLOUD_PROJECT;
   if(project!==PROJECT_ID||[process.env.GCLOUD_PROJECT,process.env.GOOGLE_CLOUD_PROJECT].some(value=>value&&value!==PROJECT_ID))throw new HttpsError('failed-precondition','Exact staging project required');
   const identity={uid:request.auth?.uid,email:String(request.auth?.token?.email||'').trim().toLowerCase(),emailVerified:request.auth?.token?.email_verified===true,appVerified:Boolean(request.app)};
-  return await require('./staging-published-workspace.cjs').executePublishedWorkspace({native:stagingWorkspaceFirestore(project),serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),identity,data:request.data,projectId:project,preserveLegacyViews:true});
+  // Isolated workspace exercises the compact reader before production cutover.
+  return await require('./staging-published-workspace.cjs').executePublishedWorkspace({native:stagingWorkspaceFirestore(project),serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),identity,data:request.data,projectId:project,preserveLegacyViews:false});
  }catch(error){if(error instanceof HttpsError)throw error;throw new HttpsError(productionSchedulerErrorCode(error),String(error?.message||'Workspace operation blocked').slice(0,240))}
 });
 
@@ -281,7 +282,7 @@ exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PR
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),trusted=runtimeValue.assertProductionTrustedOperation(request.data);
   if(trusted.actor.uid!==caller.uid||trusted.actor.email!==caller.email)throw new HttpsError('permission-denied','操作身分不一致。');
   if(PUBLISHED_ROLE_TRANSPORT_ENABLED){
-   if(!publishedOwnerRuntimePromise)publishedOwnerRuntimePromise=createPublishedOwnerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,historyVersionCache:true,release:'20.26.319'}).catch(error=>{publishedOwnerRuntimePromise=null;throw error});
+   if(!publishedOwnerRuntimePromise)publishedOwnerRuntimePromise=createPublishedOwnerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,historyVersionCache:true,release:'20.26.320'}).catch(error=>{publishedOwnerRuntimePromise=null;throw error});
    return await (await publishedOwnerRuntimePromise).execute(request.data,{...caller,emailVerified:true,appVerified:Boolean(request.app)});
   }
   const adapters=runtimeValue.adaptersFor({uid:caller.uid,email:caller.email});

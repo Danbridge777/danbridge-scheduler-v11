@@ -43,9 +43,10 @@ export function productionClientDataHash(value){
 }
 
 export function assertProductionRoleViewPublishRequest(input){
- const allowed=['schema','requestId','sourceHash','release'],unknown=input&&typeof input==='object'&&!Array.isArray(input)?Object.keys(input).filter(key=>!allowed.includes(key)):['request'];
+ const allowed=['schema','requestId','sourceHash','release','verifyReadback'],unknown=input&&typeof input==='object'&&!Array.isArray(input)?Object.keys(input).filter(key=>!allowed.includes(key)):['request'];
+ if(input?.verifyReadback!==undefined&&typeof input.verifyReadback!=='boolean')throw new Error('Invalid role readback option');
  if(unknown.length||input?.schema!==PRODUCTION_ROLE_VIEW_PUBLISH_SCHEMA||!/^[A-Za-z0-9_.:-]{12,180}$/.test(String(input?.requestId||''))||!/^record-v1:[a-f0-9]{64}$/.test(String(input?.sourceHash||''))||!/^[0-9]{1,3}(?:\.[0-9]{1,3}){2}$/.test(String(input?.release||'')))throw new Error('production 角色檢視發布請求無效');
- return Object.freeze({schema:input.schema,requestId:input.requestId,sourceHash:input.sourceHash,release:input.release});
+ return Object.freeze({schema:input.schema,requestId:input.requestId,sourceHash:input.sourceHash,release:input.release,...(input.verifyReadback===true?{verifyReadback:true}:{})});
 }
 
 export function projectProductionTeacherDb(source,teacherId,{now=Date.now()}={}){
