@@ -5,10 +5,10 @@ import {initializeTestEnvironment,assertSucceeds,assertFails} from '@firebase/ru
 import {doc,getDoc,setDoc,updateDoc,deleteDoc,collection,getDocs} from 'firebase/firestore';
 import {FULL_RECORD_COLLECTIONS} from '../js/core/cloud-full-record-shadow.js';
 import {buildRoleViewChunks} from '../js/core/role-view-chunks.js';
-import {readPatchedProductionRulesForEmulator} from './helpers/current-production-rules.mjs';
+import {readPatchedProductionRulesForEmulator,readExactProductionRulesForEmulator} from './helpers/current-production-rules.mjs';
 test('compiled Rules: own active exact scope only, current published parts only, no client writes',{skip:!process.env.FIRESTORE_EMULATOR_HOST,timeout:90000},async()=>{
  assert.match(process.env.FIRESTORE_EMULATOR_HOST,/^(127\.0\.0\.1|localhost):\d+$/);const[host,port]=process.env.FIRESTORE_EMULATOR_HOST.split(':');
- const rules=process.env.DANBRIDGE_VERIFY_PUBLISHED_PRODUCTION_RULES==='278'?await readPatchedProductionRulesForEmulator():await readFile(new URL('../firebase/firestore.rules.deploy',import.meta.url),'utf8');
+ const rules=process.env.DANBRIDGE_PRODUCTION_RULES_SHA256?await readExactProductionRulesForEmulator():process.env.DANBRIDGE_VERIFY_PUBLISHED_PRODUCTION_RULES==='278'?await readPatchedProductionRulesForEmulator():await readFile(new URL('../firebase/firestore.rules.deploy',import.meta.url),'utf8');
  const env=await initializeTestEnvironment({projectId:'demo-danbridge-published-rules',firestore:{host,port:Number(port),rules}});
  try{
   const identities=[{kind:'teacher',email:'teacher@example.test',teacherId:'t1',branchIds:[]},{kind:'scheduler',email:'aa0966626336@gmail.com',teacherId:'aa',branchIds:[]},{kind:'branch_manager',email:'branch@example.test',teacherId:'branch',branchIds:['art_museum']}],parts=[];
