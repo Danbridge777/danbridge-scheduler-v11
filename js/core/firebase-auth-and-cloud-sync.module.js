@@ -2225,7 +2225,18 @@ async function acknowledgeCurrentScheduleNotification(){
    for(let offset=0;offset<ids.length;offset+=20){const result=await scheduleNotificationAcknowledgeCall({notificationIds:ids.slice(offset,offset+20)});if(result?.data?.ok!==true)throw new Error(`通知確認未完成（${offset+1}–${Math.min(offset+20,ids.length)}）`)}
  }catch(e){
    console.error('Acknowledge schedule notification failed',e);
-   const message=String(e?.code||'').startsWith('appCheck/')?'安全驗證未完成，通知仍保留未讀。請先儲存其他表單，再重新開啟此頁；若仍失敗，請保留錯誤畫面。':'通知確認失敗：'+(e?.message||e);
+   let message='通知確認失敗：'+(e?.message||e);
+   if(String(e?.code||'').startsWith('appCheck/')){
+    message='安全驗證未完成，通知仍保留未讀。請稍後重試；若持續失敗，請保留錯誤畫面。';
+    // Report only the SDK's bounded, numeric retry duration. Do not reset its
+    // provider/backoff, retry the request here, or instruct users to bypass it
+    // by repeatedly reloading or signing in.
+    const duration=typeof e?.customData?.time==='string'?/^(?:(\d{2})d:)?(?:(\d{2})h:)?([0-5]\d)m:([0-5]\d)s$/.exec(e.customData.time):null;
+    if(['appCheck/throttled','appCheck/initial-throttle'].includes(e?.code)&&duration&&Number(duration[1]||0)<=1&&Number(duration[2]||0)<=23){
+     const units=[['天',duration[1]],['小時',duration[2]],['分',duration[3]],['秒',duration[4]]].filter(([,n])=>Number(n)>0).map(([unit,n])=>`${Number(n)} ${unit}`).join(' ')||'1 秒';
+     message=`安全驗證暫緩，通知仍保留未讀。驗證服務允許約 ${units} 後重試，無須反覆點擊或重新登入。`;
+    }
+   }
    cloudStatus(message,'error');
    // Do not make a failed acknowledgement look successful by hiding its dialog.
    let currentIds=[];try{currentIds=JSON.parse(modal?.dataset.notificationIds||'[]')}catch{}

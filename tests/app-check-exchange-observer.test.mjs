@@ -91,3 +91,34 @@ test('installed SDK preserves first 403 evidence, then enforces its original one
  await assert.rejects(provider.getToken(true),e=>e.code==='appCheck/throttled');
  assert.equal(exchanges,1);assert.equal(evidence.length,1);
 });
+
+test('installed SDK recovers from repeated 401 only after its backoff, using fresh attestations and unchanged responses',async()=>{
+ const sdk=await readFile(new URL('../node_modules/@firebase/app-check/dist/esm/index.esm.js',import.meta.url),'utf8');
+ const part=(start,end)=>{const a=sdk.indexOf(start),b=sdk.indexOf(end,a);assert.ok(a>=0&&b>a);return sdk.slice(a,b)};
+ let clock=1_000_000,attempt=0,attestations=0;const evidence=[],requests=[];
+ const observer=createAppCheckExchangeObserver({projectId:'project-id',appId:'app-id',now:()=>clock,onEvidence:r=>evidence.push(r),fetch:async(url,init)=>{
+  requests.push(JSON.parse(init.body));attempt++;
+  return attempt<=2?Response.json({error:{status:'UNAUTHENTICATED',message:'Unclassified test rejection'}},{status:401}):Response.json({token:'FAKE_VALID_TEST_TOKEN',ttl:'3600s'});
+ }});
+ const context={fetch:observer.fetch,Date:{now:()=>clock},ONE_DAY:86400000,
+  getToken$1:async()=>`FAKE_TEST_ATTESTATION_${++attestations}`,getStateReference:()=>({reCAPTCHAState:{succeeded:true}}),
+  getExchangeRecaptchaEnterpriseTokenRequest:(_app,token)=>({url:endpoint,body:{recaptcha_enterprise_token:token}}),getDurationString:String,
+  ERROR_FACTORY:{create:(code,data)=>Object.assign(new Error(code),{code:'appCheck/'+code,customData:data})},
+  calculateBackoffMillis:count=>1000*2**count};
+ const Provider=vm.runInNewContext(part('async function exchangeToken(', 'function getExchangeRecaptchaV3TokenRequest(')+
+  part('class ReCaptchaEnterpriseProvider {','class CustomProvider {')+part('function setBackoff(', '\n/**\n * @license')+'\nReCaptchaEnterpriseProvider',context);
+ const provider=new Provider('TEST_SITE_KEY');provider._app={};provider._heartbeatServiceProvider={getImmediate:()=>null};
+ for(const delay of [1000,2000]){
+  await assert.rejects(provider.getToken(true),e=>e.code==='appCheck/initial-throttle'&&e.customData.httpStatus===401);
+  const before=attempt;clock+=delay;
+  // The SDK deliberately rejects at the exact boundary as well.
+  await assert.rejects(provider.getToken(true),e=>e.code==='appCheck/throttled');
+  assert.equal(attempt,before);assert.equal(attestations,before);clock++;
+ }
+ const result=await provider.getToken(true);await observer.settled();
+ assert.equal(result.token,'FAKE_VALID_TEST_TOKEN');assert.equal(provider._throttleData,null);
+ assert.equal(attempt,3);assert.equal(new Set(requests.map(r=>r.recaptcha_enterprise_token)).size,3);
+ assert.ok(requests.every(r=>r.limited_use===true));assert.equal(evidence.length,2);
+ assert.ok(evidence.every(e=>e.httpStatus===401&&e.errorStatus==='UNAUTHENTICATED'));
+ assert.doesNotMatch(JSON.stringify(evidence),/FAKE_TEST|FAKE_VALID|recaptcha_enterprise_token/);
+});

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本機通知退避恢復驗收</title>
+<style>body{font:16px system-ui;max-width:760px;margin:40px auto;padding:20px;color:#172b42}button{font:inherit;padding:10px 16px;margin:8px;border:1px solid #8996a6;border-radius:8px;background:white}section{padding:20px;border:1px solid #ccd3dc;border-radius:12px}output{display:block;padding:12px;white-space:pre-wrap}[hidden]{display:none!important}[role=alert]{color:#9a331b}</style>
+<h1>本機通知退避恢復驗收</h1>
+<p>載入本機實際通知處理函式；安全驗證與寫入是模擬，不連線 Firebase、不代表雲端驗收。</p>
+<button id="recover" disabled>模擬等待期結束且驗證恢復</button>
+<output id="result">載入中</output>
+<section id="scheduleNotificationModal" data-notification-ids='["synthetic_notice"]'>
+ <h2>合成測試通知</h2><p>應保留未讀直到確認服務成功。</p>
+ <div class="schedule-notification-actions"><button id="scheduleNotificationAcknowledge" disabled>知道了</button></div>
+</section>
+<output id="status" aria-live="polite"></output>
+<script type="module">
+ const result=document.getElementById('result'),status=document.getElementById('status'),recover=document.getElementById('recover');
+ let available=false,attempts=0,writes=0;
+ const update=()=>{result.textContent=`驗證服務：${available?'可用':'退避中'}\n嘗試次數：${attempts}\n成功寫入：${writes}\n通知：${writes?'已讀':'未讀'}`};
+ try{
+  const source=await (await fetch('/js/core/firebase-auth-and-cloud-sync.module.js',{cache:'no-store'})).text();
+  const start=source.indexOf('async function acknowledgeCurrentScheduleNotification(){'),end=source.indexOf('\nfunction subscribeScheduleNotifications(){',start);
+  if(start<0||end<=start)throw Error('Actual notification handler not found');
+  const call=async()=>{attempts++;if(!available)throw Object.assign(Error('Synthetic 401'),{code:'appCheck/throttled',customData:{httpStatus:401,time:'42m:54s'}});writes++;return {data:{ok:true}}};
+  const handler=new Function('document','cloudUid','cloudEmailKey','scheduleNotificationAcknowledgeCall','cloudStatus',source.slice(start,end)+';return acknowledgeCurrentScheduleNotification;')(document,'synthetic_uid','synthetic@example.invalid',call,message=>{status.textContent=message});
+  const button=document.getElementById('scheduleNotificationAcknowledge');button.disabled=false;button.onclick=async()=>{await handler();update()};
+  recover.disabled=false;recover.onclick=()=>{available=true;status.textContent='模擬驗證已恢復；仍須按「知道了」並等待確認。';update()};update();
+ }catch(error){result.textContent='測試無法載入：'+error.message}
+</script></html>
