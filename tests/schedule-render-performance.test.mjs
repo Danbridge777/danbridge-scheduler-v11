@@ -4,13 +4,36 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 
 const source=path=>readFile(new URL(path,import.meta.url),'utf8');
+const timerQueue=timers=>({setTimeout:fn=>{timers.push(fn);return fn},clearTimeout:fn=>{const index=timers.indexOf(fn);if(index>=0)timers.splice(index,1)}});
+
+test('畫面幀被暫停時仍保存，恢復畫面不重送，後續連續操作也不被舊幀卡住',async()=>{
+ const code=await source('../js/modules/calendar/scheduler-ui.js');
+ const commit=code.slice(code.indexOf('let schedulePersistenceFrame='),code.indexOf('function updateSelectionCount('));
+ const frames=[],timers=new Map(),saves=[],renders=[];let serial=0;
+ const context={document:{body:{dataset:{}}},Date,performance:{now:()=>0},console,
+  calendarTeacherConflictCache:null,requestAnimationFrame:fn=>{frames.push(fn);return 99},
+  setTimeout:(fn,delay)=>{const id=++serial;timers.set(id,{fn,delay});return id},clearTimeout:id=>timers.delete(id),
+  calendarSectionIsActive:()=>true,renderCalendar:()=>renders.push(true),
+  saveDB:options=>saves.push(options),window:{}};
+ vm.createContext(context);vm.runInContext(commit,context);
+ const runTimers=()=>{for(const [id,{fn}] of [...timers]){timers.delete(id);fn()}};
+ context.commitScheduleMutation('lesson.create');context.commitScheduleMutation('lesson.delete');
+ assert.equal(frames.length,1);assert.equal(renders.length,0);
+ runTimers();assert.equal(saves.length,1,'雲端提交不能依賴 requestAnimationFrame');
+ assert.equal(saves[0].scheduleAction,'lesson.update.fields');
+ context.commitScheduleMutation('lesson.move');runTimers();
+ assert.equal(saves.length,2);assert.equal(saves[1].scheduleAction,'lesson.move');
+ frames.shift()();runTimers();assert.equal(renders.length,1);assert.equal(saves.length,2,'舊幀恢復不能重送');
+ context.commitScheduleMutation('lesson.copy');frames.shift()();runTimers();
+ assert.equal(saves.length,3);assert.equal(saves[2].scheduleAction,'lesson.copy');
+});
 
 test('從總覽新增課程或在下一幀前換頁，必須更新實際可見頁面且只保存一次',async()=>{
  const code=await source('../js/modules/calendar/scheduler-ui.js');
  const commit=code.slice(code.indexOf('let schedulePersistenceFrame='),code.indexOf('function updateSelectionCount('));
  for(const [initial,visible] of [['dashboard','dashboard'],['calendar','dashboard'],['dashboard','calendar'],['finance','finance']]){
   const frames=[],timers=[],renders=[],saves=[],document={body:{dataset:{activeSection:initial}}};
-  const context={document,Date,performance:{now:()=>0},calendarTeacherConflictCache:new Map(),requestAnimationFrame:fn=>{frames.push(fn);return 1},setTimeout:fn=>{timers.push(fn);return 2},calendarSectionIsActive:()=>document.body.dataset.activeSection==='calendar',renderCalendar:options=>renders.push(['calendar',options]),saveDB:options=>saves.push(options),window:{renderVisibleWorkspace:()=>renders.push([document.body.dataset.activeSection])}};
+  const context={document,Date,performance:{now:()=>0},calendarTeacherConflictCache:new Map(),requestAnimationFrame:fn=>{frames.push(fn);return 1},...timerQueue(timers),calendarSectionIsActive:()=>document.body.dataset.activeSection==='calendar',renderCalendar:options=>renders.push(['calendar',options]),saveDB:options=>saves.push(options),window:{renderVisibleWorkspace:()=>renders.push([document.body.dataset.activeSection])}};
   vm.createContext(context);vm.runInContext(commit,context);
   context.commitScheduleMutation('lesson.create');context.commitScheduleMutation('lesson.create');
   assert.equal(renders.length,0);assert.equal(frames.length,1);
@@ -23,7 +46,7 @@ test('從總覽新增課程或在下一幀前換頁，必須更新實際可見�
 test('畫面渲染失敗仍保存已完成的課表操作，不丟失下一步同步',async()=>{
  const code=await source('../js/modules/calendar/scheduler-ui.js');
  const commit=code.slice(code.indexOf('let schedulePersistenceFrame='),code.indexOf('function updateSelectionCount('));
- const frames=[],timers=[],saves=[],errors=[],context={document:{body:{dataset:{activeSection:'dashboard'}}},Date,performance:{now:()=>0},console:{error:(...args)=>errors.push(args)},calendarTeacherConflictCache:null,requestAnimationFrame:fn=>{frames.push(fn);return 1},setTimeout:fn=>{timers.push(fn);return 2},calendarSectionIsActive:()=>false,renderCalendar:()=>{},saveDB:options=>saves.push(options),window:{renderVisibleWorkspace:()=>{throw Error('synthetic render failure')}}};
+ const frames=[],timers=[],saves=[],errors=[],context={document:{body:{dataset:{activeSection:'dashboard'}}},Date,performance:{now:()=>0},console:{error:(...args)=>errors.push(args)},calendarTeacherConflictCache:null,requestAnimationFrame:fn=>{frames.push(fn);return 1},...timerQueue(timers),calendarSectionIsActive:()=>false,renderCalendar:()=>{},saveDB:options=>saves.push(options),window:{renderVisibleWorkspace:()=>{throw Error('synthetic render failure')}}};
  vm.createContext(context);vm.runInContext(commit,context);context.commitScheduleMutation('lesson.create');
  assert.doesNotThrow(()=>frames.shift()());assert.equal(timers.length,1);timers.shift()();
  assert.equal(saves.length,1);assert.equal(saves[0].scheduleAction,'lesson.create');assert.equal(errors.length,1);

@@ -192,6 +192,11 @@ function commitScheduleMutation(scheduleAction='lesson.update.fields'){
   calendarTeacherConflictCache=null;
   pendingScheduleAction=pendingScheduleAction&&pendingScheduleAction!==scheduleAction?'lesson.update.fields':scheduleAction;
   if(document.body?.dataset){document.body.dataset.lastScheduleMutationQueuedAt=String(Date.now());document.body.dataset.lastScheduleAction=pendingScheduleAction}
+  const persist=()=>{schedulePersistenceFrame=null;if(!pendingScheduleAction)return;const action=pendingScheduleAction;pendingScheduleAction='';saveDB({skipRender:true,scheduleAction:action})};
+  // Hidden/occluded tabs can stop animation frames entirely. Do not make
+  // durability depend on painting. Normal visible frames still paint first.
+  // Re-arm for later mutations even while the original frame is suspended.
+  if(schedulePersistenceFrame===null)schedulePersistenceFrame=setTimeout(persist,100);
   if(scheduleRenderFrame!==null)return;
   const render=()=>{
     scheduleRenderFrame=null;const renderStarted=typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();
@@ -203,8 +208,8 @@ function commitScheduleMutation(scheduleAction='lesson.update.fields'){
     }catch(error){console.error('Schedule view rendering failed; preserving queued save:',error)}
     const renderFinished=typeof performance!=='undefined'&&typeof performance.now==='function'?performance.now():Date.now();
     if(document.body?.dataset)document.body.dataset.lastScheduleRenderMs=String(Math.max(0,renderFinished-renderStarted).toFixed(1));
-    if(schedulePersistenceFrame!==null)return;
-    const persist=()=>{schedulePersistenceFrame=null;const action=pendingScheduleAction||'lesson.update.fields';pendingScheduleAction='';saveDB({skipRender:true,scheduleAction:action})};
+    if(!pendingScheduleAction)return;
+    if(schedulePersistenceFrame!==null)clearTimeout(schedulePersistenceFrame);
     schedulePersistenceFrame=setTimeout(persist,0);
   };
   if(typeof requestAnimationFrame==='function')scheduleRenderFrame=requestAnimationFrame(render);else scheduleRenderFrame=setTimeout(render,0);

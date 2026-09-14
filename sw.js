@@ -1,5 +1,5 @@
-const CACHE_NAME='danbridge-v11-notification-scope-352';
-const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png?v=20.26.324','./icon-512.png?v=20.26.324','./icon-1024.png?v=20.26.324','./icon-maskable-192.png?v=20.26.324','./icon-maskable-512.png?v=20.26.324','./css/core/77-pwa-install-and-update.css?v=20.26.324','./js/core/pwa-installation.js?v=20.26.324'];
+const CACHE_NAME='danbridge-v11-notification-scope-353';
+const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png?v=20.26.325','./icon-512.png?v=20.26.325','./icon-1024.png?v=20.26.325','./icon-maskable-192.png?v=20.26.325','./icon-maskable-512.png?v=20.26.325','./css/core/77-pwa-install-and-update.css?v=20.26.325','./js/core/pwa-installation.js?v=20.26.325'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(

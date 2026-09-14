@@ -22,7 +22,7 @@ test('legacy compatibility is server-gated consistently across scheduler, Owner 
 test('frontend-only 322 release retains the separately deployed 320 backend receipt version',async()=>{
  const [entry,workspace,client]=await Promise.all(['../functions/index.cjs','../functions/staging-published-workspace.cjs','../js/core/firebase-auth-and-cloud-sync.module.js'].map(path=>readFile(new URL(path,import.meta.url),'utf8')));
  const release=client.match(/const APP_RELEASE='(\d+\.\d+\.\d+)'/)?.[1];
- assert.equal(release,'20.26.324','review this release contract on the next frontend deployment');
+ assert.equal(release,'20.26.325','review this release contract on the next frontend deployment');
  // 322 deployed Hosting only. Falsely stamping unchanged Functions as 322
  // would hide their actual deployed source version rather than verify it.
  const backendRelease='20.26.320';
