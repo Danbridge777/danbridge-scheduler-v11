@@ -20,7 +20,9 @@
   const start=source.indexOf('async function acknowledgeCurrentScheduleNotification(){'),end=source.indexOf('\nfunction subscribeScheduleNotifications(){',start);
   if(start<0||end<=start)throw Error('Actual notification handler not found');
   const call=async()=>{attempts++;if(!available)throw Object.assign(Error('Synthetic 401'),{code:'appCheck/throttled',customData:{httpStatus:401,time:'42m:54s'}});writes++;return {data:{ok:true}}};
-  const handler=new Function('document','cloudUid','cloudEmailKey','scheduleNotificationAcknowledgeCall','cloudStatus',source.slice(start,end)+';return acknowledgeCurrentScheduleNotification;')(document,'synthetic_uid','synthetic@example.invalid',call,message=>{status.textContent=message});
+  // Simulate only the HTTPS rendering gate; recovery links remain localhost.
+  const fixtureGlobal={location:{protocol:'https:',origin:location.origin}};
+  const handler=new Function('document','cloudUid','cloudEmailKey','scheduleNotificationAcknowledgeCall','cloudStatus','globalThis',source.slice(start,end)+';return acknowledgeCurrentScheduleNotification;')(document,'synthetic_uid','synthetic@example.invalid',call,message=>{status.textContent=message},fixtureGlobal);
   const button=document.getElementById('scheduleNotificationAcknowledge');button.disabled=false;button.onclick=async()=>{await handler();update()};
   recover.disabled=false;recover.onclick=()=>{available=true;status.textContent='模擬驗證已恢復；仍須按「知道了」並等待確認。';update()};update();
  }catch(error){result.textContent='測試無法載入：'+error.message}

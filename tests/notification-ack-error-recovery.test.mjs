@@ -29,3 +29,16 @@ for(const time of ['PRIVATE_TOKEN','<script>alert(1)</script>','99d:00m:00s','24
  vm.createContext(context);vm.runInContext(handler,context);await context.acknowledgeCurrentScheduleNotification();
  assert.match(modal.error.textContent,/通知仍保留未讀/);assert.ok(!modal.error.textContent.includes(time));assert.doesNotMatch(modal.error.textContent,/PRIVATE/);
 });
+test('App Check recovery link opens only the same-origin root and preserves the failed page without replay',async()=>{
+ let calls=0;const created=[];
+ const modal={hidden:false,dataset:{notificationIds:'["test_notice"]'},querySelector:s=>s==='[data-ack-error]'?null:{before:n=>modal.error=n}},button={};
+ const context={cloudUid:'uid',cloudEmailKey:'e',location:{protocol:'https:',origin:'https://example.test',href:'https://example.test/?private=DO_NOT_COPY#SECRET'},
+  document:{getElementById:id=>id==='scheduleNotificationModal'?modal:button,createElement:tag=>{const element={tag,dataset:{},setAttribute(){},append(...children){this.children=children}};created.push(element);return element}},
+  console:{error(){}},cloudStatus(){},scheduleNotificationAcknowledgeCall:async()=>{calls++;throw Object.assign(Error('rejected'),{code:'appCheck/throttled'})}};
+ vm.createContext(context);vm.runInContext(handler,context);await context.acknowledgeCurrentScheduleNotification();
+ const link=created.find(e=>e.tag==='a');
+ assert.equal(link.href,'https://example.test/');assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener noreferrer');
+ assert.equal(link.onclick,undefined);assert.equal(calls,1);assert.equal(modal.hidden,false);assert.equal(modal.dataset.notificationIds,'["test_notice"]');
+ assert.doesNotMatch(JSON.stringify(created),/DO_NOT_COPY|SECRET/);
+ context.scheduleNotificationAcknowledgeCall=async()=>({data:{ok:true}});await context.acknowledgeCurrentScheduleNotification();assert.equal(modal.hidden,true);
+});

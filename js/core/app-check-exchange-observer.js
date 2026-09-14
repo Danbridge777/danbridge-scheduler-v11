@@ -6,7 +6,8 @@ const REASONS=new Set(['API_KEY_INVALID','API_KEY_SERVICE_BLOCKED','API_KEY_HTTP
 function summarize(body){
  const error=body?.error;
  const message=typeof error?.message==='string'?error.message:'';
- const category=/app attestation failed/i.test(message)?'attestation-rejected':
+ const category=/^The reCAPTCHA Enterprise token indicates a failed attestation attempt, but is retryable by calling execute\(\) via JavaScript\.$/.test(message)?'attestation-retryable':
+  /app attestation failed/i.test(message)?'attestation-rejected':
   /api key not valid|invalid api key/i.test(message)?'api-key-invalid':
   /requests? from referer.*blocked/i.test(message)?'referrer-blocked':
   /quota.*exceeded|rate limit/i.test(message)?'quota-or-rate-limit':'unclassified';

@@ -23,6 +23,16 @@ test('does not observe successes, other projects, other services or spoofed host
  }
  const {observer,evidence}=setup(Response.json({token:'PRIVATE_VALID_TOKEN'}));await observer.fetch(endpoint);await observer.settled();assert.equal(evidence.length,0);
 });
+test('classifies captured retryable Enterprise rejection without treating other 401s as retryable',async()=>{
+ const message='The reCAPTCHA Enterprise token indicates a failed attestation attempt, but is retryable by calling execute() via JavaScript.';
+ for(const [text,expected] of [[message,'attestation-retryable'],['Invalid token','unclassified'],[message+' PRIVATE_TOKEN','unclassified']]){
+  const response=Response.json({error:{status:'UNAUTHENTICATED',message:text}},{status:401});
+  const {observer,evidence,calls}=setup(response);
+  assert.strictEqual(await observer.fetch(endpoint),response);await observer.settled();
+  assert.equal(evidence[0].category,expected);assert.equal(calls.length,1);
+  assert.doesNotMatch(JSON.stringify(evidence),/PRIVATE|execute|JavaScript/);
+ }
+});
 test('network rejection remains the exact original error; no retry or fabricated HTTP rejection',async()=>{
  const original=Error('network'),{observer,evidence}=setup(null,{fetch:async()=>{throw original}});
  await assert.rejects(observer.fetch(endpoint),e=>e===original);await observer.settled();assert.equal(evidence.length,0);

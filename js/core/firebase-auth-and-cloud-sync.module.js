@@ -1,64 +1,64 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js';
-import {readRoleViewForAudit} from './role-view-audit-reader.js?v=20.26.325';
+import {readRoleViewForAudit} from './role-view-audit-reader.js?v=20.26.326';
 import { getAuth, initializeAuth, indexedDBLocalPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
-import {createGoogleSignInFlow} from './google-sign-in-flow.js?v=20.26.325';
-import {installAppCheckExchangeObserver} from './app-check-exchange-observer.js?v=20.26.325';
+import {createGoogleSignInFlow} from './google-sign-in-flow.js?v=20.26.326';
+import {installAppCheckExchangeObserver} from './app-check-exchange-observer.js?v=20.26.326';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getLimitedUseToken, getToken as getAppCheckToken } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app-check.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js';
 import { initializeFirestore, memoryLocalCache, doc as firebaseDoc, getDoc, getDocFromServer, setDoc, deleteDoc, deleteField, onSnapshot, collection as firebaseCollection, query, where, getDocs, getDocsFromServer, serverTimestamp, Timestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
-import {bootstrapDanbridgeFirebase} from './firebase-environment-bootstrap.js?v=20.26.325';
-import {createScheduleNotificationPresenter} from './schedule-notification-presentation.js?v=20.26.325';
-import {scheduleNotificationReadFilters,scheduleNotificationMatchesFilters} from './schedule-notification-read-scope.js?v=20.26.325';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.325';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.325';
-import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.325';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore,canonicalLegacyRecordShadowCore,extractFullRecordShadowSyncResult,buildFullRecordShadowRunIdentity} from './cloud-record-shadow-run.js?v=20.26.325';
-import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.325';
-import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.325';
-import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.325';
-import {verifyOwnRoleViewCandidateReadback} from './cloud-role-view-candidate.js?v=20.26.325';
-import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest as buildLegacyRoleViewCandidateManifest,buildAtomicRecordActivation,evaluateAtomicRecordActivation} from './cloud-record-activation.js?v=20.26.325';
-import {decideRecordReadTakeover} from './cloud-record-read-takeover.js?v=20.26.325';
-import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js?v=20.26.325';
-import {recordDataDigest,recordDataHash} from './cloud-record-data-hash.js?v=20.26.325';
-import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.325';
-import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.325';
-import {createOwnerDraftStore} from './cloud-owner-draft-store.js?v=20.26.325';
-import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from './production-scheduler-queue.js?v=20.26.325';
-import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.325';
-import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.325';
-import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.325';
-import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.325';
-import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.325';
-import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.325';
-import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.325';
-import {createFirebaseActiveRecordStreamAdapter} from './firebase-active-record-stream-adapter.js?v=20.26.325';
-import {createFirebaseRoleRecordViewAdapter} from './firebase-role-record-view-adapter.js?v=20.26.325';
-import {createFirebaseRoleRecordStreamAdapter} from './firebase-role-record-stream-adapter.js?v=20.26.325';
-import {createActiveRoleRecordPublishQueue} from './cloud-active-role-record-publish-queue.js?v=20.26.325';
-import {decideOwnerActiveSaveIntent} from './cloud-owner-active-save-intent.js?v=20.26.325';
-import {createRecordSyncActiveFailureResume} from './record-sync-active-failure-resume.js?v=20.26.325';
-import {dailyBackupChunkCore,prepareDailyShardedBackup,sealDailyShardedBackup,verifyDailyShardedBackupReadback} from './cloud-daily-sharded-backup.js?v=20.26.325';
-import {createFirebaseRecordSyncCandidateAdapter} from './firebase-record-sync-candidate-adapter.js?v=20.26.325';
-import {buildRecordSyncRoleEvidence,RECORD_SYNC_ROLE_SCENARIOS} from './cloud-record-sync-role-evidence.js?v=20.26.325';
-import {buildRecordSyncActivationManifest,buildActiveRecordSyncControl,evaluateActiveRecordSyncControl} from './cloud-record-sync-control.js?v=20.26.325';
-import {createFirebaseRecordSyncActivationAdapter} from './firebase-record-sync-activation-adapter.js?v=20.26.325';
-import {verifyRoleViewCandidateSourceBinding,buildRoleViewCandidateSourceAudit,buildRoleViewCandidateManifest as buildVerifiedRoleViewCandidateManifest,assertRoleViewCandidateManifest,buildRoleViewVerificationReceipt,assertRoleViewVerificationReceipt,verifyRoleViewReceiptSet} from './cloud-role-view-verification.js?v=20.26.325';
-import {loadProfileAfterAuthReady} from './cloud-auth-profile-bootstrap.js?v=20.26.325';
-import {RECORD_SYNC_V2_TAKEOVER_CANDIDATE_CONTROL_PATH,RECORD_SYNC_V2_TAKEOVER_CANDIDATE_HEAD_PATH,createFirebaseRecordSyncV2TakeoverCandidateAdapter} from './firebase-record-sync-v2-takeover-candidate-adapter.js?v=20.26.325';
-import {createStagingV2AuthorityReadLoader} from './staging-v2-authority-read-loader.js?v=20.26.325';
-import {createStagingV2AuthoritySaveBrowserClient} from './staging-v2-authority-save-browser-client.js?v=20.26.325';
-import {createStagingV2ActiveRecordOperationSender,normalizeStagingV2FirestoreValue,stagingV2H0GenesisBaselineDocuments} from './staging-v2-active-record-browser-bridge.js?v=20.26.325';
-import {createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.325';
-import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.325';
-import {CLOUD_BOOTSTRAP_STAGES,createCloudBootstrapProgress} from './cloud-bootstrap-progress.js?v=20.26.325';
-import {createProductionTrustedOperationClient} from './production-trusted-operation-client.js?v=20.26.325';
-import {prepareActiveRecordSync} from './cloud-active-record-sync.js?v=20.26.325';
-import {createFirebaseCallableHttpClient} from './firebase-callable-http-client.js?v=20.26.325';
-import {createLimitedUseAppCheckTokenPool,takeFreshLimitedUseAppCheckToken} from './app-check-limited-use-token.js?v=20.26.325';
-import {createPublishedRoleViewConsumer} from './published-role-view-consumer.js?v=20.26.325';
-import {createFirestoreRolePartBatchReader} from './firestore-role-part-batch-reader.js?v=20.26.325';
-import {createPublishedSchedulerReceiptReader,PUBLISHED_SCHEDULER_RESPONSE_SCHEMA} from './published-scheduler-receipt.js?v=20.26.325';
+import {bootstrapDanbridgeFirebase} from './firebase-environment-bootstrap.js?v=20.26.326';
+import {createScheduleNotificationPresenter} from './schedule-notification-presentation.js?v=20.26.326';
+import {scheduleNotificationReadFilters,scheduleNotificationMatchesFilters} from './schedule-notification-read-scope.js?v=20.26.326';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.326';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.326';
+import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.326';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore,canonicalLegacyRecordShadowCore,extractFullRecordShadowSyncResult,buildFullRecordShadowRunIdentity} from './cloud-record-shadow-run.js?v=20.26.326';
+import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.326';
+import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.326';
+import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.326';
+import {verifyOwnRoleViewCandidateReadback} from './cloud-role-view-candidate.js?v=20.26.326';
+import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest as buildLegacyRoleViewCandidateManifest,buildAtomicRecordActivation,evaluateAtomicRecordActivation} from './cloud-record-activation.js?v=20.26.326';
+import {decideRecordReadTakeover} from './cloud-record-read-takeover.js?v=20.26.326';
+import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js?v=20.26.326';
+import {recordDataDigest,recordDataHash} from './cloud-record-data-hash.js?v=20.26.326';
+import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.326';
+import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.326';
+import {createOwnerDraftStore} from './cloud-owner-draft-store.js?v=20.26.326';
+import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from './production-scheduler-queue.js?v=20.26.326';
+import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.326';
+import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.326';
+import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.326';
+import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.326';
+import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.326';
+import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.326';
+import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.326';
+import {createFirebaseActiveRecordStreamAdapter} from './firebase-active-record-stream-adapter.js?v=20.26.326';
+import {createFirebaseRoleRecordViewAdapter} from './firebase-role-record-view-adapter.js?v=20.26.326';
+import {createFirebaseRoleRecordStreamAdapter} from './firebase-role-record-stream-adapter.js?v=20.26.326';
+import {createActiveRoleRecordPublishQueue} from './cloud-active-role-record-publish-queue.js?v=20.26.326';
+import {decideOwnerActiveSaveIntent} from './cloud-owner-active-save-intent.js?v=20.26.326';
+import {createRecordSyncActiveFailureResume} from './record-sync-active-failure-resume.js?v=20.26.326';
+import {dailyBackupChunkCore,prepareDailyShardedBackup,sealDailyShardedBackup,verifyDailyShardedBackupReadback} from './cloud-daily-sharded-backup.js?v=20.26.326';
+import {createFirebaseRecordSyncCandidateAdapter} from './firebase-record-sync-candidate-adapter.js?v=20.26.326';
+import {buildRecordSyncRoleEvidence,RECORD_SYNC_ROLE_SCENARIOS} from './cloud-record-sync-role-evidence.js?v=20.26.326';
+import {buildRecordSyncActivationManifest,buildActiveRecordSyncControl,evaluateActiveRecordSyncControl} from './cloud-record-sync-control.js?v=20.26.326';
+import {createFirebaseRecordSyncActivationAdapter} from './firebase-record-sync-activation-adapter.js?v=20.26.326';
+import {verifyRoleViewCandidateSourceBinding,buildRoleViewCandidateSourceAudit,buildRoleViewCandidateManifest as buildVerifiedRoleViewCandidateManifest,assertRoleViewCandidateManifest,buildRoleViewVerificationReceipt,assertRoleViewVerificationReceipt,verifyRoleViewReceiptSet} from './cloud-role-view-verification.js?v=20.26.326';
+import {loadProfileAfterAuthReady} from './cloud-auth-profile-bootstrap.js?v=20.26.326';
+import {RECORD_SYNC_V2_TAKEOVER_CANDIDATE_CONTROL_PATH,RECORD_SYNC_V2_TAKEOVER_CANDIDATE_HEAD_PATH,createFirebaseRecordSyncV2TakeoverCandidateAdapter} from './firebase-record-sync-v2-takeover-candidate-adapter.js?v=20.26.326';
+import {createStagingV2AuthorityReadLoader} from './staging-v2-authority-read-loader.js?v=20.26.326';
+import {createStagingV2AuthoritySaveBrowserClient} from './staging-v2-authority-save-browser-client.js?v=20.26.326';
+import {createStagingV2ActiveRecordOperationSender,normalizeStagingV2FirestoreValue,stagingV2H0GenesisBaselineDocuments} from './staging-v2-active-record-browser-bridge.js?v=20.26.326';
+import {createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.326';
+import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.326';
+import {CLOUD_BOOTSTRAP_STAGES,createCloudBootstrapProgress} from './cloud-bootstrap-progress.js?v=20.26.326';
+import {createProductionTrustedOperationClient} from './production-trusted-operation-client.js?v=20.26.326';
+import {prepareActiveRecordSync} from './cloud-active-record-sync.js?v=20.26.326';
+import {createFirebaseCallableHttpClient} from './firebase-callable-http-client.js?v=20.26.326';
+import {createLimitedUseAppCheckTokenPool,takeFreshLimitedUseAppCheckToken} from './app-check-limited-use-token.js?v=20.26.326';
+import {createPublishedRoleViewConsumer} from './published-role-view-consumer.js?v=20.26.326';
+import {createFirestoreRolePartBatchReader} from './firestore-role-part-batch-reader.js?v=20.26.326';
+import {createPublishedSchedulerReceiptReader,PUBLISHED_SCHEDULER_RESPONSE_SCHEMA} from './published-scheduler-receipt.js?v=20.26.326';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -94,7 +94,7 @@ if(publishedWorkspace)document.body.dataset.publishedWorkspace=publishedWorkspac
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.325';
+const APP_RELEASE='20.26.326';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -2244,6 +2244,18 @@ async function acknowledgeCurrentScheduleNotification(){
     modal.hidden=false;let status=modal.querySelector('[data-ack-error]');
     if(!status){status=document.createElement('p');status.dataset.ackError='';status.setAttribute('role','alert');modal.querySelector('.schedule-notification-actions')?.before(status)}
     status.textContent=message;
+    // User-initiated recovery keeps this page (and any unsaved work) intact.
+    // The new page must obtain its own real App Check attestation. Never copy
+    // tokens, change provider state, or automatically reload/replay the write.
+    if(String(e?.code||'').startsWith('appCheck/')&&globalThis.location?.protocol==='https:'){
+     const recovery=document.createElement('a');
+     recovery.className='btn';recovery.href=globalThis.location.origin+'/';
+     recovery.target='_blank';recovery.rel='noopener noreferrer';
+     recovery.textContent='在新分頁重新驗證';
+     const explanation=document.createElement('span');
+     explanation.textContent=' 原分頁與未儲存內容會保留；新分頁驗證成功後，請再確認這則通知。 ';
+     status.append(explanation,recovery);
+    }
    }
  }
  finally{if(button){button.disabled=false;button.textContent='知道了'}}
