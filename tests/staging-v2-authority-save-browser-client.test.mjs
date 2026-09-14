@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import {createGoogleSignInFlow} from '../js/core/google-sign-in-flow.js';
 import {STAGING_V2_AUTHORITY_SAVE_APP_ID,STAGING_V2_AUTHORITY_SAVE_ORIGINS,STAGING_V2_AUTHORITY_SAVE_PROJECT_ID,STAGING_V2_AUTHORITY_SAVE_RESPONSE_SCHEMA} from '../js/core/staging-v2-authority-save-http-gateway.js';
 import {STAGING_V2_AUTHORITY_SAVE_PATH,createStagingV2AuthoritySaveBrowserClient} from '../js/core/staging-v2-authority-save-browser-client.js';
 
@@ -19,5 +20,21 @@ test('browser client不依賴 firebase-admin、Firestore direct write 或 produc
 
 test('App Check完成後頁面接上固定 staging client，Hosting 仍只 rewrite 精確 Function path',async()=>{const [runtime,tokenPool,html,firebaseRaw]=await Promise.all([readFile(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8'),readFile(new URL('../js/core/app-check-limited-use-token.js',import.meta.url),'utf8'),readFile(new URL('../index.html',import.meta.url),'utf8'),readFile(new URL('../firebase.json',import.meta.url),'utf8')]);assert.equal(runtime.includes('staging-v2-authority-save-browser-client'),true);assert.equal(runtime.includes('createLimitedUseAppCheckTokenPool({appCheck:stagingV2AppCheck,getLimitedUseToken'),true);assert.equal(tokenPool.includes('getLimitedUseToken(appCheck)'),true);assert.equal(runtime.includes("DANBRIDGE_ENVIRONMENT==='staging'?initializeAppCheck"),true);assert.equal(html.includes(STAGING_V2_AUTHORITY_SAVE_PATH),false);const firebase=JSON.parse(firebaseRaw),rewrite=firebase.hosting.rewrites.find(row=>row.source===STAGING_V2_AUTHORITY_SAVE_PATH);assert.deepEqual(rewrite,{source:STAGING_V2_AUTHORITY_SAVE_PATH,function:{functionId:'stagingV2AuthoritySave',region:'asia-east1'}})});
 
-test('staging 與 production 均可顯式選擇 redirect 登入以避開受限瀏覽器卡住 popup',async()=>{const runtime=await readFile(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');assert.match(runtime,/PREFER_REDIRECT_LOGIN=new URLSearchParams\(location\.search\)\.get\('auth'\)==='redirect'/);assert.match(runtime,/if\(PREFER_REDIRECT_LOGIN\)\{await signInWithRedirect\(auth,provider\);return\}/)});
-test('production popup 遇到網路阻擋時自動改用同頁 redirect 登入',async()=>{const runtime=await readFile(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');assert.match(runtime,/auth\/network-request-failed/);assert.match(runtime,/await signInWithRedirect\(auth,provider\);return/)});
+test('staging 與 production 的 redirect 偏好只能在相同 auth 網域生效',async()=>{
+ const runtime=await readFile(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');
+ assert.match(runtime,/PREFER_REDIRECT_LOGIN=new URLSearchParams\(location\.search\)\.get\('auth'\)==='redirect'/);
+ assert.match(runtime,/hostname:location.hostname,authDomain:firebaseConfig.authDomain,preferRedirect:PREFER_REDIRECT_LOGIN/);
+ for(const project of ['danbridge-d8877','danbridge-d8877-staging'])for(const sameHost of [true,false]){
+  const calls=[],authDomain=project+'.firebaseapp.com';
+  const flow=createGoogleSignInFlow({auth:{},provider:{},hostname:sameHost?authDomain:project+'.web.app',authDomain,preferRedirect:true,signInWithPopup:async()=>calls.push('popup'),signInWithRedirect:async()=>calls.push('redirect'),getRedirectResult:async()=>null,onError:()=>{},onBusy:()=>{},schedule:()=>0,cancel:()=>{}});
+  await flow.start();assert.deepEqual(calls,[sameHost?'redirect':'popup']);
+ }
+});
+test('production popup 網路失敗保留可重試錯誤，不自動啟動 redirect',async()=>{
+ for(const hostname of ['danbridge-d8877.web.app','danbridge-d8877.firebaseapp.com']){
+  let redirects=0;const errors=[];
+  const flow=createGoogleSignInFlow({auth:{},provider:{},hostname,authDomain:'danbridge-d8877.firebaseapp.com',preferRedirect:false,signInWithPopup:async()=>{throw Object.assign(new Error('offline'),{code:'auth/network-request-failed'})},signInWithRedirect:async()=>redirects++,getRedirectResult:async()=>null,onError:error=>errors.push(error),onBusy:()=>{},schedule:()=>0,cancel:()=>{}});
+  await flow.start();assert.equal(redirects,0);assert.match(errors.at(-1),/auth\/network-request-failed/);
+  await flow.start();assert.equal(redirects,0);assert.equal(errors.filter(Boolean).length,2,'an explicit retry remains available');
+ }
+});

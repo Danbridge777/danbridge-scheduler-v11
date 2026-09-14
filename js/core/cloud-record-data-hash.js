@@ -1,4 +1,4 @@
-import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.322';
+import {FULL_RECORD_COLLECTIONS,materializeFullRecordDb} from './cloud-full-record-shadow.js?v=20.26.324';
 import {sha256Canonical,sha256Text,canonicalJSONString} from './cloud-immutable-migration-backup.js';
 import {changeRecordCanonicalFingerprint} from './cloud-change-record-identity.js';
 

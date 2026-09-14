@@ -13,21 +13,24 @@ test('legacy compatibility is server-gated consistently across scheduler, Owner 
   assert.ok(construction?.includes('preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY'),constructor+' must share the server-only compatibility gate');
  }
  const endpoint=source.slice(source.indexOf('exports.stagingPublishedWorkspaceOperation='),source.indexOf('exports.stagingAcknowledgeScheduleNotification='));
- assert.match(endpoint,/projectId:project,preserveLegacyViews:true/,'isolated real-UI acceptance exercises compatibility without enabling formal deployment');
+ assert.match(endpoint,/projectId:project,preserveLegacyViews:false/,'isolated acceptance must exercise the deployed compact transport without duplicate legacy views');
  const scheduler=source.split('\n').find(line=>line.includes('productionSchedulerRuntimePromise=createProductionSchedulerRuntime'));
  assert.ok(scheduler.includes('historyVersionCache:PUBLISHED_ROLE_TRANSPORT_ENABLED'),'history reuse cannot run on legacy scheduler transport');
  const owner=source.split('\n').find(line=>line.includes('publishedOwnerRuntimePromise=createPublishedOwnerRuntime'));
  assert.ok(owner.includes('historyVersionCache:true'),'published Owner uses the staging-verified version reader');
 });
-test('published Owner production and isolated acceptance stamp the same release as the frontend',async()=>{
+test('frontend-only 322 release retains the separately deployed 320 backend receipt version',async()=>{
  const [entry,workspace,client]=await Promise.all(['../functions/index.cjs','../functions/staging-published-workspace.cjs','../js/core/firebase-auth-and-cloud-sync.module.js'].map(path=>readFile(new URL(path,import.meta.url),'utf8')));
  const release=client.match(/const APP_RELEASE='(\d+\.\d+\.\d+)'/)?.[1];
- assert.ok(release,'frontend release must be explicit');
+ assert.equal(release,'20.26.324','review this release contract on the next frontend deployment');
+ // 322 deployed Hosting only. Falsely stamping unchanged Functions as 322
+ // would hide their actual deployed source version rather than verify it.
+ const backendRelease='20.26.320';
  const owner=entry.slice(entry.indexOf('exports.productionTrustedOperation='),entry.indexOf('exports.productionPublishRoleViews='));
- assert.equal(owner.match(/createPublishedOwnerRuntime\(\{[^\n]*release:'([^']+)'/)?.[1],release,'production receipts cannot carry a stale release');
+ assert.equal(owner.match(/createPublishedOwnerRuntime\(\{[^\n]*release:'([^']+)'/)?.[1],backendRelease,'production receipts identify the separately deployed backend');
  const workspaceReleases=[...workspace.matchAll(/release:'(\d+\.\d+\.\d+)'/g)].map(match=>match[1]);
  assert.ok(workspaceReleases.length>=2,'both seed and runtime release must be checked');
- assert.ok(workspaceReleases.every(value=>value===release),'isolated and production runtime release must agree');
+ assert.ok(workspaceReleases.every(value=>value===backendRelease),'isolated and production backend receipt versions must agree');
 });
 test('gRPC comparison client is lazy, staging-only and isolated from the default Admin app',()=>{
  const {createStagingWorkspaceFirestore}=require('../functions/staging-workspace-firestore.cjs');
