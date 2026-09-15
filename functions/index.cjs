@@ -23,6 +23,17 @@ const SERVICE_ACCOUNT='danbridge-staging-v2@danbridge-d8877-staging.iam.gservice
 const PRODUCTION_PROJECT_ID='danbridge-d8877';
 const PRODUCTION_SERVICE_ACCOUNT='danbridge-production-runtime@danbridge-d8877.iam.gserviceaccount.com';
 const PRIMARY_OWNER_EMAIL='a0965487920@gmail.com';
+function lessonReportEndpoint(projectId,serviceAccount){
+ return onCall({region:'asia-east1',serviceAccount,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:30,memory:'256MiB',minInstances:0,maxInstances:5},async request=>{
+  if([process.env.GCLOUD_PROJECT,process.env.GOOGLE_CLOUD_PROJECT].filter(Boolean).some(value=>value!==projectId)||!(process.env.GCLOUD_PROJECT||process.env.GOOGLE_CLOUD_PROJECT))throw new HttpsError('failed-precondition','回報環境不符');
+  if(!request.auth?.uid||request.auth.token?.email_verified!==true||!request.app||request.app.alreadyConsumed)throw new HttpsError('unauthenticated','需要有效登入與全新 App Check');
+  const app=getApps().find(row=>row.options?.projectId===projectId)??initializeApp({projectId,credential:applicationDefault()},'lesson-report-'+projectId);
+  try{return await require('./lesson-report-runtime.cjs').saveLessonReport({firestore:getFirestore(app),identity:{uid:request.auth.uid,email:request.auth.token.email,emailVerified:true,appVerified:true},input:request.data,serverTimestamp:()=>FieldValue.serverTimestamp()})}
+  catch(error){const code=['invalid-argument','permission-denied','failed-precondition','aborted','already-exists','unauthenticated'].includes(error.code)?error.code:'internal';throw new HttpsError(code,code==='internal'?'回報未完成，請保留內容後重試。':error.message)}
+ });
+}
+exports.stagingSaveLessonReport=lessonReportEndpoint(PROJECT_ID,SERVICE_ACCOUNT);
+exports.productionSaveLessonReport=lessonReportEndpoint(PRODUCTION_PROJECT_ID,PRODUCTION_SERVICE_ACCOUNT);
 let runtimePromise=null;
 let stagingSchedulerRuntimePromise=null;
 let productionRuntimePromise=null;

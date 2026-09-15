@@ -152,7 +152,9 @@
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
         reloadAcceptedUpdate();
       });
-      navigator.serviceWorker.register('./sw.js?v=20.26.326',{scope:'./'}).then(reg=>{
+      // Keep the registration URL stable across releases and tabs. The worker
+      // contents trigger updates; a page's old version must not change its URL.
+      navigator.serviceWorker.register('./sw.js',{scope:'./',updateViaCache:'none'}).then(reg=>{
         if(!reg)return;
         reg.update().catch(()=>{});
         if(reg.waiting&&navigator.serviceWorker.controller)offerUpdate(reg.waiting);

@@ -1,8 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {createFirebaseCallableHttpClient} from '../js/core/firebase-callable-http-client.js';
 
 const user={uid:'scheduler-user-12345',email:'aa0966626336@gmail.com',emailVerified:true};
+test('所有實際模組 callable 名稱都可在正確專案初始化，跨專案必須拒絕',()=>{
+ const source=readFileSync(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');
+ const names=new Set([...source.matchAll(/(?:functionName:|\?)'(staging\w+|production\w+)'/g)].map(m=>m[1]));
+ names.add('stagingSaveLessonReport');
+ assert.ok(names.has('productionSaveLessonReport'));
+ assert.ok(names.size>=6);
+ for(const functionName of names){
+  const projectId=functionName.startsWith('production')?'danbridge-d8877':'danbridge-d8877-staging';
+  assert.doesNotThrow(()=>fixture({projectId,functionName}));
+  assert.throws(()=>fixture({projectId:projectId==='danbridge-d8877'?'danbridge-d8877-staging':'danbridge-d8877',functionName}),/設定無效/);
+ }
+});
+test('兩環境課堂回報讀寫都攜帶 Auth 及單次 App Check，不能跨環境',async()=>{
+ for(const [projectId,functionName] of [['danbridge-d8877-staging','stagingSaveLessonReport'],['danbridge-d8877','productionSaveLessonReport']]){
+  const f=fixture({projectId,functionName});
+  await f.client.call({lessonId:'lesson-12345',readOnly:true});
+  assert.equal(f.sent().url,`https://asia-east1-${projectId}.cloudfunctions.net/${functionName}`);
+  assert.equal(f.sent().options.headers.authorization,'Bearer id-token-12345');
+  assert.equal(f.sent().options.headers['x-firebase-appcheck'],'limited-app-check-12345');
+ }
+});
 function fixture(overrides={}){let current=user,sent=null,force=null;const client=createFirebaseCallableHttpClient({projectId:'danbridge-d8877-staging',functionName:'stagingSchedulerOperation',getCurrentUser:()=>current,getIdToken:async(_user,value)=>{force=value;return'id-token-12345'},getLimitedUseAppCheckToken:async()=>'limited-app-check-12345',fetch:async(url,options)=>{sent={url,options};return{status:200,text:async()=>JSON.stringify({data:{state:'committed'}})}},timeoutMs:60000,...overrides});return{client,sent:()=>sent,force:()=>force,setUser:value=>current=value}}
 
 test('隔離驗收可預取單次權杖，但不能配對 production 專案',async()=>{

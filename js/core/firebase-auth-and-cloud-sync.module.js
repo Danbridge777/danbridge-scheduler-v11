@@ -1,64 +1,66 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js';
-import {readRoleViewForAudit} from './role-view-audit-reader.js?v=20.26.326';
+import {readRoleViewForAudit} from './role-view-audit-reader.js?v=20.26.330';
 import { getAuth, initializeAuth, indexedDBLocalPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
-import {createGoogleSignInFlow} from './google-sign-in-flow.js?v=20.26.326';
-import {installAppCheckExchangeObserver} from './app-check-exchange-observer.js?v=20.26.326';
+import {createGoogleSignInFlow} from './google-sign-in-flow.js?v=20.26.330';
+import {installAppCheckExchangeObserver} from './app-check-exchange-observer.js?v=20.26.330';
+import {createLessonReportClient} from './lesson-report-client.js?v=20.26.330';
+import {createTeacherReportHydrator} from './teacher-report-hydrator.js?v=20.26.330';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getLimitedUseToken, getToken as getAppCheckToken } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app-check.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js';
 import { initializeFirestore, memoryLocalCache, doc as firebaseDoc, getDoc, getDocFromServer, setDoc, deleteDoc, deleteField, onSnapshot, collection as firebaseCollection, query, where, getDocs, getDocsFromServer, serverTimestamp, Timestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
-import {bootstrapDanbridgeFirebase} from './firebase-environment-bootstrap.js?v=20.26.326';
-import {createScheduleNotificationPresenter} from './schedule-notification-presentation.js?v=20.26.326';
-import {scheduleNotificationReadFilters,scheduleNotificationMatchesFilters} from './schedule-notification-read-scope.js?v=20.26.326';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.326';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.326';
-import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.326';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore,canonicalLegacyRecordShadowCore,extractFullRecordShadowSyncResult,buildFullRecordShadowRunIdentity} from './cloud-record-shadow-run.js?v=20.26.326';
-import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.326';
-import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.326';
-import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.326';
-import {verifyOwnRoleViewCandidateReadback} from './cloud-role-view-candidate.js?v=20.26.326';
-import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest as buildLegacyRoleViewCandidateManifest,buildAtomicRecordActivation,evaluateAtomicRecordActivation} from './cloud-record-activation.js?v=20.26.326';
-import {decideRecordReadTakeover} from './cloud-record-read-takeover.js?v=20.26.326';
-import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js?v=20.26.326';
-import {recordDataDigest,recordDataHash} from './cloud-record-data-hash.js?v=20.26.326';
-import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.326';
-import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.326';
-import {createOwnerDraftStore} from './cloud-owner-draft-store.js?v=20.26.326';
-import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from './production-scheduler-queue.js?v=20.26.326';
-import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.326';
-import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.326';
-import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.326';
-import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.326';
-import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.326';
-import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.326';
-import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.326';
-import {createFirebaseActiveRecordStreamAdapter} from './firebase-active-record-stream-adapter.js?v=20.26.326';
-import {createFirebaseRoleRecordViewAdapter} from './firebase-role-record-view-adapter.js?v=20.26.326';
-import {createFirebaseRoleRecordStreamAdapter} from './firebase-role-record-stream-adapter.js?v=20.26.326';
-import {createActiveRoleRecordPublishQueue} from './cloud-active-role-record-publish-queue.js?v=20.26.326';
-import {decideOwnerActiveSaveIntent} from './cloud-owner-active-save-intent.js?v=20.26.326';
-import {createRecordSyncActiveFailureResume} from './record-sync-active-failure-resume.js?v=20.26.326';
-import {dailyBackupChunkCore,prepareDailyShardedBackup,sealDailyShardedBackup,verifyDailyShardedBackupReadback} from './cloud-daily-sharded-backup.js?v=20.26.326';
-import {createFirebaseRecordSyncCandidateAdapter} from './firebase-record-sync-candidate-adapter.js?v=20.26.326';
-import {buildRecordSyncRoleEvidence,RECORD_SYNC_ROLE_SCENARIOS} from './cloud-record-sync-role-evidence.js?v=20.26.326';
-import {buildRecordSyncActivationManifest,buildActiveRecordSyncControl,evaluateActiveRecordSyncControl} from './cloud-record-sync-control.js?v=20.26.326';
-import {createFirebaseRecordSyncActivationAdapter} from './firebase-record-sync-activation-adapter.js?v=20.26.326';
-import {verifyRoleViewCandidateSourceBinding,buildRoleViewCandidateSourceAudit,buildRoleViewCandidateManifest as buildVerifiedRoleViewCandidateManifest,assertRoleViewCandidateManifest,buildRoleViewVerificationReceipt,assertRoleViewVerificationReceipt,verifyRoleViewReceiptSet} from './cloud-role-view-verification.js?v=20.26.326';
-import {loadProfileAfterAuthReady} from './cloud-auth-profile-bootstrap.js?v=20.26.326';
-import {RECORD_SYNC_V2_TAKEOVER_CANDIDATE_CONTROL_PATH,RECORD_SYNC_V2_TAKEOVER_CANDIDATE_HEAD_PATH,createFirebaseRecordSyncV2TakeoverCandidateAdapter} from './firebase-record-sync-v2-takeover-candidate-adapter.js?v=20.26.326';
-import {createStagingV2AuthorityReadLoader} from './staging-v2-authority-read-loader.js?v=20.26.326';
-import {createStagingV2AuthoritySaveBrowserClient} from './staging-v2-authority-save-browser-client.js?v=20.26.326';
-import {createStagingV2ActiveRecordOperationSender,normalizeStagingV2FirestoreValue,stagingV2H0GenesisBaselineDocuments} from './staging-v2-active-record-browser-bridge.js?v=20.26.326';
-import {createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.326';
-import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.326';
-import {CLOUD_BOOTSTRAP_STAGES,createCloudBootstrapProgress} from './cloud-bootstrap-progress.js?v=20.26.326';
-import {createProductionTrustedOperationClient} from './production-trusted-operation-client.js?v=20.26.326';
-import {prepareActiveRecordSync} from './cloud-active-record-sync.js?v=20.26.326';
-import {createFirebaseCallableHttpClient} from './firebase-callable-http-client.js?v=20.26.326';
-import {createLimitedUseAppCheckTokenPool,takeFreshLimitedUseAppCheckToken} from './app-check-limited-use-token.js?v=20.26.326';
-import {createPublishedRoleViewConsumer} from './published-role-view-consumer.js?v=20.26.326';
-import {createFirestoreRolePartBatchReader} from './firestore-role-part-batch-reader.js?v=20.26.326';
-import {createPublishedSchedulerReceiptReader,PUBLISHED_SCHEDULER_RESPONSE_SCHEMA} from './published-scheduler-receipt.js?v=20.26.326';
+import {bootstrapDanbridgeFirebase} from './firebase-environment-bootstrap.js?v=20.26.330';
+import {createScheduleNotificationPresenter} from './schedule-notification-presentation.js?v=20.26.330';
+import {scheduleNotificationReadFilters,scheduleNotificationMatchesFilters} from './schedule-notification-read-scope.js?v=20.26.330';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.330';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.330';
+import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.330';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore,canonicalLegacyRecordShadowCore,extractFullRecordShadowSyncResult,buildFullRecordShadowRunIdentity} from './cloud-record-shadow-run.js?v=20.26.330';
+import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.330';
+import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.330';
+import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.330';
+import {verifyOwnRoleViewCandidateReadback} from './cloud-role-view-candidate.js?v=20.26.330';
+import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest as buildLegacyRoleViewCandidateManifest,buildAtomicRecordActivation,evaluateAtomicRecordActivation} from './cloud-record-activation.js?v=20.26.330';
+import {decideRecordReadTakeover} from './cloud-record-read-takeover.js?v=20.26.330';
+import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js?v=20.26.330';
+import {recordDataDigest,recordDataHash} from './cloud-record-data-hash.js?v=20.26.330';
+import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.330';
+import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.330';
+import {createOwnerDraftStore} from './cloud-owner-draft-store.js?v=20.26.330';
+import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from './production-scheduler-queue.js?v=20.26.330';
+import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.330';
+import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.330';
+import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.330';
+import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.330';
+import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.330';
+import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.330';
+import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.330';
+import {createFirebaseActiveRecordStreamAdapter} from './firebase-active-record-stream-adapter.js?v=20.26.330';
+import {createFirebaseRoleRecordViewAdapter} from './firebase-role-record-view-adapter.js?v=20.26.330';
+import {createFirebaseRoleRecordStreamAdapter} from './firebase-role-record-stream-adapter.js?v=20.26.330';
+import {createActiveRoleRecordPublishQueue} from './cloud-active-role-record-publish-queue.js?v=20.26.330';
+import {decideOwnerActiveSaveIntent} from './cloud-owner-active-save-intent.js?v=20.26.330';
+import {createRecordSyncActiveFailureResume} from './record-sync-active-failure-resume.js?v=20.26.330';
+import {dailyBackupChunkCore,prepareDailyShardedBackup,sealDailyShardedBackup,verifyDailyShardedBackupReadback} from './cloud-daily-sharded-backup.js?v=20.26.330';
+import {createFirebaseRecordSyncCandidateAdapter} from './firebase-record-sync-candidate-adapter.js?v=20.26.330';
+import {buildRecordSyncRoleEvidence,RECORD_SYNC_ROLE_SCENARIOS} from './cloud-record-sync-role-evidence.js?v=20.26.330';
+import {buildRecordSyncActivationManifest,buildActiveRecordSyncControl,evaluateActiveRecordSyncControl} from './cloud-record-sync-control.js?v=20.26.330';
+import {createFirebaseRecordSyncActivationAdapter} from './firebase-record-sync-activation-adapter.js?v=20.26.330';
+import {verifyRoleViewCandidateSourceBinding,buildRoleViewCandidateSourceAudit,buildRoleViewCandidateManifest as buildVerifiedRoleViewCandidateManifest,assertRoleViewCandidateManifest,buildRoleViewVerificationReceipt,assertRoleViewVerificationReceipt,verifyRoleViewReceiptSet} from './cloud-role-view-verification.js?v=20.26.330';
+import {loadProfileAfterAuthReady} from './cloud-auth-profile-bootstrap.js?v=20.26.330';
+import {RECORD_SYNC_V2_TAKEOVER_CANDIDATE_CONTROL_PATH,RECORD_SYNC_V2_TAKEOVER_CANDIDATE_HEAD_PATH,createFirebaseRecordSyncV2TakeoverCandidateAdapter} from './firebase-record-sync-v2-takeover-candidate-adapter.js?v=20.26.330';
+import {createStagingV2AuthorityReadLoader} from './staging-v2-authority-read-loader.js?v=20.26.330';
+import {createStagingV2AuthoritySaveBrowserClient} from './staging-v2-authority-save-browser-client.js?v=20.26.330';
+import {createStagingV2ActiveRecordOperationSender,normalizeStagingV2FirestoreValue,stagingV2H0GenesisBaselineDocuments} from './staging-v2-active-record-browser-bridge.js?v=20.26.330';
+import {createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.330';
+import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.330';
+import {CLOUD_BOOTSTRAP_STAGES,createCloudBootstrapProgress} from './cloud-bootstrap-progress.js?v=20.26.330';
+import {createProductionTrustedOperationClient} from './production-trusted-operation-client.js?v=20.26.330';
+import {prepareActiveRecordSync} from './cloud-active-record-sync.js?v=20.26.330';
+import {createFirebaseCallableHttpClient} from './firebase-callable-http-client.js?v=20.26.330';
+import {createLimitedUseAppCheckTokenPool,takeFreshLimitedUseAppCheckToken} from './app-check-limited-use-token.js?v=20.26.330';
+import {createPublishedRoleViewConsumer} from './published-role-view-consumer.js?v=20.26.330';
+import {createFirestoreRolePartBatchReader} from './firestore-role-part-batch-reader.js?v=20.26.330';
+import {createPublishedSchedulerReceiptReader,PUBLISHED_SCHEDULER_RESPONSE_SCHEMA} from './published-scheduler-receipt.js?v=20.26.330';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -94,7 +96,7 @@ if(publishedWorkspace)document.body.dataset.publishedWorkspace=publishedWorkspac
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.326';
+const APP_RELEASE='20.26.330';
 const SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
 const RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set(['wendylee0820520@gmail.com']);
 const REPORT_NOTIFICATION_STARTED_AT=Date.parse('2026-08-11T06:50:00.000Z');
@@ -143,6 +145,8 @@ const productionRoleViewPublishCall=DANBRIDGE_ENVIRONMENT==='production'&&produc
 const productionTeacherLeaveCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?(publishedWorkspace?workspaceCall('teacherLeave'):httpsCallable(productionFunctions,'productionTeacherLeaveOperation',{limitedUseAppCheckTokens:true})):null;
 const productionNotificationAcknowledgeCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?(publishedWorkspace?workspaceCall('acknowledge'):createFirebaseCallableHttpClient({projectId:firebaseConfig.projectId,functionName:'productionAcknowledgeScheduleNotification',getCurrentUser:()=>auth.currentUser,getIdToken:(user,force)=>user.getIdToken(force),getLimitedUseAppCheckToken:takeProductionNotificationLimitedUseToken,fetch:globalThis.fetch.bind(globalThis),timeoutMs:30000}).call):null;
 const scheduleNotificationAcknowledgeCall=productionNotificationAcknowledgeCall||stagingNotificationAcknowledgeCall;
+const lessonReportCall=!publishedWorkspace?createFirebaseCallableHttpClient({projectId:firebaseConfig.projectId,functionName:DANBRIDGE_ENVIRONMENT==='production'?'productionSaveLessonReport':'stagingSaveLessonReport',getCurrentUser:()=>auth.currentUser,getIdToken:(user,force)=>user.getIdToken(force),getLimitedUseAppCheckToken:DANBRIDGE_ENVIRONMENT==='production'?takeProductionNotificationLimitedUseToken:takeStagingNotificationLimitedUseToken,fetch:globalThis.fetch.bind(globalThis),timeoutMs:30000}).call:null;
+const saveTrustedLessonReport=createLessonReportClient({call:input=>{if(!lessonReportCall)throw Error('此隔離環境尚未提供課程回報');return lessonReportCall(input)},getIdentity:()=>({uid:cloudUid,email:cloudEmailKey})});
 const productionScheduleNotificationPublishCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?(publishedWorkspace?workspaceCall('publishNotifications'):httpsCallable(productionFunctions,'productionPublishScheduleNotifications',{limitedUseAppCheckTokens:true})):null;
 const productionSchedulerOperationCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?(publishedWorkspace?workspaceCall('scheduler'):createFirebaseCallableHttpClient({projectId:firebaseConfig.projectId,functionName:'productionSchedulerOperation',getCurrentUser:()=>auth.currentUser,getIdToken:(user,force)=>user.getIdToken(force),getLimitedUseAppCheckToken:takeProductionSchedulerLimitedUseToken,fetch:globalThis.fetch.bind(globalThis),timeoutMs:60000}).call):null;
 const productionPitrPreviewCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck&&!publishedWorkspace?httpsCallable(productionFunctions,'productionPitrClonePreview',{limitedUseAppCheckTokens:true},):null;
@@ -1333,6 +1337,7 @@ function setTeacherReportReadOnly(readOnly,message=''){
 }
 function applyReportToLesson(lesson,report){
  if(!lesson||!report)return false;
+ if(Date.parse(report.updatedAtClient||'')<Date.parse(lesson.teacherReportUpdatedAt||''))return false;
  const next={teacherReportStatus:report.status||'',teacherReportContent:report.content||'',teacherReportHomework:report.homework||'',teacherReportFeedback:report.feedback||'',teacherReportNote:report.note||'',teacherReportUpdatedAt:report.updatedAtClient||'',teacherReportBy:report.teacherName||'',teacherReportEmail:report.teacherEmail||''};
  let changed=false;
  for(const [k,v] of Object.entries(next)){if((lesson[k]||'')!==v){lesson[k]=v;changed=true}}
@@ -1404,6 +1409,7 @@ function notifyNewLessonReports(reports){
 }
 
 function applyCachedLessonReportsToCurrentDB(){
+ scheduleTeacherReportHydration();
  const local=window.__danbridgeGetDB?.();
  if(!local||!Array.isArray(local.lessons)||!Array.isArray(lessonReportDocuments)||!lessonReportDocuments.length)return false;
  let changed=false;
@@ -1413,12 +1419,56 @@ function applyCachedLessonReportsToCurrentDB(){
  }
  return changed;
 }
-function openTeacherReportModal(lessonId,options={}){
+let teacherReportHydrationTimer=null;
+const teacherReportHydrator=createTeacherReportHydrator({
+ call:input=>lessonReportCall(input),getIdentity:()=>({uid:cloudUid,email:cloudEmailKey,role:cloudRole,teacherId:cloudTeacherId}),
+ apply:rows=>{
+  if(cloudRole!=='teacher')return;
+  const db=window.__danbridgeGetDB?.();let changed=false;
+  for(const row of rows){
+   const lesson=db?.lessons?.find(value=>value.id===row.lessonId);
+   if(!lesson||!lessonBelongsToTeacher(lesson,cloudTeacherId))continue;
+   const cached=lessonReportDocuments.find(value=>(value.lessonId||value.id)===row.lessonId);
+   if(cached&&(!row.report||Date.parse(cached.updatedAtClient||'')>Date.parse(row.report.updatedAtClient||'')))continue;
+   lessonReportDocuments=lessonReportDocuments.filter(value=>(value.lessonId||value.id)!==row.lessonId);
+   if(row.report){lessonReportDocuments.push({id:row.lessonId,...row.report});if(reportIsNewForCopiedLesson(lesson,row.report))changed=applyReportToLesson(lesson,row.report)||changed}
+  }
+  if(changed){persistCurrentLocalView();window.renderAll?.();window.renderDashboard?.();window.DanbridgeNotifications?.render?.()}
+ },onError:error=>cloudStatus('課程回報核對未完成，請重新開啟課程或切回此頁重試：'+error.message,'error')
+});
+function scheduleTeacherReportHydration(force=false){
+ clearTimeout(teacherReportHydrationTimer);
+ if(cloudRole!=='teacher'||cloudCanManageSchedule||!lessonReportCall)return;
+ teacherReportHydrationTimer=setTimeout(()=>{
+  const months=new Set([lessonReportLocalToday().slice(0,7),...['calendarDate','lessonMonth','teacherKpiMonth'].map(id=>String(document.getElementById(id)?.value||'').slice(0,7))]);
+  const ids=(window.__danbridgeGetDB?.().lessons||[]).filter(lesson=>!lesson.isDraft&&lessonBelongsToTeacher(lesson,cloudTeacherId)&&months.has(String(lesson.date||'').slice(0,7))).map(lesson=>lesson.id);
+  teacherReportHydrator.refresh(ids,{force});
+ },100);
+}
+window.addEventListener('focus',()=>scheduleTeacherReportHydration(true));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')scheduleTeacherReportHydration(true)});
+document.addEventListener('change',event=>{if(['calendarDate','lessonMonth','teacherKpiMonth'].includes(event.target?.id))scheduleTeacherReportHydration(true)});
+document.addEventListener('click',()=>scheduleTeacherReportHydration());
+let teacherReportOpenSequence=0;
+async function openTeacherReportModal(lessonId,options={}){
+ const sequence=++teacherReportOpenSequence,actor=cloudUid+'|'+cloudEmailKey;
+ try{
+  if(!lessonReportCall)throw Error('課程回報服務尚未提供');
+  const result=(await lessonReportCall({lessonId,readOnly:true}))?.data;
+  if(sequence!==teacherReportOpenSequence||actor!==cloudUid+'|'+cloudEmailKey)return;
+  if(result?.ok!==true||result.readOnly!==true||result.lessonId!==lessonId||(result.report&&result.report.lessonId!==lessonId))throw Error('回報讀取結果不符');
+  if(result.report){lessonReportDocuments=lessonReportDocuments.filter(row=>row.id!==lessonId).concat({id:lessonId,...result.report});applyReportToLesson(window.__danbridgeGetDB().lessons.find(row=>row.id===lessonId),result.report)}
+  renderTeacherReportModal(lessonId,options);
+  document.getElementById('teacherReportModal').dataset.expectedUpdatedAt=result.report?.updatedAtClient||'';
+ }catch(error){if(sequence===teacherReportOpenSequence&&actor===cloudUid+'|'+cloudEmailKey)alert('課程回報載入失敗：'+(error?.message||'請稍後重試'))}
+}
+function renderTeacherReportModal(lessonId,options={}){
  if(!canUseTeacherReporting())return originalEditLesson?.(lessonId);
  const lesson=window.__danbridgeGetDB().lessons.find(l=>l.id===lessonId);
  const readOnly=options.readOnly===true;
  if(!lesson||!canViewLessonReport(lesson)||(!readOnly&&cloudRole!=='owner'&&!lessonBelongsToTeacher(lesson,cloudTeacherId)))return alert('你沒有這堂課的回報權限。');
  document.getElementById('teacherReportLessonId').value=lesson.id;
+ document.getElementById('teacherReportModal').dataset.expectedUpdatedAt=String(lessonReportDocuments.find(r=>r.id===lesson.id)?.updatedAtClient||lesson.teacherReportUpdatedAt||'');
  const s=window.__danbridgeGetDB().students.find(x=>x.id===lesson.studentId)||{};
  document.getElementById('teacherReportLessonInfo').innerHTML=`<b>${lesson.date} ${lesson.start}–${lesson.end}</b><br>${escapeHTML(s.name||'未命名學生')}｜${escapeHTML(lesson.title||'課程')}｜${escapeHTML(lesson.location||'')} ${escapeHTML(lesson.room||'')}${lesson.groupStudentIds?.length?'<br><b>團班學生：</b>'+lesson.groupStudentIds.map(id=>escapeHTML(window.__danbridgeGetDB().students.find(s=>s.id===id)?.name||'學生資料未載入')).join('、'):''}`;
  document.querySelectorAll('input[name="teacherReportStatus"]').forEach(r=>r.checked=r.value===(lesson.teacherReportStatus||''));
@@ -1451,7 +1501,7 @@ function quickCompleteTeacherReport(){
  document.querySelectorAll('input[name="teacherReportStatus"]').forEach(r=>r.checked=r.value==='completed');
  return saveTeacherReport();
 }
-function closeTeacherReportModal(){document.getElementById('teacherReportModal')?.classList.remove('show')}
+function closeTeacherReportModal(){teacherReportOpenSequence++;document.getElementById('teacherReportModal')?.classList.remove('show')}
 async function saveTeacherReport(){
  if(!canUseTeacherReporting())return;
  const lessonId=document.getElementById('teacherReportLessonId').value;
@@ -1463,15 +1513,14 @@ async function saveTeacherReport(){
  if(!status)return alert('請選擇上課狀態。');
  const btn=document.getElementById('saveTeacherReportBtn');btn.disabled=true;btn.textContent='儲存中…';
  try{
-   const trustedMeta=await getTrustedLessonMeta(lessonId);
-   const lessonTeacherId=lessonTeacherIds(lesson)[0]||'';
-   const reporterName=(document.body.dataset.cloudDisplayName||auth.currentUser?.displayName||auth.currentUser?.email||'').trim();
-   const trustedDeadline=trustedMeta.editableUntil?.toDate?.()||null;
-   const report={companyId:COMPANY_ID,lessonId,branchId:trustedMeta.branchId,teacherId:cloudRole==='owner'?(cloudTeacherId||lessonTeacherId):cloudTeacherId,teacherUid:cloudUid,teacherEmail:auth.currentUser?.email?.toLowerCase()||'',teacherName:reporterName,reportedByRole:cloudRole,reportedForTeacherIds:Array.isArray(trustedMeta.teacherIds)?trustedMeta.teacherIds:[],isOwnerReport:cloudRole==='owner',status,content:document.getElementById('teacherReportContent').value.trim(),homework:document.getElementById('teacherReportHomework').value.trim(),feedback:document.getElementById('teacherReportFeedback').value.trim(),note:document.getElementById('teacherReportNote').value.trim(),editableUntil:trustedMeta.editableUntil,editableUntilClient:trustedDeadline?.toISOString()||'',updatedAt:serverTimestamp(),updatedAtClient:new Date().toISOString()};
-   await setDoc(doc(cloud,'companies',COMPANY_ID,'lessonReports',lessonId),report,{merge:true});
-   const changed=applyReportToLesson(lesson,report);
+   const readInput=()=>({status:document.querySelector('input[name="teacherReportStatus"]:checked')?.value||'',content:document.getElementById('teacherReportContent').value.trim(),homework:document.getElementById('teacherReportHomework').value.trim(),feedback:document.getElementById('teacherReportFeedback').value.trim(),note:document.getElementById('teacherReportNote').value.trim()});
+   const input=readInput(),modal=document.getElementById('teacherReportModal');
+   const report=await saveTrustedLessonReport({lessonId,expectedUpdatedAt:modal.dataset.expectedUpdatedAt||'',report:input});
+   lessonReportDocuments=lessonReportDocuments.filter(row=>row.id!==lessonId).concat({id:lessonId,...report});
+   const changed=applyReportToLesson(window.__danbridgeGetDB().lessons.find(row=>row.id===lessonId),report);
    if(changed&&cloudRole==='owner'){persistCurrentLocalView();queueOwnerCloudSave()}
-   window.renderAll?.();closeTeacherReportModal();
+   window.renderAll?.();
+   if(document.getElementById('teacherReportLessonId').value===lessonId){modal.dataset.expectedUpdatedAt=report.updatedAtClient;if(JSON.stringify(readInput())===JSON.stringify(input))closeTeacherReportModal()}
    cloudStatus('課程回報已儲存','ok');
    return true;
  }catch(e){
@@ -1479,7 +1528,7 @@ async function saveTeacherReport(){
    const code=String(e?.code||'');
    let detail=e?.message||'未知錯誤';
    if(code.includes('permission-denied')){
-     detail='課程回報寫入被 Firestore 拒絕。請部署本版本 firebase/firestore.rules；老師與主管只能在課程當天儲存，隔日 00:00 後會關閉。';
+     detail='雲端未允許這次回報，內容已保留；請確認帳號、課程歸屬與可回報日期。';
    }
    alert('課程回報儲存失敗：'+detail);
    cloudStatus('回報儲存失敗','error');return false
@@ -1596,6 +1645,7 @@ function installTeacherReportUI(){
 }
 function subscribeLessonReports(){
  unsubscribeReports?.();unsubscribeReports=null;
+ teacherReportHydrator.reset();
  if(cloudRole==='teacher')return;
  if(cloudRole!=='owner'&&!canUseTeacherReporting())return;
  const reportsRef=collection(cloud,'companies',COMPANY_ID,'lessonReports');
@@ -1611,7 +1661,8 @@ function subscribeLessonReports(){
    const local=window.__danbridgeGetDB();
    const changed=applyCachedLessonReportsToCurrentDB();
    const modal=document.getElementById('teacherReportModal');
-   if(modal?.classList.contains('show')){const id=document.getElementById('teacherReportLessonId')?.value;const l=local.lessons.find(x=>x.id===id);if(l)setTimeout(()=>openTeacherReportModal(id,{readOnly:modal.dataset.readOnly==='true'&&cloudRole==='branch_manager'&&!canActAsTeacherForLesson(l)}),0)}
+   // Snapshot updates must not replace an open, potentially unsaved report.
+   // Its captured version is checked transactionally when the user saves.
    if(!changed)return;
    persistCurrentLocalView();
    window.renderAll?.();
@@ -1619,11 +1670,6 @@ function subscribeLessonReports(){
    if(cloudRole==='owner'){queueOwnerCloudSave();clearTimeout(reportSyncTimer);reportSyncTimer=setTimeout(uploadOwnerState,500)}
  },e=>{
    console.error('lessonReports listener',e);
-   if(cloudRole==='teacher'&&String(e?.code||'').includes('permission-denied')){
-     lessonReportDocuments=[];
-     cloudStatus('老師課表已同步','ok');
-     return;
-   }
    cloudStatus('課程回報同步失敗：'+e.message,'error');
  });
 }
