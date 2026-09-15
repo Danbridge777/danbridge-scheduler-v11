@@ -10,4 +10,10 @@ Limits: historical attestation rejections are not diagnosed; recovery success do
 
 ## Publication
 
-Pending production endpoint and Hosting deployment and readback. Source release alone is not deployment evidence.
+Published successfully on 2026-09-15 from source commit cf3b80e. The production report endpoint was created before the Hosting release; exact readback is ACTIVE, entryPoint productionSaveLessonReport, revision productionsavelessonreport-00001-xek, updateTime 2026-09-15T14:31:36.020352027Z, using the existing production runtime service account. Hosting published 361 files using the production-only configuration, excluding the staging acceptance page.
+
+Post-release read-only comparison found all 357 checked public assets matching source SHA-256, zero mismatches, release 20.26.330. Runtime control and write guard remained active. Health record checked at 2026-09-15T14:30:03.143Z was healthy (this timestamp precedes the new endpoint creation; it is not a new post-deploy full health run).
+
+Before/after exact Firestore ruleset remained 44c05b87-192b-43c0-aae0-48a5436be790. Existing productionTrustedOperation revision productiontrustedoperation-00009-cij and productionSchedulerOperation revision productionscheduleroperation-00010-fip retained their September 13 update times and ACTIVE state. No new Rules or existing scheduler backend deployment occurred.
+
+Native Safari opened the production root using the existing AA session, observed the scheduler-only navigation and populated September calendar. An existing notification was postponed rather than marked read. The normal guarded update button then reloaded the page; final post-update UI state is recorded below when confirmed. No production lesson/report was created, edited or deleted in this release smoke check.
