@@ -11,6 +11,7 @@ const PRODUCTION_DEPLOY_SCRIPT = `${PREFLIGHT_SCRIPT} && firebase deploy --only 
 const HOSTING_IGNORE = [
   'firebase.json',
   'firebase.production.json',
+  'firebase.backup.json',
   'firebase-debug*.log',
   'firestore-debug*.log',
   '**/.*',

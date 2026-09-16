@@ -4,11 +4,15 @@
  const uniqueIds=list=>{const seen=new Set(),duplicates=[];(list||[]).forEach(x=>{if(!x?.id)return;if(seen.has(x.id))duplicates.push(x.id);seen.add(x.id)});return duplicates};
  function auditDataIntegrity(){
   const branches=validBranchIds(),studentIds=new Set((db.students||[]).map(x=>x.id)),teacherIds=new Set((db.teachers||[]).map(x=>x.id));
-  const issues={missingLessonBranch:0,invalidLessonBranch:0,orphanStudents:0,orphanTeachers:0,missingTeacherIds:0,missingDeliveryMode:0,expenseBranch:0,campBranch:0,duplicates:0};
+  const issues={missingLessonBranch:0,invalidLessonBranch:0,orphanStudents:0,orphanTeachers:0,missingTeacherIds:0,missingDeliveryMode:0,expenseBranch:0,campBranch:0,duplicates:0,orphanGroupStudents:0,duplicateGroupStudents:0,invalidBillingBranch:0};
   (db.lessons||[]).forEach(l=>{
    if(!l.branchId)issues.missingLessonBranch++;
    else if(!branches.has(l.branchId))issues.invalidLessonBranch++;
    if(l.studentId&&!studentIds.has(l.studentId))issues.orphanStudents++;
+   const groupIds=Array.isArray(l.groupStudentIds)?l.groupStudentIds:[];
+   issues.orphanGroupStudents+=new Set(groupIds.filter(id=>!studentIds.has(id))).size;
+   issues.duplicateGroupStudents+=groupIds.length-new Set(groupIds).size;
+   if(l.billingBranchId&&!branches.has(l.billingBranchId))issues.invalidBillingBranch++;
    const tids=Array.isArray(l.teacherIds)&&l.teacherIds.length?l.teacherIds:[l.teacherId].filter(Boolean);
    if(!tids.length)issues.missingTeacherIds++;
    issues.orphanTeachers+=tids.filter(id=>!teacherIds.has(id)).length;
@@ -49,7 +53,7 @@
  function renderDataIntegrity(showToast=false){
   const box=document.getElementById('dataIntegritySummary'),badge=document.getElementById('dataIntegrityBadge');if(!box||!badge)return;
   const r=auditDataIntegrity(),i=r.issues;badge.textContent=r.total?'需處理 '+r.total+' 項':'資料正常';badge.className='integrity-badge '+(r.total?'warn':'ok');
-  const rows=[['課程缺少／錯誤校區',i.missingLessonBranch+i.invalidLessonBranch],['學生或老師關聯失效',i.orphanStudents+i.orphanTeachers],['課程缺少老師或上課方式',i.missingTeacherIds+i.missingDeliveryMode],['支出缺少校區',i.expenseBranch],['營隊班級尚未歸屬校區',i.campBranch],['重複資料 ID',i.duplicates]];
+  const rows=[['課程缺少／錯誤校區',i.missingLessonBranch+i.invalidLessonBranch],['學生或老師關聯失效',i.orphanStudents+i.orphanTeachers],['團班學生關聯失效',i.orphanGroupStudents],['團班名單重複',i.duplicateGroupStudents],['營收歸屬校區失效',i.invalidBillingBranch],['課程缺少老師或上課方式',i.missingTeacherIds+i.missingDeliveryMode],['支出缺少校區',i.expenseBranch],['營隊班級尚未歸屬校區',i.campBranch],['重複資料 ID',i.duplicates]];
   box.innerHTML=rows.map(([name,n])=>`<div class="integrity-item ${n?'warn':''}"><span>${name}</span><b>${n}</b></div>`).join('');
   if(showToast)toast(r.total?`檢查完成：${r.total} 項待整理`:'檢查完成：資料正常');return r;
  }

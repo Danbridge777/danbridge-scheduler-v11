@@ -3,6 +3,20 @@
 const METHODS=new Set(['exchangeRecaptchaEnterpriseToken','exchangeRecaptchaV3Token']);
 const STATUS=new Set(['INVALID_ARGUMENT','PERMISSION_DENIED','UNAUTHENTICATED','RESOURCE_EXHAUSTED','UNAVAILABLE','INTERNAL','NOT_FOUND']);
 const REASONS=new Set(['API_KEY_INVALID','API_KEY_SERVICE_BLOCKED','API_KEY_HTTP_REFERRER_BLOCKED','SERVICE_DISABLED','CONSUMER_INVALID','BILLING_DISABLED','RATE_LIMIT_EXCEEDED','QUOTA_EXCEEDED','ACCESS_TOKEN_EXPIRED']);
+const CATEGORIES=new Set(['attestation-retryable','attestation-rejected','api-key-invalid','referrer-blocked','quota-or-rate-limit','unclassified']);
+const installations=new WeakMap();
+function retainedEvidence(raw){
+ try{
+  if(typeof raw!=='string'||raw.length>32768)return [];
+  const rows=JSON.parse(raw);if(!Array.isArray(rows))return [];
+  // Browser storage is not trusted evidence. Reconstruct only whitelisted
+  // fields; never copy arbitrary stored response bodies, tokens or identities.
+  return rows.slice(-8).flatMap(row=>{
+   if(!row||row.schema!=='danbridge-app-check-rejection-v1'||typeof row.at!=='string'||!Number.isFinite(Date.parse(row.at))||new Date(row.at).toISOString()!==row.at||!METHODS.has(row.method)||!Number.isInteger(row.httpStatus)||row.httpStatus<400||row.httpStatus>599||!Number.isFinite(row.elapsedMs)||row.elapsedMs<0||!CATEGORIES.has(row.category)||!(STATUS.has(row.errorStatus)||row.errorStatus==='UNKNOWN')||!['visible','hidden','unknown'].includes(row.visibility)||!(typeof row.online==='boolean'||row.online===null)||!Array.isArray(row.reasons))return [];
+   return [{schema:row.schema,at:row.at,method:row.method,httpStatus:row.httpStatus,elapsedMs:row.elapsedMs,visibility:row.visibility,online:row.online,category:row.category,errorStatus:row.errorStatus,reasons:[...new Set(row.reasons.filter(reason=>REASONS.has(reason)))]}];
+  });
+ }catch{return []}
+}
 function summarize(body){
  const error=body?.error;
  const message=typeof error?.message==='string'?error.message:'';
@@ -66,17 +80,21 @@ export function createAppCheckExchangeObserver({fetch,projectId,appId,onEvidence
 
 export function installAppCheckExchangeObserver({target,projectId,appId}){
  try{
- const evidence=[];
+ const installed=installations.get(target);
+ if(installed)return installed.projectId===projectId&&installed.appId===appId?installed.observer:null;
+ const storageKey='danbridge_app_check_rejections_v1:'+projectId;
+ let evidence=[];try{evidence=retainedEvidence(target.sessionStorage.getItem(storageKey))}catch{}
  const observer=createAppCheckExchangeObserver({fetch:target.fetch.bind(target),projectId,appId,
   context:()=>({visibility:target.document?.visibilityState,online:target.navigator?.onLine}),
   onEvidence:record=>{
    evidence.push(record);if(evidence.length>8)evidence.shift();
    // Only the sanitized schema is retained locally. No requests, tokens,
    // account identity, response bodies, or business data leave this page.
-   try{target.sessionStorage.setItem('danbridge_app_check_rejections_v1:'+projectId,JSON.stringify(evidence))}catch{}
+   try{target.sessionStorage.setItem(storageKey,JSON.stringify(evidence))}catch{}
    try{target.console.warn('Danbridge App Check exchange rejected',record)}catch{}
   }});
  target.fetch=observer.fetch;
+ installations.set(target,{projectId,appId,observer});
  return observer;
  }catch{return null}
 }

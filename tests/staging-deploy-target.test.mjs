@@ -82,7 +82,9 @@ test('production Hosting is isolated from staging-only rules, functions and rewr
     c => { c.productionConfig.functions = c.firebaseConfig.functions; },
     c => { c.productionConfig.hosting.rewrites = c.firebaseConfig.hosting.rewrites; },
     c => { c.productionConfig.hosting.public = 'public'; },
-    c => { c.productionConfig.hosting.ignore = c.productionConfig.hosting.ignore.filter(x => x !== 'firebase.production.json'); }
+    c => { c.productionConfig.hosting.ignore = c.productionConfig.hosting.ignore.filter(x => x !== 'firebase.production.json'); },
+    c => { c.productionConfig.hosting.ignore = c.productionConfig.hosting.ignore.filter(x => x !== 'firebase.backup.json'); },
+    c => { c.firebaseConfig.hosting.ignore = c.firebaseConfig.hosting.ignore.filter(x => x !== 'firebase.backup.json'); }
   ]) rejected(mutate);
 });
 

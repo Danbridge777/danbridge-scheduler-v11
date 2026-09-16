@@ -17,6 +17,23 @@ function exact(value,core,audit,label){if(!value||typeof value!=='object'||Array
 function counts(db){return{students:db.students?.length||0,teachers:db.teachers?.length||0,lessons:db.lessons?.length||0,makeups:db.makeups?.length||0}}
 function countsValid(value){return value&&typeof value==='object'&&!Array.isArray(value)&&same(Object.keys(value).sort(),['lessons','makeups','students','teachers'])&&Object.values(value).every(count=>Number.isSafeInteger(count)&&count>=0)}
 
+// Listing a manifest is not a fresh readback of its chunks. Keep this weaker
+// evidence explicit; restoring still requires verifyDailyShardedBackupReadback.
+export function cloudBackupListingState(backup,{day:backupDay,environment,legacyHash}={}){
+ if(!backup)return 'missing';
+ if(!day(backupDay)||!environments.has(environment))return 'invalid';
+ if(backup.schema===DAILY_SHARDED_BACKUP_SCHEMA){
+  if(backup.day!==backupDay||backup.environment!==environment||backup.companyId!=='danbridge')return 'invalid';
+  if(backup.state==='uploading')return 'uploading';
+  if(backup.state!=='verified'||!/^record-v1:[a-f0-9]{64}$/.test(backup.sourceHash)||backup.verifiedHash!==backup.sourceHash||!Number.isSafeInteger(backup.chunkCount)||backup.chunkCount<1||!Number.isSafeInteger(backup.recordCount)||backup.recordCount<1||!countsValid(backup.counts))return 'invalid';
+  return 'sealed';
+ }
+ if(backup.snapshot&&typeof backup.hash==='string'&&backup.hash&&typeof legacyHash==='function'){
+  try{return legacyHash(backup.snapshot)===backup.hash?'legacy-verified':'invalid'}catch{return 'invalid'}
+ }
+ return 'invalid';
+}
+
 export function prepareDailyShardedBackup(db,{day:backupDay,environment='staging',maxChunkBytes=180000}={}){
  if(!day(backupDay)||!environments.has(environment)||!Number.isSafeInteger(maxChunkBytes)||maxChunkBytes<10000||maxChunkBytes>180000)throw new Error('每日分片備份設定無效');const sharded=createShardedSnapshot(db,{hash:recordDataHash,maxChunkBytes,generationId:backupDay}),manifest={schema:DAILY_SHARDED_BACKUP_SCHEMA,environment,companyId:'danbridge',day:backupDay,state:'uploading',sourceHash:sharded.manifest.sourceHash,collectionOrder:[...sharded.manifest.collectionOrder],collections:clone(sharded.manifest.collections),chunkCount:sharded.manifest.totalChunks,recordCount:sharded.manifest.totalRecords,maxChunkBytes,counts:counts(db)},chunks=sharded.chunks.map(row=>({schema:DAILY_SHARDED_BACKUP_CHUNK_SCHEMA,environment,companyId:'danbridge',day:backupDay,chunkId:row.documentId,collection:row.key,index:row.index,items:clone(row.items),sourceHash:manifest.sourceHash}));return{manifest,chunks};
 }
