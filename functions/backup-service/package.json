@@ -1,0 +1,8 @@
+{
+  "name": "danbridge-isolated-backup-service",
+  "private": true,
+  "main": "index.cjs",
+  "engines": {"node": "22"},
+  "dependencies": {"firebase-functions": "7.3.2", "google-auth-library": "11.0.2"},
+  "overrides": {"uuid": "11.1.1"}
+}

@@ -1,0 +1,8 @@
+{
+  "functions": [{
+    "source": "functions/backup-service",
+    "codebase": "database-backup",
+    "runtime": "nodejs22",
+    "ignore": ["node_modules", ".git", "firebase-debug.log"]
+  }]
+}

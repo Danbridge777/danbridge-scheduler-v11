@@ -43,6 +43,7 @@
     "ignore": [
       "firebase.json",
       "firebase.production.json",
+      "firebase.backup.json",
       "firebase-debug*.log",
       "firestore-debug*.log",
       "**/.*",
