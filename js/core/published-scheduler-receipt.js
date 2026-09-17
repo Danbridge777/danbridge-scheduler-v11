@@ -6,7 +6,7 @@ export const PUBLISHED_SCHEDULER_RESPONSE_SCHEMA='danbridge-production-scheduler
 // been assembled. A receipt from an older commit can resolve to a newer head,
 // but may never grant access to unpublished old parts or another account.
 export function createPublishedSchedulerReceiptReader({identity,readCurrentHead,readPart,isActive}){
- if(identity?.kind!=='scheduler')throw Error('Scheduler receipt identity required');
+ if(!['scheduler','branch_manager'].includes(identity?.kind))throw Error('Scheduler receipt identity required');
  let latest=null;
  const session=createRoleViewTransportSession({identity,readCurrentHead,readPart,isActive,apply:(db,meta)=>{latest={db,meta}}});
  return Object.freeze({

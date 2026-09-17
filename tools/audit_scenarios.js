@@ -323,7 +323,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.331'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.332'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -791,7 +791,8 @@ assert.match(applicationSource,/function logChange\(type,lesson,before=null,meta
 assert.doesNotMatch(applicationSource,/db\.changes=db\.changes\.slice\(0,500\)/, 'permanent schedule history is no longer truncated at 500 operations');
 assert.match(schedulingEfficiencySource,/function undoRecentChange\(id\)[\s\S]*undoOfChangeId:String\(c\.id\)[\s\S]*finishScheduleHistory[\s\S]*commitScheduleMutation/, 'single-change restore appends a linked inverse operation and uses the nonblocking schedule pipeline');
 assert.doesNotMatch(schedulingEfficiencySource,/c\.undone\s*=|c\.undoneAt\s*=/, 'single-change restore never mutates the original permanent operation');
-assert.match(schedulerUiSource,/canMove=calendarOwnerCanEdit\(\)/,'Wendy and Owner use the same card drag permission');
+assert.match(schedulerUiSource,/canMove=calendarCanMoveLessons\(\)/,'drag uses the separately scoped move capability');
+assert.match(schedulerUiSource,/function calendarCanMoveLessons\(\)\{return calendarOwnerCanEdit\(\)\|\|/,'existing owner/scheduler drag permission remains unchanged');
 assert.match(marqueeSource,/canEdit=\(\)=>window\.calendarOwnerCanEdit/,'Wendy and Owner use the same marquee, click and context-menu controller');
 assert.match(schedulerCourseOperationsSource,/ownerCanEdit=window\.calendarOwnerCanEdit/,'Wendy and Owner use the same course drawer edit action');
 assert.match(schedulerCourseOperationsSource,/context\.canManageSchedule===true\|\|document\.body\.classList\.contains\('scheduler-cloud-role'\)[\s\S]*openLessonModal/,'Wendy lesson clicks always open scheduling edit instead of the teacher report permission path');

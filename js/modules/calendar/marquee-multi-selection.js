@@ -75,7 +75,7 @@
 
   function beginPointerDrag(event){
     const card=cardOf(event.target);
-    if(!card||!canEdit()||event.pointerType==='touch'||event.button!==0||pasteClickMode||isControl(event.target))return false;
+    if(!card||!(window.calendarCanMoveLessons?.()??canEdit())||event.pointerType==='touch'||event.button!==0||pasteClickMode||isControl(event.target))return false;
     if((selectionMode||selectedLessonIds.size)&&!selectedLessonIds.has(card.dataset.id))return false;
     const rect=card.getBoundingClientRect();
     const ids=selectedLessonIds.has(card.dataset.id)?selectedRenderedIds():[card.dataset.id];

@@ -289,10 +289,16 @@ function snapTimeTo5(t){if(!t)return t;const[h,m]=t.split(':').map(Number),n=Mat
 
 function finishCalendarMoveInteraction(){clearCalendarSelectionState();cancelPasteClickMode(false)}
 
-function moveLessonTo(id,date,time){const l=db.lessons.find(x=>x.id===id);if(!l)return;const oldDur=Math.round(hours(l.start,l.end)*60),n={...l,date,teacherIds:[...lessonTeacherIds(l)]};if(time){const nextEnd=shiftTime(time,oldDur);if(!nextEnd){finishCalendarMoveInteraction();return alert('拖曳後課程會跨過午夜，已取消。請將課程安排在同一個日期內。')}n.start=time;n.end=nextEnd}const c=conflictDetail(n,id);if(c){finishCalendarMoveInteraction();return alert(`拖曳後會造成${c.type}撞課：${c.name}\n${c.lesson.date} ${c.lesson.start}–${c.lesson.end}，已取消。`)}const tw=teacherConflictDetail(n,id);if(tw&&!confirm(`拖曳後老師 ${tw.name} 會時間重複。\n${tw.lesson.date} ${tw.lesson.start}–${tw.lesson.end}\n仍要移動嗎？重複課程會顯示亮紅色。`)){finishCalendarMoveInteraction();return}const history=beginScheduleHistory([id]),before={...l};Object.assign(l,n);logChange('移動課程',l,before);finishScheduleHistory(history,[id]);finishCalendarMoveInteraction();commitScheduleMutation('lesson.move');toast('課程已移動')}
+function branchCalendarMoveAllowed(rows){
+ const access=window.DanbridgeAccess?.getContext?.();if(access?.role!=='branch_manager')return true;
+ return !document.body.classList.contains('auth-locked')&&window.__danbridgeBranchMoveReady?.()===true&&rows.every(row=>!row.isDraft&&(access.branchIds||[]).includes(row.branchId||({'美術東四路':'art_museum','河西一路':'hexi'}[row.location])));
+}
+
+function moveLessonTo(id,date,time){const l=db.lessons.find(x=>x.id===id);if(!l||!branchCalendarMoveAllowed([l]))return;const oldDur=Math.round(hours(l.start,l.end)*60),n={...l,date,...(window.DanbridgeAccess?.getContext?.().role==='branch_manager'?{}:{teacherIds:[...lessonTeacherIds(l)]})};if(time){const nextEnd=shiftTime(time,oldDur);if(!nextEnd){finishCalendarMoveInteraction();return alert('拖曳後課程會跨過午夜，已取消。請將課程安排在同一個日期內。')}n.start=time;n.end=nextEnd}const c=conflictDetail(n,id);if(c){finishCalendarMoveInteraction();return alert(`拖曳後會造成${c.type}撞課：${c.name}\n${c.lesson.date} ${c.lesson.start}–${c.lesson.end}，已取消。`)}const tw=teacherConflictDetail(n,id);if(tw&&!confirm(`拖曳後老師 ${tw.name} 會時間重複。\n${tw.lesson.date} ${tw.lesson.start}–${tw.lesson.end}\n仍要移動嗎？重複課程會顯示亮紅色。`)){finishCalendarMoveInteraction();return}const history=beginScheduleHistory([id]),before={...l};Object.assign(l,n);logChange('移動課程',l,before);finishScheduleHistory(history,[id]);finishCalendarMoveInteraction();commitScheduleMutation('lesson.move');toast('課程已移動')}
 
 function moveLessonsTo(ids,anchorId,date,time=''){
   const idSet=new Set(ids),rows=db.lessons.filter(l=>idSet.has(l.id)),anchor=rows.find(l=>l.id===anchorId);
+  if(!branchCalendarMoveAllowed(rows))return;
   if(!anchor||rows.length<2)return moveLessonTo(anchorId,date,time);
   const dayDelta=Math.round((new Date(date+'T00:00:00')-new Date(anchor.date+'T00:00:00'))/86400000),toMinutes=value=>{const[h,m]=String(value||'').split(':').map(Number);return h*60+m},timeDelta=time?toMinutes(time)-toMinutes(anchor.start):0;
   const candidates=rows.map(old=>({...old,date:shiftDate(old.date,dayDelta),start:shiftTime(old.start,timeDelta),end:shiftTime(old.end,timeDelta)})),candidateById=new Map(candidates.map(row=>[row.id,row])),originalLessons=db.lessons;

@@ -1,4 +1,4 @@
-import {PRODUCTION_SCHEDULER_EMAILS,projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.331';
+import {PRODUCTION_SCHEDULER_EMAILS,projectProductionSchedulerDb,projectProductionBranchDb} from './production-role-view-projection.js?v=20.26.332';
 
 export const SCHEDULER_OPERATION_SCHEMA='danbridge-production-scheduler-operation-v1';
 export const SCHEDULER_OPERATION_RESPONSE_SCHEMA='danbridge-production-scheduler-operation-response-v1';
@@ -16,6 +16,7 @@ export const schedulerLesson=value=>Object.fromEntries(SCHEDULER_LESSON_FIELDS.f
 export const schedulerStudent=value=>Object.fromEntries(SCHEDULER_STUDENT_FIELDS.filter(key=>value?.[key]!==undefined).map(key=>[key,clone(value[key])]));
 
 export function assertProductionSchedulerActor(actor){
+ if(object(actor)&&actor.role==='branch_manager'&&actor.canMoveSchedule===true&&actor.active===true&&actor.companyId==='danbridge'&&token(actor.uid)&&token(actor.teacherId)&&typeof actor.email==='string'&&/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(actor.email)&&Array.isArray(actor.branchIds)&&actor.branchIds.length&&actor.branchIds.every(token))return Object.freeze({uid:actor.uid,email:actor.email,role:'branch_manager',active:true,companyId:'danbridge',teacherId:actor.teacherId,canMoveSchedule:true,branchIds:[...new Set(actor.branchIds)],displayName:String(actor.managerName||actor.displayName||actor.teacherName||'校區管理者').slice(0,120)});
  if(!object(actor)||!token(actor.uid)||!PRODUCTION_SCHEDULER_EMAILS.includes(actor.email)||actor.role!=='teacher'||actor.active!==true||actor.companyId!=='danbridge'||actor.canManageSchedule!==true||actor.readOnly===true||!token(actor.teacherId))throw new Error('排課專員身分或權限無效');
  return Object.freeze({uid:actor.uid,email:actor.email,role:'teacher',active:true,companyId:'danbridge',canManageSchedule:true,teacherId:actor.teacherId,displayName:typeof actor.displayName==='string'?actor.displayName.slice(0,120):'AA'});
 }
@@ -61,6 +62,7 @@ export function buildProductionSchedulerTarget(source,input,actor,{nowIso,maxCha
  const events=[];
  for(const change of request.changes){
   const index=target.lessons.findIndex(row=>row.id===change.lessonId),current=index<0?null:target.lessons[index],safe=current?schedulerLesson(current):null;
+  if(caller.role==='branch_manager')assertBranchScheduleMove(current,change,caller.branchIds);
   if(current?.isDraft)throw new Error('排課專員不能修改草稿');
   if(change.before===null&&current)throw new Error('新增課程 ID 已存在，未覆蓋雲端資料');
   if(change.before!==null&&!current)throw new Error('課程已由其他人刪除，未復活舊資料');
@@ -104,7 +106,7 @@ export function buildProductionSchedulerTarget(source,input,actor,{nowIso,maxCha
   const event={id:`scheduler-${request.requestId}-${events.length}`,at:nowIso,type:next?(current?'修改課程':'新增課程'):'刪除選取課程',lessonId:change.lessonId,studentId:(next||current).studentId,actorName:caller.displayName,actorEmail:caller.email,before:clone(current),after:clone(next)};
   target.changes.unshift(event);events.push(event);
  }
- for(const event of events){const next=target.lessons.find(row=>row.id===event.lessonId);if(!next)continue;
+ for(const event of events){const next=target.lessons.find(row=>row.id===event.lessonId);if(!next||caller.role==='branch_manager')continue;
   if(next.status==='學生請假'){
    const existingIndex=target.makeups.findIndex(row=>row.sourceLessonId===next.id),existing=existingIndex<0?null:target.makeups[existingIndex];
    if(existing?.status==='cancelled')Object.assign(mutableAt(target.makeups,existingIndex),{status:'pending',scheduledLessonId:'',teacherId:next.teacherId,branchId:next.branchId||existing.branchId,cancelledAt:'',reopenedAt:nowIso});
@@ -125,5 +127,17 @@ export function buildProductionSchedulerTarget(source,input,actor,{nowIso,maxCha
    if(next.deliveryMode==='onsite'&&!['home','online'].includes(other.deliveryMode)&&next.branchId===other.branchId&&next.room&&other.room===next.room)throw new Error('教室時間衝突，整批未執行');
   }
  }
- return{db:target,events,request,actor:caller,schedulerDb:projectProductionSchedulerDb(target)};
+ return{db:target,events,request,actor:caller,schedulerDb:projectProductionSchedulerDb(caller.role==='branch_manager'?projectProductionBranchDb(target,caller.branchIds):target)};
+}
+
+// Capability is read from companyAccess by the server, never from the request.
+// Scope uses the authoritative attendance campus, not the revenue campus.
+export function assertBranchScheduleMove(current,change,branchIds){
+ if(!current||!change.before||!change.after||change.student)throw new Error('校區管理者僅能移動既有課程');
+ const branch=current.branchId||({'美術東四路':'art_museum','河西一路':'hexi'}[current.location]);
+ if(!branch||!branchIds.includes(branch)||current.isDraft)throw new Error('課程不在授權校區');
+ const allowed=new Set(['date','start','end','room']);
+ for(const key of SCHEDULER_LESSON_FIELDS)if(!allowed.has(key)&&!same(change.before[key],change.after[key]))throw new Error('校區移動不能修改學生、老師、校區或其他課程資料');
+ const minutes=t=>Number(t?.slice(0,2))*60+Number(t?.slice(3));
+ if(minutes(change.after.end)-minutes(change.after.start)!==minutes(current.end)-minutes(current.start))throw new Error('移動課程必須保留原上課時數');
 }

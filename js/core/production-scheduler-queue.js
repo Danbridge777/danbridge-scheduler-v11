@@ -1,5 +1,5 @@
-import {projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.331';
-import {mergeConcurrentRecordDb} from './cloud-record-three-way-merge.js?v=20.26.331';
+import {projectProductionSchedulerDb} from './production-role-view-projection.js?v=20.26.332';
+import {mergeConcurrentRecordDb} from './cloud-record-three-way-merge.js?v=20.26.332';
 import {SCHEDULER_OPERATION_SCHEMA,SCHEDULER_OPERATION_RESPONSE_SCHEMA,normalizeProductionSchedulerRequest} from './production-scheduler-operation.js';
 import {sha256Canonical} from './cloud-immutable-migration-backup.js';
 import {assertScheduleCommand,buildScheduleCommand} from './schedule-collaboration-command.js';
@@ -33,7 +33,7 @@ export async function acquireProductionSchedulerLease(locks,key){
 
 // One durable queue per authenticated browser tab. A request is immutable from
 // its first send until its exact receipt returns, including across reloads.
-export function createProductionSchedulerQueue({storage,send,createRequestId,release,maxChangesPerRequest=30,onApply=()=>{},onState=()=>{}}){
+export function createProductionSchedulerQueue({storage,send,createRequestId,release,maxChangesPerRequest=30,includeStudent=true,onApply=()=>{},onState=()=>{}}){
  if(!storage?.load||!storage?.save||typeof send!=='function'||typeof createRequestId!=='function'||!Number.isSafeInteger(maxChangesPerRequest)||maxChangesPerRequest<1||maxChangesPerRequest>40)throw new Error('排課永久佇列設定無效');
  let state=null,persistence=Promise.resolve(),persistenceWorker=null,persistenceRequested=0,persistenceCompleted=0,persistenceUrgent=false,flight=null,buffered=null,stopped=false,lastError='',dirtyHint=false,desiredVersion=0;
  const yieldToInput=()=>new Promise(resolve=>setTimeout(resolve,0));
@@ -49,7 +49,7 @@ export function createProductionSchedulerQueue({storage,send,createRequestId,rel
  const apply=()=>onApply(clone(state.desired));
  const prepare=()=>{
   const before=map(state.baseline.lessons),after=map(state.desired.lessons),changes=[];let truncated=false;
-  for(const id of new Set([...before.keys(),...after.keys()])){const a=before.get(id),b=after.get(id);if(same(a,b))continue;if(changes.length===maxChangesPerRequest){truncated=true;break}const student=b?state.desired.students.find(row=>row.id===b.studentId):null;changes.push({lessonId:id,before:a||null,after:b||null,...(student?{student}:{})})}
+  for(const id of new Set([...before.keys(),...after.keys()])){const a=before.get(id),b=after.get(id);if(same(a,b))continue;if(changes.length===maxChangesPerRequest){truncated=true;break}const student=includeStudent&&b?state.desired.students.find(row=>row.id===b.studentId):null;changes.push({lessonId:id,before:a||null,after:b||null,...(student?{student}:{})})}
   if(!changes.length){dirtyHint=false;return null}
   const requestId=createRequestId(),request=normalizeProductionSchedulerRequest({schema:SCHEDULER_OPERATION_SCHEMA,requestId,release,changes},{maxChanges:maxChangesPerRequest>30?40:30}),createdAt=new Date().toISOString(),commands=changes.map((change,index)=>buildScheduleCommand({before:change.before,after:change.after,deviceId:'scheduler-queue',sequence:index+1,batchId:requestId,commandId:`${requestId}:${index+1}`,actionHint:state.actionHint||'',createdAt})),submitted=clone(state.baseline),submittedLessons=map(submitted.lessons);
   for(const change of changes){if(change.after)submittedLessons.set(change.lessonId,clone(change.after));else submittedLessons.delete(change.lessonId);if(change.student&&!submitted.students.some(row=>row.id===change.student.id))submitted.students.push(clone(change.student))}

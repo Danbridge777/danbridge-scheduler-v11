@@ -1,0 +1,10 @@
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url),cli='/usr/local/lib/node_modules/firebase-tools/lib',project=process.argv[2]||'danbridge-d8877';
+if(!['danbridge-d8877','danbridge-d8877-staging'].includes(project))throw Error('Invalid project');
+const account=require(cli+'/auth.js').getGlobalDefaultAccount();
+await require(cli+'/requireAuth.js').requireAuth({project,user:account.user,tokens:account.tokens});
+const {Client}=require(cli+'/apiv2.js'),api=require(cli+'/api.js');
+const client=new Client({auth:true,apiVersion:'v1',urlPrefix:api.firestoreOrigin()});
+const fields=['email','role','active','teacherId','teacherName','managerName','branchIds','readOnly','canMoveSchedule','canManageSchedule'];
+const result=await client.post(`projects/${project}/databases/(default)/documents:runQuery`,{structuredQuery:{from:[{collectionId:'companyAccess'}],where:{fieldFilter:{field:{fieldPath:'companyId'},op:'EQUAL',value:{stringValue:'danbridge'}}},select:{fields:fields.map(fieldPath=>({fieldPath}))}}},{skipLog:{resBody:true}});
+console.log(JSON.stringify({project,writes:0,accounts:result.body.filter(r=>r.document).map(r=>({id:r.document.name.split('/').at(-1),fields:r.document.fields,updateTime:r.document.updateTime}))},null,2));

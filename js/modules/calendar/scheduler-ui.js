@@ -190,6 +190,11 @@ function renderCalendar(options={}){ensureCalendarDefaults();ensureTeacherCalend
 let schedulePersistenceFrame=null,scheduleRenderFrame=null,pendingScheduleAction='';
 function commitScheduleMutation(scheduleAction='lesson.update.fields'){
   calendarTeacherConflictCache=null;
+  // Capture a scoped move before a remote snapshot can paint over it. The
+  // controller persists/sends asynchronously; no network wait blocks input.
+  if(scheduleAction==='lesson.move'&&window.DanbridgeAccess?.getContext?.().role==='branch_manager'){
+    saveDB({skipRender:true,scheduleAction});return;
+  }
   pendingScheduleAction=pendingScheduleAction&&pendingScheduleAction!==scheduleAction?'lesson.update.fields':scheduleAction;
   if(document.body?.dataset){document.body.dataset.lastScheduleMutationQueuedAt=String(Date.now());document.body.dataset.lastScheduleAction=pendingScheduleAction}
   const persist=()=>{schedulePersistenceFrame=null;if(!pendingScheduleAction)return;const action=pendingScheduleAction;pendingScheduleAction='';saveDB({skipRender:true,scheduleAction:action})};
@@ -529,11 +534,12 @@ function handleCalendarShortcuts(e){
   }
 }
 const calendarLessonBindings=new WeakMap();
+function calendarCanMoveLessons(){return calendarOwnerCanEdit()||(!document.body.classList.contains('auth-locked')&&window.DanbridgeAccess?.getContext?.().role==='branch_manager'&&window.__danbridgeBranchMoveReady?.()===true)}
 function attachDragHandlers(){
   /* iPad 與桌面一致：移動即拖曳；極小位移門檻只用來保留單點編輯。 */
   const DRAG_START_PX=3;
   const role=document.body.dataset.cloudRole||window.DanbridgeAccess?.getContext?.().role||window.currentCloudRole?.()||'';
-  const canMove=calendarOwnerCanEdit();
+  const canMove=calendarCanMoveLessons();
   document.querySelectorAll('#calendarCanvas [data-id]').forEach(el=>{
     const draggable=$('calendarCanvas').dataset.calendarController==='3'?'false':canMove&&!selectionMode?'true':'false';
     if(el.getAttribute('draggable')!==draggable)el.setAttribute('draggable',draggable);

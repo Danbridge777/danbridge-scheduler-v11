@@ -19,12 +19,12 @@ test('legacy compatibility is server-gated consistently across scheduler, Owner 
  const owner=source.split('\n').find(line=>line.includes('publishedOwnerRuntimePromise=createPublishedOwnerRuntime'));
  assert.ok(owner.includes('historyVersionCache:true'),'published Owner uses the staging-verified version reader');
 });
-test('frontend-only 331 release retains the separately deployed 320 backend receipt version',async()=>{
+test('332 scoped-move release retains the unchanged Owner/workspace 320 receipt version',async()=>{
  const [entry,workspace,client]=await Promise.all(['../functions/index.cjs','../functions/staging-published-workspace.cjs','../js/core/firebase-auth-and-cloud-sync.module.js'].map(path=>readFile(new URL(path,import.meta.url),'utf8')));
  const release=client.match(/const APP_RELEASE='(\d+\.\d+\.\d+)'/)?.[1];
- assert.equal(release,'20.26.331','review this release contract on the next frontend deployment');
- // 331 deploys Hosting only. Falsely stamping unchanged Functions as 331
- // would hide their actual deployed source version rather than verify it.
+ assert.equal(release,'20.26.332','review this release contract on the next frontend deployment');
+ // Only the scheduler endpoint changes in 332. Owner/workspace fixed receipt
+ // tags are not rewritten to imply those services were upgraded.
  const backendRelease='20.26.320';
  const owner=entry.slice(entry.indexOf('exports.productionTrustedOperation='),entry.indexOf('exports.productionPublishRoleViews='));
  assert.equal(owner.match(/createPublishedOwnerRuntime\(\{[^\n]*release:'([^']+)'/)?.[1],backendRelease,'production receipts identify the separately deployed backend');

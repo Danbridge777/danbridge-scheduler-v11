@@ -32,7 +32,11 @@ async function createProductionSchedulerRuntime({firestore,serverTimestamp,prima
  const equal=(a,b)=>a===b||nativeCanonicalSha256(a??null)===nativeCanonicalSha256(b??null);
  const notifications=createProductionScheduleNoticeBuilder({primaryOwnerEmail,projection,notificationPolicy,sha256Canonical});
  return Object.freeze({async execute(input,identity){
-  if(!identity||identity.emailVerified!==true||identity.appVerified!==true||!projection.PRODUCTION_SCHEDULER_EMAILS.includes(identity.email))throw new Error('排課專員登入驗證無效');
+  if(!identity||identity.emailVerified!==true||identity.appVerified!==true||typeof identity.email!=='string')throw new Error('排課專員登入驗證無效');
+  if(!projection.PRODUCTION_SCHEDULER_EMAILS.includes(identity.email)){
+   const member=await firestore.doc(`companyAccess/${identity.email}`).get();
+   try{policy.assertProductionSchedulerActor({...member.data(),uid:identity.uid,email:identity.email})}catch{throw new Error('排課專員登入驗證或校區移動權限無效')}
+  }
   const request=policy.normalizeProductionSchedulerRequest(input,{maxChanges}),fingerprint=sha256Canonical(request),receiptRef=firestore.doc(`companies/danbridge/productionSchedulerReceipts/${request.requestId}`),nowIso=new Date(now()).toISOString();
   let phaseStarted=performance.now();
   const mark=phase=>{const at=performance.now();try{onTiming({requestId:request.requestId,phase,ms:at-phaseStarted,count:request.changes.length})}catch{}phaseStarted=at};
@@ -50,7 +54,7 @@ async function createProductionSchedulerRuntime({firestore,serverTimestamp,prima
    ]);
    mark('authority-read');
    const accessRows=accessSnapshot.docs.map(row=>({...row.data(),email:row.id.toLowerCase()})),member=accessRows.find(row=>row.email===identity.email),caller=policy.assertProductionSchedulerActor({...member,uid:identity.uid,email:identity.email});
-   if(receipt.exists){const saved=receipt.data();if(saved.fingerprint!==fingerprint||saved.uid!==caller.uid||saved.email!==caller.email)throw new Error('排課回條識別衝突');return saved.response}
+   if(receipt.exists){const saved=receipt.data();if(saved.fingerprint!==fingerprint||saved.uid!==caller.uid||saved.email!==caller.email)throw new Error('排課回條識別衝突');if(caller.role==='branch_manager'&&!equal(saved.scopeBranchIds,[...caller.branchIds].sort()))throw new Error('校區回條權限範圍已變更');return saved.response}
    const control=assertProductionRecordRuntimeControl(controlSnapshot.data()),safety=assertProductionRecordRuntimeSafety(safetySnapshot.data(),{activationEpoch:control.activationEpoch});
    if(safety.state!=='active'||!safety.writeAllowed)throw new Error('正式逐筆同步已安全暫停');
    const documents=Object.fromEntries(FULL_RECORD_COLLECTIONS.map((name,index)=>[name,collections[index].docs.map(row=>({id:row.id,data:row.data()}))])),source=rebuildFullRecordShadowDb(documents,{environment:'production'});
@@ -95,9 +99,10 @@ async function createProductionSchedulerRuntime({firestore,serverTimestamp,prima
     if(publishedPlan.needsPreparation)throw Object.assign(Error('Role chunk preparation required'),{roleChunkPreparation:publishedPlan});
     for(const write of publishedPlan.writes)derived.push({ref:firestore.doc(write.path),value:write.value,merge:write.merge});
    }
-   const callerManifest=publishedPlan?.views.find(view=>view.kind==='scheduler'&&view.email===caller.email)?.manifest;
+   const callerKind=caller.role==='branch_manager'?'branch_manager':'scheduler';
+   const callerManifest=publishedPlan?.views.find(view=>view.kind===callerKind&&view.email===caller.email)?.manifest;
    const chunkResponse=publishedRoleChunks&&!preserveLegacyViews;
-   const response={schema:chunkResponse?'danbridge-production-scheduler-chunk-response-v1':policy.SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:request.requestId,state:'committed',sourceHash:plan.targetHash,sourceRecordRevision:sourceRevision,operationCount:plan.operationCount,notificationCount:notices.length,...(chunkResponse?{roleManifest:callerManifest}:{schedulerDb:views.find(view=>view.kind==='scheduler'&&view.email===caller.email).db})};
+   const response={schema:chunkResponse?'danbridge-production-scheduler-chunk-response-v1':policy.SCHEDULER_OPERATION_RESPONSE_SCHEMA,requestId:request.requestId,state:'committed',sourceHash:plan.targetHash,sourceRecordRevision:sourceRevision,operationCount:plan.operationCount,notificationCount:notices.length,...(chunkResponse?{roleManifest:callerManifest}:{schedulerDb:projection.projectProductionSchedulerDb(views.find(view=>view.kind===callerKind&&view.email===caller.email).db)})};
    if(Buffer.byteLength(JSON.stringify(response))>750000)throw new Error('排課回條超過安全大小');
    if(2*plan.operationCount+3+derived.length>450)throw new Error('排課原子交易超過安全寫入上限');
    mark('role-notification-plan');
@@ -107,7 +112,7 @@ async function createProductionSchedulerRuntime({firestore,serverTimestamp,prima
    const adapter=createFirebaseProductionRecordBatchAdapter({actor:{uid:caller.uid,email:caller.email},role:'owner',serverTimestamp,runTransaction:callback=>callback({get:readTransaction,set:(path,value,options)=>transaction.set(firestore.doc(path),value,options||{merge:false}),delete:path=>transaction.delete(firestore.doc(path))})});
    if(plan.operationCount){const result=await adapter.apply({activationEpoch:plan.activationEpoch,reason:'scheduler-timetable',operations:plan.operations},`scheduler-${sha256Canonical({uid:caller.uid,requestId:request.requestId}).slice(0,48)}`);if(result.kind!=='batch'||result.targetHash!==plan.targetHash)throw new Error('排課原子提交回條不符')}
    for(const write of derived){if(write.remove)transaction.delete(write.ref);else transaction.set(write.ref,write.value,{merge:write.merge===true})}
-   transaction.set(receiptRef,{fingerprint,uid:caller.uid,email:caller.email,response,createdAt:serverTimestamp()});
+   transaction.set(receiptRef,{fingerprint,uid:caller.uid,email:caller.email,...(caller.role==='branch_manager'?{scopeBranchIds:[...caller.branchIds].sort()}:{}),response,createdAt:serverTimestamp()});
    mark('adapter-read-write-plan');
    return response;
   });
