@@ -20,6 +20,8 @@
   Object.entries({'時段':'Session','早上':'Morning','下午':'Afternoon','營隊季別':'Camp Season','營隊收費':'Camp Fee','夏令營收費':'Summer Camp Billing','夏令營學生收費':'Summer Camp Student Billing','冬令營學生收費':'Winter Camp Student Billing','冬／夏令營學生收費':'Winter / Summer Camp Student Billing','手動登記夏令營收費':'Manual Summer Camp Billing','手動登記冬令營收費':'Manual Winter Camp Billing','複製完整 LINE 收費':'Copy Complete LINE Billing','輸入金額':'Enter amount','建立夏令營課表':'Create Summer Camp Schedule','建立冬令營課表':'Create Winter Camp Schedule'}).forEach(([zh,en])=>dict.set(zh,en));
   Object.entries({
     '家教':'Tutoring','團課':'Group Class','儲存請假':'Save Leave','更新請假':'Update Leave',
+    '我的總覽':'My Dashboard','我的課表':'My Schedule','查看我的課表':'View My Schedule','填寫課程回報':'Complete Lesson Report',
+    '全老師課表':'All Teachers Schedule','管理全老師課表':'Manage All Teachers Schedule','加入 Apple 行事曆':'Add to Apple Calendar','列印 / PDF':'Print / PDF',
     '請假管理':'Leave Management','我的請假':'My Leave','請假登記':'Leave Request','老師請假紀錄':'Teacher Leave Records',
     '查看請假紀錄':'View Leave Records','稍後查看':'View Later','知道了':'Got It',
     '開啟通知中心':'Open Notification Center','最近修改':'Recent Changes','快速新增':'Quick Add',
@@ -86,6 +88,7 @@
     if((m=core.match(/^(\d+)\s*分鐘$/)))return `${lead}${m[1]} minutes${trail}`;
     if((m=core.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/)))return `${lead}${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${trail}`;
     if((m=core.match(/^(\d{4})\s*年\s*(\d{1,2})\s*月$/)))return `${lead}${m[1]}-${m[2].padStart(2,'0')}${trail}`;
+    if((m=core.match(/^課表通知[（(]\s*(\d+)\s*[）)]$/)))return `${lead}Schedule Notifications (${m[1]})${trail}`;
     if((m=core.match(/^查看\s*(\d+)\s*則課表通知$/)))return `${lead}View ${m[1]} schedule notifications${trail}`;
     if((m=core.match(/^更新時間：(.+)$/)))return `${lead}Updated: ${m[1].replace('上午','AM').replace('下午','PM')}${trail}`;
     if((m=core.match(/^(.+?)\s*(事假|病假|喪假)已更新$/))){const type={'事假':'personal leave','病假':'sick leave','喪假':'bereavement leave'}[m[2]];return `${lead}${m[1]} ${type} updated${trail}`}
@@ -125,7 +128,7 @@
   function install(){
     const b=document.createElement('button');b.type='button';b.id='danbridgeLanguageToggle';b.className='danbridge-language-toggle';b.onclick=toggle;
     const mountButton=()=>{const target=document.querySelector('header .header-auth-actions');if(target){if(b.classList.contains('is-floating'))b.classList.remove('is-floating');if(b.parentElement!==target)target.appendChild(b)}else{if(!b.classList.contains('is-floating'))b.classList.add('is-floating');if(!b.isConnected)document.body.appendChild(b)}};mountButton();updateButton();
-    const observer=new MutationObserver(records=>{if(applying)return;for(const r of records){if(r.type==='characterData')translateNode(r.target);else r.addedNodes.forEach(n=>{if(n.nodeType===Node.TEXT_NODE)translateNode(n);else if(n.nodeType===Node.ELEMENT_NODE)walk(n)})}mountButton()});observer.observe(document.body,{subtree:true,childList:true,characterData:true});
+    const observer=new MutationObserver(records=>{if(applying)return;for(const r of records){if(r.type==='characterData')translateNode(r.target);else if(r.type==='attributes')translateAttributes(r.target);else r.addedNodes.forEach(n=>{if(n.nodeType===Node.TEXT_NODE)translateNode(n);else if(n.nodeType===Node.ELEMENT_NODE)walk(n)})}mountButton()});observer.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['placeholder','title','aria-label']});
     if(language==='en')walk();
   }
   window.DanbridgeLanguage={toggle,setLanguage,getLanguage:()=>language,translate:translateExact};

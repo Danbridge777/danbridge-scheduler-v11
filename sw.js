@@ -1,5 +1,5 @@
-const CACHE_NAME='danbridge-v11-staging-leave-368';
-const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png?v=20.26.348','./icon-512.png?v=20.26.348','./icon-1024.png?v=20.26.348','./icon-maskable-192.png?v=20.26.348','./icon-maskable-512.png?v=20.26.348','./css/core/77-pwa-install-and-update.css?v=20.26.348','./js/core/pwa-installation.js?v=20.26.348'];
+const CACHE_NAME='danbridge-v11-staging-leave-369';
+const APP_SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png?v=20.26.349','./icon-512.png?v=20.26.349','./icon-1024.png?v=20.26.349','./icon-maskable-192.png?v=20.26.349','./icon-maskable-512.png?v=20.26.349','./css/core/77-pwa-install-and-update.css?v=20.26.349','./js/core/pwa-installation.js?v=20.26.349'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(

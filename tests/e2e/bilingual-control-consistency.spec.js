@@ -150,3 +150,25 @@ test('English navigation and schedule notification dialogs contain no untranslat
  });
  expect(untranslated).toEqual([]);
 });
+
+test('dynamic teacher and notification controls stay translated after updates',async({page})=>{
+ await unlockOwnerWorkspace(page);
+ await page.evaluate(()=>window.DanbridgeLanguage?.setLanguage('en'));
+ await page.evaluate(()=>{
+  const host=document.createElement('div');host.id='dynamicTeacherTranslationProbe';
+  host.innerHTML='<button id="teacherDashboardProbe">我的總覽</button><button id="teacherScheduleProbe">我的課表</button><button id="teacherReportProbe">填寫課程回報</button><button id="notificationProbe" aria-label="查看 12 則課表通知">課表通知（12）</button>';
+  document.body.appendChild(host);
+ });
+ const probe=page.locator('#dynamicTeacherTranslationProbe');
+ await expect(probe.getByRole('button',{name:'My Dashboard'})).toBeVisible();
+ await expect(probe.getByRole('button',{name:'My Schedule'})).toBeVisible();
+ await expect(probe.getByRole('button',{name:'Complete Lesson Report'})).toBeVisible();
+ await expect(probe.getByRole('button',{name:'View 12 schedule notifications'})).toHaveText('Schedule Notifications (12)');
+ await page.evaluate(()=>{
+  const button=document.querySelector('#notificationProbe');
+  button.textContent='課表通知（18）';
+  button.setAttribute('aria-label','查看 18 則課表通知');
+ });
+ await expect(probe.getByRole('button',{name:'View 18 schedule notifications'})).toHaveText('Schedule Notifications (18)');
+ await probe.evaluate(element=>element.remove());
+});
