@@ -1,4 +1,4 @@
-import {prepareCanonicalRecordPlan,RECORD_PLAN_WORKER_PROTOCOL} from './cloud-record-plan-executor.js?v=20.26.350';
+import {prepareCanonicalRecordPlan,RECORD_PLAN_WORKER_PROTOCOL} from './cloud-record-plan-executor.js?v=20.26.351';
 
 self.onmessage=async({data})=>{
  const {protocol,requestId,options}=data||{};

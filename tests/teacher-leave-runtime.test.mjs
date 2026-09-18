@@ -20,13 +20,17 @@ function memory(){
 }
 for(let i=0;i<4;i++)test('leave transaction: '+profiles[i].displayName+' create/update/cancel and four distinct recipients',async()=>{
  const{db,rows}=memory(),request=req('actor'+i),call=r=>executeTeacherLeave({firestore:db,identity:identity(i),request:r,serverTimestamp:()=>123});
- assert.equal((await call(request)).record.hours,1.5);
+ const created=(await call(request)).record;assert.equal(created.hours,1.5);assert.equal(created.status,'pending');
  assert.equal((await call(request)).duplicate,true);
  const notices=[...rows].filter(([p])=>p.includes('/scheduleNotifications/')).map(([,r])=>r);
  assert.deepEqual(notices.map(r=>r.recipientEmail).sort(),[...emails].sort());assert.equal(notices.length,4);
  assert.equal((await call({...request,operationId:'update_actor_'+i,action:'update',expectedRevision:1,input:{...request.input,end:'11:00'}})).record.hours,2);
  assert.equal((await call({...request,operationId:'cancel_actor_'+i,action:'cancel',expectedRevision:2})).record.status,'cancelled');
  assert.equal(rows.get('productionTeacherLeaveRecords/'+request.leaveId).revision,3);
+});
+test('only Owner can approve pending leave and approved leave cannot be cancelled by scheduler',async()=>{
+ const{db}=memory(),request=req('approval'),teacherCall=r=>executeTeacherLeave({firestore:db,identity:identity(3),request:r,serverTimestamp:()=>123}),schedulerCall=r=>executeTeacherLeave({firestore:db,identity:identity(2),request:r,serverTimestamp:()=>123}),ownerCall=r=>executeTeacherLeave({firestore:db,identity:identity(0),request:r,serverTimestamp:()=>123});
+ await teacherCall(request);const approval={action:'approve',operationId:'approve_operation',leaveId:request.leaveId,expectedRevision:1};await assert.rejects(schedulerCall(approval),/Owner/);const approved=(await ownerCall(approval)).record;assert.equal(approved.status,'approved');assert.equal(approved.days,0.188);await assert.rejects(schedulerCall({action:'cancel',operationId:'cancel_approved',leaveId:request.leaveId,expectedRevision:2}),/Owner/);
 });
 test('transaction rechecks revoked access, forged receipt and foreign teacher; rejection is atomic',async()=>{
  const{db,rows}=memory(),request=req('guard'),call=(r,i=3)=>executeTeacherLeave({firestore:db,identity:identity(i),request:r,serverTimestamp:()=>123});

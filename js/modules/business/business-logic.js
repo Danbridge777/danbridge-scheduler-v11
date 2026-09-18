@@ -299,7 +299,7 @@ function teacherPayrollLeaveHours(t,m,source=teacherPayrollLeaveSource()){
   const workDays=new Set((t.workDays||[]).map(Number)),byDate=new Map();
   for(const row of source||[]){
     const date=String(row?.date||''),start=String(row?.start||''),end=String(row?.end||'');
-    if(String(row?.teacherId)!==String(t.id)||row?.status==='cancelled'||!date.startsWith(`${m}-`)||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end))continue;
+    if(String(row?.teacherId)!==String(t.id)||!['approved','active'].includes(String(row?.status||''))||!date.startsWith(`${m}-`)||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end))continue;
     const day=new Date(`${date}T12:00:00`).getDay();if(!workDays.has(day))continue;
     const minutes=value=>Number(value.slice(0,2))*60+Number(value.slice(3)),from=minutes(start),to=minutes(end);
     if(!Number.isFinite(from)||!Number.isFinite(to)||to<=from)continue;
