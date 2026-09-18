@@ -7,7 +7,7 @@ import {sha256Canonical} from '../js/core/cloud-immutable-migration-backup.js';
 const require=createRequire(import.meta.url);
 const {createProductionScheduleNoticeBuilder}=require('../functions/production-scheduler-runtime.cjs');
 const {buildNotifications}=require('../functions/staging-derived-delivery-runtime.cjs');
-const access={email:'aa0966626336@gmail.com',role:'branch_manager',companyId:'danbridge',active:true,teacherId:'aa',branchIds:['art_museum'],hideFinancials:true,scheduleBranchIds:['art_museum','hexi'],canMoveSchedule:false};
+const access={email:'aa0966626336@gmail.com',role:'branch_manager',companyId:'danbridge',active:true,teacherId:'aa',branchIds:['art_museum'],hideFinancials:true,canViewBranchFinance:true,scheduleBranchIds:['art_museum','hexi'],canMoveSchedule:false};
 const lesson={id:'l1',studentId:'s1',teacherId:'t1',branchId:'hexi',date:'2026-09-17',start:'10:00',end:'11:00',note:'SECRET_FEE_700',address:'SECRET_ADDRESS',onlinePlatform:'SECRET_OTHER',meetingUrl:'SECRET_LINK'};
 const before={students:[{id:'s1',name:'學生甲'}],lessons:[lesson]},after={...before,lessons:[{...lesson,start:'11:00',end:'12:00'}]};
 test('production AA receives both-campus notifications without financial/freeform data; legacy scope unchanged',()=>{

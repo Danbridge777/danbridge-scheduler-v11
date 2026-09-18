@@ -3,7 +3,7 @@ export const ACCESS_PRESETS=Object.freeze({
  owner:Object.freeze({label:'完整管理',role:'owner',readOnly:false,canManageSchedule:false,canMoveSchedule:false,hideFinancials:false,scheduleBranchIds:[]}),
  teacher:Object.freeze({label:'老師本人',role:'teacher',readOnly:false,canSubmitOwnReports:true,canManageSchedule:false,canMoveSchedule:false,hideFinancials:true,scheduleBranchIds:[]}),
  scheduler:Object.freeze({label:'排課專員',role:'teacher',readOnly:false,canSubmitOwnReports:true,canManageSchedule:true,canMoveSchedule:false,hideFinancials:true,scheduleBranchIds:[]}),
- branch_schedule:Object.freeze({label:'跨校區課表唯讀／無財務',role:'branch_manager',readOnly:true,canSubmitOwnReports:false,canManageSchedule:false,canMoveSchedule:false,hideFinancials:true,scheduleBranchIds:Object.freeze(['art_museum','hexi'])})
+ branch_schedule:Object.freeze({label:'跨校區課表唯讀／本校財務唯讀',role:'branch_manager',readOnly:true,canSubmitOwnReports:false,canManageSchedule:false,canMoveSchedule:false,hideFinancials:true,canViewBranchFinance:true,scheduleBranchIds:Object.freeze(['art_museum','hexi'])})
 });
 
 export function buildAccessPreset(id,{teacherId='',branchIds=[]}={}){

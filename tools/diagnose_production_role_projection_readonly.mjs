@@ -43,8 +43,23 @@ try {
     const assembled = assembleRoleViewChunks(manifest, parts, {identity: {email: view.email, kind: view.kind, teacherId: view.teacherId, branchIds: view.branchIds || []}, minSourceRevision: safety.recordRevision, expectedSourceHash: safety.recordDataHash});
     const expectedHash = recordDataHash(view.db);
     const legacyKey = branch ? 'scopedDb' : 'db';
-    result.push({email: view.email, kind: view.kind, expectedHash, chunkHash: recordDataHash(assembled), chunkMatches: recordDataHash(assembled) === expectedHash, legacyPresent: Object.hasOwn(head, legacyKey), legacyMatches: Object.hasOwn(head, legacyKey) ? recordDataHash(head[legacyKey]) === expectedHash : null, sourceRevision: manifest.sourceRevision, publicationRevision: manifest.publicationRevision, release: head.release, expectedLessons: view.db.lessons.length, chunkLessons: assembled.lessons.length});
+    let branchIsolation = null;
+    if (branch) {
+      const lessonBranches = [...new Set(assembled.lessons.map(row => String(row.branchId || 'unassigned'))) ].sort();
+      const financeCollections = ['fixedExpenses', 'oneTimeExpenses', 'settlementRecords', 'summerCampRegistrations', 'winterCampRegistrations', 'collectionRecords'];
+      const financeBranchIds = [...new Set(financeCollections.flatMap(key => (assembled[key] || []).map(row => String(row.branchId || 'unassigned'))))].sort();
+      const billingItemBranchIds = [...new Set((assembled.collectionRecords || []).flatMap(row => (row.billingItems || []).map(item => String(item.branchId || 'unassigned'))))].sort();
+      const hexiFinanceLeaks = financeCollections.reduce((count, key) => count + (assembled[key] || []).filter(row => String(row.branchId || '') === 'hexi').length, 0)
+        + (assembled.collectionRecords || []).reduce((count, row) => count + (row.billingItems || []).filter(item => String(item.branchId || '') === 'hexi').length, 0);
+      if (!lessonBranches.includes('art_museum') || !lessonBranches.includes('hexi')) throw Error(`Branch schedule scope incomplete for ${view.email}`);
+      if (financeBranchIds.some(id => id !== 'art_museum') || billingItemBranchIds.some(id => id !== 'art_museum') || hexiFinanceLeaks !== 0) throw Error(`Cross-branch finance leak for ${view.email}`);
+      branchIsolation = {lessonBranches, financeBranchIds, billingItemBranchIds, hexiFinanceLeaks, readOnly: head?.readOnly === true, canMoveSchedule: head?.canMoveSchedule === true, canViewBranchFinance: head?.canViewBranchFinance === true};
+      if (!branchIsolation.readOnly || branchIsolation.canMoveSchedule || !branchIsolation.canViewBranchFinance) throw Error(`Branch capability mismatch for ${view.email}`);
+    }
+    result.push({email: view.email, kind: view.kind, expectedHash, chunkHash: recordDataHash(assembled), chunkMatches: recordDataHash(assembled) === expectedHash, legacyPresent: Object.hasOwn(head, legacyKey), legacyMatches: Object.hasOwn(head, legacyKey) ? recordDataHash(head[legacyKey]) === expectedHash : null, sourceRevision: manifest.sourceRevision, publicationRevision: manifest.publicationRevision, release: head.release, expectedLessons: view.db.lessons.length, chunkLessons: assembled.lessons.length, ...(branchIsolation ? {branchIsolation} : {})});
   }
+  const branchViews = result.filter(row => row.kind === 'branch_manager');
+  if (branchViews.length > 1 && new Set(branchViews.map(row => row.expectedHash)).size !== 1) throw Error('AA and Lucas branch projections differ');
   console.log(JSON.stringify({project, cloudWrites: 0, authorityHash: safety.recordDataHash, sourceRevision: safety.recordRevision, roles: result}, null, 2));
 } finally {
   await db.terminate();

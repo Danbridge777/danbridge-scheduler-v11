@@ -5,7 +5,7 @@ const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
 const source=fs.readFileSync(path.resolve(__dirname,'../../js/core/firebase-auth-and-cloud-sync.module.js'),'utf8');
 const roleCode=source.slice(source.indexOf('function roleAccessSignature('),source.indexOf('function lessonMetaSignature('));
 
-test('AA Lucas policy: both-campus schedule, no finances, no moves and no foreign CRM details',async({page})=>{
+test('AA Lucas policy: both-campus schedule, managed-campus finance, no moves and no foreign finance',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await isolateApplicationAuth(page);await page.goto('/index.html',{waitUntil:'load'});
  await page.evaluate(async code=>{
@@ -19,13 +19,14 @@ test('AA Lucas policy: both-campus schedule, no finances, no moves and no foreig
    const emptyDB=()=>Object.fromEntries(Object.keys(window.__danbridgeGetDB()).map(k=>[k,[]]));
    ${code}
    window.currentCloudRole=()=>cloudRole;window.__testApplyRole=applyRoleUI;installRoleInteractionGuards();`)();
-  const access={role:'branch_manager',teacherId:'t1',branchIds:['art_museum'],hideFinancials:true,scheduleBranchIds:['art_museum','hexi'],readOnly:true,canMoveSchedule:false};
+  const access={role:'branch_manager',teacherId:'t1',branchIds:['art_museum'],hideFinancials:true,canViewBranchFinance:true,scheduleBranchIds:['art_museum','hexi'],readOnly:true,canMoveSchedule:false};
   window.__testApplyRole(access,{uid:'aa',email:'aa@example.test'});
-  const input={...db,branches:[{id:'art_museum',name:'美術東四路',rooms:['1']},{id:'hexi',name:'河西一路',rooms:['2']}],students:[{id:'s1',name:'東四學生',parent:'東四家長',rate:700,courseType:'1對1',branchIds:['art_museum']},{id:'s2',name:'河西學生',parent:'FOREIGN_PARENT',rate:800,courseType:'1對1',branchIds:['hexi']}],teachers:[{id:'t1',name:'東四老師',type:'兼職',rate:300,assignedBranchIds:['art_museum']},{id:'t2',name:'河西老師',type:'兼職',rate:400,assignedBranchIds:['hexi']}],lessons:[{id:'l1',studentId:'s1',teacherId:'t1',branchId:'art_museum',location:'美術東四路',date:'2026-10-01',start:'10:00',end:'11:00',status:'未上課',billingBranchId:'art_museum'},{id:'l2',studentId:'s2',teacherId:'t2',branchId:'hexi',location:'河西一路',date:'2026-10-01',start:'11:00',end:'12:00',status:'未上課',billingBranchId:'hexi'}]};
+  const input={...db,branches:[{id:'art_museum',name:'美術東四路',rooms:['1']},{id:'hexi',name:'河西一路',rooms:['2']}],students:[{id:'s1',name:'東四學生',parent:'東四家長',rate:700,courseType:'1對1',billingBranchId:'art_museum',branchIds:['art_museum']},{id:'s2',name:'河西學生',parent:'FOREIGN_PARENT',rate:800,courseType:'1對1',billingBranchId:'hexi',branchIds:['hexi']}],teachers:[{id:'t1',name:'東四老師',type:'兼職',rate:300,payrollMode:'hourly',assignedBranchIds:['art_museum']},{id:'t2',name:'河西老師',type:'兼職',rate:400,payrollMode:'hourly',assignedBranchIds:['hexi']}],lessons:[{id:'l1',studentId:'s1',teacherId:'t1',branchId:'art_museum',location:'美術東四路',date:'2026-10-01',start:'10:00',end:'11:00',status:'未上課',billingBranchId:'art_museum'},{id:'l2',studentId:'s2',teacherId:'t2',branchId:'hexi',location:'河西一路',date:'2026-10-01',start:'11:00',end:'12:00',status:'未上課',billingBranchId:'hexi'}],fixedExpenses:[{id:'art-fixed',name:'東四租金',branchId:'art_museum',amount:100,startMonth:'2026-10'},{id:'hexi-fixed',name:'FOREIGN_EXPENSE',branchId:'hexi',amount:900,startMonth:'2026-10'}],oneTimeExpenses:[{id:'art-one',name:'東四耗材',branchId:'art_museum',amount:50,month:'2026-10'},{id:'hexi-one',name:'FOREIGN_ONE_TIME',branchId:'hexi',amount:500,month:'2026-10'}]};
   db=projectProductionBranchAccessDb(input,access);window.__safeSnapshot=JSON.stringify(db);window.__writes=0;window.saveDB=()=>window.__writes++;
   renderAll();switchTab('calendar');document.getElementById('calendarDate').value='2026-10-01';renderAll();window.DanbridgeRoleResponsive.apply();
  },roleCode);
- for(const tab of ['finance','settlement','security','data'])await expect(page.locator(`nav button[data-tab="${tab}"]`)).toBeHidden();
+ await expect(page.locator('nav button[data-tab="finance"]')).toBeVisible();
+ for(const tab of ['security','data'])await expect(page.locator(`nav button[data-tab="${tab}"]`)).toBeHidden();
  await page.locator('#calendarFilterPanel > summary').click();
  await page.locator('#calendarDate').fill('2026-10-01');await page.locator('#calendarDate').press('Tab');
  const teacher=page.locator('#calendarTeacherFilter');await expect(teacher).toBeVisible();
@@ -47,19 +48,23 @@ test('AA Lucas policy: both-campus schedule, no finances, no moves and no foreig
  await expect(page.locator('#studentRows')).toContainText('東四學生');
  await expect(page.locator('#studentRows')).not.toContainText('河西學生');
  await expect(page.locator('#studentRows')).not.toContainText('FOREIGN_PARENT');
- await expect(page.locator('#students table thead')).not.toContainText('收費');
+ await expect(page.locator('#students table thead')).toContainText('收費');
  let historyText='';page.once('dialog',async dialog=>{historyText=dialog.message();await dialog.dismiss()});
  await page.locator('#students').getByRole('button',{name:'歷程',exact:true}).click();
- expect(historyText).toContain('東四學生');expect(historyText).not.toMatch(/已繳|未繳|鐘點費|薪資/);
+ expect(historyText).toContain('東四學生');expect(historyText).toContain('未繳');expect(historyText).not.toMatch(/FOREIGN_|薪資/);
  await page.locator('nav button[data-tab="teachers"]').click();
  await expect(page.locator('#teacherRows')).toContainText('東四老師');
  await expect(page.locator('#teacherRows')).not.toContainText('河西老師');
- await expect(page.locator('#teacherRows tr td:nth-child(2)').first()).toBeHidden();
- await page.evaluate(()=>switchTab('finance'));await expect(page.locator('#finance')).toBeHidden();
- expect(await page.evaluate(()=>JSON.stringify(db))).not.toMatch(/"rate"|baseSalary|FOREIGN_PARENT/);
- expect(await page.evaluate(()=>DanbridgeNotifications.buildNotifications().filter(n=>n.category==='payment'||n.action?.type==='settlement'||n.action?.type==='collections'))).toEqual([]);
- await expect(page.locator('.notification-tab[data-filter="payment"]')).toBeHidden();
- await expect(page.locator('.notification-tab[data-filter="hours"]')).toBeHidden();
+ await expect(page.locator('#teacherRows')).toContainText('NT$300');
+ await page.evaluate(()=>{window.__danbridgeFinanceWorkspaceMonth='2026-10';switchTab('finance');renderFinance()});await expect(page.locator('#finance')).toBeVisible();
+ await expect(page.locator('#financeBranchScope')).toBeDisabled();await expect(page.locator('#financeBranchScope')).toHaveValue('art_museum');
+ const totals=await page.evaluate(()=>{const x=financeData('2026-10');return{revenue:x.revenue,fixed:x.fixedTotal,one:x.oneTimeTotal,payroll:x.payroll,total:x.totalExpenses,profit:x.profit}});
+ expect(totals).toEqual({revenue:700,fixed:100,one:50,payroll:300,total:450,profit:250});
+ expect(await page.evaluate(()=>JSON.stringify(db))).not.toMatch(/FOREIGN_PARENT|FOREIGN_EXPENSE|FOREIGN_ONE_TIME|"rate":800|"rate":400/);
+ await expect(page.locator('#finance')).not.toContainText(/FOREIGN_/);
+ await expect(page.locator('#finance button[onclick*="edit"],#finance button[onclick*="delete"]')).toHaveCount(0);
+ await expect(page.locator('#finance button[onclick*="save"]').first()).toBeHidden();
+ await page.evaluate(()=>saveFixedExpense());expect(await page.evaluate(()=>window.__writes)).toBe(0);
  expect(errors).toEqual([]);
 });
 

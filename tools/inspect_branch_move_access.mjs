@@ -5,6 +5,6 @@ const account=require(cli+'/auth.js').getGlobalDefaultAccount();
 await require(cli+'/requireAuth.js').requireAuth({project,user:account.user,tokens:account.tokens});
 const {Client}=require(cli+'/apiv2.js'),api=require(cli+'/api.js');
 const client=new Client({auth:true,apiVersion:'v1',urlPrefix:api.firestoreOrigin()});
-const fields=['email','role','active','teacherId','teacherName','managerName','branchIds','readOnly','canMoveSchedule','canManageSchedule'];
+const fields=['email','role','active','teacherId','teacherName','managerName','branchIds','readOnly','hideFinancials','canViewBranchFinance','scheduleBranchIds','canMoveSchedule','canManageSchedule'];
 const result=await client.post(`projects/${project}/databases/(default)/documents:runQuery`,{structuredQuery:{from:[{collectionId:'companyAccess'}],where:{fieldFilter:{field:{fieldPath:'companyId'},op:'EQUAL',value:{stringValue:'danbridge'}}},select:{fields:fields.map(fieldPath=>({fieldPath}))}}},{skipLog:{resBody:true}});
 console.log(JSON.stringify({project,writes:0,accounts:result.body.filter(r=>r.document).map(r=>({id:r.document.name.split('/').at(-1),fields:r.document.fields,updateTime:r.document.updateTime}))},null,2));

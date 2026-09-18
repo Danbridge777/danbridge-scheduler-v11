@@ -64,7 +64,7 @@
     const actions=$('#dashboard .v32-header-actions');if(!actions)return;
     const first=actions.querySelector('button:not(.owner-only-action)');if(first)first.textContent='查看校區課表';
     [['managerLessonShortcut','課程紀錄','lessons'],['managerMakeupShortcut','補課中心','makeups'],['managerFinanceShortcut','校區財務','finance']].forEach(([id,label,tab])=>{
-      if(tab==='finance'&&accessContext().hideFinancials===true){$('#'+id,actions)?.remove();return}if($('#'+id,actions))return;const button=document.createElement('button');button.id=id;button.type='button';button.className='btn manager-shortcut';button.textContent=label;button.addEventListener('click',()=>window.switchTab?.(tab));actions.appendChild(button);
+      if(tab==='finance'&&accessContext().hideFinancials===true&&accessContext().canViewBranchFinance!==true){$('#'+id,actions)?.remove();return}if($('#'+id,actions))return;const button=document.createElement('button');button.id=id;button.type='button';button.className='btn manager-shortcut';button.textContent=label;button.addEventListener('click',()=>window.switchTab?.(tab));actions.appendChild(button);
     });
   }
 
@@ -175,7 +175,8 @@
     }
     if(current==='branch_manager'){
       for(const id of ['calendarTeacherFilter','calendarLocationFilter','calendarStudentFilter','calendarRoomFilter','calendarStateFilter']){const input=$('#'+id);for(const el of [input,input?.closest('.calendar-field')].filter(Boolean)){el.hidden=false;el.inert=false;el.removeAttribute('aria-hidden');el.style.removeProperty('display');el.classList.remove('teacher-redundant-filter')}}
-      const allowedTabs=new Set(['dashboard','students','teachers','calendar','lessons','makeups',...(accessContext().hideFinancials===true?[]:['settlement','finance'])]);
+      const context=accessContext(),branchFinanceVisible=context.hideFinancials!==true||context.canViewBranchFinance===true;
+      const allowedTabs=new Set(['dashboard','students','teachers','calendar','lessons','makeups',...(branchFinanceVisible?['settlement','finance']:[])]);
       $$('nav button[data-tab]').forEach(button=>{const allowed=allowedTabs.has(button.dataset.tab);button.hidden=!allowed;button.style.setProperty('display',allowed?'':'none',allowed?'':'important')});
       $$('.owner-only-action,.floating-actions,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#calendar .day-add,#courseDrawerEditBtn,#students .grid>.card.col-4,#teachers .grid>.card.col-4,#finance .finance-form-row').forEach(hideForRole);
       branchManagerStats();branchManagerConvenience();

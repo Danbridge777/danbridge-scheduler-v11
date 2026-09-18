@@ -54,7 +54,7 @@ function setStudentWorkspaceView(mode){
   const title=section.querySelector('.col-4 h2'),nameLabel=$('studentName')?.previousElementSibling,listTitle=$('crmSearch')?.closest('.toolbar')?.querySelector('h2');
   if(title)title.textContent=group?'團課資料':'學生資料';if(nameLabel)nameLabel.textContent=group?'團課名稱 *':'學生姓名 *';if(listTitle)listTitle.textContent=group?'團課清單':'學生清單';
   const additional=$('studentAdditionalDetails');if(additional)additional.querySelector('summary').textContent=group?'教材與備註':'聯絡與學習資料';
-  const headers=section.querySelectorAll('table thead th');['學生','家長／聯絡','學校／程度',window.DanbridgeAccess?.getContext?.().hideFinancials===true?'課程':'課程／收費','歷程','操作'].forEach((label,i)=>{if(headers[i])headers[i].textContent=group?['團班','班內學生','固定老師','歸屬／上課校區','歷程','操作'][i]:label});
+  const context=window.DanbridgeAccess?.getContext?.()||{},canViewFees=context.hideFinancials!==true||context.canViewBranchFinance===true,headers=section.querySelectorAll('table thead th');['學生','家長／聯絡','學校／程度',canViewFees?'課程／收費':'課程','歷程','操作'].forEach((label,i)=>{if(headers[i])headers[i].textContent=group?['團班','班內學生','固定老師','歸屬／上課校區','歷程','操作'][i]:label});
   if($('crmSearch'))$('crmSearch').placeholder=group?'團班名稱、學生或家長姓名':'姓名、家長、學校、程度、電話';
   const searchLabel=$('crmSearch')?.previousElementSibling;if(searchLabel?.tagName==='LABEL')searchLabel.textContent=group?'搜尋團課':'搜尋學生';
 }

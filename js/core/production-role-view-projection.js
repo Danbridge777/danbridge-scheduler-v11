@@ -35,6 +35,7 @@ const stripPrematureReport=(lesson,now)=>{
 };
 const branchIdFromLocation=location=>location==='河西一路'?'hexi':location==='美術東四路'?'art_museum':'unassigned';
 const lessonBranchId=lesson=>String(lesson?.branchId||branchIdFromLocation(lesson?.location||''));
+const lessonBillingBranchId=(lesson,studentsById)=>String(lesson?.billingBranchId||studentsById.get(String(lesson?.studentId||''))?.billingBranchId||'unassigned');
 
 // A move may cross a permission boundary. Never copy the other side (or a
 // preformatted summary containing it) into the receiving branch's history.
@@ -84,8 +85,8 @@ export function projectProductionBranchDb(source,branchIds,{now=Date.now()}={}){
  return{...emptyDb(),branches:(source?.branches||[]).filter(branch=>allowed.has(String(branch.id))),students,teachers:(source?.teachers||[]).filter(teacher=>teacherIds.has(String(teacher.id))||(teacher.assignedBranchIds||[]).some(id=>allowed.has(String(id)))),lessons,makeups:(source?.makeups||[]).filter(makeup=>{const sourceLesson=lessonById.get(String(makeup.sourceLessonId||makeup.lessonId||''));return allowed.has(String(makeup.branchId||lessonBranchId(sourceLesson||makeup)))}),changes:branchChanges(source,allowed,now),summerCampClasses:(source?.summerCampClasses||[]).filter(row=>allowed.has(String(row.branchId||lessonBranchId(row)))),summerCampRegistrations:(source?.summerCampRegistrations||[]).filter(row=>allowed.has(String(row.branchId))),winterCampRegistrations:(source?.winterCampRegistrations||[]).filter(row=>allowed.has(String(row.branchId))),winterCampClasses:(source?.winterCampClasses||[]).filter(row=>allowed.has(String(row.branchId||lessonBranchId(row)))),settlementRecords:(source?.settlementRecords||[]).filter(row=>allowed.has(String(row.branchId))),fixedExpenses:(source?.fixedExpenses||[]).filter(row=>allowed.has(String(row.branchId))),oneTimeExpenses:(source?.oneTimeExpenses||[]).filter(row=>allowed.has(String(row.branchId))),collectionRecords:(source?.collectionRecords||[]).filter(row=>allowed.has(String(row.branchId))).map(row=>({...row,studentIds:(row.studentIds||[]).filter(id=>visibleStudentIds.has(String(id))),...(Array.isArray(row.billingItems)?{billingItems:row.billingItems.filter(item=>visibleStudentIds.has(String(item.studentId))&&allowed.has(String(item.branchId)))}:{}) }))};
 }
 
-// Schedule visibility is independent of move authority. This capability never
-// returns the financial branch projection, even for the managed campus.
+// Schedule visibility is independent of move authority. Financial data is a
+// separate opt-in capability and is always projected only for managed campus.
 export function projectProductionBranchAccessDb(source,access,{now=Date.now()}={}){
  if(access?.hideFinancials!==true)return projectProductionBranchDb(source,access?.branchIds,{now});
  const local=projectProductionBranchDb(source,access.branchIds,{now});
@@ -108,6 +109,47 @@ export function projectProductionBranchAccessDb(source,access,{now=Date.now()}={
  result.teachers=result.teachers.map(row=>localTeachers.has(String(row.id))?pick(localTeachers.get(String(row.id)),teacherKeys):{...pick(row,['id','name','displayName','color']),scheduleReferenceOnly:true});
  for(const row of localTeachers.values())if(!result.teachers.some(item=>item.id===row.id))result.teachers.push(pick(row,teacherKeys));
  result.makeups=local.makeups.map(row=>pick(row,['id','studentId','teacherId','lessonId','sourceLessonId','scheduledLessonId','status','branchId','date','start','end']));
+ if(access.canViewBranchFinance===true){
+  const managed=new Set((access.branchIds||[]).map(String)),sourceStudents=new Map((source?.students||[]).map(row=>[String(row.id),row])),sourceLessons=new Map((source?.lessons||[]).map(row=>[String(row.id),row]));
+  const billingStudentIds=new Set((source?.students||[]).filter(row=>managed.has(String(row.billingBranchId||''))).map(row=>String(row.id))),costStudentIds=new Set(),financeTeacherIds=new Set((source?.teachers||[]).filter(row=>(row.assignedBranchIds||[]).some(id=>managed.has(String(id)))).map(row=>String(row.id)));
+  const lessonStudentIds=lesson=>{
+   if(Array.isArray(lesson?.groupStudentIds)&&lesson.groupStudentIds.length)return lesson.groupStudentIds.map(String);
+   const primary=sourceStudents.get(String(lesson?.studentId||''));return primary?.isGroupRoster?(primary.groupMemberIds||[]).map(String):[String(lesson?.studentId||'')].filter(Boolean);
+  };
+  for(const lesson of source?.lessons||[]){
+   if(lesson.isDraft)continue;
+   if(managed.has(lessonBillingBranchId(lesson,sourceStudents)))lessonStudentIds(lesson).forEach(id=>billingStudentIds.add(id));
+   if(managed.has(lessonBranchId(lesson))){lessonTeacherIds(lesson).forEach(id=>financeTeacherIds.add(id));if(lesson.studentId)costStudentIds.add(String(lesson.studentId))}
+  }
+  for(const key of ['summerCampRegistrations','winterCampRegistrations'])for(const row of source?.[key]||[])if(managed.has(String(row.branchId||''))&&row.studentId)billingStudentIds.add(String(row.studentId));
+  result.lessons=result.lessons.map(row=>{
+   const original=sourceLessons.get(String(row.id));if(!original)return row;
+   const additions={};
+   if(managed.has(lessonBillingBranchId(original,sourceStudents)))for(const key of ['paymentStatus','chargeStudent'])if(original[key]!==undefined)additions[key]=clone(original[key]);
+   if(managed.has(lessonBranchId(original))&&original.payTeacher!==undefined)additions.payTeacher=clone(original.payTeacher);
+   return{...row,...additions};
+  });
+  result.students=result.students.map(row=>{
+   const original=sourceStudents.get(String(row.id));
+   if(original&&billingStudentIds.has(String(row.id)))return clone(original);
+   if(original&&costStudentIds.has(String(row.id))){const safe={...row};for(const key of ['partTimeTeacherRate'])if(original[key]!==undefined)safe[key]=clone(original[key]);return safe}
+   return row;
+  });
+  for(const id of billingStudentIds){if(result.students.some(row=>String(row.id)===id))continue;const row=sourceStudents.get(id);if(row)result.students.push(clone(row))}
+  const sourceTeachers=new Map((source?.teachers||[]).map(row=>[String(row.id),row]));
+  result.teachers=result.teachers.map(row=>financeTeacherIds.has(String(row.id))&&sourceTeachers.has(String(row.id))?clone(sourceTeachers.get(String(row.id))):row);
+  for(const id of financeTeacherIds){if(result.teachers.some(row=>String(row.id)===id))continue;const row=sourceTeachers.get(id);if(row)result.teachers.push(clone(row))}
+  const inManaged=row=>managed.has(String(row?.branchId||''));
+  for(const key of ['fixedExpenses','oneTimeExpenses','settlementRecords','summerCampRegistrations','winterCampRegistrations'])result[key]=(source?.[key]||[]).filter(inManaged).map(clone);
+  result.collectionRecords=(source?.collectionRecords||[]).filter(inManaged).map(row=>{
+   const safe={...clone(row),studentIds:(row.studentIds||[]).filter(id=>billingStudentIds.has(String(id)))};
+   if(Array.isArray(row.billingItems)){
+    safe.billingItems=row.billingItems.filter(item=>billingStudentIds.has(String(item.studentId))&&managed.has(String(item.branchId)));
+    if(row.billingItemsVersion===1)safe.amount=safe.billingItems.reduce((sum,item)=>sum+Math.max(0,Number(item.amount)||0),0);
+   }
+   return safe;
+  });
+ }
  return result;
 }
 
