@@ -216,7 +216,7 @@
     if(!canEdit())return;
     event.preventDefault();event.stopImmediatePropagation();
     const card=cardOf(event.target),target=targetOf(event.target);
-    if(card&&!selectedLessonIds.has(card.dataset.id)){selectedLessonIds.clear();selectedLessonIds.add(card.dataset.id);selectionMode=true;updateSelectionCount();refresh()}
+    if(card&&!selectedLessonIds.has(card.dataset.id)){focusCalendar();selectedLessonIds.clear();selectedLessonIds.add(card.dataset.id);selectionMode=true;updateSelectionCount();refresh()}
     showCalendarContextMenu(event.clientX,event.clientY,{date:target?.date||'',time:target?.time||''});
   }
 

@@ -227,6 +227,11 @@ function updateSelectionCount(){
   if(btn)btn.textContent=(selectionMode||count)?'多選中':'部分選取';
   if(!selectionMode&&!count)hideCalendarContextMenu();
 }
+function focusCalendarShortcutSurface(){
+  const canvas=$('calendarCanvas');if(!canvas)return;
+  if(!canvas.hasAttribute('tabindex'))canvas.tabIndex=-1;
+  try{canvas.focus({preventScroll:true})}catch{canvas.focus()}
+}
 function clearCalendarSelectionState(){
   selectedLessonIds.clear();selectionMode=false;dragState=null;
   updateSelectionCount();
@@ -246,6 +251,7 @@ function toggleLessonSelection(id){
   selectionMode=true;
   if(selectedLessonIds.has(id))selectedLessonIds.delete(id);else selectedLessonIds.add(id);
   if(!selectedLessonIds.size)selectionMode=false;
+  if(selectedLessonIds.size)focusCalendarShortcutSurface();
   updateSelectionCount();
   window.DanbridgeCalendarInteractions?.refresh?.();
 }
@@ -254,6 +260,7 @@ function selectVisibleLessons(){
   selectionMode=true;
   selectedLessonIds.clear();
   document.querySelectorAll('#calendarCanvas [data-id]').forEach(el=>selectedLessonIds.add(el.dataset.id));
+  if(selectedLessonIds.size)focusCalendarShortcutSurface();
   updateSelectionCount();
   window.DanbridgeCalendarInteractions?.refresh?.();
 }

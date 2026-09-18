@@ -67,7 +67,10 @@ function moveCalendar(n){cancelSelectionForNewAction();const d=new Date($('calen
 let lastSelectionCopyAt=0;
 document.addEventListener('click',e=>{if(!e.target.closest('#calendarContextMenu'))hideCalendarContextMenu()});
 document.addEventListener('change',e=>{if(!e.target.closest('#calendar .toolbar'))return;const id=e.target.id||'';if(['calendarMode','calendarDate','calendarTeacherFilter','calendarLocationFilter','calendarStudentFilter','calendarRoomFilter'].includes(id))cancelSelectionForNewAction()});
-document.addEventListener('keydown',handleCalendarShortcuts,true);
+// Window capture runs before modal/filter listeners. This makes the first
+// Command+C deterministic once a lesson selection has returned focus to the
+// calendar, while handleCalendarShortcuts still leaves editable fields alone.
+window.addEventListener('keydown',handleCalendarShortcuts,true);
 document.addEventListener('copy',e=>{
   const tag=(e.target?.tagName||'').toLowerCase();
   if(['input','textarea','select'].includes(tag)||e.target?.isContentEditable||!selectedLessonIds.size)return;

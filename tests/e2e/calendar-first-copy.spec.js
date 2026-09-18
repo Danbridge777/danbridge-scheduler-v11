@@ -129,6 +129,7 @@ test('first Command+C remains ready after reload and repeated eight-lesson selec
       await page.locator('#calendarSearch').focus();
       for(let i=0;i<8;i++)await page.locator(`#calendarCanvas [data-id="copy-${i}"]`).first().click({modifiers:['Meta']});
       expect(await page.evaluate(()=>selectedLessonIds.size)).toBe(8);
+      expect(await page.evaluate(()=>document.activeElement?.id)).toBe('calendarCanvas');
       await page.keyboard.press('Meta+c');
       await expect(page.locator('#pasteModeBanner')).toHaveClass(/show/);
       expect(await page.evaluate(()=>getLessonClipboard().map(row=>row.id).sort())).toEqual(Array.from({length:8},(_,i)=>`copy-${i}`));
@@ -136,6 +137,26 @@ test('first Command+C remains ready after reload and repeated eight-lesson selec
       await page.keyboard.press('Escape');
     }
   }
+});
+
+test('right-click first selection returns shortcut focus to calendar',async({page})=>{
+  const card=page.locator('#calendarCanvas [data-id="first-copy"]').first();
+  await page.locator('#calendarSearch').focus();
+  await card.click({button:'right'});
+  expect(await page.evaluate(()=>({selected:[...selectedLessonIds],focus:document.activeElement?.id}))).toEqual({selected:['first-copy'],focus:'calendarCanvas'});
+  await page.keyboard.press('Meta+c');
+  await expect(page.locator('#pasteModeBanner')).toHaveClass(/show/);
+  expect(await page.evaluate(()=>getLessonClipboard().map(row=>row.id))).toEqual(['first-copy']);
+});
+
+test('quick student add never rebuilds every selector before closing',async({page})=>{
+  await page.evaluate(()=>{
+    openLessonModal('2026-09-08','16:00');toggleQuickStudent(true);
+    window.__fullSelectRenderCalls=0;window.renderSelects=()=>{window.__fullSelectRenderCalls++};window.saveDB=()=>{};
+    document.getElementById('quickStudentName').value='立即新增學生';document.getElementById('quickParentName').value='家長';saveQuickStudent();
+  });
+  const result=await page.evaluate(()=>({calls:window.__fullSelectRenderCalls,studentId:document.getElementById('lessonStudent').value,closed:document.getElementById('quickStudentBox').classList.contains('hidden'),matches:[...document.getElementById('lessonStudent').options].filter(option=>option.textContent==='立即新增學生').length}));
+  expect(result.calls).toBe(0);expect(result.studentId).toBeTruthy();expect(result.closed).toBe(true);expect(result.matches).toBe(1);
 });
 
 test('new lesson fills exact student schedule, never copies payment or overwrites edited lessons',async({page})=>{
