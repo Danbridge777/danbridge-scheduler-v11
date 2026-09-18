@@ -10,7 +10,7 @@ test('native module worker preserves all 40 changes and audit order while input 
   // Use the exact module URL imported by the application runtime; an
   // unversioned URL creates a separate JS module and therefore a different
   // idle pool even when its source bytes are identical.
-  const executor=await import('/js/core/cloud-record-plan-executor.js?v=20.26.346');
+  const executor=await import('/js/core/cloud-record-plan-executor.js?v=20.26.347');
   const NativeWorker=window.Worker;window.__workerSuccess=0;window.__workerErrors=0;
   window.Worker=class extends NativeWorker{constructor(...args){super(...args);this.addEventListener('message',event=>{if(event.data?.ok===true)window.__workerSuccess++});this.addEventListener('error',()=>window.__workerErrors++)}};
   const empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(k=>[k,[]])),db=empty(),documents=empty();
