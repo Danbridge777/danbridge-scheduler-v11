@@ -3,28 +3,28 @@ const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
 
 test.beforeEach(async({page})=>isolateApplicationAuth(page));
 
-const RELEASE = '20.26.347';
-const CLOUD_RELEASE = '20.26.347';
-const SCHEDULER_STUDENT_TOOLS_RELEASE = '20.26.347';
-const APP_SHELL_RELEASE = '20.26.347';
-const BUSINESS_RELEASE = '20.26.347';
-const TEACHER_KPI_RELEASE = '20.26.347';
-const BRANCH_SCOPE_RELEASE = '20.26.347';
-const ROLE_UX_RELEASE = '20.26.347';
-const REPORT_STYLE_RELEASE = '20.26.347';
-const ROLE_UX_STYLE_RELEASE = '20.26.347';
-const PWA_RELEASE = '20.26.347';
-const PWA_STYLE_RELEASE = '20.26.347';
-const CLEAN_FIELD_RELEASE = '20.26.347';
-const LANGUAGE_RELEASE = '20.26.347';
-const INTERFACE_CLARITY_STYLE_RELEASE = '20.26.347';
-const SCHEDULER_UI_RELEASE = '20.26.347';
-const PREMIUM_CONTROLS_RELEASE = '20.26.347';
-const PERMANENT_HISTORY_RELEASE = '20.26.347';
-const APPLICATION_FEATURES_RELEASE = '20.26.347';
-const SCHEDULING_EFFICIENCY_RELEASE = '20.26.347';
-const CROSS_PLATFORM_LAYOUT_RELEASE = '20.26.347';
-const BILINGUAL_CONTROL_STYLE_RELEASE = '20.26.347';
+const RELEASE = '20.26.348';
+const CLOUD_RELEASE = '20.26.348';
+const SCHEDULER_STUDENT_TOOLS_RELEASE = '20.26.348';
+const APP_SHELL_RELEASE = '20.26.348';
+const BUSINESS_RELEASE = '20.26.348';
+const TEACHER_KPI_RELEASE = '20.26.348';
+const BRANCH_SCOPE_RELEASE = '20.26.348';
+const ROLE_UX_RELEASE = '20.26.348';
+const REPORT_STYLE_RELEASE = '20.26.348';
+const ROLE_UX_STYLE_RELEASE = '20.26.348';
+const PWA_RELEASE = '20.26.348';
+const PWA_STYLE_RELEASE = '20.26.348';
+const CLEAN_FIELD_RELEASE = '20.26.348';
+const LANGUAGE_RELEASE = '20.26.348';
+const INTERFACE_CLARITY_STYLE_RELEASE = '20.26.348';
+const SCHEDULER_UI_RELEASE = '20.26.348';
+const PREMIUM_CONTROLS_RELEASE = '20.26.348';
+const PERMANENT_HISTORY_RELEASE = '20.26.348';
+const APPLICATION_FEATURES_RELEASE = '20.26.348';
+const SCHEDULING_EFFICIENCY_RELEASE = '20.26.348';
+const CROSS_PLATFORM_LAYOUT_RELEASE = '20.26.348';
+const BILINGUAL_CONTROL_STYLE_RELEASE = '20.26.348';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
   await page.route('https://www.gstatic.com/**', route => route.abort());
@@ -40,9 +40,9 @@ test('signed-out entry keeps private application content isolated', async ({ pag
 test('永久操作日誌在重新整理後仍可從 IndexedDB 完整讀回',async({page},testInfo)=>{
   await page.goto('/index.html',{waitUntil:'domcontentloaded'});
   const key=`staging:e2e@example.com:${testInfo.project.name}-${Date.now()}`,rows=[{schema:'danbridge-operation-journal-v1',operationId:'device:1',status:'pending',attempts:0,operation:{operationId:'device:1',recordId:'lesson-1'}}];
-  await page.evaluate(async({key,rows})=>{const{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.347'),storage=createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key});await storage.save(rows);sessionStorage.setItem('e2eJournalKey',key)},{key,rows});
+  await page.evaluate(async({key,rows})=>{const{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.348'),storage=createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key});await storage.save(rows);sessionStorage.setItem('e2eJournalKey',key)},{key,rows});
   await page.reload({waitUntil:'domcontentloaded'});
-  const readback=await page.evaluate(async()=>{const key=sessionStorage.getItem('e2eJournalKey'),{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.347');return createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key}).load()});
+  const readback=await page.evaluate(async()=>{const key=sessionStorage.getItem('e2eJournalKey'),{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.348');return createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key}).load()});
   expect(readback).toEqual(rows);
 });
 
@@ -89,7 +89,7 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/app/scheduler-student-tools.js?v=${SCHEDULER_STUDENT_TOOLS_RELEASE}`);
   expect(sources).toContain(`./js/ui/clean-field-hints.js?v=${CLEAN_FIELD_RELEASE}`);
   expect(sources).toContain(`./js/modules/teachers/teacher-kpi.js?v=${TEACHER_KPI_RELEASE}`);
-  expect(sources).toContain('./js/modules/teachers/teacher-leave.js?v=20.26.347');
+  expect(sources).toContain('./js/modules/teachers/teacher-leave.js?v=20.26.348');
   expect(sources).toContain(`./js/core/branch-business-scope.js?v=${BRANCH_SCOPE_RELEASE}`);
   expect(sources).toContain(`./js/app/v20014-role-responsive-ux.js?v=${ROLE_UX_RELEASE}`);
   expect(sources).toContain(`./js/core/pwa-installation.js?v=${PWA_RELEASE}`);
@@ -100,17 +100,17 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/app/v20-scheduling-efficiency.js?v=${SCHEDULING_EFFICIENCY_RELEASE}`);
   const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(elements => elements.map(element => element.getAttribute('href')));
   expect(styles).toContain(`./css/core/73-v20014-role-responsive-ux.css?v=${ROLE_UX_STYLE_RELEASE}`);
-  expect(styles).toContain('./css/teachers/24-teacher-leave.css?v=20.26.347');
+  expect(styles).toContain('./css/teachers/24-teacher-leave.css?v=20.26.348');
   expect(styles).toContain(`./css/core/37-v15252-lesson-reporting-and-toolbar-fix.css?v=${REPORT_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/77-pwa-install-and-update.css?v=${PWA_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/67-v185-interface-clarity.css?v=${INTERFACE_CLARITY_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/78-v20259-premium-responsive-controls.css?v=${PREMIUM_CONTROLS_RELEASE}`);
   expect(styles).toContain(`./css/core/84-v2026146-cross-platform-layout-guard.css?v=${CROSS_PLATFORM_LAYOUT_RELEASE}`);
-  expect(styles).toContain(`./css/core/85-v2026347-bilingual-control-consistency.css?v=${BILINGUAL_CONTROL_STYLE_RELEASE}`);
+  expect(styles).toContain(`./css/core/85-v2026348-bilingual-control-consistency.css?v=${BILINGUAL_CONTROL_STYLE_RELEASE}`);
   const manifest = await page.locator('link[rel="manifest"]').getAttribute('href');
   expect(manifest).toBe('./manifest.webmanifest');
   const appleIcon = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
-  expect(appleIcon).toBe('./icon-192.png?v=20.26.347');
+  expect(appleIcon).toBe('./icon-192.png?v=20.26.348');
 });
 
 test('首頁啟用中的本機 CSS 與 JavaScript 全部使用同一發布指紋',async({page})=>{

@@ -22,6 +22,8 @@
     '家教':'Tutoring','團課':'Group Class','儲存請假':'Save Leave','更新請假':'Update Leave',
     '請假管理':'Leave Management','我的請假':'My Leave','請假登記':'Leave Request','老師請假紀錄':'Teacher Leave Records',
     '查看請假紀錄':'View Leave Records','稍後查看':'View Later','知道了':'Got It',
+    '開啟通知中心':'Open Notification Center','最近修改':'Recent Changes','快速新增':'Quick Add',
+    '稍後':'Later','立即更新':'Update Now',
     '課表更新通知':'Schedule Update','課堂回報通知':'Lesson Report Update','老師請假異動':'Teacher Leave Update',
     '類別':'Type','事假':'Personal Leave','病假':'Sick Leave','喪假':'Bereavement Leave',
     '有效':'Active','已取消':'Cancelled','請假紀錄已更新':'Leave record updated','剛剛':'Just now',
@@ -84,7 +86,9 @@
     if((m=core.match(/^(\d+)\s*分鐘$/)))return `${lead}${m[1]} minutes${trail}`;
     if((m=core.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/)))return `${lead}${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${trail}`;
     if((m=core.match(/^(\d{4})\s*年\s*(\d{1,2})\s*月$/)))return `${lead}${m[1]}-${m[2].padStart(2,'0')}${trail}`;
-    if((m=core.match(/^更新時間：(.+)$/)))return `${lead}Updated: ${m[1]}${trail}`;
+    if((m=core.match(/^查看\s*(\d+)\s*則課表通知$/)))return `${lead}View ${m[1]} schedule notifications${trail}`;
+    if((m=core.match(/^更新時間：(.+)$/)))return `${lead}Updated: ${m[1].replace('上午','AM').replace('下午','PM')}${trail}`;
+    if((m=core.match(/^(.+?)\s*(事假|病假|喪假)已更新$/))){const type={'事假':'personal leave','病假':'sick leave','喪假':'bereavement leave'}[m[2]];return `${lead}${m[1]} ${type} updated${trail}`}
     if((m=core.match(/^(.+) 已更新課表$/)))return `${lead}${m[1]} updated the schedule${trail}`;
     return value;
   }
