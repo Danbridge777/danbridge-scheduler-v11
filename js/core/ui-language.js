@@ -19,6 +19,13 @@
   const dict=new Map(Object.entries(pairs));
   Object.entries({'時段':'Session','早上':'Morning','下午':'Afternoon','營隊季別':'Camp Season','營隊收費':'Camp Fee','夏令營收費':'Summer Camp Billing','夏令營學生收費':'Summer Camp Student Billing','冬令營學生收費':'Winter Camp Student Billing','冬／夏令營學生收費':'Winter / Summer Camp Student Billing','手動登記夏令營收費':'Manual Summer Camp Billing','手動登記冬令營收費':'Manual Winter Camp Billing','複製完整 LINE 收費':'Copy Complete LINE Billing','輸入金額':'Enter amount','建立夏令營課表':'Create Summer Camp Schedule','建立冬令營課表':'Create Winter Camp Schedule'}).forEach(([zh,en])=>dict.set(zh,en));
   Object.entries({
+    '家教':'Tutoring','團課':'Group Class','儲存請假':'Save Leave','更新請假':'Update Leave',
+    '標記已通知':'Mark Notified','標記已收款':'Mark Collected','恢復待通知':'Restore Pending',
+    '月底一次檢查':'Run Month-end Check','下載唯讀診斷':'Download Diagnostics',
+    '啟用 Daniel 系統通知':'Enable Daniel Alerts',
+    '建立暫存還原並預覽差異':'Create Restore Preview'
+  }).forEach(([zh,en])=>dict.set(zh,en));
+  Object.entries({
     '課表、教師、薪資與營運管理，集中於同一個安全、即時同步的管理平台。':'Schedules, teachers, payroll and operations in one secure, real-time platform.',
     '智慧課表':'Smart Scheduling','拖曳排課與衝堂檢查':'Drag-and-drop scheduling and conflict checks','教師管理':'Teacher Management','課務紀錄與工時統計':'Lesson records and hour tracking','薪資管理':'Payroll Management','工時、薪資與績效統計':'Hours, payroll and performance','營運分析':'Operations Analytics','財務報表與即時指標':'Financial reports and live metrics',
     '登入 Danbridge 排課系統，繼續管理今日課務與營運。':'Sign in to Danbridge to manage today’s lessons and operations.','正在載入 Google 登入…':'Loading Google Sign-In…','僅限已授權帳號使用':'Authorized accounts only','登入後將依您的角色顯示對應功能與資料。':'Your role determines the features and data available after sign-in.',

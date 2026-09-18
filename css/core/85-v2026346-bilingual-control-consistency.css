@@ -1,0 +1,189 @@
+/* V20.26.346 — bilingual control consistency.
+   One sizing system for line controls and action buttons, plus enough native
+   month-field width for English month names in Safari/WebKit. */
+:root{
+  --danbridge-control-height:48px;
+  --danbridge-unified-control-font-size:15px;
+  --danbridge-unified-action-font-size:14px;
+}
+
+html body:not(.auth-locked) main section[id] :is(
+  input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=color]),
+  select
+),
+html body:not(.auth-locked) :is(.modal,.course-drawer,.notification-drawer) :is(
+  input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=color]),
+  select
+){
+  height:var(--danbridge-control-height)!important;
+  min-height:var(--danbridge-control-height)!important;
+  max-height:var(--danbridge-control-height)!important;
+  padding-block:0!important;
+  padding-inline:14px!important;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",Arial,sans-serif!important;
+  font-size:var(--danbridge-unified-control-font-size)!important;
+  font-weight:550!important;
+  line-height:normal!important;
+  box-sizing:border-box!important;
+}
+
+/* Workspace styles intentionally loaded before this file used several local
+   font scales. Repeat the rule with an ID-strength selector so the shared
+   system remains the final authority without changing any element behavior. */
+html body:not(.auth-locked) main :is(
+  #dashboard,#students,#teachers,#teacherLeave,#calendar,#lessons,#makeups,
+  #camps,#winterCamps,#settlement,#finance,#data,#security
+) :is(
+  input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=color]),
+  select
+){
+  height:var(--danbridge-control-height)!important;
+  min-height:var(--danbridge-control-height)!important;
+  max-height:var(--danbridge-control-height)!important;
+  padding-block:0!important;
+  font-size:var(--danbridge-unified-control-font-size)!important;
+  line-height:normal!important;
+}
+
+html body:not(.auth-locked) main #students#students :is(
+  input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=color]),
+  select
+),
+html body:not(.auth-locked) main #calendar#calendar :is(
+  input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=color]),
+  select
+){
+  font-size:var(--danbridge-unified-control-font-size)!important;
+}
+html body:not(.auth-locked) main #calendar#calendar :is(#calendarDate,#calendarSearch){
+  font-size:var(--danbridge-unified-control-font-size)!important;
+}
+
+html body:not(.auth-locked) main section[id] .btn,
+html body:not(.auth-locked) :is(.modal,.course-drawer,.notification-drawer) .btn{
+  height:var(--danbridge-control-height)!important;
+  min-height:var(--danbridge-control-height)!important;
+  max-height:var(--danbridge-control-height)!important;
+  padding:6px 13px!important;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",Arial,sans-serif!important;
+  font-size:var(--danbridge-unified-action-font-size)!important;
+  font-weight:700!important;
+  line-height:1.2!important;
+  box-sizing:border-box!important;
+}
+
+html body:not(.auth-locked) main :is(
+  #dashboard#dashboard,#students#students,#teachers#teachers,#teacherLeave#teacherLeave,
+  #calendar#calendar,#lessons#lessons,#makeups#makeups,#camps#camps,
+  #winterCamps#winterCamps,#settlement#settlement,#finance#finance,#data#data,#security#security
+) .btn{
+  height:var(--danbridge-control-height)!important;
+  min-height:var(--danbridge-control-height)!important;
+  max-height:var(--danbridge-control-height)!important;
+  font-size:var(--danbridge-unified-action-font-size)!important;
+  line-height:1.2!important;
+}
+
+/* English month names are longer than numeric Chinese month rendering. */
+@media(min-width:701px){
+  html body:not(.auth-locked) main section[id] input[type=month]{
+    width:100%!important;
+    min-width:190px!important;
+    max-width:100%!important;
+    padding-left:14px!important;
+    padding-right:38px!important;
+    font-size:var(--danbridge-unified-control-font-size)!important;
+    font-variant-numeric:tabular-nums!important;
+    text-align:center!important;
+    text-align-last:center!important;
+    position:relative!important;
+    overflow:visible!important;
+  }
+  #lessons>.card>.toolbar{
+    grid-template-columns:minmax(190px,.9fr) minmax(160px,1fr) minmax(160px,1fr) max-content!important;
+  }
+  #lessons>.card>.toolbar>div:first-child{
+    min-width:190px!important;
+    overflow:visible!important;
+  }
+  #teacherLeave .teacher-leave-filters{
+    grid-template-columns:minmax(190px,1fr) repeat(2,minmax(140px,1fr))!important;
+    width:min(100%,620px)!important;
+    min-width:min(100%,540px)!important;
+  }
+  #teacherLeave .teacher-leave-filters>div:first-child{min-width:190px!important}
+}
+
+html body:not(.auth-locked) main #lessons #lessonMonth{
+  height:var(--danbridge-control-height)!important;
+  min-height:var(--danbridge-control-height)!important;
+  max-height:var(--danbridge-control-height)!important;
+  font-size:var(--danbridge-unified-control-font-size)!important;
+  line-height:normal!important;
+}
+
+html body:not(.auth-locked) input[type=month]::-webkit-datetime-edit{
+  display:flex!important;
+  width:100%!important;
+  min-width:0!important;
+  height:46px!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:0!important;
+  overflow:visible!important;
+}
+html body:not(.auth-locked) input[type=month]::-webkit-datetime-edit-fields-wrapper{
+  display:flex!important;
+  min-width:max-content!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:0!important;
+}
+html body:not(.auth-locked) input[type=month]::-webkit-calendar-picker-indicator{
+  position:absolute!important;
+  right:10px!important;
+  width:18px!important;
+  height:18px!important;
+  margin:0!important;
+  padding:0!important;
+}
+
+/* Later workspace styles used two larger one-off control scales. */
+html body:not(.auth-locked) #camps .camp-registration-form :is(input,select,.student-select-search-input),
+html body:not(.auth-locked) #students :is(input:not([type=checkbox]):not([type=hidden]),select),
+html body:not(.auth-locked) #lessonModal :is(input:not([type=checkbox]):not([type=hidden]),select){
+  height:var(--danbridge-control-height)!important;
+  min-height:var(--danbridge-control-height)!important;
+  max-height:var(--danbridge-control-height)!important;
+  font-size:var(--danbridge-unified-control-font-size)!important;
+  line-height:normal!important;
+}
+
+@media(min-width:701px) and (max-width:1260px){
+  #lessons>.card>.toolbar{
+    grid-template-columns:repeat(2,minmax(190px,1fr))!important;
+  }
+  #lessons>.card>.toolbar>button{grid-column:1/-1!important}
+}
+
+@media(max-width:700px){
+  :root{
+    --danbridge-unified-control-font-size:16px;
+    --danbridge-unified-action-font-size:14px;
+  }
+  html body:not(.auth-locked) main section[id] input[type=month]{
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    padding-left:12px!important;
+    padding-right:38px!important;
+    position:relative!important;
+    text-align:center!important;
+    text-align-last:center!important;
+  }
+  #teacherLeave .teacher-leave-filters{
+    grid-template-columns:minmax(0,1fr)!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+}

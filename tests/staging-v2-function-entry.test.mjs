@@ -19,10 +19,10 @@ test('legacy compatibility is server-gated consistently across scheduler, Owner 
  const owner=source.split('\n').find(line=>line.includes('publishedOwnerRuntimePromise=createPublishedOwnerRuntime'));
  assert.ok(owner.includes('historyVersionCache:true'),'published Owner uses the staging-verified version reader');
 });
-test('336 staging candidate retains the separately deployed Owner/workspace 320 receipt version',async()=>{
+test('frontend release retains the separately deployed Owner/workspace receipt version',async()=>{
  const [entry,workspace,client]=await Promise.all(['../functions/index.cjs','../functions/staging-published-workspace.cjs','../js/core/firebase-auth-and-cloud-sync.module.js'].map(path=>readFile(new URL(path,import.meta.url),'utf8')));
  const release=client.match(/const APP_RELEASE='(\d+\.\d+\.\d+)'/)?.[1];
- assert.equal(release,'20.26.345','review this release contract on the next frontend deployment');
+ assert.equal(release,'20.26.346','review this release contract on the next frontend deployment');
  // Candidate staging deployment must not imply the production Owner endpoint
  // was upgraded. Update this contract with its actual production deployment.
  const backendRelease='20.26.345';
