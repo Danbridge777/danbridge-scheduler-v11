@@ -8,7 +8,7 @@ const recordHash=record=>hash({revision:record.revision,sourceHash:record.source
 // summary. A proof is valid only for this exact authority record revision.
 function recipientState(payload,detail){
  const after=detail.after===null?null:{...detail.after,teacherIds:[...new Set(detail.after.teacherIds||[])].sort()};
- return hash({recipientEmail:payload.recipientEmail,recipientRole:payload.recipientRole,teacherId:payload.teacherId||'',branchIds:[...(payload.branchIds||[])].sort(),lessonId:detail.lessonId,after});
+ return hash({recipientEmail:payload.recipientEmail,recipientRole:payload.recipientRole,teacherId:payload.teacherId||'',branchIds:[...(payload.branchIds||[])].sort(),lessonId:detail.lessonId,after,...(payload.privacyScope?{privacyScope:payload.privacyScope}:{})});
 }
 function buildNotificationDeliveryProofs(notices,records,actor,sourceHash){
  const proofs=new Map();

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {FULL_RECORD_COLLECTIONS} from '../js/core/cloud-full-record-shadow.js';
 import {buildProductionSchedulerTarget,assertProductionSchedulerActor,schedulerLesson,SCHEDULER_OPERATION_SCHEMA} from '../js/core/production-scheduler-operation.js';
 import {createBranchScheduleMoveController,mergeBranchMoveView} from '../js/core/branch-schedule-move.js';
-import {projectProductionBranchDb} from '../js/core/production-role-view-projection.js';
+import {projectProductionBranchDb,projectProductionBranchAccessDb} from '../js/core/production-role-view-projection.js';
 const clone=x=>structuredClone(x);
 const actor={uid:'lucas-fixture',email:'lucas@example.test',role:'branch_manager',teacherId:'teacher1',companyId:'danbridge',active:true,readOnly:true,canMoveSchedule:true,branchIds:['art_museum'],managerName:'Lucas'};
 const lesson={id:'lesson1',date:'2026-10-01',start:'16:00',end:'17:30',teacherId:'teacher1',teacherIds:['teacher1'],studentId:'student1',branchId:'art_museum',location:'美術東四路',room:'教室 1',deliveryMode:'onsite',billingBranchId:'hexi',status:'未上課',paymentStatus:'paid',teacherReportText:'keep',chargeStudent:'yes',payTeacher:'yes'};
@@ -11,6 +11,14 @@ const seed=()=>({...Object.fromEntries(FULL_RECORD_COLLECTIONS.map(k=>[k,[]])),b
 const request=changes=>({schema:SCHEDULER_OPERATION_SCHEMA,requestId:'branch-move-test-123',release:'20.26.332',changes});
 const change=(db,patch)=>({lessonId:'lesson1',before:schedulerLesson(db.lessons[0]),after:{...schedulerLesson(db.lessons[0]),...patch}});
 const run=(db,changes,a=actor)=>buildProductionSchedulerTarget(db,request(changes),a,{nowIso:'2026-09-17T01:00:00Z'});
+test('future explicit unlock retains both-campus redacted view while only art-campus moves succeed',async()=>{
+ const access={...actor,hideFinancials:true,scheduleBranchIds:['art_museum','hexi']};
+ let server=seed(),stored=null,applied,revision=1,id=0;server.lessons[0].note='PRIVATE_FEE_NOTE';
+ const controller=await createBranchScheduleMoveController({storage:{load:async()=>stored,save:async x=>stored=clone(x)},locks:{request:async(n,o,work)=>work({name:n})},key:'private-move-fixture',branchIds:access.branchIds,access,release:'20.26.332',initialDb:projectProductionBranchAccessDb(server,access),revision,onApply:x=>applied=x,onState:()=>{},createRequestId:()=>`private-move-${++id}`,send:async req=>{const result=buildProductionSchedulerTarget(server,req,access,{nowIso:'2026-09-17T01:00:00Z'});server=result.db;return{schema:'danbridge-production-scheduler-operation-response-v1',state:'committed',requestId:req.requestId,sourceHash:'record-v1:'+'a'.repeat(64),sourceRecordRevision:++revision,operationCount:2,notificationCount:1,schedulerDb:result.schedulerDb}}});
+ for(const date of ['2026-10-02','2026-10-03','2026-10-04']){const next=clone(applied);next.lessons.find(l=>l.id==='lesson1').date=date;await controller.move(next);assert.equal(applied.lessons.length,2);assert.doesNotMatch(JSON.stringify(applied),/PRIVATE_FEE_NOTE|"rate":|"amount":/)}
+ assert.equal(server.lessons[0].note,'PRIVATE_FEE_NOTE');assert.equal(server.lessons[0].billingBranchId,'hexi');assert.equal(server.lessons[0].paymentStatus,'paid');assert.equal(server.students[0].rate,700);
+ const foreign=clone(applied);foreign.lessons.find(l=>l.id==='other-campus').date='2026-10-05';await assert.rejects(()=>controller.move(foreign),/授權校區/);await controller.stop();
+});
 test('branch move keeps duration, financial values, parent identity and other campus unchanged',()=>{
  const db=seed(),original=clone(db),result=run(db,[change(db,{date:'2026-10-02',start:'17:00',end:'18:30'})]);
  assert.equal(result.db.lessons[0].date,'2026-10-02');

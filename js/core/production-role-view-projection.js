@@ -33,8 +33,21 @@ const stripPrematureReport=(lesson,now)=>{
  if(reportKeys.length&&date>=today&&['已上課','學生請假','老師請假','缺席','補課完成'].includes(copy.status))copy.status='未上課';
  return copy;
 };
-const branchIdFromLocation=location=>location==='河西一路'?'hexi':location==='到府'||location==='線上課'?'unassigned':'art_museum';
+const branchIdFromLocation=location=>location==='河西一路'?'hexi':location==='美術東四路'?'art_museum':'unassigned';
 const lessonBranchId=lesson=>String(lesson?.branchId||branchIdFromLocation(lesson?.location||''));
+
+// A move may cross a permission boundary. Never copy the other side (or a
+// preformatted summary containing it) into the receiving branch's history.
+function branchChanges(source,allowed,now){
+ return(source?.changes||[]).flatMap(change=>{
+  const visible=side=>side&&!side.isDraft&&allowed.has(lessonBranchId(side));
+  const before=visible(change.before)?stripPrematureReport(change.before,now):null;
+  const after=visible(change.after)?stripPrematureReport(change.after,now):null;
+  if(!before&&!after)return[];
+  const safe=Object.fromEntries(['id','at','actorName','actorEmail','undoOfChangeId','historyAction'].filter(key=>change[key]!==undefined).map(key=>[key,clone(change[key])]));
+  return[{...safe,type:before&&after?change.type:after?'新增':'刪除',lessonId:String(change.lessonId||after?.id||before?.id||''),studentId:String(after?.studentId||before?.studentId||''),before,after}];
+ });
+}
 
 export function productionClientDataHash(value){
  const text=JSON.stringify(canonical(value||{}));let hash=2166136261;
@@ -68,7 +81,34 @@ export function projectProductionSchedulerDb(source){
 
 export function projectProductionBranchDb(source,branchIds,{now=Date.now()}={}){
  const allowed=new Set(Array.isArray(branchIds)?branchIds.map(String):[]),lessons=(source?.lessons||[]).filter(lesson=>!lesson.isDraft&&allowed.has(lessonBranchId(lesson))).map(lesson=>stripPrematureReport(lesson,now)),studentIds=new Set(lessons.flatMap(lesson=>[lesson.studentId,...(lesson.groupStudentIds||[])])),teacherIds=new Set(lessons.flatMap(lessonTeacherIds)),lessonById=new Map((source?.lessons||[]).map(lesson=>[String(lesson.id),lesson])),students=(source?.students||[]).filter(student=>studentIds.has(student.id)||(student.branchIds||[]).some(id=>allowed.has(String(id)))),visibleStudentIds=new Set(students.map(student=>String(student.id)));
- return{...emptyDb(),branches:(source?.branches||[]).filter(branch=>allowed.has(String(branch.id))),students,teachers:(source?.teachers||[]).filter(teacher=>teacherIds.has(String(teacher.id))||(teacher.assignedBranchIds||[]).some(id=>allowed.has(String(id)))),lessons,makeups:(source?.makeups||[]).filter(makeup=>{const sourceLesson=lessonById.get(String(makeup.sourceLessonId||makeup.lessonId||''));return allowed.has(String(makeup.branchId||lessonBranchId(sourceLesson||makeup)))}),changes:(source?.changes||[]).filter(change=>{const lesson=lessonById.get(String(change.lessonId))||change.after||change.before;return lesson&&allowed.has(lessonBranchId(lesson))}),summerCampClasses:(source?.summerCampClasses||[]).filter(row=>allowed.has(String(row.branchId||lessonBranchId(row)))),summerCampRegistrations:(source?.summerCampRegistrations||[]).filter(row=>allowed.has(String(row.branchId))),winterCampRegistrations:(source?.winterCampRegistrations||[]).filter(row=>allowed.has(String(row.branchId))),winterCampClasses:(source?.winterCampClasses||[]).filter(row=>allowed.has(String(row.branchId||lessonBranchId(row)))),settlementRecords:(source?.settlementRecords||[]).filter(row=>allowed.has(String(row.branchId))),fixedExpenses:(source?.fixedExpenses||[]).filter(row=>allowed.has(String(row.branchId))),oneTimeExpenses:(source?.oneTimeExpenses||[]).filter(row=>allowed.has(String(row.branchId))),collectionRecords:(source?.collectionRecords||[]).filter(row=>allowed.has(String(row.branchId))).map(row=>({...row,studentIds:(row.studentIds||[]).filter(id=>visibleStudentIds.has(String(id))),...(Array.isArray(row.billingItems)?{billingItems:row.billingItems.filter(item=>visibleStudentIds.has(String(item.studentId))&&allowed.has(String(item.branchId)))}:{}) }))};
+ return{...emptyDb(),branches:(source?.branches||[]).filter(branch=>allowed.has(String(branch.id))),students,teachers:(source?.teachers||[]).filter(teacher=>teacherIds.has(String(teacher.id))||(teacher.assignedBranchIds||[]).some(id=>allowed.has(String(id)))),lessons,makeups:(source?.makeups||[]).filter(makeup=>{const sourceLesson=lessonById.get(String(makeup.sourceLessonId||makeup.lessonId||''));return allowed.has(String(makeup.branchId||lessonBranchId(sourceLesson||makeup)))}),changes:branchChanges(source,allowed,now),summerCampClasses:(source?.summerCampClasses||[]).filter(row=>allowed.has(String(row.branchId||lessonBranchId(row)))),summerCampRegistrations:(source?.summerCampRegistrations||[]).filter(row=>allowed.has(String(row.branchId))),winterCampRegistrations:(source?.winterCampRegistrations||[]).filter(row=>allowed.has(String(row.branchId))),winterCampClasses:(source?.winterCampClasses||[]).filter(row=>allowed.has(String(row.branchId||lessonBranchId(row)))),settlementRecords:(source?.settlementRecords||[]).filter(row=>allowed.has(String(row.branchId))),fixedExpenses:(source?.fixedExpenses||[]).filter(row=>allowed.has(String(row.branchId))),oneTimeExpenses:(source?.oneTimeExpenses||[]).filter(row=>allowed.has(String(row.branchId))),collectionRecords:(source?.collectionRecords||[]).filter(row=>allowed.has(String(row.branchId))).map(row=>({...row,studentIds:(row.studentIds||[]).filter(id=>visibleStudentIds.has(String(id))),...(Array.isArray(row.billingItems)?{billingItems:row.billingItems.filter(item=>visibleStudentIds.has(String(item.studentId))&&allowed.has(String(item.branchId)))}:{}) }))};
+}
+
+// Schedule visibility is independent of move authority. This capability never
+// returns the financial branch projection, even for the managed campus.
+export function projectProductionBranchAccessDb(source,access,{now=Date.now()}={}){
+ if(access?.hideFinancials!==true)return projectProductionBranchDb(source,access?.branchIds,{now});
+ const local=projectProductionBranchDb(source,access.branchIds,{now});
+ const allowed=new Set([...(access.branchIds||[]),...(access.scheduleBranchIds||[])].filter(id=>['art_museum','hexi'].includes(id)));
+ const lessons=(source?.lessons||[]).filter(row=>!row.isDraft&&allowed.has(lessonBranchId(row)));
+ const studentsById=new Map((source?.students||[]).map(row=>[String(row.id),row]));
+ const studentIds=new Set(lessons.flatMap(row=>[row.studentId,...(row.groupStudentIds||[]),...(studentsById.get(String(row.studentId))?.groupMemberIds||[])].filter(Boolean).map(String)));
+ const teacherIds=new Set(lessons.flatMap(lessonTeacherIds));
+ const result=projectProductionSchedulerDb({...source,branches:(source?.branches||[]).filter(row=>allowed.has(String(row.id))),lessons,students:(source?.students||[]).filter(row=>studentIds.has(String(row.id))),teachers:(source?.teachers||[]).filter(row=>teacherIds.has(String(row.id)))});
+ // Free-form notes can contain fee agreements. Do not send those, pricing
+ // histories, payment flags or any financial collection to this role.
+ result.lessons=result.lessons.map(({note,address,meetingUrl,onlinePlatform,...row})=>row);
+ const pick=(row,keys)=>Object.fromEntries(keys.filter(key=>row[key]!==undefined).map(key=>[key,clone(row[key])]));
+ const localStudents=new Map(local.students.filter(row=>!row.scheduleReferenceOnly).map(row=>[String(row.id),row]));
+ const localTeachers=new Map(local.teachers.filter(row=>!row.scheduleReferenceOnly).map(row=>[String(row.id),row]));
+ const studentKeys=['id','name','status','courseType','isGroupRoster','groupMemberIds'];
+ result.students=result.students.map(row=>localStudents.has(String(row.id))?pick(localStudents.get(String(row.id)),[...studentKeys,'parent','contact','parentLine','parentEmail','school','grade','level','preferredTeacherId','branchIds','billingBranchId','attendanceBranchId']):{...pick(row,studentKeys),scheduleReferenceOnly:true});
+ for(const row of localStudents.values())if(!result.students.some(item=>item.id===row.id))result.students.push(pick(row,[...studentKeys,'parent','contact','parentLine','parentEmail','school','grade','level','preferredTeacherId','branchIds','billingBranchId','attendanceBranchId']));
+ const teacherKeys=['id','name','displayName','color','type','subjects','assignedBranchIds'];
+ result.teachers=result.teachers.map(row=>localTeachers.has(String(row.id))?pick(localTeachers.get(String(row.id)),teacherKeys):{...pick(row,['id','name','displayName','color']),scheduleReferenceOnly:true});
+ for(const row of localTeachers.values())if(!result.teachers.some(item=>item.id===row.id))result.teachers.push(pick(row,teacherKeys));
+ result.makeups=local.makeups.map(row=>pick(row,['id','studentId','teacherId','lessonId','sourceLessonId','scheduledLessonId','status','branchId','date','start','end']));
+ return result;
 }
 
 export function buildProductionRoleViews(source,accessRows,{now=Date.now()}={}){
@@ -80,7 +120,7 @@ export function buildProductionRoleViews(source,accessRows,{now=Date.now()}={}){
    const scheduler=PRODUCTION_SCHEDULER_EMAILS.includes(email)&&access.canManageSchedule===true,db=scheduler?projectProductionSchedulerDb(source):projectProductionTeacherDb(source,access.teacherId,{now});
    views.push({kind:scheduler?'scheduler':'teacher',email,teacherId:String(access.teacherId),db,clientHash:productionClientDataHash(db)});
   }else if(access.role==='branch_manager'&&access.teacherId&&Array.isArray(access.branchIds)&&access.branchIds.length){
-   const branchIds=[...new Set(access.branchIds.map(String))].sort(),db=projectProductionBranchDb(source,branchIds,{now});
+   const branchIds=[...new Set(access.branchIds.map(String))].sort(),db=projectProductionBranchAccessDb(source,{...access,branchIds},{now});
    views.push({kind:'branch_manager',email,teacherId:String(access.teacherId),branchIds,db,clientHash:productionClientDataHash(db)});
   }
  }

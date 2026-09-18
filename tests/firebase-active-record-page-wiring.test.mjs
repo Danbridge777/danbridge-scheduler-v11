@@ -87,7 +87,7 @@ test('Firestore 查詢協調使用有界記憶體快取，耐久操作仍由獨�
 });
 
 test('同帳號雙分頁登入權限初始化會串行化並使用有限權杖重試',()=>{
- assert.match(source,/import \{loadProfileAfterAuthReady\} from '\.\/cloud-auth-profile-bootstrap\.js\?v=20\.26\.332'/);
+ assert.match(source,/import \{loadProfileAfterAuthReady\} from '\.\/cloud-auth-profile-bootstrap\.js\?v=20\.26\.342'/);
  const auth=block('async function loadSignedInProfile','function loginTimeValue');
  assert.match(auth,/loadProfileAfterAuthReady\(\{user,loadProfile:\(\)=>ensureProfile\(user\)\}\)/);
  assert.match(auth,/navigator\.locks\?\.request\? navigator\.locks\.request\(lockName,load\):load\(\)/);
@@ -123,7 +123,7 @@ test('角色證據不能自動填通過，完整實測後才可在記憶體準�
 });
 
 test('角色候選 manifest 與每位本人收據不可變，URL 只顯示按鈕不會自動寫入',()=>{
- assert.match(source,/cloud-role-view-verification\.js\?v=20\.26\.332/);
+ assert.match(source,/cloud-role-view-verification\.js\?v=20\.26\.342/);
  assert.match(source,/stagingRoleViewCandidateManifests/);
  assert.match(source,/stagingRoleViewVerificationReceipts/);
  assert.match(source,/persistStagingRoleCandidateManifest/);
@@ -212,7 +212,7 @@ test('核心逐筆已完成但角色發布仍在執行時，串流快照不會�
 
 test('Owner active save 依資料 hash 合併相同意圖，但不同 hash 仍排入下一輪',()=>{
  const queue=block('function queueOwnerCloudSave','function lessonMap');
- assert.match(source,/import \{decideOwnerActiveSaveIntent\} from '\.\/cloud-owner-active-save-intent\.js\?v=20\.26\.332'/);
+ assert.match(source,/import \{decideOwnerActiveSaveIntent\} from '\.\/cloud-owner-active-save-intent\.js\?v=20\.26\.342'/);
  assert.match(queue,/scheduleMutation.+queueLocalSave\(\{changedCollections:\['lessons','makeups','changes'\]\}\)/s);
  assert.ok(queue.indexOf("if(scheduleMutation&&['staging','production'].includes")<queue.indexOf('const nextHash=dataHash'));
  assert.match(queue,/decideOwnerActiveSaveIntent\(\{nextHash,localDirtyHash,lastUploadedHash,diagnostics,applyingCloud\}\)/);
@@ -266,7 +266,7 @@ test('staging 僅允許永久 fence 後走 V2；缺少 fence 或任何 V2 錯誤
 test('角色逐筆發布重用現有 aa、老師、校區篩選且每個 scope 使用獨立 viewKey',()=>{
  const publish=block('function activeRoleRecordIdentity','async function publishScopedViews');
  assert.match(publish,/kind:'scheduler'/);assert.match(publish,/kind:'teacher'/);assert.match(publish,/kind:'branch_manager'/);
- assert.match(publish,/filteredSchedulerDB\(sourceDb\)/);assert.match(publish,/filteredTeacherDB\(sourceDb,identity\.teacherId\)/);assert.match(publish,/filteredBranchDB\(sourceDb,identity\.branchIds\)/);
+ assert.match(publish,/filteredSchedulerDB\(sourceDb\)/);assert.match(publish,/filteredTeacherDB\(sourceDb,identity\.teacherId\)/);assert.match(publish,/filteredBranchDB\(sourceDb,identity\.branchIds,access\)/);
  assert.match(publish,/adapter\.synchronize\(targetDb/);
 });
 

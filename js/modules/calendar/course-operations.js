@@ -231,7 +231,7 @@ function openCourseDrawer(id){
   activeCourseDrawerId=id;
   const s=student(l.studentId),teachers=lessonTeacherNames(l)||'未指定老師';
   const mode=window.DanbridgeAccess?.deliveryModeFromLesson?.(l)||'onsite';const place=mode==='home'?`${locationLabel(l)}${l.address?'・'+l.address:''}`:mode==='online'?`${locationLabel(l)}${l.onlinePlatform?'・'+l.onlinePlatform:''}`:`${locationLabel(l)}${l.room?'・'+l.room:''}`;
-  const role=window.currentCloudRole?.()||window.DanbridgeAccess?.getContext?.().role||'',teacherView=role==='teacher',payment=l.paymentStatus==='paid'?'已繳':l.paymentStatus==='waived'?'免收':'未繳';
+  const context=window.DanbridgeAccess?.getContext?.()||{},role=window.currentCloudRole?.()||context.role||'',teacherView=role==='teacher'||(role==='branch_manager'&&context.hideFinancials===true),payment=l.paymentStatus==='paid'?'已繳':l.paymentStatus==='waived'?'免收':'未繳';
   $('courseDrawerTitle').textContent=s.name||l.title||'課程';
   $('courseDrawerTitle').dataset.calendarStudentId=l.studentId||'';
   $('courseDrawerSubtitle').textContent=`${formatCourseDrawerDate(l.date)}・${l.start}–${l.end}`;
@@ -254,7 +254,7 @@ function openCourseDrawer(id){
     <div class="course-detail-note">${esc(l.note||'目前沒有備註。')}</div>`;
   const reportBtn=$('courseDrawerReportBtn');
   if(reportBtn){
-    const canReport=window.canCurrentUserReportLesson?.(l.id)===true;
+    const canReport=!(role==='branch_manager'&&context.hideFinancials===true)&&window.canCurrentUserReportLesson?.(l.id)===true;
     reportBtn.hidden=!canReport;
     reportBtn.onclick=()=>{const lessonId=activeCourseDrawerId;closeCourseDrawer();window.openLessonReport?.(lessonId)};
   }

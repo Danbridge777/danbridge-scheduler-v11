@@ -24,11 +24,12 @@ function normalizeScheduleDetail(value,index){
 }
 
 function normalizePublishNotification(value,index){
- const row=exact(value,['id','payload'],`通知 ${index+1}`),id=text(row.id,200),payload=exact(row.payload,['companyId','recipientEmail','recipientRole','teacherId','branchIds','teacherName','title','message','changeCount','details','read','createdBy','createdByName'],`通知 ${index+1}.payload`),recipientEmail=normalizedEmail(payload.recipientEmail),recipientRole=text(payload.recipientRole,32),teacherId=text(payload.teacherId,160),branchIds=Array.isArray(payload.branchIds)?[...new Set(payload.branchIds.map(value=>text(value,160)).filter(Boolean))]:[],details=Array.isArray(payload.details)?payload.details.map(normalizeScheduleDetail):[];
+ const row=exact(value,['id','payload'],`通知 ${index+1}`),id=text(row.id,200),payload=exact(row.payload,['companyId','recipientEmail','recipientRole','teacherId','branchIds','teacherName','title','message','changeCount','details','read','createdBy','createdByName','privacyScope'],`通知 ${index+1}.payload`),recipientEmail=normalizedEmail(payload.recipientEmail),recipientRole=text(payload.recipientRole,32),teacherId=text(payload.teacherId,160),branchIds=Array.isArray(payload.branchIds)?[...new Set(payload.branchIds.map(value=>text(value,160)).filter(Boolean))]:[],details=Array.isArray(payload.details)?payload.details.map(normalizeScheduleDetail):[];
  if(!NOTIFICATION_ID.test(id)||payload.companyId!=='danbridge'||!EMAIL.test(recipientEmail)||!RECIPIENT_ROLES.has(recipientRole)||branchIds.length>50||details.length<1||details.length>500||payload.read!==false||!NOTIFICATION_ID.test(text(payload.createdBy,128)))throw new Error(`通知 ${index+1} 內容無效`);
  if(Number(payload.changeCount)!==details.length)throw new Error(`通知 ${index+1} 變更數不一致`);
  if(recipientRole==='teacher'&&!teacherId)throw new Error(`通知 ${index+1} 缺少老師識別碼`);
- return Object.freeze({id,payload:Object.freeze({companyId:'danbridge',recipientEmail,recipientRole,teacherId,branchIds:Object.freeze(branchIds),teacherName:text(payload.teacherName,160),title:text(payload.title,120),message:text(payload.message,500),changeCount:details.length,details:Object.freeze(details),read:false,createdBy:text(payload.createdBy,128),createdByName:text(payload.createdByName,160)})});
+ if(payload.privacyScope!==undefined&&(payload.privacyScope!=='schedule-only-v1'||recipientRole!=='branch_manager'||details.some(d=>[d.before,d.after].some(s=>s&&['note','address','meetingUrl','onlinePlatform'].some(k=>s[k])))))throw Error('唯讀通知隱私範圍無效');
+ return Object.freeze({id,payload:Object.freeze({companyId:'danbridge',recipientEmail,recipientRole,teacherId,branchIds:Object.freeze(branchIds),teacherName:text(payload.teacherName,160),title:text(payload.title,120),message:text(payload.message,500),changeCount:details.length,details:Object.freeze(details),read:false,createdBy:text(payload.createdBy,128),createdByName:text(payload.createdByName,160),...(payload.privacyScope?{privacyScope:payload.privacyScope}:{})})});
 }
 
 export function normalizeProductionScheduleNotificationPublishRequest(request={}){
@@ -49,6 +50,7 @@ export function assertProductionScheduleNotificationAccess(notification={},acces
  if(payload.recipientRole==='branch_manager'){
   const allowed=new Set(Array.isArray(row.branchIds)?row.branchIds.map(String):[]);
   if(row.role!=='branch_manager'||!payload.branchIds.length||payload.branchIds.some(branchId=>!allowed.has(branchId)))throw new Error('通知校區主管範圍不符');
+  if(row.hideFinancials===true&&payload.privacyScope!=='schedule-only-v1')throw Error('通知未通過隱藏費用範圍驗證');
  }
  return true;
 }

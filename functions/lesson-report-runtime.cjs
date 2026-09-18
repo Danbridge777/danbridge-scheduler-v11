@@ -42,6 +42,7 @@ async function saveLessonReport({firestore,identity,input,serverTimestamp,now=()
   const ownTeacher=teacherId&&meta.teacherIds.includes(teacherId),ownBranch=branchIds.includes(meta.branchId);
   if(!owner&&!(access.role==='branch_manager'?(ownBranch&&(readOnly||ownTeacher)):ownTeacher))fail('permission-denied','沒有這堂課的回報權限');
   if(readOnly)return{ok:true,readOnly:true,lessonId:request.lessonId,report:current?Object.fromEntries([...fields,'companyId','lessonId','branchId','teacherId','teacherUid','teacherEmail','teacherName','reportedByRole','reportedForTeacherIds','isOwnerReport','updatedAtClient','editableUntilClient'].filter(k=>k in current).map(k=>[k,current[k]])):null};
+  if(!owner&&(access.canSubmitOwnReports===false||(access.role==='branch_manager'&&access.readOnly===true)))fail('permission-denied','此帳號僅供查閱，不能提交課堂回報');
   // Even replay requires current membership and lesson scope. The original
   // committed receipt may be recovered after the editing window closes.
   if(receiptSnap.exists){const receipt=receiptSnap.data();if(receipt.fingerprint!==fingerprint)fail('already-exists','回報操作識別衝突');return{ok:true,duplicate:true,operationId:request.operationId,lessonId:request.lessonId,report:receipt.report}}

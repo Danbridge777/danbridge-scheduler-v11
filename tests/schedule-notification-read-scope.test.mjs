@@ -5,6 +5,15 @@ import vm from 'node:vm';
 import {scheduleNotificationReadFilters as filters,scheduleNotificationMatchesFilters as matches} from '../js/core/schedule-notification-read-scope.js';
 const email='aa@example.test';
 
+test('financial scope reduction excludes same-role same-branch historical payloads',()=>{
+ const profile={email,role:'branch_manager',branchIds:['art_museum'],hideFinancials:true};
+ const old={recipientEmail:email,recipientRole:'branch_manager',branchIds:['art_museum']};
+ assert.equal(matches(old,filters(profile)),false);
+ assert.equal(matches({...old,privacyScope:'schedule-only-v1'},filters(profile)),true);
+ assert.equal(matches({...old,privacyScope:'unknown'},filters(profile)),false);
+ assert.equal(matches(old,filters({...profile,hideFinancials:false})),true);
+});
+
 test('scope reduction rejects historical scheduler and other-branch notices',()=>{
  const scope=filters({email,role:'branch_manager',branchIds:['art_museum']});
  assert.equal(matches({recipientEmail:email,recipientRole:'branch_manager',branchIds:['art_museum']},scope),true);
@@ -33,14 +42,14 @@ test('actual subscription uses server query scope and rejects out-of-scope callb
  const module=readFileSync(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');
  const source=module.slice(module.indexOf('function subscribeScheduleNotifications(){'),module.indexOf('async function publishStagingShadowGeneration'));
  assert.ok(source.startsWith('function subscribeScheduleNotifications(){'));
- for(const profile of [{role:'owner'},{role:'teacher',canManageSchedule:true},{role:'teacher',teacherId:'t1'},{role:'branch_manager',branchIds:['art_museum']}]){
+  for(const profile of [{role:'owner'},{role:'teacher',canManageSchedule:true},{role:'teacher',teacherId:'t1'},{role:'branch_manager',branchIds:['art_museum']},{role:'branch_manager',branchIds:['art_museum'],hideFinancials:true}]){
   let callback,queryArgs,displayed;
   const scope=filters({email,...profile});
   const current=Object.fromEntries(scope.map(([field,,value])=>[field,value]));
   const context=vm.createContext({
    unsubscribeScheduleNotifications:null,scheduleNotificationDocuments:[],scheduleNotificationPresenter:null,
    cloud:{},COMPANY_ID:'danbridge',cloudEmailKey:email,cloudRole:profile.role,cloudTeacherId:profile.teacherId||'',cloudBranchIds:profile.branchIds||[],cloudCanManageSchedule:profile.canManageSchedule===true,
-   installScheduleNotificationUI(){},document:{getElementById:()=>({})},
+   installScheduleNotificationUI(){},resetScheduleNotificationContext(){},document:{getElementById:()=>({})},window:{DanbridgeAccess:{getContext:()=>profile}},
    createScheduleNotificationPresenter:()=>({update:rows=>{displayed=rows},stop(){}}),
    collection:(...args)=>args,where:(...args)=>args,query:(...args)=>{queryArgs=args;return args},
    onSnapshot:(q,options,next)=>{callback=next;return()=>{}},

@@ -10,6 +10,13 @@ function fixture(access,notifications){
  return{writes,reads,run:ids=>acknowledgeScheduleNotifications({firestore,actor,notificationIds:ids,serverTimestamp:()=> 'timestamp'})};
 }
 const member=fields=>({active:true,companyId:'danbridge',...fields});
+test('same-role financial reduction rejects historical acknowledgments atomically',async()=>{
+ const access=member({role:'branch_manager',branchIds:['art_museum'],hideFinancials:true});
+ const notice={recipientRole:'branch_manager',branchIds:['art_museum']};
+ const f=fixture(access,{safe:{...notice,privacyScope:'schedule-only-v1'},old:notice});
+ await assert.rejects(f.run(['safe','old']));assert.equal(f.writes.length,0);
+ assert.deepEqual(await f.run(['safe']),{updatedCount:1,alreadyReadCount:0});
+});
 for(const [name,access,notice]of[
  ['owner',member({role:'owner'}),{recipientRole:'teacher',teacherId:'past'}],
  ['scheduler',member({role:'teacher',canManageSchedule:true}),{recipientRole:'scheduler'}],

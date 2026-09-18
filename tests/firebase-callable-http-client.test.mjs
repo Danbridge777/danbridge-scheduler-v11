@@ -4,6 +4,13 @@ import {readFileSync} from 'node:fs';
 import {createFirebaseCallableHttpClient} from '../js/core/firebase-callable-http-client.js';
 
 const user={uid:'scheduler-user-12345',email:'aa0966626336@gmail.com',emailVerified:true};
+test('expected UI identity is checked before attestation and after token acquisition',async()=>{
+ let expected={uid:'other-user-12345',email:'other@example.test'},tokens=0,requests=0;
+ const f=fixture({getExpectedIdentity:()=>expected,getLimitedUseAppCheckToken:async()=>{tokens++;expected={uid:'other-user-12345',email:'other@example.test'};return'limited-app-check-12345'},fetch:async()=>{requests++;throw Error('must not send')}});
+ await assert.rejects(()=>f.client.call({}),/畫面與登入身分不一致/);assert.equal(tokens,0);assert.equal(requests,0);
+ expected={uid:user.uid,email:user.email};await assert.rejects(()=>f.client.call({}),/畫面與登入身分不一致/);assert.equal(tokens,1);assert.equal(requests,0);
+ assert.throws(()=>fixture({getExpectedIdentity:true}),/設定無效/);
+});
 test('所有實際模組 callable 名稱都可在正確專案初始化，跨專案必須拒絕',()=>{
  const source=readFileSync(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');
  const names=new Set([...source.matchAll(/(?:functionName:|\?)'(staging\w+|production\w+)'/g)].map(m=>m[1]));

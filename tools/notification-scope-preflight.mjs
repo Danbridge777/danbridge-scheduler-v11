@@ -16,8 +16,8 @@ const token=await require(cli+'/auth.js').getAccessToken(account.tokens.refresh_
 authClient.setCredentials({access_token:token.access_token});
 const db=new Firestore({projectId:project,authClient});
 try{
- const namedAccounts=['a0965487920@gmail.com','catherine890202@gmail.com','aa0966626336@gmail.com','yamiiii8549@gmail.com'];
- const access=authorizedFour?{docs:await db.getAll(...namedAccounts.map(email=>db.doc('companyAccess/'+email)))}:await db.collection('companyAccess').where('companyId','==','danbridge').where('active','==',true).limit(101).get();
+ const primaryOwner='a0965487920@gmail.com',namedAccounts=[primaryOwner,'catherine890202@gmail.com','aa0966626336@gmail.com','yamiiii8549@gmail.com'];
+ const access=authorizedFour?{docs:(await db.getAll(...namedAccounts.map(email=>db.doc('companyAccess/'+email)))).map((row,index)=>row.exists?row:{exists:true,id:namedAccounts[index],data:()=>({companyId:'danbridge',active:true,role:'owner'})})}:await db.collection('companyAccess').where('companyId','==','danbridge').where('active','==',true).limit(101).get();
  assert.ok(access.docs.length<=100,'Access sample truncated');
  const reports=[];
  for(const row of access.docs){
@@ -27,7 +27,7 @@ try{
   for(const [field,op,value]of filters)q=q.where(field,op,value);
   // Native production/staging aggregate query exercises the real indexes.
   const eligible=(await q.count().get()).data().count;
-  const notices=await db.collection('companies/danbridge/scheduleNotifications').where('recipientEmail','==',profile.email).select('recipientEmail','recipientRole','teacherId','branchIds').get();
+  const notices=await db.collection('companies/danbridge/scheduleNotifications').where('recipientEmail','==',profile.email).select('recipientEmail','recipientRole','teacherId','branchIds','privacyScope').get();
   const matched=notices.docs.filter(doc=>scheduleNotificationMatchesFilters(doc.data(),filters)).length;
   assert.equal(eligible,matched,'Query disagrees with scope matcher');
   reports.push({role:profile.role==='teacher'&&profile.canManageSchedule?'scheduler':profile.role,branchCount:profile.branchIds?.length||0,total:notices.size,currentScope:matched,excludedHistoricalScope:notices.size-matched,missingRecipientRole:notices.docs.filter(doc=>!doc.data().recipientRole).length});

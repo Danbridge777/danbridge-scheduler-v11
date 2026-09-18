@@ -6,6 +6,7 @@ const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 const context = {
+  projectProductionBranchAccessDb: require('../js/core/production-role-view-projection.js').projectProductionBranchAccessDb,
   console,
   db: { students: [], teachers: [], lessons: [], makeups: [], summerCampRegistrations: [], winterCampRegistrations: [] },
   window: {},
@@ -323,7 +324,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.332'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.342'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -487,7 +488,7 @@ const threeTeacherSource = {
   students: [
     { id: 'student-t1', name: 'T1 Student', parent: 'Private T1', rate: 111 },
     { id: 'student-t2', name: 'T2 Student', parent: 'Private T2', rate: 222 },
-    { id: 'student-t3', name: 'T3 Student', parent: 'Private T3', rate: 333 },
+    { id: 'student-t3', name: 'T3 Student', parent: 'Private T3', rate: 334 },
     { id: 'student-shared', name: 'Shared Student', parent: 'Private Shared', rate: 444 }
   ],
   teachers: [
@@ -545,7 +546,7 @@ assert.deepEqual(Array.from(branchView.students,row=>row.id), ['s1']);
 assert.deepEqual(Array.from(branchView.teachers,row=>row.id), ['t1']);
 assert.deepEqual(Array.from(branchView.fixedExpenses, row => row.id), ['expense']);
 assert.deepEqual(Array.from(branchView.collectionRecords,row=>row.id), ['payment']);
-assert.match(cloudSource,/function buildCurrentRoleViewCandidates[\s\S]*filteredSchedulerDB\(sourceDb\)[\s\S]*filteredTeacherDB\(sourceDb,access\.teacherId\)[\s\S]*filteredBranchDB\(sourceDb,access\.branchIds\)/,'role-record candidates reuse the exact live permission projections instead of a duplicate permission model');
+assert.match(cloudSource,/function buildCurrentRoleViewCandidates[\s\S]*filteredSchedulerDB\(sourceDb\)[\s\S]*filteredTeacherDB\(sourceDb,access\.teacherId\)[\s\S]*filteredBranchDB\(sourceDb,access\.branchIds,access\)/,'role-record candidates reuse the exact live permission projections instead of a duplicate permission model');
 assert.match(cloudSource,/__danbridgeRepublishProductionRoleViews[\s\S]*production-records-authoritative[\s\S]*publishScopedViews\(sourceDb,\{recordAuthority:true,verifyReadback:true\}\)[\s\S]*const audit=publication\?\.audit;[\s\S]*!audit\?\.verified\|\|audit.sourceHash!==sourceHash\|\|audit.formalRecordWrites!==0[\s\S]*throw Error/,'production Owner requires protected backend readback, matching source hash and zero primary writes for every sanitized role view');
 assert.match(cloudSource,/productionRolePrivacyBtn[\s\S]*__danbridgeRepublishProductionRoleViews\(\)[\s\S]*角色權限已驗證/,'production Owner has a visible control that only reports success after role-view hash verification');
 assert.match(cloudSource,/__danbridgeRepublishProductionRoleViews=async\(\)=>\{[\s\S]*auth\.currentUser[\s\S]*currentUser\.uid!==cloudUid[\s\S]*currentEmail!==OWNER_EMAIL/,'production role-view republish rechecks the live primary Owner without referencing a reader-local guard');

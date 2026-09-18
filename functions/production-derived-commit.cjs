@@ -18,7 +18,7 @@ async function readProductionRoleViewInputs(firestore,collectionNames,{onRead=()
 
 function accessIdentity(value){
  if(!value)return null;
- return JSON.stringify({email:value.email||'',companyId:value.companyId||'',role:value.role||'',active:value.active===true,teacherId:value.teacherId||'',branchIds:[...(value.branchIds||[])].map(String).sort(),canManageSchedule:value.canManageSchedule===true,readOnly:value.readOnly===true,revision:value.revision??null});
+ return JSON.stringify({email:value.email||'',companyId:value.companyId||'',role:value.role||'',active:value.active===true,teacherId:value.teacherId||'',branchIds:[...(value.branchIds||[])].map(String).sort(),canManageSchedule:value.canManageSchedule===true,canMoveSchedule:value.canMoveSchedule===true,hideFinancials:value.hideFinancials===true,scheduleBranchIds:[...(value.scheduleBranchIds||[])].map(String).sort(),readOnly:value.readOnly===true,revision:value.revision??null});
 }
 
 // The authoritative head and access scope are part of every write transaction.
@@ -43,4 +43,4 @@ async function commitProductionDerivedWrites(firestore,writes,{sourceHash,access
  return writes.length;
 }
 
-module.exports={commitProductionDerivedWrites,readProductionRoleViewInputs};
+module.exports={commitProductionDerivedWrites,readProductionRoleViewInputs,accessIdentity};

@@ -38,11 +38,11 @@ body[data-role-ux="branch_manager"] #v20ReplaceModal,
 body[data-role-ux="branch_manager"] #v20HistoryModal,
 body[data-role-ux="branch_manager"] #students .grid>.card.col-4,
 body[data-role-ux="branch_manager"] #teachers .grid>.card.col-4,
-body[data-role-ux="branch_manager"] #students button,
+body[data-role-ux="branch_manager"] #students button:not(#studentWorkspaceTabs > button):not([onclick^="showStudentHistory("]):not([data-branch-readonly="history"]),
 body[data-role-ux="branch_manager"] #teachers button,
 body[data-role-ux="branch_manager"] #makeups button,
 body[data-role-ux="branch_manager"] #settlement button,
-body[data-role-ux="branch_manager"] #finance button,
+body[data-role-ux="branch_manager"] #finance button:not(.v181-finance-nav > button),
 body[data-role-ux="branch_manager"] #finance .finance-form-row{display:none!important}
 body[data-role-ux="teacher"] #calendar .lesson,body[data-role-ux="teacher"] #calendar .week-event,
 body[data-role-ux="branch_manager"] #calendar .lesson,body[data-role-ux="branch_manager"] #calendar .week-event{cursor:pointer!important}
@@ -390,3 +390,28 @@ body.teacher-cloud-role #lessonRows td[class^="status-"] .pill{display:none!impo
   body.teacher-cloud-role #calendar .calendar-toolbar-tools{gap:6px!important;padding:8px!important}
   body.teacher-cloud-role #calendar .calendar-toolbar-tools .btn{height:38px!important;min-height:38px!important;padding:5px 6px!important}
 }
+/* Financial payloads are excluded on the server; remove empty fee UI too. */
+body.branch-finance-hidden #finance,
+body.branch-finance-hidden #settlement,
+body.branch-finance-hidden #teacherRows td:nth-child(2),
+body.branch-finance-hidden #teacherRows td:nth-child(3),
+body.branch-finance-hidden #teachers table thead th:nth-child(2),
+body.branch-finance-hidden #teachers table thead th:nth-child(3),
+body.branch-finance-hidden #lessonRows td:nth-child(6),
+body.branch-finance-hidden #lessons table thead th:nth-child(6),
+body.branch-finance-hidden #lessonRows td:nth-child(5) .pill,
+body.branch-finance-hidden #studentRows td:nth-child(4) > .small,
+body.branch-finance-hidden #studentRows td:nth-child(5) > .small,
+body.branch-finance-hidden #teacherKpiSummary > div:last-child,
+body.branch-finance-hidden .teacher-kpi-metrics > div:last-child,
+body.branch-finance-hidden #dashboard .metric:has(#mRevenue),
+body.branch-finance-hidden #dashboard .metric:has(#mUnpaid),
+body.branch-finance-hidden #dashboard .metric:has(#mPayroll),
+body.branch-finance-hidden #dashboard .v33-ops-mini:has(#v33TodayRevenue){display:none!important}
+/* An explicitly unlocked branch manager needs empty dates as drop targets.
+   The default locked policy and all other roles retain the compact layout. */
+@media(max-width:700px){
+ body.branch-move-enabled #calendarCanvas .month-grid>.day-cell:not(.out){display:block!important;min-height:90px!important}
+}
+body.branch-finance-hidden .notification-tab[data-filter="payment"],
+body.branch-finance-hidden .notification-tab[data-filter="hours"]{display:none!important}

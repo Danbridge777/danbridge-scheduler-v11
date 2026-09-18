@@ -7,7 +7,7 @@ function clearStudentWorkspaceDraftsOnIdentityChange(){
   studentWorkspaceDrafts.identity=key;
 }
 function ensureStudentWorkspace(){
-  const section=$('students');if(!section||$('studentWorkspaceTabs'))return;
+  const section=$('students');if(!section)return;if($('studentWorkspaceTabs')){setStudentWorkspaceView(studentWorkspaceMode);return}
   const tabs=document.createElement('div');tabs.id='studentWorkspaceTabs';tabs.className='student-workspace-tabs';tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','登記類型');
   for(const [mode,id,label] of [['individual','individualStudentTab','家教'],['group','createGroupRosterButton','團課']]){
     const button=document.createElement('button');button.type='button';button.id=id;button.textContent=label;button.setAttribute('role','tab');button.setAttribute('aria-controls','studentWorkspacePanel');button.dataset.workspace=mode;
@@ -54,7 +54,7 @@ function setStudentWorkspaceView(mode){
   const title=section.querySelector('.col-4 h2'),nameLabel=$('studentName')?.previousElementSibling,listTitle=$('crmSearch')?.closest('.toolbar')?.querySelector('h2');
   if(title)title.textContent=group?'團課資料':'學生資料';if(nameLabel)nameLabel.textContent=group?'團課名稱 *':'學生姓名 *';if(listTitle)listTitle.textContent=group?'團課清單':'學生清單';
   const additional=$('studentAdditionalDetails');if(additional)additional.querySelector('summary').textContent=group?'教材與備註':'聯絡與學習資料';
-  const headers=section.querySelectorAll('table thead th');['學生','家長／聯絡','學校／程度','課程／收費','歷程','操作'].forEach((label,i)=>{if(headers[i])headers[i].textContent=group?['團班','班內學生','固定老師','歸屬／上課校區','歷程','操作'][i]:label});
+  const headers=section.querySelectorAll('table thead th');['學生','家長／聯絡','學校／程度',window.DanbridgeAccess?.getContext?.().hideFinancials===true?'課程':'課程／收費','歷程','操作'].forEach((label,i)=>{if(headers[i])headers[i].textContent=group?['團班','班內學生','固定老師','歸屬／上課校區','歷程','操作'][i]:label});
   if($('crmSearch'))$('crmSearch').placeholder=group?'團班名稱、學生或家長姓名':'姓名、家長、學校、程度、電話';
   const searchLabel=$('crmSearch')?.previousElementSibling;if(searchLabel?.tagName==='LABEL')searchLabel.textContent=group?'搜尋團課':'搜尋學生';
 }
@@ -76,11 +76,11 @@ function renderGroupFeePreview(){
   const total=document.createElement('p');total.className='small';total.textContent=`已選 ${rows.length} 位 · 鐘點費合計 ${money(hourly)}／小時`;target.append(total);
 }
 function renderGroupWorkspaceRows(q,teacherId,archiveMode){
-  const rows=(db.students||[]).filter(s=>s.isGroupRoster&&(archiveMode==='all'||(archiveMode==='archived')===isArchivedRecord(s))&&(!teacherId||studentTeacherIds(s).has(String(teacherId)))&&(!q||[s.name,...(s.groupMemberIds||[]).flatMap(id=>{const child=student(id);return[child.name,child.parent]})].join(' ').toLowerCase().includes(q)));
+  const rows=(db.students||[]).filter(s=>!s.scheduleReferenceOnly&&s.isGroupRoster&&(archiveMode==='all'||(archiveMode==='archived')===isArchivedRecord(s))&&(!teacherId||studentTeacherIds(s).has(String(teacherId)))&&(!q||[s.name,...(s.groupMemberIds||[]).flatMap(id=>{const child=student(id);return[child.name,child.parent]})].join(' ').toLowerCase().includes(q)));
   const body=$('studentRows');body.replaceChildren();
   for(const s of rows){const tr=document.createElement('tr'),h=studentHistoryStats(s.id),archived=isArchivedRecord(s);if(archived)tr.className='is-archived';
     tr.innerHTML=`<td><b>${esc(s.name)}</b><div class="small">${archived?'已封存':'團班'}</div></td><td>${(s.groupMemberIds||[]).map(id=>{const child=student(id);return esc(child.name||'未找到學生')+'<span class="small">（'+esc(child.parent||'未填家長')+'）</span>'}).join('<br>')||'尚無學生'}</td><td>${esc(teacher(s.preferredTeacherId)?.name||'未設定')}</td><td>${studentBranchSummary(s)}<div class="small">依各學生收費 × 課表時數</div></td><td>${h.total} 堂<br><span class="small">${h.last?'最近 '+esc(h.last.date):'尚無課程'}</span></td><td class="crm-actions"></td>`;
-    const actions=tr.lastElementChild;for(const [label,fn] of [['檢視／編輯',()=>editStudent(s.id)],...(!archived?[['排課',()=>openSmartScheduler(s.id)]]:[]),['歷程',()=>showStudentHistory(s.id)],[archived?'恢復':'封存',()=>archived?restoreStudent(s.id):archiveStudent(s.id)]]){const button=document.createElement('button');button.type='button';button.className='btn';button.textContent=label;button.onclick=fn;actions.append(button)}body.append(tr);
+    const actions=tr.lastElementChild;for(const [label,fn] of [['檢視／編輯',()=>editStudent(s.id)],...(!archived?[['排課',()=>openSmartScheduler(s.id)]]:[]),['歷程',()=>showStudentHistory(s.id)],[archived?'恢復':'封存',()=>archived?restoreStudent(s.id):archiveStudent(s.id)]]){const button=document.createElement('button');button.type='button';button.className='btn';button.textContent=label;button.onclick=fn;if(label==='歷程')button.dataset.branchReadonly='history';actions.append(button)}body.append(tr);
   }
   if(!rows.length)body.innerHTML='<tr><td colspan="6" class="small">沒有符合條件的團班。</td></tr>';
 }

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {initializeTestEnvironment,assertSucceeds,assertFails} from '@firebase/rules-unit-testing';
-import {doc,getDoc,setDoc,updateDoc,deleteDoc,collection,getDocs} from 'firebase/firestore';
+import {doc,getDoc,setDoc,updateDoc,deleteDoc,collection,getDocs,writeBatch} from 'firebase/firestore';
 import {FULL_RECORD_COLLECTIONS} from '../js/core/cloud-full-record-shadow.js';
 import {buildRoleViewChunks} from '../js/core/role-view-chunks.js';
 import {readPatchedProductionRulesForEmulator,readExactProductionRulesForEmulator} from './helpers/current-production-rules.mjs';
@@ -20,7 +20,22 @@ test('compiled Rules: own active exact scope only, current published parts only,
   for(const item of parts){const db=env.authenticatedContext('uid-'+item.identity.kind,{email:item.identity.email,email_verified:true}).firestore();await assertSucceeds(getDoc(doc(db,item.root)));await assertSucceeds(getDoc(doc(db,item.part)));await assertFails(getDoc(doc(db,item.hidden)));await assertFails(getDocs(collection(db,item.root+'/parts')));await assertFails(setDoc(doc(db,item.part),{forged:true}));await assertFails(deleteDoc(doc(db,item.part)));await assertFails(getDoc(doc(db,parts.find(p=>p!==item).part)));
    await env.withSecurityRulesDisabled(ctx=>updateDoc(doc(ctx.firestore(),'companyAccess/'+item.identity.email),{active:false}));await assertFails(getDoc(doc(db,item.part)));await env.withSecurityRulesDisabled(ctx=>updateDoc(doc(ctx.firestore(),'companyAccess/'+item.identity.email),{active:true}));
   }
-  const branch=parts[2],branchDb=env.authenticatedContext('branch',{email:branch.identity.email}).firestore();await env.withSecurityRulesDisabled(ctx=>updateDoc(doc(ctx.firestore(),'companyAccess/'+branch.identity.email),{branchIds:['hexi']}));await assertFails(getDoc(doc(branchDb,branch.part)));
+  const branch=parts[2],branchDb=env.authenticatedContext('branch',{email:branch.identity.email}).firestore();
+  // Same account, teacher binding and managed campus: financial privacy must
+  // revoke old chunks through the current publication head, not a new identity.
+  const privateSource={...Object.fromEntries(FULL_RECORD_COLLECTIONS.map(c=>[c,[]])),lessons:[{id:'l1',teacherId:'t1',title:'private schedule only'}]};
+  const privateView=buildRoleViewChunks(privateSource,{identity:branch.identity,sourceRevision:2,sourceHash:'record-v1:'+'2'.repeat(64),stableRecords:true});
+  assert.equal(privateView.manifest.scope,branch.root.split('/')[1]);
+  await env.withSecurityRulesDisabled(async ctx=>{
+   const db=ctx.firestore(),batch=writeBatch(db);
+   for(const part of privateView.chunks)batch.set(doc(db,branch.root+'/parts/'+part.id),part);
+   batch.set(doc(db,branch.root),privateView.manifest);
+   batch.update(doc(db,branch.path),{hideFinancials:true,scheduleBranchIds:['art_museum','hexi'],canMoveSchedule:false,roleChunkManifest:privateView.manifest,scopedSourceRecordRevision:2,scopedSourceRecordHash:privateView.manifest.sourceHash});
+   await batch.commit();
+  });
+  await assertFails(getDoc(doc(branchDb,branch.part)));
+  await assertSucceeds(getDoc(doc(branchDb,branch.root+'/parts/'+privateView.chunks[0].id)));
+  await env.withSecurityRulesDisabled(ctx=>updateDoc(doc(ctx.firestore(),'companyAccess/'+branch.identity.email),{branchIds:['hexi']}));await assertFails(getDoc(doc(branchDb,branch.root+'/parts/'+privateView.chunks[0].id)));
   const teacher=parts[0],teacherDb=env.authenticatedContext('teacher',{email:teacher.identity.email}).firestore();await env.withSecurityRulesDisabled(ctx=>updateDoc(doc(ctx.firestore(),teacher.path),{'roleChunkManifest.digest':'0'.repeat(64)}));await assertFails(getDoc(doc(teacherDb,teacher.part)));
   const ownerDb=env.authenticatedContext('owner',{email:'a0965487920@gmail.com'}).firestore();await assertFails(setDoc(doc(ownerDb,parts[1].part),{forged:true}));await assertFails(deleteDoc(doc(ownerDb,parts[1].root)));await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),parts[1].part)));
  }finally{await env.cleanup()}

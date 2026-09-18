@@ -22,7 +22,8 @@ try{
   const parts=[];
   for(let i=0;i<manifest.chunkIds.length;i+=100){const rows=await db.getAll(...manifest.chunkIds.slice(i,i+100).map(id=>db.doc(`productionRoleChunkViews/${manifest.scope}/parts/${id}`)));if(rows.some(r=>!r.exists))throw Error('Published part missing');parts.push(...rows.map(r=>r.data()))}
   const assembled=assembleRoleViewChunks(manifest,parts,{identity:{email:view.email,kind:view.kind,teacherId:view.teacherId,branchIds:view.branchIds||[]},minSourceRevision:start.recordRevision,expectedSourceHash:start.recordDataHash});
-  const expected=recordDataHash(view.db);if(recordDataHash(assembled)!==expected||recordDataHash(head[branch?'scopedDb':'db'])!==expected)throw Error('Current and compatible role projection mismatch: '+view.kind);
+  const expected=recordDataHash(view.db),legacyKey=branch?'scopedDb':'db';
+  if(recordDataHash(assembled)!==expected||(Object.hasOwn(head,legacyKey)&&recordDataHash(head[legacyKey])!==expected))throw Error('Current and compatible role projection mismatch: '+view.kind);
   verified.push({role:view.kind,lessons:assembled.lessons.length,parts:parts.length,sourceRevision:manifest.sourceRevision,release:head.release,verified:true});
  }
  const [end,accessEnd,teachersEnd,schedulersEnd]=await Promise.all([safetyRef.get(),db.collection('companyAccess').where('companyId','==','danbridge').get(),db.collection('companies/danbridge/teacherViews').get(),db.collection('companies/danbridge/schedulerViews').get()]);

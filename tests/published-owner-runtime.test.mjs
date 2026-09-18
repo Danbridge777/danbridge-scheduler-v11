@@ -208,6 +208,19 @@ for(const preserveLegacyViews of [false,true])test(`native Firestore Owner: auth
   const branchBefore=(await firestore.doc('companyAccess/branch@example.test').get()).data();
   await runtime.execute({...scoped,requestId:'branch-name-only',mutation:{...scoped.mutation,expectedRevision:1,payload:{...scoped.mutation.payload,displayName:'隔離主管改名'}}},identity);
   const branchAfter=(await firestore.doc('companyAccess/branch@example.test').get()).data();assert.deepEqual(branchAfter.roleChunkManifest,branchBefore.roleChunkManifest,'unchanged branch scope must retain its manifest after access replacement');assert.equal(branchAfter.accessRevision,2);
+  // The exact AA/Lucas deployment must publish its new privacy scope with the
+  // access revision, not leave an old financial manifest attached to the user.
+  const privacyPayload={role:'branch_manager',teacherId:'branch',branchIds:['art_museum'],scheduleBranchIds:['art_museum','hexi'],hideFinancials:true,readOnly:true,canMoveSchedule:false,active:true};
+  const privacyRequest={...scoped,requestId:'branch-no-finance-340',mutation:{...scoped.mutation,expectedRevision:2,payload:privacyPayload}};
+  const privacyReply=await runtime.execute(privacyRequest,identity);
+  const privateProfile=(await firestore.doc('companyAccess/branch@example.test').get()).data();
+  assert.equal(privateProfile.accessRevision,3);assert.equal(privateProfile.hideFinancials,true);assert.equal(privateProfile.canMoveSchedule,false);
+  assert.deepEqual(privateProfile.scheduleBranchIds,['art_museum','hexi']);assert.ok(privateProfile.roleChunkManifest);
+  assert.equal(privateProfile.roleChunkManifest.sourceHash,privacyReply.result.publication.sourceHash);
+  if(!preserveLegacyViews)assert.equal(privateProfile.scopedDb,undefined,'no old financial inline copy after publication');
+  const beforeReplay=JSON.stringify(privateProfile);await runtime.execute(privacyRequest,identity);
+  assert.equal(JSON.stringify((await firestore.doc('companyAccess/branch@example.test').get()).data()),beforeReplay,'retry does not increment revision or restore old scope');
+  await assert.rejects(runtime.execute({...privacyRequest,requestId:'stale-privacy-change'},identity),/版本|revision|衝突/);
   const ordinaryOwner=await createPublishedOwnerRuntime({...dependencies,primaryOwnerEmail:'primary@example.test'});
   await firestore.doc('companyAccess/'+actor.email).update({active:false});await assert.rejects(ordinaryOwner.execute(createRequest,identity),/有效 Owner/);
   await assert.rejects(runtime.execute(createRequest,{...identity,appVerified:false}),/authentication/);

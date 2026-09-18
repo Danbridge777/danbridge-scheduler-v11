@@ -12,6 +12,7 @@ const functionCode=status=>String(status||'internal').toLowerCase().replaceAll('
 function identity(cfg){
  const user=cfg.getCurrentUser(),uid=user?.uid,email=clean(user?.email);
  if(!user||!validActor(uid)||!validEmail(email)||user.emailVerified!==true)throw new Error('排課需要已驗證的登入身分');
+ if(cfg.getExpectedIdentity){const expected=cfg.getExpectedIdentity();if(expected?.uid!==uid||clean(expected?.email)!==email)throw new Error('畫面與登入身分不一致，未送出操作');}
  return{user,uid,email};
 }
 
@@ -20,7 +21,7 @@ function identity(cfg){
 // clicked Save while retaining Auth, App Check replay protection and the exact
 // same onCall function boundary.
 export function createFirebaseCallableHttpClient(cfg){
- if(!cfg||typeof cfg!=='object'||Array.isArray(cfg)||!ALLOWED[cfg.projectId]?.has(cfg.functionName)||![cfg.getCurrentUser,cfg.getIdToken,cfg.getLimitedUseAppCheckToken,cfg.fetch].every(value=>typeof value==='function')||!Number.isSafeInteger(cfg.timeoutMs)||cfg.timeoutMs<1000||cfg.timeoutMs>60000)throw new Error('排課 callable client 設定無效');
+ if(!cfg||typeof cfg!=='object'||Array.isArray(cfg)||!ALLOWED[cfg.projectId]?.has(cfg.functionName)||![cfg.getCurrentUser,cfg.getIdToken,cfg.getLimitedUseAppCheckToken,cfg.fetch].every(value=>typeof value==='function')||(cfg.getExpectedIdentity!==undefined&&typeof cfg.getExpectedIdentity!=='function')||!Number.isSafeInteger(cfg.timeoutMs)||cfg.timeoutMs<1000||cfg.timeoutMs>60000)throw new Error('排課 callable client 設定無效');
  const endpoint=`https://${REGION}-${cfg.projectId}.cloudfunctions.net/${cfg.functionName}`;
  return Object.freeze({
   endpoint,

@@ -1,4 +1,12 @@
 /* One compact CRM workspace; data IDs and financial calculations are unchanged. */
+/* Read-only branch lists have no editor column; retain horizontal table
+   scrolling on small displays rather than compressing names into one glyph. */
+html body[data-role-ux="branch_manager"] #students>.grid,
+html body[data-role-ux="branch_manager"] #teachers>.grid{grid-template-columns:minmax(0,1fr)!important}
+html body[data-role-ux="branch_manager"] #students>.grid>.card.col-8,
+html body[data-role-ux="branch_manager"] #teachers>.grid>.card.col-8{grid-column:1/-1!important;width:100%!important;min-width:0!important}
+html body[data-role-ux="branch_manager"] #students .table-wrap{overflow:auto!important}
+html body[data-role-ux="branch_manager"] #students .table-wrap table{min-width:680px!important}
 html body #students{--danbridge-control-height:48px;--danbridge-control-font-size:14px}
 html body #students.active{display:flex!important;flex-direction:column;gap:12px}
 html body #students .student-workspace-tabs{flex:0 0 auto;margin:0;gap:0;background:#fff;border:1px solid #deddd6;border-radius:10px;overflow:hidden}

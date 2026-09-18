@@ -1,0 +1,22 @@
+// Read live Rules; prepare local pinned artifacts. Never deploy or modify cloud data.
+import {createRequire} from 'node:module';
+import {mkdtemp,writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import assert from 'node:assert/strict';
+import {patchNotificationPrivacyRules,PRIVACY_RULE_BASELINES} from './notification-privacy-rules-patch.mjs';
+const project=process.argv[2];assert.ok(PRIVACY_RULE_BASELINES[project]);
+const require=createRequire(import.meta.url),cli='/usr/local/lib/node_modules/firebase-tools/lib';
+const account=require(cli+'/auth.js').getGlobalDefaultAccount();
+await require(cli+'/requireAuth.js').requireAuth({project,user:account.user,tokens:account.tokens});
+const {Client}=require(cli+'/apiv2.js'),api=require(cli+'/api.js'),client=new Client({auth:true,apiVersion:'v1',urlPrefix:api.rulesOrigin()});
+const release=(await client.get(`/projects/${project}/releases/cloud.firestore`)).body;
+assert.ok(release.rulesetName.startsWith(`projects/${project}/rulesets/`));
+const files=(await client.get('/'+release.rulesetName,{skipLog:{resBody:true}})).body.source.files;
+assert.equal(files.length,1);
+const patch=patchNotificationPrivacyRules(files[0].content,project);
+const directory=await mkdtemp('/private/tmp/danbridge-notification-privacy-');
+await writeFile(join(directory,'baseline.rules'),files[0].content);
+await writeFile(join(directory,'candidate.rules'),patch.source);
+const evidence={project,baseRuleset:release.rulesetName,baseSha256:patch.baseSha256,candidateSha256:patch.candidateSha256,writes:0,rulesDeployed:false};
+await writeFile(join(directory,'evidence.json'),JSON.stringify(evidence,null,2));
+console.log(JSON.stringify({directory,...evidence}));

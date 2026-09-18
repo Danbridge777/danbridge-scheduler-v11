@@ -14,6 +14,15 @@ function fixture({role='teacher',access={},meta={},current,actor=identity}={}){
  const firestore={doc:path=>({path}),runTransaction:async fn=>{const writes=[];const result=await fn({get:async ref=>{assert.equal(writes.length,0);return{exists:rows.has(ref.path),data:()=>rows.get(ref.path)}},set:(ref,data)=>writes.push([ref.path,data])});for(const [path,data]of writes){rows.set(path,data);count++}return result}};
  return{rows,get count(){return count},setTime:value=>time=value,run:(request=input,id=actor)=>saveLessonReport({firestore,identity:id,input:request,serverTimestamp:()=> 'server-time',now:()=>time})};
 }
+test('read-only branch cannot submit even its own lesson; explicit report revocation also blocks receipt replay',async()=>{
+ const f=fixture({role:'branch_manager',access:{readOnly:true,canSubmitOwnReports:true}});
+ assert.equal((await f.run({lessonId:'lesson-1',readOnly:true})).ok,true);
+ await assert.rejects(f.run(),{code:'permission-denied'});assert.equal(f.count,0);
+ const t=fixture();await t.run();const before=t.count;t.rows.get('companyAccess/'+identity.email).canSubmitOwnReports=false;
+ await assert.rejects(t.run(),{code:'permission-denied'});assert.equal(t.count,before);
+ const writable=fixture({role:'branch_manager',access:{readOnly:false,canSubmitOwnReports:true}});assert.equal((await writable.run()).ok,true);
+ const owner=fixture({role:'owner',access:{readOnly:true,canSubmitOwnReports:false}});assert.equal((await owner.run()).ok,true);
+});
 test('batch reads are bounded, no writes, and each lesson is checked against live scope',async()=>{
  const f=fixture();await f.run();const count=f.count;
  const result=await f.run({readOnly:true,lessonIds:['lesson-1']});assert.equal(result.reports[0].report.content,input.report.content);assert.equal(f.count,count);

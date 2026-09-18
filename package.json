@@ -6,6 +6,8 @@
     "node": "22"
   },
   "scripts": {
+    "test:notification-privacy": "node --test tests/notification-privacy.test.mjs tests/schedule-notification-read-scope.test.mjs tests/branch-no-finance-notifications.test.mjs tests/production-notification-acknowledge.test.mjs tests/production-notification-delivery-proof.test.mjs tests/teacher-report-recovery-status.test.mjs",
+    "test:access-presets": "node --test tests/access-presets.test.mjs tests/access-capability-mutation.test.mjs tests/branch-history-isolation.test.mjs tests/branch-no-finance.test.mjs tests/branch-no-finance-notifications.test.mjs tests/branch-schedule-move.test.mjs tests/branch-readonly-drawer.test.mjs",
     "build:record-plan": "node tools/build_record_plan_worker.mjs",
     "check:record-plan": "node tools/build_record_plan_worker.mjs --check",
     "pretest:e2e": "npm run check:record-plan",
@@ -14,7 +16,7 @@
     "test:published-workspace-browser": "node --test tests/staging-published-workspace-browser.test.mjs",
     "test:published-native-ui": "firebase emulators:exec --only firestore --project demo-danbridge-published-ui \"node --test tests/published-scheduler-native-ui.test.mjs tests/published-role-chunks-rules.test.mjs\"",
     "test:first-priority": "node --test tests/google-sign-in-flow.test.mjs tests/data-integrity-role-guard.test.mjs tests/production-first-priority-hardening.test.mjs tests/production-derived-commit.test.mjs tests/production-role-view-incremental-write.test.mjs tests/schedule-render-performance.test.mjs tests/cloud-login-nonblocking.test.mjs tests/billing-line-preview.test.mjs tests/teacher-payroll-monthly-leave.test.mjs tests/group-roster-projection.test.mjs tests/billing-collection-record-roundtrip.test.mjs",
-    "posttest": "npm run test:first-priority && npm run test:notification-delivery && npm run test:scheduler-atomic && npm run test:calendar-fast-filter && npm run test:role-transport && npm run test:journal && npm run test:health-refresh && npm run test:leave-release && npm run test:app-check",
+    "posttest": "npm run test:first-priority && npm run test:notification-delivery && npm run test:notification-privacy && npm run test:scheduler-atomic && npm run test:calendar-fast-filter && npm run test:role-transport && npm run test:journal && npm run test:health-refresh && npm run test:leave-release && npm run test:app-check",
     "test:app-check": "node --test tests/app-check-exchange-observer.test.mjs tests/app-check-limited-use-token.test.mjs tests/firebase-callable-http-client.test.mjs tests/notification-ack-error-recovery.test.mjs tests/hardening-review-331.test.mjs",
     "test:leave-release": "node --test tests/teacher-leave-runtime.test.mjs tests/teacher-leave-integration-contract.test.mjs tests/notification-ack-error-recovery.test.mjs",
     "test:health-refresh": "node --test tests/production-health-refresh.test.mjs tests/production-role-capacity.test.mjs tests/backend-health-freshness.test.mjs tests/transaction-history-version-reader.test.mjs tests/immutable-history-materializer.test.mjs tests/staging-workspace-runtime-pool.test.mjs tests/published-workspace-snapshot-identity.test.mjs",

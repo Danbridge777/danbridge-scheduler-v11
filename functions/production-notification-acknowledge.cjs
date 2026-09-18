@@ -11,7 +11,7 @@ async function acknowledgeScheduleNotifications({firestore,actor,notificationIds
   const accessSnapshot=await transaction.get(firestore.doc('companyAccess/'+actor.email));
   const access=accessSnapshot.data();
   if(!accessSnapshot.exists||access?.active!==true||access.companyId!=='danbridge')throw Error('通知確認帳號未通過目前公司權限');
-  const filters=scheduleNotificationReadFilters({email:actor.email,role:access.role,teacherId:access.teacherId,branchIds:access.branchIds,canManageSchedule:access.canManageSchedule});
+  const filters=scheduleNotificationReadFilters({email:actor.email,role:access.role,teacherId:access.teacherId,branchIds:access.branchIds,canManageSchedule:access.canManageSchedule,hideFinancials:access.hideFinancials});
   const refs=notificationIds.map(id=>firestore.doc('companies/danbridge/scheduleNotifications/'+id));
   const rows=await Promise.all(refs.map(ref=>transaction.get(ref)));
   for(const row of rows){

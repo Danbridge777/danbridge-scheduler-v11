@@ -227,6 +227,17 @@ async function verifiedProductionLeaveActor(request,runtimeValue){
  try{return normalizeTeacherLeaveActor(access)}catch{throw new HttpsError('permission-denied','此帳號沒有請假操作權限。')}
 }
 
+exports.stagingTeacherLeaveOperation=onCall({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'512MiB',concurrency:20,minInstances:0,maxInstances:5},async request=>{
+ if(!(process.env.GCLOUD_PROJECT||process.env.GOOGLE_CLOUD_PROJECT)||[process.env.GCLOUD_PROJECT,process.env.GOOGLE_CLOUD_PROJECT].filter(Boolean).some(value=>value!==PROJECT_ID))throw new HttpsError('failed-precondition','請假環境不符');
+ if(!request.auth?.uid||request.auth.token?.email_verified!==true||!request.app||request.app.alreadyConsumed)throw new HttpsError('unauthenticated','需要有效登入與全新 App Check');
+ try{
+  const app=getApps().find(row=>row.options?.projectId===PROJECT_ID)??initializeApp({projectId:PROJECT_ID,credential:applicationDefault()},'staging-teacher-leave');
+  const firestore=getFirestore(app),actor=await verifiedProductionLeaveActor(request,{firestore});
+  const result=await require('./teacher-leave-runtime.cjs').executeTeacherLeave({firestore,identity:actor,request:request.data,serverTimestamp:()=>FieldValue.serverTimestamp(),environment:'staging',readTeacherEnvelope:require('./staging-teacher-leave.cjs').stagingTeacherReader(firestore)});
+  return{schema:'danbridge-teacher-leave-operation-response-v1',ok:true,...result};
+ }catch(error){if(error instanceof HttpsError)throw error;throw new HttpsError('failed-precondition',String(error?.message||'請假操作已安全阻止。').slice(0,200))}
+});
+
 exports.productionTeacherLeaveOperation=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'512MiB',concurrency:20,minInstances:0,maxInstances:20},async request=>{
  try{
   const runtimeValue=await productionRuntime(),actor=await verifiedProductionLeaveActor(request,runtimeValue);
@@ -293,7 +304,7 @@ exports.productionTrustedOperation=onCall({region:'asia-east1',serviceAccount:PR
   const runtimeValue=await productionRuntime(),caller=await verifiedProductionOwner(request,runtimeValue),trusted=runtimeValue.assertProductionTrustedOperation(request.data);
   if(trusted.actor.uid!==caller.uid||trusted.actor.email!==caller.email)throw new HttpsError('permission-denied','操作身分不一致。');
   if(PUBLISHED_ROLE_TRANSPORT_ENABLED){
-   if(!publishedOwnerRuntimePromise)publishedOwnerRuntimePromise=createPublishedOwnerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,historyVersionCache:true,release:'20.26.320'}).catch(error=>{publishedOwnerRuntimePromise=null;throw error});
+   if(!publishedOwnerRuntimePromise)publishedOwnerRuntimePromise=createPublishedOwnerRuntime({firestore:runtimeValue.firestore,serverTimestamp:()=>FieldValue.serverTimestamp(),deleteField:()=>FieldValue.delete(),primaryOwnerEmail:PRIMARY_OWNER_EMAIL,preserveLegacyViews:PUBLISHED_ROLE_LEGACY_COMPATIBILITY,historyVersionCache:true,release:'20.26.342'}).catch(error=>{publishedOwnerRuntimePromise=null;throw error});
    return await (await publishedOwnerRuntimePromise).execute(request.data,{...caller,emailVerified:true,appVerified:Boolean(request.app)});
   }
   const adapters=runtimeValue.adaptersFor({uid:caller.uid,email:caller.email});

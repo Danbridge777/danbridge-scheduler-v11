@@ -1,6 +1,6 @@
 const {test,expect}=require('@playwright/test');
 const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
-test('Lucas scoped teacher filter and repeated real pointer moves retain duration and finance',async({page})=>{
+test('Lucas scoped teacher filter and repeated real pointer moves retain duration and finance',async({page,isMobile})=>{
  await isolateApplicationAuth(page);await page.goto('/index.html',{waitUntil:'load'});
  await page.evaluate(async()=>{
   const [{createBranchScheduleMoveController},{FULL_RECORD_COLLECTIONS},{buildProductionSchedulerTarget},{recordDataHash},{projectProductionBranchDb}]=await Promise.all([import('/js/core/branch-schedule-move.js'),import('/js/core/cloud-full-record-shadow.js'),import('/js/core/production-scheduler-operation.js'),import('/js/core/cloud-record-data-hash.js'),import('/js/core/production-role-view-projection.js')]);
@@ -15,18 +15,20 @@ test('Lucas scoped teacher filter and repeated real pointer moves retain duratio
   }});
   window.__danbridgeBranchMoveReady=()=>window.DanbridgeAccess.getContext().canMoveSchedule===true;
   window.saveDB=options=>{if(options?.scheduleAction!=='lesson.move')throw Error('Unexpected mutation');controller.move(db).catch(e=>window.__branchErrors.push(e.message))};
-  document.getElementById('calendarDate').value='2026-10-01';document.getElementById('calendarMode').value='month';switchTab('calendar');renderAll();window.DanbridgeRoleResponsive.apply();
+  switchTab('calendar');document.getElementById('calendarDate').value='2026-10-01';document.getElementById('calendarMode').value='month';renderAll();window.DanbridgeRoleResponsive.apply();
  });
  await page.locator('#calendarFilterPanel > summary').click();
+ await page.locator('#calendarDate').fill('2026-10-01');await page.locator('#calendarDate').press('Tab');
  const teachers=page.locator('#calendarTeacherFilter');await expect(teachers).toBeVisible();
  await expect(teachers.locator('option')).not.toContainText(['其他校區老師']);
- await teachers.selectOption('t2');await expect(page.locator('#calendarCanvas [data-id="l2"]:visible').first()).toBeVisible();await expect(page.locator('#calendarCanvas [data-id="l1"]:visible')).toHaveCount(0);
- await teachers.selectOption('t1');await expect(page.locator('#calendarCanvas [data-id="l1"]:visible').first()).toBeVisible();await expect(page.locator('#calendarCanvas [data-id="l2"]:visible')).toHaveCount(0);
+ await teachers.selectOption('t2');await page.locator('#calendarDate').fill('2026-10-01');await page.locator('#calendarDate').press('Tab');if(isMobile&&!(await page.locator('#calendarCanvas [data-id="l2"]').first().isVisible()))await page.locator('#calendarCanvas [data-date="2026-10-01"] .day-num').click();await expect(page.locator('#calendarCanvas [data-id="l2"]:visible').first()).toBeVisible();await expect(page.locator('#calendarCanvas [data-id="l1"]:visible')).toHaveCount(0);
+ await teachers.selectOption('t1');await page.locator('#calendarDate').fill('2026-10-01');await page.locator('#calendarDate').press('Tab');if(isMobile&&!(await page.locator('#calendarCanvas [data-id="l1"]').first().isVisible()))await page.locator('#calendarCanvas [data-date="2026-10-01"] .day-num').click();await expect(page.locator('#calendarCanvas [data-id="l1"]:visible').first()).toBeVisible();await expect(page.locator('#calendarCanvas [data-id="l2"]:visible')).toHaveCount(0);
  await expect(page.locator('#calendar .calendar-quick-add')).toBeHidden();
  for(const date of ['2026-10-02','2026-10-03','2026-10-04']){
+  if(isMobile&&!(await page.locator('#calendarCanvas [data-id="l1"]').first().isVisible())){const day=await page.locator('#calendarCanvas [data-id="l1"]').first().evaluate(el=>el.closest('[data-date]').dataset.date);await page.locator(`#calendarCanvas [data-date="${day}"] .day-num`).click()}
   const source=page.locator('#calendarCanvas [data-id="l1"]:visible').first(),target=page.locator(`#calendarCanvas [data-date="${date}"]`).first();
-  await source.scrollIntoViewIfNeeded();const a=await source.boundingBox(),b=await target.boundingBox();
-  await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2,b.y+50,{steps:12});await page.mouse.up();
+  if(isMobile)await source.dragTo(target.locator('.day-num'));
+  else{await source.scrollIntoViewIfNeeded();const a=await source.boundingBox(),b=await target.boundingBox();await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2,b.y+50,{steps:12});await page.mouse.up()}
   await expect.poll(()=>page.evaluate(()=>window.__branchServer?.lessons.find(l=>l.id==='l1').date)).toBe(date);
  }
  expect(await page.evaluate(()=>window.__branchErrors)).toEqual([]);

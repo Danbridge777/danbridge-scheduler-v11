@@ -15,6 +15,7 @@ test('atomic delivery proof binds current record, actor, scoped recipient and re
  assert.equal(coveredNotificationId(item,aggregate,entry.value,record,actor),item.id,'coalesced before-state and teacher set ordering do not resend already committed resulting state');
 });
 test('a previous matching value cannot hide a subsequent unnotified operation',()=>{
+ assert.equal(coveredNotificationId({...item,payload:{...item.payload,privacyScope:'schedule-only-v1'}},item.payload.details[0],entry.value,record,actor),null,'old non-private delivery proof cannot stand in for a private notification');
  for(const different of [{...record,revision:4},{...record,sourceHash:'authority-proof-4'},{...record,deleted:true},{...record,record:{...record.record,end:'12:00'}},null])assert.equal(coveredNotificationId(item,item.payload.details[0],entry.value,different,actor),null);
 });
 test('proof never matches another account, role, teacher, scope, lesson or target',()=>{

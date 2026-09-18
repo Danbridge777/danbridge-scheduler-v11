@@ -155,15 +155,16 @@ function createProductionScheduleNoticeBuilder({primaryOwnerEmail,projection,not
    const details=[];
    for(const change of changes){let a=change.before,b=change.after;
     if(role==='teacher'){a=teachers(a).includes(member.teacherId)?a:null;b=teachers(b).includes(member.teacherId)?b:null}
-    if(role==='branch_manager'){const allowed=new Set(member.branchIds||[]);a=allowed.has(a?.branchId)?a:null;b=allowed.has(b?.branchId)?b:null}
+    if(role==='branch_manager'){const allowed=new Set([...(member.branchIds||[]),...(member.hideFinancials===true?(member.scheduleBranchIds||[]).filter(id=>['art_museum','hexi'].includes(id)):[])]);const branch=row=>row?.branchId||(row?.location==='河西一路'?'hexi':row?.location==='美術東四路'?'art_museum':'unassigned');a=allowed.has(branch(a))?a:null;b=allowed.has(branch(b))?b:null}
     if(!a&&!b)continue;
     const type=!a?'added':!b?'removed':'modified',row=b||a,studentName=String(after.students.find(item=>item.id===row.studentId)?.name||before.students.find(item=>item.id===row.studentId)?.name||'未命名學生'),time=value=>value?`${value.date} ${value.start}–${value.end}`:'';
     let safeBefore=lessonSnapshot(a),safeAfter=lessonSnapshot(b);
-    if(role==='teacher'){if(safeBefore)safeBefore={...safeBefore,address:'',meetingUrl:'',note:''};if(safeAfter)safeAfter={...safeAfter,address:'',meetingUrl:'',note:''}}
+    if(role==='teacher'||(role==='branch_manager'&&member.hideFinancials===true)){if(safeBefore)safeBefore={...safeBefore,address:'',meetingUrl:'',onlinePlatform:'',note:''};if(safeAfter)safeAfter={...safeAfter,address:'',meetingUrl:'',onlinePlatform:'',note:''}}
     details.push({type,lessonId:change.lessonId,summary:`${{added:'新增',removed:'取消',modified:'修改'}[type]}：${studentName}｜${time(row)}`,studentName,beforeTime:time(a),afterTime:time(b),before:safeBefore,after:safeAfter});
    }
    if(!details.length)continue;
    const item={id:`scheduler_${sha256Canonical({requestId:request.requestId,email:member.email})}`,payload:{companyId:'danbridge',recipientEmail:member.email,recipientRole:role,teacherId:role==='teacher'?member.teacherId:'',branchIds:role==='branch_manager'?member.branchIds:[],teacherName:String(member.teacherName||member.displayName||''),title:'課表更新通知',message:`課表有 ${details.length} 個變更`,changeCount:details.length,details,read:false,createdBy:caller.uid,createdByName:caller.displayName}};
+   if(role==='branch_manager'&&member.hideFinancials===true)item.payload.privacyScope='schedule-only-v1';
    notificationPolicy.assertProductionScheduleNotificationAccess(item,member,primaryOwnerEmail);result.push(item);
   }
   if(!result.length)return[];

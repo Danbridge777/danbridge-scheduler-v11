@@ -2,7 +2,8 @@
 
 // Shared by production and the path-fenced staging workspace. All authorization,
 // receipt checks, records, audit and notifications belong to one transaction.
-async function executeTeacherLeave({firestore,identity,request,serverTimestamp,primaryOwnerEmail='a0965487920@gmail.com',nowIso=new Date().toISOString()}){
+async function executeTeacherLeave({firestore,identity,request,serverTimestamp,primaryOwnerEmail='a0965487920@gmail.com',nowIso=new Date().toISOString(),environment='production',readTeacherEnvelope=null}){
+ if(!['production','staging'].includes(environment))throw Error('請假環境無效');
  const policy=await import('../js/core/teacher-leave-policy.js');
  const normalized=policy.normalizeTeacherLeaveRequest(request),fingerprint=policy.teacherLeaveRequestFingerprint(request);
  const email=String(identity?.email||'').trim().toLowerCase(),uid=String(identity?.uid||'');
@@ -23,8 +24,8 @@ async function executeTeacherLeave({firestore,identity,request,serverTimestamp,p
    return{duplicate:true,record:current,revision:receipt.revision};
   }
   const teacherId=String(normalized.action==='cancel'?current?.teacherId||'':normalized.input?.teacherId||'');
-  const teacherSnapshot=await tx.get(firestore.doc(`productionFullRecordShadows/danbridge/collections/teachers/records/${teacherId}`));
-  const teacher=policy.teacherRecordFromAuthorityEnvelope(teacherSnapshot.exists?teacherSnapshot.data():null,teacherId);
+  const teacherEnvelope=readTeacherEnvelope?await readTeacherEnvelope(tx,teacherId):(await tx.get(firestore.doc(`productionFullRecordShadows/danbridge/collections/teachers/records/${teacherId}`))).data();
+  const teacher=policy.teacherRecordFromAuthorityEnvelope(teacherEnvelope,teacherId);
   const record=policy.buildTeacherLeaveRecord({request,actor,current,teacherName:String(teacher.name||teacher.displayName||teacherId),nowIso});
   const active=accessRows.filter(row=>row.active===true&&row.companyId==='danbridge');
   const recipients=new Map();
@@ -35,8 +36,8 @@ async function executeTeacherLeave({firestore,identity,request,serverTimestamp,p
    if(row.role==='owner'||scheduler||ownTeacher)recipients.set(row.email,{email:row.email,role:row.role==='owner'?'owner':scheduler?'scheduler':'teacher',teacherId:row.role==='owner'?'':String(row.teacherId||'')});
   }
   tx.set(leaveRef,{...record,updatedAt:serverTimestamp(),updatedByUid:uid,updatedByEmail:email},{merge:false});
-  tx.set(receiptRef,{schema:'danbridge-teacher-leave-operation-receipt-v1',environment:'production',companyId:'danbridge',operationId:normalized.operationId,leaveId:normalized.leaveId,action:normalized.action,requestFingerprint:fingerprint,revision:record.revision,committedAt:serverTimestamp(),committedByUid:uid,committedByEmail:email},{merge:false});
-  tx.set(firestore.doc(`companyAudit/teacher-leave-${normalized.operationId}`),{schema:'danbridge-company-audit-v2',environment:'production',companyId:'danbridge',category:'teacher-leave',action:`teacher-leave-${normalized.action}`,actorUid:uid,actorEmail:email,targetType:'teacherLeave',targetId:normalized.leaveId,teacherId:record.teacherId,leaveType:record.leaveType,date:record.date,durationMinutes:record.durationMinutes,status:record.status,revision:record.revision,createdAt:serverTimestamp()},{merge:false});
+  tx.set(receiptRef,{schema:'danbridge-teacher-leave-operation-receipt-v1',environment,companyId:'danbridge',operationId:normalized.operationId,leaveId:normalized.leaveId,action:normalized.action,requestFingerprint:fingerprint,revision:record.revision,committedAt:serverTimestamp(),committedByUid:uid,committedByEmail:email},{merge:false});
+  tx.set(firestore.doc(`companyAudit/teacher-leave-${normalized.operationId}`),{schema:'danbridge-company-audit-v2',environment,companyId:'danbridge',category:'teacher-leave',action:`teacher-leave-${normalized.action}`,actorUid:uid,actorEmail:email,targetType:'teacherLeave',targetId:normalized.leaveId,teacherId:record.teacherId,leaveType:record.leaveType,date:record.date,durationMinutes:record.durationMinutes,status:record.status,revision:record.revision,createdAt:serverTimestamp()},{merge:false});
   for(const recipient of recipients.values()){
    const suffix=recipient.email.replace(/[^A-Za-z0-9_-]/g,'_'),verb=normalized.action==='create'?'新增':normalized.action==='update'?'更新':'取消',label=policy.teacherLeaveTypeLabel(record.leaveType);
    tx.set(firestore.doc(`companies/danbridge/scheduleNotifications/leave_${normalized.operationId}_${suffix}`),{companyId:'danbridge',notificationType:'teacher-leave',recipientEmail:recipient.email,recipientRole:recipient.role,teacherId:recipient.teacherId,teacherName:record.teacherName,title:'老師請假異動',message:`${record.teacherName} ${record.date} ${record.start}–${record.end} ${label}已${verb}`,changeCount:1,details:[{leaveId:record.leaveId,teacherId:record.teacherId,teacherName:record.teacherName,leaveType:record.leaveType,leaveTypeLabel:label,date:record.date,start:record.start,end:record.end,hours:record.hours,status:record.status,action:normalized.action,summary:`${label} ${record.hours} 小時`}],read:false,createdAt:serverTimestamp(),createdBy:uid,createdByName:String(saved?.teacherName||saved?.displayName||email)},{merge:false});

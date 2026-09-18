@@ -8,7 +8,7 @@ function ensureStudentTeacherPricingFields(){
 function pricingToday(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())}
 function renderPricingEffectiveDate(kind,record={}){
  const teacher=kind==='teacher',id=teacher?'teacherPricingEffectiveMonth':'studentPricingEffectiveDate',anchor=$(teacher?'teacherRate':'studentRate');if(!anchor)return;
- let input=$(id);if(!input){const box=document.createElement('div');box.className='pricing-effective-field';const label=document.createElement('label');label.htmlFor=id;label.textContent=teacher?'薪資變更生效月份':'費率變更生效日期';input=document.createElement('input');input.id=id;input.type=teacher?'month':'date';box.append(label,input);anchor.parentElement.after(box)}
+ let input=$(id);if(!input){const box=document.createElement('div');box.className='pricing-effective-field';const label=document.createElement('label');label.htmlFor=id;label.textContent=teacher?'薪資變更生效月份':'費率變更生效日期';input=document.createElement('input');input.id=id;input.type=teacher?'month':'date';box.append(label,input);if(teacher)anchor.after(box);else anchor.parentElement.after(box)}
  const today=pricingToday(),[y,m]=today.split('-').map(Number),nextMonth=String(m===12?y+1:y)+'-'+String(m===12?1:m+1).padStart(2,'0');
  const pending=(record.pricingHistory||[]).filter(row=>row.effectiveFrom>=today).sort((a,b)=>b.effectiveFrom.localeCompare(a.effectiveFrom))[0]?.effectiveFrom;
  const monthlyStudent=!teacher&&record.courseType==='安親';
