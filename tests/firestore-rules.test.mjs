@@ -798,13 +798,15 @@ describe('每日分片雲端備份權限與不可覆寫保護',()=>{
 });
 
 describe('Owner 權限', () => {
-  test('排課專員授權只允許 aa 帳號', async () => {
+  test('排課專員套裝可套用任何有效老師帳號，但不能省略老師身分或改成其他角色', async () => {
     const owner = auth('owner-uid', OWNER_EMAIL);
     await assertSucceeds(setDoc(doc(owner, `companyAccess/${SECOND_SCHEDULER_EMAIL}`), { email: SECOND_SCHEDULER_EMAIL, active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-aa', canManageSchedule: true }));
-    await assertFails(setDoc(doc(owner, `companyAccess/${WENDY_EMAIL}`), { email: WENDY_EMAIL, active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-wendy', canManageSchedule: true }));
-    await assertFails(setDoc(doc(owner, 'companyAccess/not-approved@gmail.com'), { email: 'not-approved@gmail.com', active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-other', canManageSchedule: true }));
-    await assertFails(updateDoc(doc(owner, `companyAccess/${OTHER_TEACHER_EMAIL}`), { canManageSchedule: true }));
+    await assertSucceeds(setDoc(doc(owner, `companyAccess/${WENDY_EMAIL}`), { email: WENDY_EMAIL, active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-wendy', canManageSchedule: true }));
+    await assertSucceeds(setDoc(doc(owner, 'companyAccess/new-scheduler@gmail.com'), { email: 'new-scheduler@gmail.com', active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: 'teacher-other', canManageSchedule: true }));
+    await assertSucceeds(updateDoc(doc(owner, `companyAccess/${OTHER_TEACHER_EMAIL}`), { canManageSchedule: true }));
     await assertSucceeds(updateDoc(doc(owner, `companyAccess/${OTHER_TEACHER_EMAIL}`), { canManageSchedule: false }));
+    await assertFails(setDoc(doc(owner, 'companyAccess/no-teacher@gmail.com'), { email: 'no-teacher@gmail.com', active: true, companyId: COMPANY_ID, role: 'teacher', teacherId: '', canManageSchedule: true }));
+    await assertFails(setDoc(doc(owner, 'companyAccess/forged-owner@gmail.com'), { email: 'forged-owner@gmail.com', active: true, companyId: COMPANY_ID, role: 'owner', teacherId: 'teacher-other', canManageSchedule: true }));
   });
 
   test('Wendy request 狀態與公司主資料可由 Owner 原子完成', async () => {

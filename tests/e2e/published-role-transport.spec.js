@@ -17,7 +17,7 @@ for(const kind of ['teacher','scheduler','branch_manager'])test(`${kind}: actual
   const {FULL_RECORD_COLLECTIONS}=await import('/js/core/cloud-full-record-shadow.js');
   const identity={kind,email:'isolated@example.test',teacherId:'teacher-1',branchIds:kind==='branch_manager'?['art_museum']:[]};
   let activePublishedRoleConsumer=null,cloudUid='test-user',cloudEmailKey=identity.email,cloudRoleAccessSignature='scope-1',activeRoleWriteAllowed=false;
-  const publishedWorkspace=null; // Normal production listener, not the isolated acceptance batch-GET path.
+  const publishedWorkspace=null,DANBRIDGE_ENVIRONMENT='staging'; // Normal listener, not the isolated acceptance batch-GET path.
   const auth={currentUser:{uid:cloudUid}},COMPANY_ID='danbridge',roleAccessSignature=value=>value.signature;
   let productionSchedulerGeneration=1,productionSchedulerViewChain=Promise.resolve(),schedulerRecoveryHold=false,head,records=new Map(),reads=0;
   const doc=(_cloud,...segments)=>segments.join('/'),cloud={};

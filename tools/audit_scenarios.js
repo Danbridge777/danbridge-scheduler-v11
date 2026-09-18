@@ -7,6 +7,7 @@ const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const context = {
   projectProductionBranchAccessDb: require('../js/core/production-role-view-projection.js').projectProductionBranchAccessDb,
+  isSchedulerAccess: require('../js/core/access-presets.js').isSchedulerAccess,
   console,
   db: { students: [], teachers: [], lessons: [], makeups: [], summerCampRegistrations: [], winterCampRegistrations: [] },
   window: {},
@@ -324,7 +325,7 @@ assert.equal(context.ownerLessonShrinkRisk({lessons:Array.from({length:100},(_,i
 assert.match(cloudSource, /const capacityBlocked=ownerUploadCapacityError\(e\);[\s\S]*ownerUploadQueued=true;if\(!capacityBlocked\)ownerRetryCount\+\+;[\s\S]*scheduleOwnerRetry\(\)/, 'retryable owner upload failures stay queued while capacity failures are not retried');
 assert.match(cloudSource, /estimatedMainBytes>=1000000[\s\S]*ownerUploadCapacityBlocked=true[\s\S]*已停止自動重試/, 'an oversized main document is retained locally and blocked before an impossible Firestore write');
 assert.match(cloudSource,/ownerUploadQueued=true[\s\S]*syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'every Owner save queues cloud persistence within 120 ms');
-assert.match(cloudSource, /const APP_RELEASE='20\.26\.344'/, 'operational errors identify the current release');
+assert.match(cloudSource, /const APP_RELEASE='20\.26\.345'/, 'operational errors identify the current release');
 assert.match(cloudSource, /estimatedMainDocumentBytes/, 'Owner health center estimates the main document size');
 assert.match(cloudSource, /schedulerQuarantined/, 'Owner health center exposes quarantined scheduler requests');
 assert.match(cloudSource, /readOnly:true/, 'Owner health diagnostics are explicitly read only');
@@ -337,9 +338,10 @@ assert.match(cloudSource,/classList\.toggle\('wendy-teacher-role',cloudRole==='t
 assert.match(cloudSource,/classList\.remove\('wendy-teacher-role'\)/,'Wendy card styling is removed immediately on sign-out');
 assert.doesNotMatch(cloudSource, /jobs\.push\(setDoc\(ref,[\s\S]{0,500}actorName/, 'aa schedule requests never add fields outside the Firestore allowlist');
 assert.match(cloudSource, /applySchedulerRequest[\s\S]*auditRecord[\s\S]*await transaction\.get\(auditRecord\.ref\)[\s\S]*if\(auditRecord&&!auditSnap\.exists\(\)\)transaction\.set/, 'concurrent Owners never overwrite an existing immutable scheduler audit');
-assert.match(cloudSource, /SCHEDULER_ACCOUNT_EMAILS=new Set\(\['aa0966626336@gmail\.com'\]\)/, 'the actual aa Gmail is the only approved scheduler account');
+assert.doesNotMatch(cloudSource, /const SCHEDULER_ACCOUNT_EMAILS=new Set/, 'scheduler authority is never tied to a fixed Gmail allowlist');
 assert.match(cloudSource, /RETIRED_SCHEDULER_ACCOUNT_EMAILS=new Set\(\['wendylee0820520@gmail\.com'\]\)/, 'Wendy is explicitly migrated back to a standard teacher');
-assert.match(cloudSource, /canManageSchedule=SCHEDULER_ACCOUNT_EMAILS\.has\(email\)/, 'approved scheduler Gmail accounts always receive all-teacher scheduling instead of relying on a checkbox');
+assert.match(cloudSource, /listAccessPresets\('teacher'\)/, 'Owner assigns teacher and scheduler capability packages from the shared preset registry');
+assert.match(cloudSource, /capabilities=buildAccessPreset\(presetId,\{teacherId\}\)/, 'the selected package, not the account email, creates the stored capabilities');
 assert.match(cloudSource, /function applyRoleUI\(profile,user\)[\s\S]*teacherHiddenSelector[\s\S]*document\.querySelectorAll\(teacherHiddenSelector\)\.forEach[\s\S]*markRoleIsolated/, 'authenticated teacher role actively isolates every owner-only control');
 assert.match(cloudSource, /cloudCanManageSchedule[\s\S]*'quickParentName','quickParentContact','quickHomeAddress','quickBilling','quickRate','paymentStatus','chargeStudent','payTeacher'[\s\S]*markRoleIsolated/, 'aa scheduling UI isolates parent contact, address, billing, payment and payroll controls');
 assert.match(cloudSource, /function createVerifiedStagingMigrationBackup\(\)[\s\S]*stagingMigrationBackups[\s\S]*verifyImmutableMigrationBackupReadback[\s\S]*latestHash!==sourceHash[\s\S]*sealImmutableMigrationBackup/, 'staging migration backup is sealed only after cloud readback and an unchanged source version');
@@ -376,8 +378,8 @@ assert.match(convenienceSource,/push\('校區',branchName\(old\.branchId\),branc
 assert.match(cloudSource, /async function setCloudAccessActive\(email,active\)[\s\S]*setCompanyAccessWithAudit\(email,\{active,updatedAt:serverTimestamp\(\)\}[\s\S]*users/, 'account suspension atomically audits the preserved access record and synchronizes user profiles');
 assert.match(cloudSource, /cloud-access-toggle[\s\S]*branch-access-toggle/, 'teacher and branch manager lists both expose suspension separately from deletion');
 assert.match(cloudSource, /function confirmCloudRoleTransition\(existing,targetRole,email\)[\s\S]*舊角色的資料範圍會立即移除/, 'cross-role account changes require explicit owner confirmation');
-assert.match(cloudSource, /role:'teacher'[\s\S]*branchIds:deleteField\(\)/, 'changing to teacher removes stale branch-manager scope');
-assert.match(cloudSource, /if\(canManageSchedule\)\{const db=filteredSchedulerDB[\s\S]*schedulerViews/, 'only the approved scheduler account receives a dedicated scheduler view');
+assert.match(cloudSource, /capabilities=buildAccessPreset\(presetId,\{teacherId\}\)[\s\S]*payload=\{email,\.\.\.capabilities/, 'changing to a teacher package replaces stale branch-manager scope with the package-defined empty branch scope');
+assert.match(cloudSource, /if\(canManageSchedule\)\{const db=filteredSchedulerDB[\s\S]*schedulerViews/, 'only accounts carrying the scheduler capability package receive dedicated scheduler views');
 assert.match(cloudSource, /role:'branch_manager'[\s\S]*deleteDoc\(doc\(cloud,'companies',COMPANY_ID,'teacherViews',email\)\)/, 'changing to branch manager removes the stale teacher view');
 assert.match(cloudSource, /async function removeCloudTeacherAccess[\s\S]*teacherViews[\s\S]*branchViews/, 'deleting teacher access removes both possible scoped views');
 assert.match(cloudSource, /async function removeCloudBranchManagerAccess\(email\)\{\s*if\(cloudRole!=='owner'\)return;/, 'branch-manager deletion has an explicit owner guard');
@@ -756,15 +758,15 @@ assert.match(pointerDragMoveSource, /state\.moved=true[\s\S]*setPointerCapture/,
 const pwaSource = fs.readFileSync(path.join(root, 'js/core/pwa-installation.js'), 'utf8');
 assert.match(cloudSource, /if\(cloudRole==='owner'\)return \{\.\.\.meta,teacherIds\};[\s\S]*if\(!cloudTeacherId\)throw new Error/, 'every Owner can submit a lesson report without a linked teacher profile');
 assert.match(cloudSource, /function buildScheduleNotificationRecipientGroups[\s\S]*const owners=\[\{email:ownerEmail[\s\S]*if\(a\.role==='owner'\)[\s\S]*for\(const owner of owners\)addRecipientItem/, 'every active Owner receives a large schedule-change notification');
-assert.match(cloudSource, /if\(a\.canManageSchedule===true\|\|schedulerSet\.has\(email\)\)schedulers\.push[\s\S]*for\(const scheduler of schedulers\)addRecipientItem/, 'every approved scheduler receives every company schedule-change notification');
-assert.doesNotMatch(cloudSource,/function (?:publish|queue)ScheduleChangeNotifications\([^)]*\)\{\s*if\([^\n]*ownerBaselineReady/,'aa and Owner schedule notifications never depend on owner snapshot startup timing');
+assert.match(cloudSource, /if\(isSchedulerAccess\(a\)\)schedulers\.push[\s\S]*for\(const scheduler of schedulers\)addRecipientItem/, 'every account carrying the scheduler package receives every company schedule-change notification');
+assert.doesNotMatch(cloudSource,/function (?:publish|queue)ScheduleChangeNotifications\([^)]*\)\{\s*if\([^\n]*ownerBaselineReady/,'scheduler and Owner notifications never depend on owner snapshot startup timing');
 assert.match(cloudSource, /applySchedulerRequest[\s\S]*transaction\.set\(requestRef,\{status:'applied'[\s\S]*queueScheduleChangeNotifications\(notificationBefore,notificationAfter,`scheduler-\$\{requestRef\.id\}`/, 'scheduler requests commit atomically while large role notifications continue in the retry queue');
 assert.match(cloudSource, /課表已立即更新，[\s\S]*正在同步給 Owner、校區管理者與老師/, 'Wendy sees the locally updated all-teacher schedule immediately');
 assert.match(cloudSource, /schedulerSaveChain=schedulerSaveChain\.catch\(\(\)=>\{\}\)\.then\(queueSchedulerChanges\)/, 'rapid Wendy drag, paste and edit saves are serialized without duplicate schedule requests');
 assert.match(cloudSource, /operation!=='delete'\?schedulerSafeStudent/, 'aa create and update requests both carry the referenced student recovery snapshot');
 assert.match(cloudSource, /unchangedOrphanStudent=data\.operation==='update'&&index>=0&&String\(after\.lessons\[index\]\?\.studentId\|\|''\)===String\(lesson\.studentId\|\|''\)/, 'an existing aa lesson can still move when its unchanged historical student record is already absent');
 assert.match(cloudSource, /transaction\.get\(schedulerViewRef\)[\s\S]*viewStudent=schedulerSafeStudent\(\(schedulerViewSnap\.data\(\)\?\.db\?\.students/, 'legacy pending aa requests recover their student snapshot from the scheduler view inside the Owner transaction');
-assert.match(cloudSource, /approvedLegacyCreate=data\.operation==='create'&&SCHEDULER_ACCOUNT_EMAILS\.has[\s\S]*name:'待補學生資料'[\s\S]*由舊版 aa 待同步課程保留/, 'approved legacy aa creates preserve orphaned lesson IDs with an explicit non-financial recovery student instead of dropping lessons');
+assert.match(cloudSource, /approvedLegacyCreate=data\.operation==='create'&&LEGACY_SCHEDULER_ACCOUNT_EMAILS\.has[\s\S]*name:'待補學生資料'[\s\S]*由舊版 aa 待同步課程保留/, 'approved legacy AA creates preserve orphaned lesson IDs with an explicit non-financial recovery student instead of dropping lessons');
 assert.match(cloudSource, /schedulerOptimisticStudents\.set\(id,afterStudents\.get\(id\)\|\|null\)[\s\S]*serverStudents\.set\(id,deepCopy\(desired\)\)/, 'aa locally added student details survive scheduler-view refreshes until Owner publication confirms them');
 assert.match(cloudSource, /schedulerRequestQueueIds\.has\(d\.id\)[\s\S]*processSchedulerRequestQueue\(\)[\s\S]*while\(schedulerRequestQueue\.length[\s\S]*await applySchedulerRequest\(item\.ref,item\.data\)[\s\S]*setTimeout\(processSchedulerRequestQueue,wait\)/, 'large aa pending batches are deduplicated, applied serially, and backed off instead of exhausting Firestore with parallel main-document transactions');
 assert.match(cloudSource, /if\(!retryable\)[\s\S]*schedulerRequestQueue\.shift\(\)[\s\S]*schedulerQuarantinedRequestIds\.add\(item\.id\)[\s\S]*continue/, 'one malformed legacy aa request is quarantined without blocking every valid lesson behind it');

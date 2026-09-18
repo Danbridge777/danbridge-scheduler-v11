@@ -1,8 +1,8 @@
 import {FULL_RECORD_COLLECTIONS} from './cloud-full-record-shadow.js';
+import {isSchedulerAccess} from './access-presets.js';
 
 export const PRODUCTION_ROLE_VIEW_PUBLISH_SCHEMA='danbridge-production-role-view-publish-v1';
 export const PRODUCTION_ROLE_VIEW_PUBLISH_RESPONSE_SCHEMA='danbridge-production-role-view-publish-response-v1';
-export const PRODUCTION_SCHEDULER_EMAILS=Object.freeze(['aa0966626336@gmail.com']);
 
 const EMPTY_DB=Object.freeze(Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,Object.freeze([])])));
 const clone=value=>value===undefined?undefined:JSON.parse(JSON.stringify(value));
@@ -159,7 +159,7 @@ export function buildProductionRoleViews(source,accessRows,{now=Date.now()}={}){
   const email=String(access?.email||access?.id||'').trim().toLowerCase();
   if(access?.active!==true||access?.companyId!=='danbridge'||!email||access.role==='owner')continue;
   if(access.role==='teacher'&&access.teacherId){
-   const scheduler=PRODUCTION_SCHEDULER_EMAILS.includes(email)&&access.canManageSchedule===true,db=scheduler?projectProductionSchedulerDb(source):projectProductionTeacherDb(source,access.teacherId,{now});
+   const scheduler=isSchedulerAccess(access),db=scheduler?projectProductionSchedulerDb(source):projectProductionTeacherDb(source,access.teacherId,{now});
    views.push({kind:scheduler?'scheduler':'teacher',email,teacherId:String(access.teacherId),db,clientHash:productionClientDataHash(db)});
   }else if(access.role==='branch_manager'&&access.teacherId&&Array.isArray(access.branchIds)&&access.branchIds.length){
    const branchIds=[...new Set(access.branchIds.map(String))].sort(),db=projectProductionBranchAccessDb(source,{...access,branchIds},{now});

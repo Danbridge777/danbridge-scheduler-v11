@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildAccessPreset} from '../js/core/access-presets.js';
+import {buildAccessPreset,isSchedulerAccess,listAccessPresets} from '../js/core/access-presets.js';
 
 test('Lucas/AA preset separates two-campus schedules from managed-branch finance and movement',()=>{
  const p=buildAccessPreset('branch_schedule',{teacherId:'aa',branchIds:['art_museum']});
@@ -23,4 +23,18 @@ test('local schedule preset never widens managed scope and does not share mutabl
  const input=['art_museum'];const p=buildAccessPreset('branch_local_schedule',{teacherId:'aa',branchIds:input});
  assert.deepEqual(p.scheduleBranchIds,['art_museum']);input.push('hexi');assert.deepEqual(p.branchIds,['art_museum']);
  assert.equal(p.hideFinancials,true);assert.equal(p.canViewBranchFinance,true);assert.equal(p.canMoveSchedule,false);assert.equal(p.readOnly,true);
+});
+
+test('permission packages are discoverable by account group without exposing mutable policy objects',()=>{
+ assert.deepEqual(listAccessPresets('teacher').map(row=>row.id),['teacher','scheduler']);
+ assert.deepEqual(listAccessPresets('branch_manager').map(row=>row.id),['branch_schedule','branch_local_schedule']);
+ const rows=listAccessPresets('teacher');rows.pop();assert.equal(listAccessPresets('teacher').length,2);
+});
+
+test('scheduler capability is account data, never an email allowlist',()=>{
+ const scheduler=buildAccessPreset('scheduler',{teacherId:'teacher-42'});
+ assert.equal(isSchedulerAccess({...scheduler,active:true,email:'new.scheduler@gmail.com'}),true);
+ assert.equal(isSchedulerAccess({...scheduler,active:false}),false);
+ assert.equal(isSchedulerAccess({...scheduler,teacherId:''}),false);
+ assert.equal(isSchedulerAccess(buildAccessPreset('teacher',{teacherId:'teacher-42'})),false);
 });

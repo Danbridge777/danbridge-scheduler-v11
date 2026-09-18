@@ -733,12 +733,13 @@ service cloud.firestore {
         : (currentProfileExists() && currentProfile().branchIds is list ? currentProfile().branchIds : []);
     }
     function isTeacher(companyId) { return activeMember(companyId) && access().role == 'teacher' && effectiveTeacherId() != ''; }
-    function canManageSchedule(companyId) { return isTeacher(companyId) && emailKey() == 'aa0966626336@gmail.com' && access().canManageSchedule == true; }
+    function canManageSchedule(companyId) { return isTeacher(companyId) && access().canManageSchedule == true; }
     function isManager(companyId) { return activeMember(companyId) && access().role == 'branch_manager' && effectiveTeacherId() != ''; }
-    function schedulerGrantAllowed(email, data) {
+    function schedulerGrantAllowed(data) {
       return !('canManageSchedule' in data) || data.canManageSchedule != true || (
         data.role == 'teacher'
-        && email == 'aa0966626336@gmail.com'
+        && data.teacherId is string
+        && data.teacherId != ''
       );
     }
     function ownTeacherId() { return effectiveTeacherId(); }
@@ -749,7 +750,6 @@ service cloud.firestore {
         && target.companyId == companyId
         && data.email == email
         && ((data.kind == 'scheduler'
-            && email == 'aa0966626336@gmail.com'
             && target.role == 'teacher'
             && target.teacherId is string
             && target.teacherId != ''
@@ -801,7 +801,6 @@ service cloud.firestore {
         && target.active == true
         && target.companyId == companyId
         && ((kind == 'scheduler'
-            && email == 'aa0966626336@gmail.com'
             && target.role == 'teacher'
             && target.teacherId is string
             && target.teacherId != ''
@@ -810,7 +809,6 @@ service cloud.firestore {
             && target.role == 'teacher'
             && target.teacherId is string
             && target.teacherId != ''
-            && email != 'aa0966626336@gmail.com'
             && (!('canManageSchedule' in target) || target.canManageSchedule != true))
           || (kind == 'branch_manager'
             && target.role == 'branch_manager'
@@ -852,7 +850,6 @@ service cloud.firestore {
         && control.email == emailKey()
         && control.viewKey == viewKey
         && ((control.kind == 'scheduler'
-            && emailKey() == 'aa0966626336@gmail.com'
             && member.role == 'teacher'
             && member.canManageSchedule == true
             && control.teacherId == member.teacherId
@@ -1233,12 +1230,12 @@ service cloud.firestore {
       allow create: if (isPrimaryOwner() || (isOwner()
         && email != 'a0965487920@gmail.com'
         && request.resource.data.role != 'owner'))
-        && schedulerGrantAllowed(email, request.resource.data);
+        && schedulerGrantAllowed(request.resource.data);
       allow update: if (isPrimaryOwner() || (isOwner()
         && email != 'a0965487920@gmail.com'
         && resource.data.role != 'owner'
         && request.resource.data.role != 'owner'))
-        && schedulerGrantAllowed(email, request.resource.data);
+        && schedulerGrantAllowed(request.resource.data);
       allow delete: if isPrimaryOwner() || (isOwner()
         && email != 'a0965487920@gmail.com'
         && resource.data.role != 'owner');

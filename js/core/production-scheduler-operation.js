@@ -1,4 +1,5 @@
-import {PRODUCTION_SCHEDULER_EMAILS,projectProductionSchedulerDb,projectProductionBranchAccessDb} from './production-role-view-projection.js?v=20.26.344';
+import {projectProductionSchedulerDb,projectProductionBranchAccessDb} from './production-role-view-projection.js?v=20.26.345';
+import {isSchedulerAccess} from './access-presets.js?v=20.26.345';
 
 export const SCHEDULER_OPERATION_SCHEMA='danbridge-production-scheduler-operation-v1';
 export const SCHEDULER_OPERATION_RESPONSE_SCHEMA='danbridge-production-scheduler-operation-response-v1';
@@ -17,8 +18,8 @@ export const schedulerStudent=value=>Object.fromEntries(SCHEDULER_STUDENT_FIELDS
 
 export function assertProductionSchedulerActor(actor){
  if(object(actor)&&actor.role==='branch_manager'&&actor.canMoveSchedule===true&&actor.active===true&&actor.companyId==='danbridge'&&token(actor.uid)&&token(actor.teacherId)&&typeof actor.email==='string'&&/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(actor.email)&&Array.isArray(actor.branchIds)&&actor.branchIds.length&&actor.branchIds.every(token))return Object.freeze({uid:actor.uid,email:actor.email,role:'branch_manager',active:true,companyId:'danbridge',teacherId:actor.teacherId,canMoveSchedule:true,branchIds:[...new Set(actor.branchIds)],hideFinancials:actor.hideFinancials===true,scheduleBranchIds:actor.hideFinancials===true?(actor.scheduleBranchIds||[]).filter(id=>['art_museum','hexi'].includes(id)):[],displayName:String(actor.managerName||actor.displayName||actor.teacherName||'校區管理者').slice(0,120)});
- if(!object(actor)||!token(actor.uid)||!PRODUCTION_SCHEDULER_EMAILS.includes(actor.email)||actor.role!=='teacher'||actor.active!==true||actor.companyId!=='danbridge'||actor.canManageSchedule!==true||actor.readOnly===true||!token(actor.teacherId))throw new Error('排課專員身分或權限無效');
- return Object.freeze({uid:actor.uid,email:actor.email,role:'teacher',active:true,companyId:'danbridge',canManageSchedule:true,teacherId:actor.teacherId,displayName:typeof actor.displayName==='string'?actor.displayName.slice(0,120):'AA'});
+ if(!object(actor)||!token(actor.uid)||typeof actor.email!=='string'||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(actor.email)||actor.companyId!=='danbridge'||actor.readOnly===true||!isSchedulerAccess(actor))throw new Error('排課專員身分或權限無效');
+ return Object.freeze({uid:actor.uid,email:actor.email,role:'teacher',active:true,companyId:'danbridge',canManageSchedule:true,teacherId:actor.teacherId,displayName:typeof actor.displayName==='string'?actor.displayName.slice(0,120):'排課專員'});
 }
 
 function assertSafeLesson(value,id,{complete=false}={}){

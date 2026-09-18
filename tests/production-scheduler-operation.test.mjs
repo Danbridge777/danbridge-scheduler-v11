@@ -105,9 +105,10 @@ test('暫時性交易或網路錯誤可重送同一回條，資料衝突與權�
  for(const error of [Error('conflict'),{code:7},{code:'permission-denied'},{code:'failed-precondition'},{code:'unauthenticated'}])assert.equal(productionSchedulerErrorCode(error),'failed-precondition');
 });
 
-test('排課專員必須同時符合固定帳號、既有授權與公司，不能藉新入口取得 Owner 權限',()=>{
+test('排課專員由程式內套裝能力授權，不綁固定信箱且不能藉新入口取得 Owner 權限',()=>{
  assert.equal(assertProductionSchedulerActor(actor).role,'teacher');
- for(const patch of [{uid:''},{email:'teacher@example.com'},{role:'owner'},{active:false},{companyId:'other'},{canManageSchedule:false},{readOnly:true},{teacherId:''}])assert.throws(()=>assertProductionSchedulerActor({...actor,...patch}),/權限|身分/);
+ assert.equal(assertProductionSchedulerActor({...actor,email:'another.scheduler@example.com'}).email,'another.scheduler@example.com');
+ for(const patch of [{uid:''},{email:'invalid'},{role:'owner'},{active:false},{companyId:'other'},{canManageSchedule:false},{readOnly:true},{teacherId:''}])assert.throws(()=>assertProductionSchedulerActor({...actor,...patch}),/權限|身分/);
 });
 test('拒絕注入財務、帳號、任意路徑、重複課程與無效日期時間',()=>{
  const change={lessonId:lesson.id,before:lesson,after:{...lesson,date:'2026-10-02'}};

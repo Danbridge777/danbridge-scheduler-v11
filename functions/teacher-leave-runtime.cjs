@@ -31,7 +31,7 @@ async function executeTeacherLeave({firestore,identity,request,serverTimestamp,p
   const recipients=new Map();
   if(!accessRows.some(row=>row.email===primaryOwnerEmail))recipients.set(primaryOwnerEmail,{email:primaryOwnerEmail,role:'owner',teacherId:''});
   for(const row of active){
-   const scheduler=row.role==='teacher'&&row.canManageSchedule===true&&row.email==='aa0966626336@gmail.com';
+   const scheduler=row.role==='teacher'&&row.active===true&&row.canManageSchedule===true&&typeof row.teacherId==='string'&&row.teacherId.trim()!=='';
    const ownTeacher=row.role==='teacher'&&String(row.teacherId||'')===record.teacherId;
    if(row.role==='owner'||scheduler||ownTeacher)recipients.set(row.email,{email:row.email,role:row.role==='owner'?'owner':scheduler?'scheduler':'teacher',teacherId:row.role==='owner'?'':String(row.teacherId||'')});
   }

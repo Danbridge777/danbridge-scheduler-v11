@@ -33,10 +33,6 @@ async function createProductionSchedulerRuntime({firestore,serverTimestamp,prima
  const notifications=createProductionScheduleNoticeBuilder({primaryOwnerEmail,projection,notificationPolicy,sha256Canonical});
  return Object.freeze({async execute(input,identity){
   if(!identity||identity.emailVerified!==true||identity.appVerified!==true||typeof identity.email!=='string')throw new Error('排課專員登入驗證無效');
-  if(!projection.PRODUCTION_SCHEDULER_EMAILS.includes(identity.email)){
-   const member=await firestore.doc(`companyAccess/${identity.email}`).get();
-   try{policy.assertProductionSchedulerActor({...member.data(),uid:identity.uid,email:identity.email})}catch{throw new Error('排課專員登入驗證或校區移動權限無效')}
-  }
   const request=policy.normalizeProductionSchedulerRequest(input,{maxChanges}),fingerprint=sha256Canonical(request),receiptRef=firestore.doc(`companies/danbridge/productionSchedulerReceipts/${request.requestId}`),nowIso=new Date(now()).toISOString();
   let phaseStarted=performance.now();
   const mark=phase=>{const at=performance.now();try{onTiming({requestId:request.requestId,phase,ms:at-phaseStarted,count:request.changes.length})}catch{}phaseStarted=at};
@@ -150,7 +146,7 @@ function createProductionScheduleNoticeBuilder({primaryOwnerEmail,projection,not
   members.set(primaryOwnerEmail,{email:primaryOwnerEmail,role:'owner',active:true,companyId:'danbridge'});
   const result=[];
   for(const member of members.values()){
-   const scheduler=member.role==='teacher'&&member.canManageSchedule===true&&projection.PRODUCTION_SCHEDULER_EMAILS.includes(member.email),role=scheduler?'scheduler':member.role;
+   const scheduler=member.role==='teacher'&&member.active===true&&member.canManageSchedule===true&&typeof member.teacherId==='string'&&member.teacherId.trim()!=='',role=scheduler?'scheduler':member.role;
    if(!['owner','scheduler','teacher','branch_manager'].includes(role))continue;
    const details=[];
    for(const change of changes){let a=change.before,b=change.after;
