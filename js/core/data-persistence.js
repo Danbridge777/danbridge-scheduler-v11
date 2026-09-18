@@ -161,13 +161,15 @@ window.addEventListener('pagehide',flushScheduleLocalSnapshot);
 function saveDB(options={}){
  let saveError=null;
  const scheduleMutation=typeof options.scheduleAction==='string'&&options.scheduleAction.length>0;
+ const studentMutation=typeof options.studentMutation==='string'&&options.studentMutation.length>0;
+ const lightweightMutation=scheduleMutation||studentMutation;
  try{
   // Calendar commands already create normalized lesson records. Re-normalizing
   // every collection here rebuilt the entire database for each drag, paste or
   // delete and blocked the next pointer event. Full normalization remains the
   // boundary for every non-calendar save, import and cloud readback.
-  if(!scheduleMutation){normalizeLessonStates();db=normalizeBranchData(db)}
-  if(!scheduleMutation){try{window.__danbridgeReconcileLockedSettlements?.()}catch(error){console.error('Settlement adjustment reconciliation failed:',error)}flushScheduleLocalSnapshot()}
+  if(!lightweightMutation){normalizeLessonStates();db=normalizeBranchData(db)}
+  if(!lightweightMutation){try{window.__danbridgeReconcileLockedSettlements?.()}catch(error){console.error('Settlement adjustment reconciliation failed:',error)}flushScheduleLocalSnapshot()}
   else scheduleLocalSnapshot();
   try{if(!options.skipRender)((options.calendarOnly||options.scheduleAction&&calendarSectionIsActive())?renderCalendar({deferAnalysis:true}):renderAll())}
   catch(error){
@@ -177,7 +179,7 @@ function saveDB(options={}){
  }
  catch(error){saveError=error;console.error('Local save failed:',error)}
  finally{
-  if(!scheduleMutation)try{updateLastBackupInfo()}catch(error){console.error('Backup status update failed:',error)}
+  if(!lightweightMutation)try{updateLastBackupInfo()}catch(error){console.error('Backup status update failed:',error)}
   try{updateUndoRedoButtons()}catch(error){console.error('Undo/redo status update failed:',error)}
   /* Every mutation path ends here. The cloud module installs this hook after authentication. */
   try{window.__danbridgeQueueCloudSave?.(options)}catch(error){console.error('Cloud save scheduling failed:',error)}
