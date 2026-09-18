@@ -20,6 +20,11 @@
   Object.entries({'時段':'Session','早上':'Morning','下午':'Afternoon','營隊季別':'Camp Season','營隊收費':'Camp Fee','夏令營收費':'Summer Camp Billing','夏令營學生收費':'Summer Camp Student Billing','冬令營學生收費':'Winter Camp Student Billing','冬／夏令營學生收費':'Winter / Summer Camp Student Billing','手動登記夏令營收費':'Manual Summer Camp Billing','手動登記冬令營收費':'Manual Winter Camp Billing','複製完整 LINE 收費':'Copy Complete LINE Billing','輸入金額':'Enter amount','建立夏令營課表':'Create Summer Camp Schedule','建立冬令營課表':'Create Winter Camp Schedule'}).forEach(([zh,en])=>dict.set(zh,en));
   Object.entries({
     '家教':'Tutoring','團課':'Group Class','儲存請假':'Save Leave','更新請假':'Update Leave',
+    '請假管理':'Leave Management','我的請假':'My Leave','請假登記':'Leave Request','老師請假紀錄':'Teacher Leave Records',
+    '查看請假紀錄':'View Leave Records','稍後查看':'View Later','知道了':'Got It',
+    '課表更新通知':'Schedule Update','課堂回報通知':'Lesson Report Update','老師請假異動':'Teacher Leave Update',
+    '類別':'Type','事假':'Personal Leave','病假':'Sick Leave','喪假':'Bereavement Leave',
+    '有效':'Active','已取消':'Cancelled','請假紀錄已更新':'Leave record updated','剛剛':'Just now',
     '標記已通知':'Mark Notified','標記已收款':'Mark Collected','恢復待通知':'Restore Pending',
     '月底一次檢查':'Run Month-end Check','下載唯讀診斷':'Download Diagnostics',
     '啟用 Daniel 系統通知':'Enable Daniel Alerts',
@@ -79,6 +84,8 @@
     if((m=core.match(/^(\d+)\s*分鐘$/)))return `${lead}${m[1]} minutes${trail}`;
     if((m=core.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/)))return `${lead}${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${trail}`;
     if((m=core.match(/^(\d{4})\s*年\s*(\d{1,2})\s*月$/)))return `${lead}${m[1]}-${m[2].padStart(2,'0')}${trail}`;
+    if((m=core.match(/^更新時間：(.+)$/)))return `${lead}Updated: ${m[1]}${trail}`;
+    if((m=core.match(/^(.+) 已更新課表$/)))return `${lead}${m[1]} updated the schedule${trail}`;
     return value;
   }
   function translateNode(node){

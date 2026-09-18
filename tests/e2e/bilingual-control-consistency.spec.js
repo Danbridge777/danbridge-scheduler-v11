@@ -131,3 +131,22 @@ test('English action controls contain no untranslated Chinese UI labels',async({
  }
  expect(untranslated).toEqual([]);
 });
+
+test('English navigation and schedule notification dialogs contain no untranslated Chinese controls',async({page})=>{
+ await unlockOwnerWorkspace(page);
+ await page.evaluate(()=>window.DanbridgeLanguage?.setLanguage('en'));
+ const untranslated=await page.evaluate(()=>{
+  const modal=document.getElementById('scheduleNotificationModal');
+  if(modal){
+   modal.hidden=false;
+   const body=document.getElementById('scheduleNotificationBody');
+   if(body)body.innerHTML='<p class="schedule-notification-lead"><b>老師請假異動</b><span>請假紀錄已更新</span></p><table><thead><tr><th>老師</th><th>日期</th><th>時間</th><th>類別</th><th>時數</th><th>狀態</th></tr></thead><tbody><tr><td>Test</td><td>2026-09-19</td><td>09:00–10:00</td><td>事假</td><td>1</td><td>有效</td></tr></tbody></table><div class="schedule-notification-actions"><button type="button" class="btn" data-leave-notification-open>查看請假紀錄</button></div><div class="schedule-notification-time">更新時間：2026/09/19 09:00</div>';
+  }
+  window.DanbridgeLanguage?.setLanguage('en');
+  const roots=[document.querySelector('body>nav'),modal].filter(Boolean);
+  return roots.flatMap(root=>[...root.querySelectorAll('button,h2,th,[data-leave-notification-open],.schedule-notification-lead,.schedule-notification-time')]
+   .filter(element=>getComputedStyle(element).display!=='none'&&/[\u3400-\u9fff]/u.test(element.textContent||''))
+   .map(element=>element.id||element.textContent.trim().replace(/\s+/g,' ').slice(0,80)));
+ });
+ expect(untranslated).toEqual([]);
+});
