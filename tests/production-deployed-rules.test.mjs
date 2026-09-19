@@ -7,7 +7,7 @@ import {doc,getDoc,getDocs,collection,query,where,setDoc,updateDoc,deleteDoc} fr
 
 // Opt-in: load the exact source read from the production Rules release into a
 // localhost emulator. Never run these fixture writes against a remote database.
-test('正式已部署 Rules：角色隔離且通知／回報／排課／錯誤均禁止瀏覽器直寫',{
+test('正式已部署 Rules：角色隔離，僅通知收件人可回寫已讀，其餘敏感資料禁止瀏覽器直寫',{
  skip:!process.env.DANBRIDGE_PRODUCTION_RULES_FILE,timeout:120000
 },async()=>{
  assert.match(process.env.FIRESTORE_EMULATOR_HOST||'',/^(127\.0\.0\.1|localhost):\d+$/);
@@ -62,10 +62,13 @@ test('正式已部署 Rules：角色隔離且通知／回報／排課／錯誤�
   for(const db of [ownerDb,aaDb,teacherDb,otherDb,anon]){
    for(const name of ['scheduleNotifications','scheduleRequests','lessonReports','errorEvents','productionRuntimeLocks']){
     await assertFails(setDoc(doc(db,`${base}/${name}/forged`),{companyId:'danbridge',recipientEmail:teacher}));
-    await assertFails(updateDoc(doc(db,`${base}/${name}/own`),{read:true}));
+    if(name==='scheduleNotifications'&&(db===ownerDb||db===teacherDb))await assertSucceeds(updateDoc(doc(db,`${base}/${name}/own`),{read:true}));
+    else await assertFails(updateDoc(doc(db,`${base}/${name}/own`),{read:true}));
     await assertFails(deleteDoc(doc(db,`${base}/${name}/own`)));
    }
   }
+  await assertFails(updateDoc(doc(otherDb,`${base}/scheduleNotifications/own`),{read:false}));
+  await assertFails(updateDoc(doc(teacherDb,`${base}/scheduleNotifications/own`),{recipientEmail:other}));
   await env.withSecurityRulesDisabled(async context=>updateDoc(doc(context.firestore(),`companyAccess/${teacher}`),{active:false}));
   await assertFails(getDoc(doc(teacherDb,`${base}/teacherViews/${teacher}`)));
   await assertFails(getDoc(doc(teacherDb,`${base}/scheduleNotifications/own`)));

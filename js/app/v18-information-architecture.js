@@ -3,14 +3,32 @@
   const $=(s,r=document)=>r.querySelector(s);
   const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
   let selectedTeacher='';
+  let activeFinancePane='';
+  let financeRefreshToken=0;
 
   function activateFinancePane(name){
     const pane=['overview','kpi','collections','expenses'].includes(name)?name:'overview';
-    $$('.v181-finance-nav button').forEach(b=>b.classList.toggle('active',b.dataset.pane===pane));
+    const changed=activeFinancePane!==pane;
+    activeFinancePane=pane;
+    $$('.v181-finance-nav button').forEach(b=>{
+      const selected=b.dataset.pane===pane;
+      b.classList.toggle('active',selected);
+      b.setAttribute('aria-selected',String(selected));
+    });
     $$('.v181-finance-pane').forEach(p=>p.classList.toggle('active',p.dataset.pane===pane));
-    if(pane==='overview'||pane==='expenses') window.renderFinance?.();
-    if(pane==='kpi'){ window.renderTeacherKpi?.(); window.renderSettlement?.(); }
-    if(pane==='collections') window.renderSettlement?.();
+    if(!changed)return;
+    // Switch the visible workspace before doing finance calculations.  This
+    // keeps the button response immediate even when a month contains many
+    // lessons; the existing renderers still refresh the selected pane on the
+    // next paint and therefore preserve every calculation and control.
+    const token=++financeRefreshToken;
+    const afterPaint=window.requestAnimationFrame||((callback)=>setTimeout(callback,0));
+    afterPaint(()=>setTimeout(()=>{
+      if(token!==financeRefreshToken||activeFinancePane!==pane||!document.querySelector('#finance.active'))return;
+      if(pane==='overview'||pane==='expenses') window.renderFinance?.();
+      if(pane==='kpi'){ window.renderTeacherKpi?.(); window.renderSettlement?.(); }
+      if(pane==='collections') window.renderSettlement?.();
+    },0));
   }
   window.activateFinancePane=activateFinancePane;
 

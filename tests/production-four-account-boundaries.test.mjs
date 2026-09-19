@@ -50,7 +50,10 @@ test('正式 Rules 實跑：Daniel／Catherine 全資料、Lucas 僅自身校區
    await setDoc(doc(db,'productionFullRecordShadows/danbridge/collections/lessons/records/private-fixture'),{privateValue:true});
   });
   const dbs=Object.fromEntries([daniel,catherine,lucas,aa].map((email,i)=>[email,env.authenticatedContext('account-'+i,{email}).firestore()]));
-  for(const email of [daniel,catherine])assert.equal((await assertSucceeds(getDoc(doc(dbs[email],base+'/data/main')))).data().lessons.length,2);
+  for(const email of [daniel,catherine]){
+   assert.equal((await assertSucceeds(getDoc(doc(dbs[email],base+'/data/main')))).data().lessons.length,2);
+   assert.equal((await assertSucceeds(getDoc(doc(dbs[email],'productionFullRecordShadows/danbridge/collections/lessons/records/private-fixture')))).data().privateValue,true);
+  }
   for(const email of [lucas,aa]){
    await assertFails(getDoc(doc(dbs[email],base+'/data/main')));
    await assertFails(getDoc(doc(dbs[email],'productionFullRecordShadows/danbridge/collections/lessons/records/private-fixture')));

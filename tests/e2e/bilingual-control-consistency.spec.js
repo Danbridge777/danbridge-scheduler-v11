@@ -30,20 +30,22 @@ async function auditCurrentSection(page,language,section){
   const key=element=>element.id||element.getAttribute('name')||element.getAttribute('aria-label')||element.textContent.trim().replace(/\s+/g,' ').slice(0,36)||element.tagName;
   const issues=[];
   if(!root)return{language,section,issues:['missing-active-section']};
+  const documentStyle=getComputedStyle(document.documentElement);
+  const expectedControlFont=parseFloat(documentStyle.getPropertyValue('--danbridge-unified-control-font-size'));
+  const expectedActionFont=parseFloat(documentStyle.getPropertyValue('--danbridge-unified-action-font-size'));
 
   for(const element of root.querySelectorAll('button,.btn,input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=color]),select,textarea')){
    if(!visible(element)||deliberateScroller(element))continue;
    const rect=element.getBoundingClientRect(),style=getComputedStyle(element),name=key(element);
    if(rect.left<-tolerance||rect.right>viewportWidth+tolerance)issues.push(`viewport:${name}:${Math.round(rect.left)}..${Math.round(rect.right)}/${viewportWidth}`);
    if(element.matches('button,.btn')&&(element.scrollWidth>element.clientWidth+tolerance||element.scrollHeight>element.clientHeight+tolerance))issues.push(`button-text-clipped:${name}:${element.clientWidth}x${element.clientHeight}/${element.scrollWidth}x${element.scrollHeight}`);
-   const compactViewport=viewportWidth<=700;
    if(element.matches('.btn')){
     if(Math.abs(rect.height-48)>tolerance)issues.push(`button-height:${name}:${rect.height}`);
-    if(Math.abs(parseFloat(style.fontSize)-14)>.2)issues.push(`button-font:${name}:${style.fontSize}`);
+    if(Math.abs(parseFloat(style.fontSize)-expectedActionFont)>.2)issues.push(`button-font:${name}:${style.fontSize}`);
    }
    if(element.matches('input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=color]),select')){
     if(Math.abs(rect.height-48)>tolerance)issues.push(`control-height:${name}:${rect.height}`);
-    if(Math.abs(parseFloat(style.fontSize)-(compactViewport?16:15))>.2)issues.push(`control-font:${name}:${style.fontSize}`);
+    if(Math.abs(parseFloat(style.fontSize)-expectedControlFont)>.2)issues.push(`control-font:${name}:${style.fontSize}`);
    }
    if(element.matches('input[type=month]')){
     if(viewportWidth>700&&rect.width<190-tolerance)issues.push(`month-too-narrow:${name}:${rect.width}`);
@@ -82,7 +84,7 @@ test('English month controls keep a readable native date width on desktop and Sa
   }),section));
  }
  expect(results.length).toBeGreaterThan(0);
- const expectedFont=await page.evaluate(()=>document.documentElement.clientWidth<=700?16:15);
+ const expectedFont=await page.evaluate(()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--danbridge-unified-control-font-size')));
  expect(results.filter(item=>item.width<188||Math.abs(item.height-48)>1.5||Math.abs(parseFloat(item.fontSize)-expectedFont)>.2),JSON.stringify(results,null,2)).toEqual([]);
 });
 

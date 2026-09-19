@@ -1,4 +1,4 @@
-/* V20.26.357 — bilingual control consistency.
+/* V20.26.358 — bilingual control consistency.
    One sizing system for line controls and action buttons, plus enough native
    month-field width for English month names in Safari/WebKit. */
 /* Compact teacher navigation has a light surface; desktop white labels must
@@ -19,6 +19,34 @@
   --danbridge-unified-control-font-size:15px;
   --danbridge-unified-action-font-size:14px;
 }
+html[lang="en"]{
+  --danbridge-unified-control-font-size:14px;
+  --danbridge-unified-action-font-size:13px;
+}
+
+/* English labels are materially longer. Keep their text inside the same
+   component geometry instead of widening cards or changing any behavior. */
+html[lang="en"] body:not(.auth-locked) main section[id] :is(h1,h2,h3,h4,p,label,small,b,strong),
+html[lang="en"] body:not(.auth-locked) main section[id] :is(.card,.metric,.v181-module-card,.teacher-leave-dashboard-card) > *{
+  min-width:0;
+  max-width:100%;
+  overflow-wrap:anywhere;
+}
+html[lang="en"] body:not(.auth-locked) main section[id] :is(button,.btn){
+  padding-inline:8px!important;
+}
+html[lang="en"] body:not(.auth-locked) #finance .v181-finance-nav button{
+  height:72px!important;
+  min-height:72px!important;
+  max-height:72px!important;
+  padding:6px!important;
+}
+html[lang="en"] body:not(.auth-locked) #finance .v181-finance-nav button b{font-size:13px!important;line-height:1.18!important}
+html[lang="en"] body:not(.auth-locked) #finance .v181-finance-nav button span{font-size:10px!important;line-height:1.18!important}
+html[lang="en"] body:not(.auth-locked) #dashboard .teacher-leave-dashboard-card b,
+html[lang="en"] body:not(.auth-locked) #dashboard .v32-card-head h2{font-size:20px!important;line-height:1.2!important}
+html[lang="en"] body:not(.auth-locked) #dashboard .teacher-leave-dashboard-card small,
+html[lang="en"] body:not(.auth-locked) #dashboard .v32-card-head p{font-size:12px!important;line-height:1.35!important}
 
 html body:not(.auth-locked) main section[id] :is(
   input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=color]),
@@ -198,5 +226,14 @@ html body:not(.auth-locked) #lessonModal :is(input:not([type=checkbox]):not([typ
     grid-template-columns:minmax(0,1fr)!important;
     width:100%!important;
     min-width:0!important;
+  }
+  html[lang="en"]{
+    --danbridge-unified-control-font-size:16px;
+    --danbridge-unified-action-font-size:13px;
+  }
+  html[lang="en"] body:not(.auth-locked) #finance .v181-finance-nav button{
+    height:64px!important;
+    min-height:64px!important;
+    max-height:64px!important;
   }
 }

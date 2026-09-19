@@ -4,6 +4,16 @@ const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
 
 test.beforeEach(async({page})=>isolateApplicationAuth(page));
 
+test('財務四個分頁先立即切換畫面，再於下一幀更新計算',async({page})=>{
+  await page.goto('/index.html',{waitUntil:'domcontentloaded'});await page.waitForTimeout(350);
+  await page.evaluate(()=>{document.body.classList.remove('auth-locked');document.getElementById('authScreen')?.remove();window.DanbridgeAccess.setContext({role:'owner',email:'owner@example.com'});window.currentCloudRole=()=> 'owner';window.renderAll();window.switchTab('finance');window.__financeDeferredCalls=0;window.renderFinance=()=>window.__financeDeferredCalls++;window.renderSettlement=()=>window.__financeDeferredCalls++;window.renderTeacherKpi=()=>window.__financeDeferredCalls++});
+  for(const pane of ['kpi','collections','expenses','overview']){
+    const immediate=await page.evaluate(pane=>{window.__financeDeferredCalls=0;window.activateFinancePane(pane);return{calls:window.__financeDeferredCalls,button:document.querySelector(`.v181-finance-nav button[data-pane="${pane}"]`)?.classList.contains('active'),panel:document.querySelector(`.v181-finance-pane[data-pane="${pane}"]`)?.classList.contains('active')}},pane);
+    expect(immediate).toEqual({calls:0,button:true,panel:true});
+    await expect.poll(()=>page.evaluate(()=>window.__financeDeferredCalls)).toBeGreaterThan(0);
+  }
+});
+
 test('切換月份會同步更新家庭帳單、老師工時、底薪與請假扣款',async({page})=>{
   await page.goto('/index.html',{waitUntil:'domcontentloaded'});
   await page.waitForTimeout(450);

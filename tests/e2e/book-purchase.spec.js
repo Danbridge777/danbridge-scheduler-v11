@@ -26,6 +26,10 @@ test('all role navigation, other-user read-only, optimistic create/edit/delete r
  expect(await page.evaluate(()=>window.__bookCalls.map(r=>[r.action,r.expectedRevision]))).toEqual([['create',0],['update',1],['delete',2]]);
  expect(await page.evaluate(()=>window.__bookServer.find(r=>r.title==='Edited before cloud')?.deleted)).toBe(true);
  await expect(page.locator('#bookPurchaseRows')).toContainText('<script>alert(1)</script>');
+ if((page.viewportSize()?.width||0)>1100){
+  const compact=await page.locator('#bookPurchaseRows .book-purchase-item').first().evaluate(item=>({display:getComputedStyle(item).display,columns:getComputedStyle(item).gridTemplateColumns.split(' ').length,height:item.getBoundingClientRect().height,overflow:item.scrollWidth>item.clientWidth+2}));
+  expect(compact.display).toBe('grid');expect(compact.columns).toBe(4);expect(compact.height).toBeLessThan(80);expect(compact.overflow).toBe(false);
+ }
 });
 test('failed background writes retain draft, same operation retries, cross-user isolation and centered controls',async({page})=>{
  await setup(page);await page.evaluate(()=>{window.__holdBooks=false;window.__failBooks=true});

@@ -31,6 +31,15 @@ test('rules deployment minifier preserves every single-quoted policy/schema lite
  ])assert.ok(deployedLiterals.includes(literal),literal);
 });
 
+test('runtime rules retain the active production record read path without broadening client writes',()=>{
+ assert.match(deployRules,/match\/productionFullRecordShadows\//);
+ const sourceStart=rules.indexOf('match /productionFullRecordShadows/');
+ assert.notEqual(sourceStart,-1);
+ const sourceBlock=rules.slice(sourceStart,rules.indexOf('\n    match /',sourceStart+1));
+ assert.match(sourceBlock,/allow read: if isOwner\(\) && companyId == 'danbridge';/);
+ assert.doesNotMatch(sourceBlock,/allow read: if signedIn\(\)/);
+});
+
 test('frozen-source proof stays at the exact ten-call backup-Owner budget without a direct H read',()=>{
  const body=functionBody('validFrozenSourceProof','legacyV1CandidateWriteOpen');
  assert.equal((body.match(/\bget\(/g)??[]).length,7);

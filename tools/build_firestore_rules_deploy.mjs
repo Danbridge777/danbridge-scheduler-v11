@@ -202,7 +202,6 @@ if(phase==='runtime'){
     '/stagingLiveRecords/',
     '/stagingLiveOperationReceipts/',
     '/stagingLiveRecordControls/',
-    '/productionFullRecordShadows/',
     '/stagingRoleViewCandidateManifests/',
     '/stagingRoleViewVerificationReceipts/',
     '/stagingRoleViewCandidates/',
@@ -429,6 +428,7 @@ if(phase==='runtime'){
     'match/stagingActiveRecordV2AuditAppends/',
     'match/stagingRoleRecordViewControls/',
     'match/stagingRoleRecordViews/',
+    'match/productionFullRecordShadows/',
     'match/companies/',
   ])if(!deploy.includes(path))throw new Error(`FIRESTORE_RULES_RUNTIME_REQUIRED_PATH_MISSING:${path}`);
   for(const path of [
