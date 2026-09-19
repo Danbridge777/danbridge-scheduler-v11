@@ -1,7 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {automaticScheduleNotifications,createScheduleNotificationPresenter} from '../js/core/schedule-notification-presentation.js';
+import {automaticScheduleNotifications,createScheduleNotificationPresenter,teacherLeaveNotificationStatusLabel} from '../js/core/schedule-notification-presentation.js';
+
+test('live leave notification renderer never presents pending, rejected or unknown leave as approved',()=>{
+ const source=readFileSync(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');
+ const line=source.split('\n').find(row=>row.includes("else if(notification.notificationType==='teacher-leave')body.innerHTML="));
+ const expression=line.slice(line.indexOf('body.innerHTML=')+'body.innerHTML='.length).replace(/;$/,'');
+ const render=new Function('details','notification','escapeHTML','formatNotificationTimestamp','teacherLeaveNotificationStatusLabel',`return ${expression}`);
+ const escapeHTML=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ for(const [status,label] of [['pending','待審核'],['approved','已核准'],['active','已核准'],['rejected','已駁回'],['cancelled','已取消'],[undefined,'狀態未確認'],['__proto__','狀態未確認'],['<script>bad</script>','狀態未確認']]){
+  assert.equal(teacherLeaveNotificationStatusLabel(status),label);
+  const html=render([{teacherName:'Fixture',date:'2026-09-04',start:'09:00',end:'17:00',leaveTypeLabel:'事假',hours:8,status}],{message:'Fixture'},escapeHTML,()=>'',teacherLeaveNotificationStatusLabel);
+  assert.ok(html.includes(`<td>${label}</td>`),String(status));
+  assert.ok(!html.includes('<td>有效</td>'));
+  assert.ok(!html.includes('<script>'));
+ }
+});
 
 test('實際頁面：排課永久佇列未完成時不自動蓋住操作畫面',()=>{
  const source=readFileSync(new URL('../js/core/firebase-auth-and-cloud-sync.module.js',import.meta.url),'utf8');

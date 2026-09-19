@@ -22,6 +22,7 @@ async function executeTeacherLeave({firestore,identity,request,serverTimestamp,p
   const accessRows=accessSnapshot.docs.map(row=>({...row.data(),email:row.id.toLowerCase()}));
   const saved=accessRows.find(row=>row.email===email);
   const actor=policy.normalizeTeacherLeaveActor({...(!saved&&email===primaryOwnerEmail?{role:'owner',companyId:'danbridge',active:true}:saved),uid,email});
+  if(normalized.action==='complete'&&actor.kind!=='owner')throw Error('只有 Owner 可以完成請假待辦');
   const [currentSnapshot,receiptSnapshot,leaveRowsSnapshot]=await Promise.all([tx.get(leaveRef),tx.get(receiptRef),tx.get(firestore.collection('productionTeacherLeaveRecords').where('companyId','==','danbridge'))]);
   const current=currentSnapshot.exists?currentSnapshot.data():null,receipt=receiptSnapshot.exists?receiptSnapshot.data():null;
   if(current&&(current.companyId!=='danbridge'||current.leaveId!==normalized.leaveId))throw Error('請假紀錄識別不一致');
@@ -36,7 +37,8 @@ async function executeTeacherLeave({firestore,identity,request,serverTimestamp,p
   const teacherEnvelope=readTeacherEnvelope?await readTeacherEnvelope(tx,teacherId):(await tx.get(firestore.doc(`productionFullRecordShadows/danbridge/collections/teachers/records/${teacherId}`))).data();
   const teacher=policy.teacherRecordFromAuthorityEnvelope(teacherEnvelope,teacherId);
   const record=policy.buildTeacherLeaveRecord({request,actor,current,teacher,teacherName:String(teacher.name||teacher.displayName||teacherId),nowIso,environment});
-  assertApprovedLeaveWithinAllowance(record,leaveRowsSnapshot.docs.map(row=>({...row.data(),id:row.id})),teacher);
+  // Completing a todo acknowledges existing data; it must not recalculate pay or quota.
+  if(normalized.action!=='complete')assertApprovedLeaveWithinAllowance(record,leaveRowsSnapshot.docs.map(row=>({...row.data(),id:row.id})),teacher);
   const active=accessRows.filter(row=>row.active===true&&row.companyId==='danbridge');
   const recipients=new Map();
   if(!accessRows.some(row=>row.email===primaryOwnerEmail))recipients.set(primaryOwnerEmail,{email:primaryOwnerEmail,role:'owner',teacherId:''});
@@ -48,7 +50,7 @@ async function executeTeacherLeave({firestore,identity,request,serverTimestamp,p
   tx.set(leaveRef,{...record,updatedAt:serverTimestamp(),updatedByUid:uid,updatedByEmail:email},{merge:false});
   tx.set(receiptRef,{schema:'danbridge-teacher-leave-operation-receipt-v1',environment,companyId:'danbridge',operationId:normalized.operationId,leaveId:normalized.leaveId,action:normalized.action,requestFingerprint:fingerprint,revision:record.revision,committedAt:serverTimestamp(),committedByUid:uid,committedByEmail:email},{merge:false});
   tx.set(firestore.doc(`companyAudit/teacher-leave-${normalized.operationId}`),{schema:'danbridge-company-audit-v2',environment,companyId:'danbridge',category:'teacher-leave',action:`teacher-leave-${normalized.action}`,actorUid:uid,actorEmail:email,targetType:'teacherLeave',targetId:normalized.leaveId,teacherId:record.teacherId,leaveType:record.leaveType,date:record.date,durationMinutes:record.durationMinutes,status:record.status,revision:record.revision,createdAt:serverTimestamp()},{merge:false});
-  for(const recipient of recipients.values()){
+  for(const recipient of normalized.action==='complete'?[]:recipients.values()){
    const suffix=recipient.email.replace(/[^A-Za-z0-9_-]/g,'_'),verbs={create:'已送出申請',update:'已更新申請',approve:'已核准',reject:'已駁回',cancel:'已取消'},verb=verbs[normalized.action]||'已異動',label=policy.teacherLeaveTypeLabel(record.leaveType);
    tx.set(firestore.doc(`companies/danbridge/scheduleNotifications/leave_${normalized.operationId}_${suffix}`),{companyId:'danbridge',notificationType:'teacher-leave',recipientEmail:recipient.email,recipientRole:recipient.role,teacherId:recipient.teacherId,teacherName:record.teacherName,title:'老師請假異動',message:`${record.teacherName} ${record.date} ${record.start}–${record.end} ${label}${verb}`,changeCount:1,details:[{leaveId:record.leaveId,teacherId:record.teacherId,teacherName:record.teacherName,leaveType:record.leaveType,leaveTypeLabel:label,date:record.date,start:record.start,end:record.end,hours:record.hours,days:record.days,status:record.status,action:normalized.action,summary:`${label} ${record.hours} 小時／${record.days} 天`}],read:false,createdAt:serverTimestamp(),createdBy:uid,createdByName:String(saved?.teacherName||saved?.displayName||email)},{merge:false});
   }

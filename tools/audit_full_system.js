@@ -10,7 +10,7 @@ const jsFiles = fs.readdirSync(path.join(root, 'js'), { recursive: true })
   .map(file => path.join(root, 'js', file));
 const source = jsFiles.map(file => fs.readFileSync(file, 'utf8')).join('\n');
 
-const expectedTabs = ['dashboard', 'students', 'teachers', 'teacherLeave', 'calendar', 'lessons', 'makeups', 'camps', 'finance', 'data', 'security'];
+const expectedTabs = ['dashboard', 'students', 'teachers', 'bookPurchase', 'teacherLeave', 'calendar', 'lessons', 'makeups', 'camps', 'finance', 'data', 'security'];
 const tabs = [...html.matchAll(/data-tab="([^"]+)"/g)].map(match => match[1]);
 assert.deepEqual(tabs, expectedTabs, 'the owner navigation exposes every expected system module exactly once and in order');
 for (const id of expectedTabs) assert.match(html, new RegExp(`<section id="${id}"`), `${id} navigation has a matching section`);

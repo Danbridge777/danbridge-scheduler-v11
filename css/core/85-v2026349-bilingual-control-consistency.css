@@ -1,6 +1,19 @@
-/* V20.26.351 — bilingual control consistency.
+/* V20.26.357 — bilingual control consistency.
    One sizing system for line controls and action buttons, plus enough native
    month-field width for English month names in Safari/WebKit. */
+/* Compact teacher navigation has a light surface; desktop white labels must
+   not leak into it. Keep Wendy's separately themed palette unchanged. */
+@media(max-width:1100px){
+  html body.teacher-cloud-role:not(.auth-locked):not(.wendy-teacher-role):not([data-cloud-display-name="Wendy"])>nav{
+    background:#fff!important;
+  }
+  html body.teacher-cloud-role:not(.auth-locked):not(.wendy-teacher-role):not([data-cloud-display-name="Wendy"])>nav>button[data-tab]{
+    color:#223b53!important;background:#fff!important;opacity:1!important;transition:none!important;
+  }
+  html body.teacher-cloud-role:not(.auth-locked):not(.wendy-teacher-role):not([data-cloud-display-name="Wendy"])>nav>button[data-tab].active{
+    color:#123d60!important;background:#eaf2f8!important;border-color:#cdddea!important;
+  }
+}
 :root{
   --danbridge-control-height:48px;
   --danbridge-unified-control-font-size:15px;

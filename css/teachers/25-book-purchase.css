@@ -1,0 +1,25 @@
+#bookPurchase{--book-line:#ded7c9;--book-ink:#223348;color:var(--book-ink)}
+#bookPurchase#bookPurchase input,#bookPurchase#bookPurchase select,#bookPurchase#bookPurchase textarea{font-size:var(--danbridge-unified-control-font-size,15px)!important;text-align:center!important}
+#bookPurchase#bookPurchase .btn{font-size:var(--danbridge-unified-action-font-size,14px)!important;text-align:center!important}
+#bookPurchase#bookPurchase input,#bookPurchase#bookPurchase select,#bookPurchase#bookPurchase .btn{height:var(--danbridge-control-height,48px)!important;min-height:var(--danbridge-control-height,48px)!important;max-height:var(--danbridge-control-height,48px)!important}
+#bookPurchase [hidden]{display:none!important}
+#teacherLeave [hidden]{display:none!important}
+#bookPurchase .book-purchase-heading{padding:8px 0 20px;border-bottom:1px solid var(--book-line);text-align:center}
+#bookPurchase h2{font-size:24px;margin:10px 0}#bookPurchase h3{font-size:16px;margin:0;font-weight:700;overflow-wrap:anywhere}
+.book-purchase-layout{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:24px;margin-top:24px;align-items:start}
+#bookPurchase .book-purchase-panel{border:1px solid var(--book-line);border-radius:14px;padding:20px;background:#fff;min-width:0}
+#bookPurchase label{display:block;font-size:14px;font-weight:600;text-align:center;margin:0 0 6px}
+#bookPurchase input,#bookPurchase select,#bookPurchase textarea,#bookPurchase .btn{box-sizing:border-box;font:500 14px/1.4 inherit;font-family:inherit;font-size:14px;text-align:center;min-width:0;max-width:100%;border:1px solid var(--book-line);border-radius:8px;background:#fff;color:var(--book-ink);box-shadow:none}
+#bookPurchase input,#bookPurchase select,#bookPurchase .btn{height:44px;min-height:44px;padding:0 12px}
+#bookPurchase input,#bookPurchase select,#bookPurchase textarea{width:100%;margin:0 0 16px}#bookPurchase textarea{height:96px;padding:14px;resize:vertical}
+#bookPurchase .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:600;min-width:80px;cursor:pointer}#bookPurchase .btn:disabled{opacity:.55;cursor:wait}
+.book-purchase-actions{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}.book-purchase-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 130px auto;gap:10px;align-items:start}
+#bookPurchaseStatus,#bookPurchaseCount{text-align:center;font-size:14px;min-height:22px}#bookPurchaseStatus[data-error="true"]{color:#b32626}
+.book-purchase-rows{display:grid;gap:14px}.book-purchase-item{border-top:1px solid var(--book-line);padding:18px 0;text-align:center;min-width:0}.book-purchase-item p{font-size:14px;overflow-wrap:anywhere;line-height:1.6;margin:10px 0}.book-purchase-note{white-space:pre-wrap}
+.book-purchase-item-head,.book-purchase-item-footer{display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap}.book-purchase-quantity,.book-purchase-readonly{display:inline-grid;place-items:center;min-height:32px;padding:0 12px;border:1px solid var(--book-line);border-radius:6px;font-size:14px}.book-purchase-item-footer>span{font-size:14px;overflow-wrap:anywhere;max-width:100%}.book-purchase-empty{text-align:center;padding:20px;font-size:14px}
+#teacherLeave .teacher-leave-page-head,#teacherLeave .teacher-leave-head,#teacherLeave label,#teacherLeave h2,#teacherLeave .teacher-leave-kicker,#teacherLeave .small,#teacherLeave .teacher-leave-pending-item,#teacherLeave .teacher-leave-quota{text-align:center}
+#teacherLeave input:not([type=checkbox]):not([type=hidden]),#teacherLeave select,#teacherLeave .btn{box-sizing:border-box;min-height:44px;height:44px;font-size:14px;text-align:center;border-radius:8px}
+#teacherLeave#teacherLeave input:not([type=checkbox]):not([type=hidden]),#teacherLeave#teacherLeave select,#teacherLeave#teacherLeave textarea{font-size:var(--danbridge-unified-control-font-size,15px)!important;text-align:center!important}
+#teacherLeave#teacherLeave .btn{font-size:var(--danbridge-unified-action-font-size,14px)!important;text-align:center!important}
+#teacherLeave .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:80px}#teacherLeave textarea{text-align:center;font-size:14px}#teacherLeave .teacher-leave-pending-item .row-actions{display:flex;align-items:center;justify-content:center;gap:8px}#teacherLeave .teacher-leave-owner-approve{justify-content:center}
+@media(max-width:780px){.book-purchase-layout{grid-template-columns:1fr;gap:16px}.book-purchase-toolbar{grid-template-columns:minmax(0,1fr) minmax(100px,130px)}#bookPurchaseRefresh{grid-column:1/-1;width:100%}#bookPurchase .book-purchase-panel{padding:16px}}

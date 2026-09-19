@@ -10,7 +10,7 @@ const start=source.indexOf('   beginCloudBootstrap();',source.indexOf('onAuthSta
 const end=source.indexOf('\n }catch(e){console.error(e);failCloudBootstrap',start);
 assert.ok(start>0&&end>start);
 function harness({profileRead,loginWrite,currentUid='current'}={}){
- const calls=[],user={uid:'current'},context={user,auth:{currentUser:{uid:currentUid}},DANBRIDGE_ENVIRONMENT:'production',console:{warn:()=>calls.push('audit-error')},setTimeout:()=>0};
+ const calls=[],user={uid:'current',email:'current@example.com'},context={user,window:{__danbridgeSetBookIdentity:()=>calls.push('bookIdentity')},auth:{currentUser:{uid:currentUid}},DANBRIDGE_ENVIRONMENT:'production',console:{warn:()=>calls.push('audit-error')},setTimeout:()=>0};
  for(const name of ['beginCloudBootstrap','cloudStatus','advanceCloudBootstrap','applyRoleUI','showCloudApp','subscribeOwner','subscribeSchedulerRequests','subscribeSchedulerTeacher','subscribeTeacher','subscribeBranchManager','subscribeRoleAccessGuard','subscribeLessonReports','subscribeScheduleNotifications','subscribeTeacherLeaves','reportOperationalError'])context[name]=()=>calls.push(name);
  context.loadSignedInProfile=()=>profileRead??Promise.resolve({role:'owner'});
  context.recordSuccessfulLogin=()=>{calls.push('recordSuccessfulLogin');return loginWrite??Promise.resolve()};

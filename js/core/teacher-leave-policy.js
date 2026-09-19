@@ -31,13 +31,19 @@ export function assertTeacherLeaveScope(actor,input){const normalized=normalizeT
 export function teacherRecordFromAuthorityEnvelope(envelope={},teacherId=''){const expectedId=text(teacherId,128),record=envelope&&typeof envelope==='object'&&envelope.record&&typeof envelope.record==='object'?envelope.record:null;if(!TOKEN.test(expectedId)||!record||envelope.deleted===true||text(envelope.recordId,128)!==expectedId||text(record.id,128)!==expectedId)throw new Error('找不到有效老師資料');return Object.freeze({...record})}
 export function normalizeTeacherLeaveRequest(request={}){
  const action=text(request.action,16),operationId=text(request.operationId,128),leaveId=text(request.leaveId,128),expectedRevision=Number(request.expectedRevision),decisionNote=text(request.decisionNote,500),approveImmediately=request.approveImmediately===true;
- if(!['create','update','cancel','approve','reject'].includes(action))throw new Error('請假操作類型無效');
+ if(!['create','update','cancel','approve','reject','complete'].includes(action))throw new Error('請假操作類型無效');
  if(!TOKEN.test(operationId)||!TOKEN.test(leaveId))throw new Error('請假操作識別碼無效');
  if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0)throw new Error('請假版本無效');
  if(action==='create'&&expectedRevision!==0)throw new Error('新增請假版本必須為 0');
  return Object.freeze({action,operationId,leaveId,expectedRevision,input:request.input||{},decisionNote,approveImmediately});
 }
 function assertActionAllowed(actor,action,existing){
+ if(action==='complete'){
+  if(actor.kind!=='owner')throw new Error('只有 Owner 可以完成請假待辦');
+  if(!existing||!['approved','active','rejected','cancelled'].includes(existing.status))throw new Error('請先核准、駁回或取消，再按完成');
+  if(existing.completedAtIso)throw new Error('這筆待辦已完成，請重新整理');
+  return;
+ }
  if(['approve','reject'].includes(action)&&actor.kind!=='owner')throw new Error('只有 Owner 可以核准或駁回請假');
  if(existing&&actor.kind==='teacher'&&String(existing.teacherId)!==actor.teacherId)throw new Error('老師只能操作自己的請假紀錄');
  if(existing&&actor.kind!=='owner'&&approvedStatus(existing.status))throw new Error('已核准請假須由 Owner 處理');
@@ -51,14 +57,16 @@ export function buildTeacherLeaveRecord({request,actor,current=null,teacher={},t
  if(normalizedRequest.action!=='create'&&!existing)throw new Error('找不到請假紀錄');
  const revision=Number(existing?.revision)||0;if(revision!==normalizedRequest.expectedRevision)throw new Error('請假紀錄已由其他人更新，請重新整理');
  assertActionAllowed(actor,normalizedRequest.action,existing);
+ if(normalizedRequest.action==='complete')return Object.freeze({...existing,revision:revision+1,requiresCompletion:true,completedAtIso:text(nowIso,40),completedByUid:actor.uid,completedByEmail:actor.email,updatedAtIso:text(nowIso,40),updatedByUid:actor.uid,updatedByEmail:actor.email});
  const decisionAction=['approve','reject','cancel'].includes(normalizedRequest.action),base=decisionAction?normalizeTeacherLeaveInput(existing):assertTeacherLeaveScope(actor,normalizedRequest.input),nextRevision=revision+1,approveNow=actor.kind==='owner'&&normalizedRequest.approveImmediately;
  let status='pending';if(normalizedRequest.action==='approve'||(!decisionAction&&approveNow))status='approved';else if(normalizedRequest.action==='reject')status='rejected';else if(normalizedRequest.action==='cancel')status='cancelled';
  const hoursPerDay=teacherDailyHours(teacher),days=Number((base.hours/hoursPerDay).toFixed(3));
  const record={schema:'danbridge-teacher-leave-record-v2',environment:environment==='staging'?'staging':'production',companyId:'danbridge',leaveId:normalizedRequest.leaveId,...base,teacherName:text(teacherName||teacher?.name||teacher?.displayName||existing?.teacherName,120),standardDailyHours:hoursPerDay,days,status,revision:nextRevision,createdAtIso:text(existing?.createdAtIso||nowIso,40),createdByUid:text(existing?.createdByUid||actor.uid,128),createdByEmail:text(existing?.createdByEmail||actor.email,320),updatedAtIso:text(nowIso,40),updatedByUid:actor.uid,updatedByEmail:actor.email};
  if(base.leaveType==='annual')record.statutoryAllowanceDays=annualDays(teacher?.employmentStartDate,base.date);
+ record.requiresCompletion=true;
  if(status==='approved')Object.assign(record,{approvedAtIso:text(nowIso,40),approvedByUid:actor.uid,approvedByEmail:actor.email,decisionNote:normalizedRequest.decisionNote});
  else if(status==='rejected')Object.assign(record,{rejectedAtIso:text(nowIso,40),rejectedByUid:actor.uid,rejectedByEmail:actor.email,decisionNote:normalizedRequest.decisionNote});
  else if(status==='cancelled')Object.assign(record,{cancelledAtIso:text(nowIso,40),cancelledByUid:actor.uid,cancelledByEmail:actor.email});
  return Object.freeze(record);
 }
-export function teacherLeaveRequestFingerprint(request={}){const normalized=normalizeTeacherLeaveRequest(request),input=['cancel','approve','reject'].includes(normalized.action)?{}:normalizeTeacherLeaveInput(normalized.input);return JSON.stringify({action:normalized.action,operationId:normalized.operationId,leaveId:normalized.leaveId,expectedRevision:normalized.expectedRevision,input,decisionNote:normalized.decisionNote,approveImmediately:normalized.approveImmediately})}
+export function teacherLeaveRequestFingerprint(request={}){const normalized=normalizeTeacherLeaveRequest(request),input=['cancel','approve','reject','complete'].includes(normalized.action)?{}:normalizeTeacherLeaveInput(normalized.input);return JSON.stringify({action:normalized.action,operationId:normalized.operationId,leaveId:normalized.leaveId,expectedRevision:normalized.expectedRevision,input,decisionNote:normalized.decisionNote,approveImmediately:normalized.approveImmediately})}

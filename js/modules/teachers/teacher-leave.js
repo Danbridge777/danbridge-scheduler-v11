@@ -6,6 +6,8 @@
  const labels=Object.fromEntries(Object.entries(rules).map(([key,value])=>[key,value.label]));
  const statusLabels={pending:'待審核',approved:'已核准',active:'已核准',rejected:'已駁回',cancelled:'已取消'};
  let records=[],loadError='';
+ const completing=new Set();
+ const isOutstanding=row=>entitlement.isOutstandingTodo?.(row)??row?.status==='pending';
  const context=()=>window.DanbridgeAccess?.getContext?.()||{},isOwner=()=>context().role==='owner',monthNow=()=>localToday().slice(0,7);
  function localToday(){const d=new Date(),offset=d.getTimezoneOffset();return new Date(d.getTime()-offset*60000).toISOString().slice(0,10)}
  const roleCanManageAll=()=>isOwner()||(context().role==='teacher'&&context().canManageSchedule===true);
@@ -21,6 +23,11 @@
  function teacherOptions(){return(db?.teachers||[]).filter(teacher=>!teacher.archivedAt||records.some(record=>String(record.teacherId)===String(teacher.id)))}
  function optionsMarkup(options){return options.map(teacher=>`<option value="${html(teacher.id)}">${html(teacher.name||teacher.displayName||teacher.id)}</option>`).join('')}
  function syncSelectors(){
+  // Authentication can restore a different role after DOMContentLoaded. Refresh
+  // privileged controls with the live role without clearing an unsent form.
+  const owner=isOwner(),ownerWrap=$('teacherLeaveOwnerApproveWrap'),approveNow=$('teacherLeaveApproveImmediately');
+  if(ownerWrap)ownerWrap.hidden=!owner;
+  if(approveNow){approveNow.disabled=!owner;if(!owner)approveNow.checked=false}
   const own=String(context().teacherId||''),all=roleCanManageAll(),options=teacherOptions(),form=$('teacherLeaveTeacher'),filter=$('teacherLeaveFilterTeacher'),balance=$('teacherLeaveBalanceTeacher'),formValue=form?.value||own,filterValue=filter?.value||'',balanceValue=balance?.value||formValue||own;
   if(form){form.innerHTML=optionsMarkup(options);form.value=all?formValue:own;if(!form.value&&options[0])form.value=options[0].id;form.disabled=!all}
   if(filter){filter.innerHTML=(all?'<option value="">全部老師</option>':'')+optionsMarkup(options);filter.value=all?filterValue:own;if(!filter.value&&!all)filter.value=own;filter.disabled=!all}
@@ -54,8 +61,33 @@
   const notice=$('teacherLeaveEmploymentNotice');if(notice)notice.textContent=teacher.employmentStartDate?`到職日 ${teacher.employmentStartDate}；特休依年資自動計算。標準每日工時 ${entitlement.teacherDailyHours?.(teacher)||8} 小時。`:'尚未設定到職日，因此特休顯示 0 天；請先到老師資料補上到職日。';
  }
  function impactMarkup(record){const affected=impacts(record);return affected.length?`<b>${affected.length} 堂／${number(affected.reduce((sum,row)=>sum+row.overlapHours,0))} 小時</b><br><span class="small">${html([...new Set(affected.flatMap(row=>row.studentNames))].join('、'))}</span>`:'<span class="small">沒有重疊課程</span>'}
- function renderPending(){const node=$('teacherLeavePendingQueue');if(!node)return;const pending=records.filter(row=>row.status==='pending').sort((a,b)=>String(a.date).localeCompare(String(b.date)));node.innerHTML=pending.length?pending.map(row=>`<article class="teacher-leave-pending-item"><div><b>${html(row.teacherName||row.teacherId)}</b><span>${html(row.date)}　${html(row.start)}–${html(row.end)}　${html(labels[row.leaveType]||row.leaveType)}</span><small>${impactMarkup(row)}</small></div>${isOwner()?`<div class="row-actions"><button class="btn ok" onclick="approveTeacherLeave('${html(row.leaveId||row.id)}')">核准</button><button class="btn danger" onclick="rejectTeacherLeave('${html(row.leaveId||row.id)}')">駁回</button></div>`:'<span class="teacher-leave-status pending">等待 Owner</span>'}</article>`).join(''):'<div class="teacher-leave-empty">目前沒有待審核申請</div>'}
- function renderDashboard(){const stats=entitlement.leaveDashboardStats?.({records,db,today:localToday()})||{pending:0,today:0,affectedLessons:0};if($('teacherLeaveDashboardPending'))$('teacherLeaveDashboardPending').textContent=stats.pending;if($('teacherLeaveDashboardToday'))$('teacherLeaveDashboardToday').textContent=stats.today;if($('teacherLeaveDashboardText'))$('teacherLeaveDashboardText').textContent=stats.pending?`${stats.pending} 筆等待核准；今日 ${stats.today} 位老師請假`:`沒有待審；今日 ${stats.today} 位老師請假、影響 ${stats.affectedLessons} 堂`}
+ function renderPending(){
+  const node=$('teacherLeavePendingQueue');if(!node)return;
+  const outstanding=records.filter(isOutstanding).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  node.innerHTML=outstanding.length?outstanding.map(row=>{
+   const id=String(row.leaveId||row.id),pending=row.status==='pending';
+   const actions=isOwner()?(pending?`<button class="btn ok" onclick="approveTeacherLeave('${html(id)}')">核准</button><button class="btn danger" onclick="rejectTeacherLeave('${html(id)}')">駁回</button>`:`<button class="btn ok" data-leave-complete="${html(id)}" onclick="completeTeacherLeave('${html(id)}')"${completing.has(id)?' disabled':''}>${completing.has(id)?'同步中…':'完成'}</button>`):'<span class="teacher-leave-status pending">等待 Owner 處理</span>';
+   return`<article class="teacher-leave-pending-item"><div><b>${html(row.teacherName||row.teacherId)}</b><span>${html(row.date)}　${html(row.start)}–${html(row.end)}　${html(labels[row.leaveType]||row.leaveType)}</span><small>${impactMarkup(row)}</small><small>${pending?'待審核':`${html(statusLabels[row.status]||row.status)} · 尚未按完成`}</small></div><div class="row-actions">${actions}</div></article>`;
+  }).join(''):'<div class="teacher-leave-empty">所有請假待辦已完成，目前沒有待審核申請</div>';
+ }
+ async function completeTeacherLeave(id){
+  const row=records.find(row=>String(row.leaveId||row.id)===String(id));
+  if(!row||!isOwner()||row.status==='pending'||!isOutstanding(row)||completing.has(id))return;
+  completing.add(id);renderPending();
+  try{await operate({action:'complete',leaveId:id,expectedRevision:Number(row.revision)||0},'已完成此筆待辦。')}catch{}finally{completing.delete(id);renderPending()}
+ }
+ window.completeTeacherLeave=completeTeacherLeave;
+ function renderDashboard(){
+  const stats=entitlement.leaveDashboardStats?.({records,db,today:localToday()})||{pending:0,today:0,affectedLessons:0};
+  // Use the received leave state, never a button click or the current table filter.
+  // Failed writes/reads retain the last confirmed count until a new snapshot arrives.
+  const badge=$('teacherLeaveDashboardBadge'),icon=$('teacherLeaveDashboardIcon'),outstanding=stats.outstanding??stats.pending;
+  if(badge){badge.textContent=outstanding?String(outstanding):'';badge.hidden=outstanding===0;badge.setAttribute('aria-label',`${outstanding} 筆未完成請假待辦`);badge.style.setProperty('--badge-digits',String(String(outstanding).length))}
+  if(icon)icon.hidden=outstanding>0;
+  if($('teacherLeaveDashboardPending'))$('teacherLeaveDashboardPending').textContent=stats.pending;
+  if($('teacherLeaveDashboardToday'))$('teacherLeaveDashboardToday').textContent=stats.today;
+  if($('teacherLeaveDashboardText'))$('teacherLeaveDashboardText').textContent=outstanding?`${outstanding} 筆待辦未完成（${stats.pending} 筆待審核）`:`待辦已完成；今日 ${stats.today} 位老師請假、影響 ${stats.affectedLessons} 堂`
+ }
  function renderTeacherLeaves(){
   if(!$('teacherLeaveRows'))return;syncSelectors();if(!$('teacherLeaveMonth').value)$('teacherLeaveMonth').value=monthNow();if(!$('teacherLeaveYear').value)$('teacherLeaveYear').value=new Date().getFullYear();const month=$('teacherLeaveMonth').value,teacherId=$('teacherLeaveFilterTeacher').value,status=$('teacherLeaveStatus').value||'all',rows=records.filter(row=>(!month||String(row.date||'').startsWith(month))&&(!teacherId||String(row.teacherId)===String(teacherId))&&(status==='all'||(status==='approved'?isApproved(row):row.status===status))).sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(a.start).localeCompare(String(b.start))),approved=rows.filter(isApproved),pending=rows.filter(row=>row.status==='pending'),hours=approved.reduce((sum,row)=>sum+Number(row.hours||0),0),affected=approved.flatMap(impacts);
   $('teacherLeaveSummary').innerHTML=[['已核准',approved.length],['待審核',pending.length],['核准時數',`${number(hours)} 小時`],['影響課程',`${affected.length} 堂`]].map(([label,value])=>`<div><span>${label}</span><b>${value}</b></div>`).join('');

@@ -43,13 +43,13 @@ test('actual subscription uses server query scope and rejects out-of-scope callb
  const source=module.slice(module.indexOf('function subscribeScheduleNotifications(){'),module.indexOf('async function publishStagingShadowGeneration'));
  assert.ok(source.startsWith('function subscribeScheduleNotifications(){'));
   for(const profile of [{role:'owner'},{role:'teacher',canManageSchedule:true},{role:'teacher',teacherId:'t1'},{role:'branch_manager',branchIds:['art_museum']},{role:'branch_manager',branchIds:['art_museum'],hideFinancials:true}]){
-  let callback,queryArgs,displayed;
+  let callback,queryArgs,displayed,bookRefreshes=0;
   const scope=filters({email,...profile});
   const current=Object.fromEntries(scope.map(([field,,value])=>[field,value]));
   const context=vm.createContext({
    unsubscribeScheduleNotifications:null,scheduleNotificationDocuments:[],scheduleNotificationPresenter:null,
    cloud:{},COMPANY_ID:'danbridge',cloudEmailKey:email,cloudRole:profile.role,cloudTeacherId:profile.teacherId||'',cloudBranchIds:profile.branchIds||[],cloudCanManageSchedule:profile.canManageSchedule===true,
-   installScheduleNotificationUI(){},resetScheduleNotificationContext(){},document:{getElementById:()=>({})},window:{DanbridgeAccess:{getContext:()=>profile}},
+   installScheduleNotificationUI(){},resetScheduleNotificationContext(){},document:{getElementById:()=>({})},Event:class{constructor(type){this.type=type}},window:{DanbridgeAccess:{getContext:()=>profile},dispatchEvent:e=>{assert.equal(e.type,'danbridge:book-purchase-changed');bookRefreshes++}},
    createScheduleNotificationPresenter:()=>({update:rows=>{displayed=rows},stop(){}}),
    collection:(...args)=>args,where:(...args)=>args,query:(...args)=>{queryArgs=args;return args},
    onSnapshot:(q,options,next)=>{callback=next;return()=>{}},
@@ -60,7 +60,12 @@ test('actual subscription uses server query scope and rejects out-of-scope callb
   const rows=[{id:'current',...current},{id:'foreign',...current,recipientEmail:'other@example.test'},
    {id:'read',...current,read:true}];
   if(profile.role!=='owner')rows.push({id:'old-owner',recipientEmail:email,recipientRole:'owner'});
-  callback({metadata:{hasPendingWrites:false},docs:rows.map(row=>({id:row.id,data:()=>row}))});
+  const snapshot=(changes=[],fromCache=false)=>({metadata:{hasPendingWrites:false,fromCache},docs:rows.map(row=>({id:row.id,data:()=>row})),docChanges:()=>changes});
+  callback(snapshot());
   assert.deepEqual(Array.from(displayed,row=>row.id),['current']);
+  const change={type:'added',doc:{data:()=>({...current,notificationType:'book-purchase'})}};
+  callback(snapshot([change],true));assert.equal(bookRefreshes,0);
+  callback(snapshot([{type:'added',doc:{data:()=>({...current,notificationType:'book-purchase',recipientEmail:'other@example.test'})}}]));assert.equal(bookRefreshes,0);
+  callback(snapshot([change]));assert.equal(bookRefreshes,1);
  }
 });

@@ -8,6 +8,13 @@ const teacher=normalizeTeacherLeaveActor({uid:'teacher-uid-1',email:'teacher@exa
 const teacherAuthority={id:'teacher-1',name:'張毅',employmentStartDate:'2024-01-01',standardDailyHours:8};
 const input={teacherId:'teacher-1',leaveType:'sick',date:'2026-09-02',start:'09:30',end:'11:00',note:'看診'};
 
+test('偽造立即核准旗標仍不能讓老師或排課專員自行核准',()=>{
+ for(const actor of [teacher,scheduler]){
+  const record=buildTeacherLeaveRecord({request:{action:'create',operationId:'operation-forged-now',leaveId:'leave-forged-now',expectedRevision:0,approveImmediately:true,input},actor,teacher:teacherAuthority,nowIso:'2026-09-01T00:00:00.000Z'});
+  assert.equal(record.status,'pending');
+ }
+});
+
 test('請假時數與天數由時間及老師標準每日工時精確計算',()=>{const normalized=normalizeTeacherLeaveInput(input);assert.equal(normalized.durationMinutes,90);assert.equal(normalized.hours,1.5);const record=buildTeacherLeaveRecord({request:{action:'create',operationId:'operation-0001',leaveId:'leave-0001',expectedRevision:0,input},actor:owner,teacher:teacherAuthority,nowIso:'2026-09-01T00:00:00.000Z'});assert.equal(record.days,0.188)});
 test('接受法定十種假別；喪假必須指定親屬關係',()=>{for(const leaveType of ['annual','personal','sick','hospitalSick','marriage','familyCare','menstrual','occupational','official'])assert.equal(normalizeTeacherLeaveInput({...input,leaveType}).leaveType,leaveType);assert.throws(()=>normalizeTeacherLeaveInput({...input,leaveType:'bereavement'}),/親屬/);assert.equal(normalizeTeacherLeaveInput({...input,leaveType:'bereavement',bereavementRelationship:'close8'}).bereavementRelationship,'close8')});
 test('拒絕跨日、零時數、未知類別與不存在的日期',()=>{for(const row of [{...input,end:'09:30'},{...input,end:'08:00'},{...input,leaveType:'other'},{...input,date:'bad'},{...input,date:'2026-02-31'}])assert.throws(()=>normalizeTeacherLeaveInput(row))});

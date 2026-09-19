@@ -3,28 +3,28 @@ const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
 
 test.beforeEach(async({page})=>isolateApplicationAuth(page));
 
-const RELEASE = '20.26.351';
-const CLOUD_RELEASE = '20.26.351';
-const SCHEDULER_STUDENT_TOOLS_RELEASE = '20.26.351';
-const APP_SHELL_RELEASE = '20.26.351';
-const BUSINESS_RELEASE = '20.26.351';
-const TEACHER_KPI_RELEASE = '20.26.351';
-const BRANCH_SCOPE_RELEASE = '20.26.351';
-const ROLE_UX_RELEASE = '20.26.351';
-const REPORT_STYLE_RELEASE = '20.26.351';
-const ROLE_UX_STYLE_RELEASE = '20.26.351';
-const PWA_RELEASE = '20.26.351';
-const PWA_STYLE_RELEASE = '20.26.351';
-const CLEAN_FIELD_RELEASE = '20.26.351';
-const LANGUAGE_RELEASE = '20.26.351';
-const INTERFACE_CLARITY_STYLE_RELEASE = '20.26.351';
-const SCHEDULER_UI_RELEASE = '20.26.351';
-const PREMIUM_CONTROLS_RELEASE = '20.26.351';
-const PERMANENT_HISTORY_RELEASE = '20.26.351';
-const APPLICATION_FEATURES_RELEASE = '20.26.351';
-const SCHEDULING_EFFICIENCY_RELEASE = '20.26.351';
-const CROSS_PLATFORM_LAYOUT_RELEASE = '20.26.351';
-const BILINGUAL_CONTROL_STYLE_RELEASE = '20.26.351';
+const RELEASE = '20.26.357';
+const CLOUD_RELEASE = '20.26.357';
+const SCHEDULER_STUDENT_TOOLS_RELEASE = '20.26.357';
+const APP_SHELL_RELEASE = '20.26.357';
+const BUSINESS_RELEASE = '20.26.357';
+const TEACHER_KPI_RELEASE = '20.26.357';
+const BRANCH_SCOPE_RELEASE = '20.26.357';
+const ROLE_UX_RELEASE = '20.26.357';
+const REPORT_STYLE_RELEASE = '20.26.357';
+const ROLE_UX_STYLE_RELEASE = '20.26.357';
+const PWA_RELEASE = '20.26.357';
+const PWA_STYLE_RELEASE = '20.26.357';
+const CLEAN_FIELD_RELEASE = '20.26.357';
+const LANGUAGE_RELEASE = '20.26.357';
+const INTERFACE_CLARITY_STYLE_RELEASE = '20.26.357';
+const SCHEDULER_UI_RELEASE = '20.26.357';
+const PREMIUM_CONTROLS_RELEASE = '20.26.357';
+const PERMANENT_HISTORY_RELEASE = '20.26.357';
+const APPLICATION_FEATURES_RELEASE = '20.26.357';
+const SCHEDULING_EFFICIENCY_RELEASE = '20.26.357';
+const CROSS_PLATFORM_LAYOUT_RELEASE = '20.26.357';
+const BILINGUAL_CONTROL_STYLE_RELEASE = '20.26.357';
 
 test('signed-out entry keeps private application content isolated', async ({ page }) => {
   await page.route('https://www.gstatic.com/**', route => route.abort());
@@ -40,9 +40,9 @@ test('signed-out entry keeps private application content isolated', async ({ pag
 test('永久操作日誌在重新整理後仍可從 IndexedDB 完整讀回',async({page},testInfo)=>{
   await page.goto('/index.html',{waitUntil:'domcontentloaded'});
   const key=`staging:e2e@example.com:${testInfo.project.name}-${Date.now()}`,rows=[{schema:'danbridge-operation-journal-v1',operationId:'device:1',status:'pending',attempts:0,operation:{operationId:'device:1',recordId:'lesson-1'}}];
-  await page.evaluate(async({key,rows})=>{const{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.351'),storage=createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key});await storage.save(rows);sessionStorage.setItem('e2eJournalKey',key)},{key,rows});
+  await page.evaluate(async({key,rows})=>{const{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.357'),storage=createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key});await storage.save(rows);sessionStorage.setItem('e2eJournalKey',key)},{key,rows});
   await page.reload({waitUntil:'domcontentloaded'});
-  const readback=await page.evaluate(async()=>{const key=sessionStorage.getItem('e2eJournalKey'),{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.351');return createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key}).load()});
+  const readback=await page.evaluate(async()=>{const key=sessionStorage.getItem('e2eJournalKey'),{createBrowserOperationJournalStorage}=await import('/js/core/browser-operation-journal-storage.js?v=20.26.357');return createBrowserOperationJournalStorage({indexedDB,locks:navigator.locks,key}).load()});
   expect(readback).toEqual(rows);
 });
 
@@ -89,7 +89,7 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/app/scheduler-student-tools.js?v=${SCHEDULER_STUDENT_TOOLS_RELEASE}`);
   expect(sources).toContain(`./js/ui/clean-field-hints.js?v=${CLEAN_FIELD_RELEASE}`);
   expect(sources).toContain(`./js/modules/teachers/teacher-kpi.js?v=${TEACHER_KPI_RELEASE}`);
-  expect(sources).toContain('./js/modules/teachers/teacher-leave.js?v=20.26.351');
+  expect(sources).toContain('./js/modules/teachers/teacher-leave.js?v=20.26.357');
   expect(sources).toContain(`./js/core/branch-business-scope.js?v=${BRANCH_SCOPE_RELEASE}`);
   expect(sources).toContain(`./js/app/v20014-role-responsive-ux.js?v=${ROLE_UX_RELEASE}`);
   expect(sources).toContain(`./js/core/pwa-installation.js?v=${PWA_RELEASE}`);
@@ -100,7 +100,7 @@ test('critical teacher and finance resources load the current release', async ({
   expect(sources).toContain(`./js/app/v20-scheduling-efficiency.js?v=${SCHEDULING_EFFICIENCY_RELEASE}`);
   const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(elements => elements.map(element => element.getAttribute('href')));
   expect(styles).toContain(`./css/core/73-v20014-role-responsive-ux.css?v=${ROLE_UX_STYLE_RELEASE}`);
-  expect(styles).toContain('./css/teachers/24-teacher-leave.css?v=20.26.351');
+  expect(styles).toContain('./css/teachers/24-teacher-leave.css?v=20.26.357');
   expect(styles).toContain(`./css/core/37-v15252-lesson-reporting-and-toolbar-fix.css?v=${REPORT_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/77-pwa-install-and-update.css?v=${PWA_STYLE_RELEASE}`);
   expect(styles).toContain(`./css/core/67-v185-interface-clarity.css?v=${INTERFACE_CLARITY_STYLE_RELEASE}`);
@@ -110,7 +110,7 @@ test('critical teacher and finance resources load the current release', async ({
   const manifest = await page.locator('link[rel="manifest"]').getAttribute('href');
   expect(manifest).toBe('./manifest.webmanifest');
   const appleIcon = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
-  expect(appleIcon).toBe('./icon-192.png?v=20.26.351');
+  expect(appleIcon).toBe('./icon-192.png?v=20.26.357');
 });
 
 test('首頁啟用中的本機 CSS 與 JavaScript 全部使用同一發布指紋',async({page})=>{
@@ -120,8 +120,26 @@ test('首頁啟用中的本機 CSS 與 JavaScript 全部使用同一發布指紋
   expect(assets.filter(value=>!value.endsWith(`?v=${RELEASE}`))).toEqual([]);
 });
 
+test('teacher navigation stays readable on light compact layouts in both languages',async({page})=>{
+ await page.goto('/index.html',{waitUntil:'load'});
+ await page.evaluate(()=>{document.body.classList.remove('auth-locked');document.body.classList.add('teacher-cloud-role');window.DanbridgeAccess.setContext({role:'teacher',email:'teacher@example.com',teacherId:'teacher-1'});window.DanbridgeRoleResponsive.apply()});
+ for(const width of [390,768,1024,1100]){
+  await page.setViewportSize({width,height:900});
+  for(const lang of ['zh','en']){
+   await page.evaluate(lang=>window.DanbridgeLanguage.setLanguage(lang),lang);
+   const colors=await page.locator('body>nav>button[data-tab]').evaluateAll(buttons=>buttons.filter(b=>getComputedStyle(b).display!=='none').map(b=>({tab:b.dataset.tab,color:getComputedStyle(b).color,background:getComputedStyle(b).backgroundColor,active:b.classList.contains('active')})));
+   expect(colors.length).toBeGreaterThan(0);
+   for(const color of colors){
+    const luminance=value=>value.match(/[\d.]+/g).slice(0,3).map(Number).map(n=>{n/=255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4}).reduce((sum,n,i)=>sum+n*[.2126,.7152,.0722][i],0);
+    const foreground=luminance(color.color),background=luminance(color.background),contrast=(Math.max(foreground,background)+.05)/(Math.min(foreground,background)+.05);
+    expect(contrast,JSON.stringify({width,lang,...color})).toBeGreaterThanOrEqual(4.5);
+   }
+  }
+ }
+});
+
 test('主選單在桌機、平板與手機都只顯示一致文字',async({page})=>{
-  const expected=['總覽','學生／家長','老師','請假管理','課表','課程紀錄','補課中心','冬／夏令營','公司財務','備份／iPad','安全設定'];
+  const expected=['總覽','學生／家長','老師','書籍代購','請假管理','課表','課程紀錄','補課中心','冬／夏令營','公司財務','備份／iPad','安全設定'];
   await page.goto('/index.html',{waitUntil:'domcontentloaded'});
   await page.evaluate(()=>document.body.classList.remove('auth-locked'));
   for(const viewport of [{width:1440,height:900},{width:1024,height:768},{width:390,height:844}]){
@@ -141,7 +159,7 @@ test('老師請假頁在 Daniel、AA、老師三種角色下呈現正確範圍�
  await expect(page.locator('#teacherLeave')).toHaveClass(/active/);await expect(page.locator('#teacherLeaveRows')).toContainText('張毅');await expect(page.locator('#teacherLeaveRows')).toContainText('1.5 小時');
  await page.locator('#teacherLeaveTeacher').selectOption('teacher-1');await page.locator('#teacherLeaveType').selectOption('bereavement');await page.locator('#teacherLeaveDate').fill('2026-09-04');await page.locator('#teacherLeaveStart').selectOption('13:00');await page.locator('#teacherLeaveEnd').selectOption('15:30');await expect(page.locator('#teacherLeaveHoursPreview')).toHaveText('共 2.5 小時／0.31 天');await page.locator('#teacherLeaveSaveBtn').click();await expect.poll(()=>page.evaluate(()=>window.__leaveTestPayload?.input)).toEqual({teacherId:'teacher-1',leaveType:'bereavement',date:'2026-09-04',start:'13:00',end:'15:30',note:'',bereavementRelationship:'close8'});
  const roles=await page.evaluate(()=>{const result={};window.DanbridgeAccess.setContext({role:'teacher',email:'teacher@example.com',teacherId:'teacher-1',canManageSchedule:false});window.DanbridgeRoleResponsive.apply();window.renderTeacherLeaves();result.teacher={tabs:[...document.querySelectorAll('nav button[data-tab]')].filter(button=>!button.hidden&&getComputedStyle(button).display!=='none').map(button=>button.dataset.tab),teacherDisabled:document.getElementById('teacherLeaveTeacher').disabled,teacherValue:document.getElementById('teacherLeaveTeacher').value};window.DanbridgeAccess.setContext({role:'teacher',email:'aa@example.com',teacherId:'teacher-2',canManageSchedule:true});window.DanbridgeRoleResponsive.apply();window.renderTeacherLeaves();result.scheduler={tabs:[...document.querySelectorAll('nav button[data-tab]')].filter(button=>!button.hidden&&getComputedStyle(button).display!=='none').map(button=>button.dataset.tab),teacherDisabled:document.getElementById('teacherLeaveTeacher').disabled};return result});
- expect(roles.teacher).toEqual({tabs:['dashboard','teacherLeave','calendar','lessons'],teacherDisabled:true,teacherValue:'teacher-1'});expect(roles.scheduler).toEqual({tabs:['teacherLeave','calendar'],teacherDisabled:false});
+ expect(roles.teacher).toEqual({tabs:['dashboard','bookPurchase','teacherLeave','calendar','lessons'],teacherDisabled:true,teacherValue:'teacher-1'});expect(roles.scheduler).toEqual({tabs:['bookPurchase','teacherLeave','calendar'],teacherDisabled:false});
 });
 
 test('刪除課程可沿用同一 ID 重建且永久日誌只追加不覆寫',async({page})=>{
@@ -223,11 +241,11 @@ test('every owner navigation and dashboard shortcut responds before heavy render
   const result=await page.evaluate(async()=>{
     document.body.classList.remove('auth-locked','teacher-cloud-role','branch-manager-cloud-role','scheduler-cloud-role');
     window.DanbridgeAccess.setContext({role:'owner',canManageSchedule:false});window.currentCloudRole=()=> 'owner';
-    const renderNames=['renderDashboard','renderStudents','renderCalendar','renderLessons','renderFinance'],rendererByTab={dashboard:'renderDashboard',students:'renderStudents',calendar:'renderCalendar',lessons:'renderLessons',finance:'renderFinance'},originals={},originalFrame=window.requestAnimationFrame,frames=[],renderCalls=[];
+    const renderNames=['renderDashboard','renderStudents','renderCalendar','renderLessons','renderFinance','renderTeacherLeaves','renderBookPurchases'],rendererByTab={dashboard:'renderDashboard',students:'renderStudents',calendar:'renderCalendar',lessons:'renderLessons',finance:'renderFinance',teacherLeave:'renderTeacherLeaves',bookPurchase:'renderBookPurchases'},originals={},originalFrame=window.requestAnimationFrame,frames=[],renderCalls=[];
     renderNames.forEach(name=>{originals[name]=window[name];window[name]=()=>{renderCalls.push(name)}});
     window.requestAnimationFrame=callback=>{frames.push(callback);return frames.length};
     try{
-      const tabs=['dashboard','students','teachers','teacherLeave','calendar','lessons','makeups','camps','finance','data','security'],checks=[];
+      const tabs=['dashboard','students','teachers','bookPurchase','teacherLeave','calendar','lessons','makeups','camps','finance','data','security'],checks=[];
       for(const tab of tabs){
         const before=renderCalls.length,expectedRenderer=rendererByTab[tab]??null;window.switchTab(tab);
         const section=document.getElementById(tab).classList.contains('active'),button=document.querySelector(`nav button[data-tab="${tab}"]`).classList.contains('active'),renderedDuringSwitch=renderCalls.length!==before,queuedFrames=frames.length;
@@ -241,7 +259,7 @@ test('every owner navigation and dashboard shortcut responds before heavy render
   });
   const failedChecks=result.checks.filter(item=>!item.section||!item.button||item.renderedDuringSwitch||!item.frameScheduled||!item.rendererCorrect);
   expect(failedChecks,JSON.stringify(result.checks)).toEqual([]);
-  expect(result.shortcutTargets.sort()).toEqual(['calendar','calendar','calendar','lessons','makeups'].sort());
+  expect(result.shortcutTargets.sort()).toEqual(['calendar','calendar','calendar','lessons','makeups','teacherLeave'].sort());
 });
 
 test('role navigation matrix rejects every forbidden workspace', async ({ page }) => {

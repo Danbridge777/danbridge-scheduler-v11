@@ -3,7 +3,7 @@ const {isolateApplicationAuth}=require('./helpers/isolate-application-auth');
 
 test.beforeEach(async({page})=>isolateApplicationAuth(page));
 
-const SECTION_IDS=['dashboard','students','teachers','teacherLeave','calendar','lessons','makeups','camps','winterCamps','settlement','finance','data','security'];
+const SECTION_IDS=['dashboard','students','teachers','teacherLeave','bookPurchase','calendar','lessons','makeups','camps','winterCamps','settlement','finance','data','security'];
 
 async function unlockOwnerWorkspace(page){
  await page.goto('/index.html',{waitUntil:'load'});

@@ -1,68 +1,68 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js';
-import {readRoleViewForAudit} from './role-view-audit-reader.js?v=20.26.351';
-import {projectProductionBranchAccessDb} from './production-role-view-projection.js?v=20.26.351';
-import {buildAccessPreset,isSchedulerAccess,listAccessPresets} from './access-presets.js?v=20.26.351';
+import {readRoleViewForAudit} from './role-view-audit-reader.js?v=20.26.357';
+import {projectProductionBranchAccessDb} from './production-role-view-projection.js?v=20.26.357';
+import {buildAccessPreset,isSchedulerAccess,listAccessPresets} from './access-presets.js?v=20.26.357';
 import { getAuth, initializeAuth, indexedDBLocalPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, browserLocalPersistence, setPersistence } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
-import {createGoogleSignInFlow} from './google-sign-in-flow.js?v=20.26.351';
-import {installAppCheckExchangeObserver} from './app-check-exchange-observer.js?v=20.26.351';
-import {createLessonReportClient} from './lesson-report-client.js?v=20.26.351';
-import {createTeacherReportHydrator} from './teacher-report-hydrator.js?v=20.26.351';
+import {createGoogleSignInFlow} from './google-sign-in-flow.js?v=20.26.357';
+import {installAppCheckExchangeObserver} from './app-check-exchange-observer.js?v=20.26.357';
+import {createLessonReportClient} from './lesson-report-client.js?v=20.26.357';
+import {createTeacherReportHydrator} from './teacher-report-hydrator.js?v=20.26.357';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getLimitedUseToken, getToken as getAppCheckToken } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app-check.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js';
 import { initializeFirestore, memoryLocalCache, doc as firebaseDoc, getDoc, getDocFromServer, setDoc, deleteDoc, deleteField, onSnapshot, collection as firebaseCollection, query, where, getDocs, getDocsFromServer, serverTimestamp, Timestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
-import {bootstrapDanbridgeFirebase} from './firebase-environment-bootstrap.js?v=20.26.351';
-import {createScheduleNotificationPresenter} from './schedule-notification-presentation.js?v=20.26.351';
-import {scheduleNotificationReadFilters,scheduleNotificationMatchesFilters} from './schedule-notification-read-scope.js?v=20.26.351';
-import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.351';
-import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.351';
-import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.351';
-import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore,canonicalLegacyRecordShadowCore,extractFullRecordShadowSyncResult,buildFullRecordShadowRunIdentity} from './cloud-record-shadow-run.js?v=20.26.351';
-import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.351';
-import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.351';
-import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.351';
-import {verifyOwnRoleViewCandidateReadback} from './cloud-role-view-candidate.js?v=20.26.351';
-import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest as buildLegacyRoleViewCandidateManifest,buildAtomicRecordActivation,evaluateAtomicRecordActivation} from './cloud-record-activation.js?v=20.26.351';
-import {decideRecordReadTakeover} from './cloud-record-read-takeover.js?v=20.26.351';
-import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js?v=20.26.351';
-import {recordDataDigest,recordDataHash} from './cloud-record-data-hash.js?v=20.26.351';
-import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.351';
-import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.351';
-import {createOwnerDraftStore} from './cloud-owner-draft-store.js?v=20.26.351';
-import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from './production-scheduler-queue.js?v=20.26.351';
-import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.351';
-import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.351';
-import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.351';
-import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.351';
-import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.351';
-import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.351';
-import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.351';
-import {createFirebaseActiveRecordStreamAdapter} from './firebase-active-record-stream-adapter.js?v=20.26.351';
-import {createFirebaseRoleRecordViewAdapter} from './firebase-role-record-view-adapter.js?v=20.26.351';
-import {createFirebaseRoleRecordStreamAdapter} from './firebase-role-record-stream-adapter.js?v=20.26.351';
-import {createActiveRoleRecordPublishQueue} from './cloud-active-role-record-publish-queue.js?v=20.26.351';
-import {decideOwnerActiveSaveIntent} from './cloud-owner-active-save-intent.js?v=20.26.351';
-import {createRecordSyncActiveFailureResume} from './record-sync-active-failure-resume.js?v=20.26.351';
-import {cloudBackupListingState,dailyBackupChunkCore,prepareDailyShardedBackup,sealDailyShardedBackup,verifyDailyShardedBackupReadback} from './cloud-daily-sharded-backup.js?v=20.26.351';
-import {createFirebaseRecordSyncCandidateAdapter} from './firebase-record-sync-candidate-adapter.js?v=20.26.351';
-import {buildRecordSyncRoleEvidence,RECORD_SYNC_ROLE_SCENARIOS} from './cloud-record-sync-role-evidence.js?v=20.26.351';
-import {buildRecordSyncActivationManifest,buildActiveRecordSyncControl,evaluateActiveRecordSyncControl} from './cloud-record-sync-control.js?v=20.26.351';
-import {createFirebaseRecordSyncActivationAdapter} from './firebase-record-sync-activation-adapter.js?v=20.26.351';
-import {verifyRoleViewCandidateSourceBinding,buildRoleViewCandidateSourceAudit,buildRoleViewCandidateManifest as buildVerifiedRoleViewCandidateManifest,assertRoleViewCandidateManifest,buildRoleViewVerificationReceipt,assertRoleViewVerificationReceipt,verifyRoleViewReceiptSet} from './cloud-role-view-verification.js?v=20.26.351';
-import {loadProfileAfterAuthReady} from './cloud-auth-profile-bootstrap.js?v=20.26.351';
-import {RECORD_SYNC_V2_TAKEOVER_CANDIDATE_CONTROL_PATH,RECORD_SYNC_V2_TAKEOVER_CANDIDATE_HEAD_PATH,createFirebaseRecordSyncV2TakeoverCandidateAdapter} from './firebase-record-sync-v2-takeover-candidate-adapter.js?v=20.26.351';
-import {createStagingV2AuthorityReadLoader} from './staging-v2-authority-read-loader.js?v=20.26.351';
-import {createStagingV2AuthoritySaveBrowserClient} from './staging-v2-authority-save-browser-client.js?v=20.26.351';
-import {createStagingV2ActiveRecordOperationSender,normalizeStagingV2FirestoreValue,stagingV2H0GenesisBaselineDocuments} from './staging-v2-active-record-browser-bridge.js?v=20.26.351';
-import {createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.351';
-import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.351';
-import {CLOUD_BOOTSTRAP_STAGES,createCloudBootstrapProgress} from './cloud-bootstrap-progress.js?v=20.26.351';
-import {createProductionTrustedOperationClient} from './production-trusted-operation-client.js?v=20.26.351';
-import {prepareActiveRecordSync} from './cloud-active-record-sync.js?v=20.26.351';
-import {createFirebaseCallableHttpClient} from './firebase-callable-http-client.js?v=20.26.351';
-import {createLimitedUseAppCheckTokenPool,takeFreshLimitedUseAppCheckToken} from './app-check-limited-use-token.js?v=20.26.351';
-import {createPublishedRoleViewConsumer} from './published-role-view-consumer.js?v=20.26.351';
-import {createFirestoreRolePartBatchReader} from './firestore-role-part-batch-reader.js?v=20.26.351';
-import {createPublishedSchedulerReceiptReader,PUBLISHED_SCHEDULER_RESPONSE_SCHEMA} from './published-scheduler-receipt.js?v=20.26.351';
+import {bootstrapDanbridgeFirebase} from './firebase-environment-bootstrap.js?v=20.26.357';
+import {createScheduleNotificationPresenter,teacherLeaveNotificationStatusLabel} from './schedule-notification-presentation.js?v=20.26.357';
+import {scheduleNotificationReadFilters,scheduleNotificationMatchesFilters} from './schedule-notification-read-scope.js?v=20.26.357';
+import {createShardedSnapshot,assembleShardedSnapshot,canRunStagingShadow} from './cloud-sharded-store.js?v=20.26.357';
+import {createFirebaseRecordShadowAdapter} from './firebase-record-shadow-adapter.js?v=20.26.357';
+import {createFirebaseFullRecordShadowAdapter} from './firebase-full-record-shadow-adapter.js?v=20.26.357';
+import {buildRecordShadowRunManifest,verifyRecordShadowRun,buildRecordShadowActivation,canonicalRecordShadowCore,canonicalLegacyRecordShadowCore,extractFullRecordShadowSyncResult,buildFullRecordShadowRunIdentity} from './cloud-record-shadow-run.js?v=20.26.357';
+import {evaluateRecordShadowReadCandidate} from './cloud-record-shadow-read-candidate.js?v=20.26.357';
+import {prepareImmutableMigrationBackup,verifyImmutableMigrationBackupReadback,sealImmutableMigrationBackup,verifyImmutableMigrationBackupManifest,sha256Canonical} from './cloud-immutable-migration-backup.js?v=20.26.357';
+import {createFirebaseRoleViewCandidateAdapter} from './firebase-role-view-candidate-adapter.js?v=20.26.357';
+import {verifyOwnRoleViewCandidateReadback} from './cloud-role-view-candidate.js?v=20.26.357';
+import {buildFullRecordCandidateManifest,buildRoleViewCandidateManifest as buildLegacyRoleViewCandidateManifest,buildAtomicRecordActivation,evaluateAtomicRecordActivation} from './cloud-record-activation.js?v=20.26.357';
+import {decideRecordReadTakeover} from './cloud-record-read-takeover.js?v=20.26.357';
+import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js?v=20.26.357';
+import {recordDataDigest,recordDataHash} from './cloud-record-data-hash.js?v=20.26.357';
+import {buildStagingLivePreflight} from './cloud-staging-live-preflight.js?v=20.26.357';
+import {createBrowserOperationJournalStorage} from './browser-operation-journal-storage.js?v=20.26.357';
+import {createOwnerDraftStore} from './cloud-owner-draft-store.js?v=20.26.357';
+import {createProductionSchedulerQueue,acquireProductionSchedulerLease} from './production-scheduler-queue.js?v=20.26.357';
+import {createBrowserStagingLiveExecutionStorage} from './browser-staging-live-execution-storage.js?v=20.26.357';
+import {createOperationJournal} from './cloud-operation-journal.js?v=20.26.357';
+import {enqueueOperationPlan,runOperationWorker} from './cloud-operation-worker.js?v=20.26.357';
+import {createFirebaseLiveRecordOperationAdapter} from './firebase-live-record-operation-adapter.js?v=20.26.357';
+import {assertStagingExecutionManifestEnvelope,stripStagingExecutionManifestAudit,verifyStagingLiveJournalRows} from './cloud-staging-live-activation.js?v=20.26.357';
+import {createFirebaseStagingLiveActivationAdapter} from './firebase-staging-live-activation-adapter.js?v=20.26.357';
+import {createActiveRecordPageController} from './cloud-active-record-page-controller.js?v=20.26.357';
+import {createFirebaseActiveRecordStreamAdapter} from './firebase-active-record-stream-adapter.js?v=20.26.357';
+import {createFirebaseRoleRecordViewAdapter} from './firebase-role-record-view-adapter.js?v=20.26.357';
+import {createFirebaseRoleRecordStreamAdapter} from './firebase-role-record-stream-adapter.js?v=20.26.357';
+import {createActiveRoleRecordPublishQueue} from './cloud-active-role-record-publish-queue.js?v=20.26.357';
+import {decideOwnerActiveSaveIntent} from './cloud-owner-active-save-intent.js?v=20.26.357';
+import {createRecordSyncActiveFailureResume} from './record-sync-active-failure-resume.js?v=20.26.357';
+import {cloudBackupListingState,dailyBackupChunkCore,prepareDailyShardedBackup,sealDailyShardedBackup,verifyDailyShardedBackupReadback} from './cloud-daily-sharded-backup.js?v=20.26.357';
+import {createFirebaseRecordSyncCandidateAdapter} from './firebase-record-sync-candidate-adapter.js?v=20.26.357';
+import {buildRecordSyncRoleEvidence,RECORD_SYNC_ROLE_SCENARIOS} from './cloud-record-sync-role-evidence.js?v=20.26.357';
+import {buildRecordSyncActivationManifest,buildActiveRecordSyncControl,evaluateActiveRecordSyncControl} from './cloud-record-sync-control.js?v=20.26.357';
+import {createFirebaseRecordSyncActivationAdapter} from './firebase-record-sync-activation-adapter.js?v=20.26.357';
+import {verifyRoleViewCandidateSourceBinding,buildRoleViewCandidateSourceAudit,buildRoleViewCandidateManifest as buildVerifiedRoleViewCandidateManifest,assertRoleViewCandidateManifest,buildRoleViewVerificationReceipt,assertRoleViewVerificationReceipt,verifyRoleViewReceiptSet} from './cloud-role-view-verification.js?v=20.26.357';
+import {loadProfileAfterAuthReady} from './cloud-auth-profile-bootstrap.js?v=20.26.357';
+import {RECORD_SYNC_V2_TAKEOVER_CANDIDATE_CONTROL_PATH,RECORD_SYNC_V2_TAKEOVER_CANDIDATE_HEAD_PATH,createFirebaseRecordSyncV2TakeoverCandidateAdapter} from './firebase-record-sync-v2-takeover-candidate-adapter.js?v=20.26.357';
+import {createStagingV2AuthorityReadLoader} from './staging-v2-authority-read-loader.js?v=20.26.357';
+import {createStagingV2AuthoritySaveBrowserClient} from './staging-v2-authority-save-browser-client.js?v=20.26.357';
+import {createStagingV2ActiveRecordOperationSender,normalizeStagingV2FirestoreValue,stagingV2H0GenesisBaselineDocuments} from './staging-v2-active-record-browser-bridge.js?v=20.26.357';
+import {createFirebaseProductionRecordConflictAdapter,createFirebaseProductionRecordStreamAdapter} from './firebase-production-record-runtime-adapter.js?v=20.26.357';
+import {buildProductionRecordRuntimeControl,assertProductionRecordRuntimeControl,buildProductionRecordRuntimeSafety,assertProductionRecordRuntimeSafety,assertLegacyProductionRecordRuntimeSafety} from './cloud-production-record-runtime.js?v=20.26.357';
+import {CLOUD_BOOTSTRAP_STAGES,createCloudBootstrapProgress} from './cloud-bootstrap-progress.js?v=20.26.357';
+import {createProductionTrustedOperationClient} from './production-trusted-operation-client.js?v=20.26.357';
+import {prepareActiveRecordSync} from './cloud-active-record-sync.js?v=20.26.357';
+import {createFirebaseCallableHttpClient} from './firebase-callable-http-client.js?v=20.26.357';
+import {createLimitedUseAppCheckTokenPool,takeFreshLimitedUseAppCheckToken} from './app-check-limited-use-token.js?v=20.26.357';
+import {createPublishedRoleViewConsumer} from './published-role-view-consumer.js?v=20.26.357';
+import {createFirestoreRolePartBatchReader} from './firestore-role-part-batch-reader.js?v=20.26.357';
+import {createPublishedSchedulerReceiptReader,PUBLISHED_SCHEDULER_RESPONSE_SCHEMA} from './published-scheduler-receipt.js?v=20.26.357';
 
 const firebaseConfigs={
  production:{apiKey:"AIzaSyB4tID5Dl1c_6MCev1OZxMSpiYFq3t3_EU",authDomain:"danbridge-d8877.firebaseapp.com",projectId:"danbridge-d8877",messagingSenderId:"251283850754",appId:"1:251283850754:web:105a2813d86918af03091b",measurementId:"G-K6ZH7DF7RS"},
@@ -98,7 +98,7 @@ if(publishedWorkspace)document.body.dataset.publishedWorkspace=publishedWorkspac
 
 const COMPANY_ID='danbridge';
 const OWNER_EMAIL='a0965487920@gmail.com';
-const APP_RELEASE='20.26.351';
+const APP_RELEASE='20.26.357';
 // Kept only for repairing requests created by the retired email-bound client.
 // Current authorization is exclusively role/capability based.
 const LEGACY_SCHEDULER_ACCOUNT_EMAILS=new Set(['aa0966626336@gmail.com']);
@@ -149,6 +149,14 @@ const productionRoleViewPublishCall=DANBRIDGE_ENVIRONMENT==='production'&&produc
 const productionTeacherLeaveCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?(publishedWorkspace?workspaceCall('teacherLeave'):httpsCallable(productionFunctions,'productionTeacherLeaveOperation',{limitedUseAppCheckTokens:true})):null;
 const stagingTeacherLeaveCall=DANBRIDGE_ENVIRONMENT==='staging'&&stagingV2AppCheck?httpsCallable(stagingFunctions,'stagingTeacherLeaveOperation',{limitedUseAppCheckTokens:true}):null;
 const teacherLeaveCall=productionTeacherLeaveCall||stagingTeacherLeaveCall;
+const bookPurchaseCall=!publishedWorkspace&&(DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?httpsCallable(productionFunctions,'productionBookPurchase',{limitedUseAppCheckTokens:true}):DANBRIDGE_ENVIRONMENT==='staging'&&stagingV2AppCheck?httpsCallable(stagingFunctions,'stagingBookPurchase',{limitedUseAppCheckTokens:true}):null);
+window.__danbridgeBookPurchaseCall=async payload=>{
+ const user=auth.currentUser;
+ if(!bookPurchaseCall||!user||user.uid!==cloudUid||String(user.email||'').toLowerCase()!==cloudEmailKey)throw Error('書籍代購登入尚未就緒');
+ const result=await bookPurchaseCall(payload);
+ if(auth.currentUser!==user)throw Error('登入身分已變更，請重新登入確認');
+ return result.data;
+};
 const productionNotificationAcknowledgeCall=DANBRIDGE_ENVIRONMENT==='production'&&productionAppCheck?(publishedWorkspace?workspaceCall('acknowledge'):createFirebaseCallableHttpClient({projectId:firebaseConfig.projectId,functionName:'productionAcknowledgeScheduleNotification',getCurrentUser:()=>auth.currentUser,getExpectedIdentity:()=>({uid:cloudUid,email:cloudEmailKey}),getIdToken:(user,force)=>user.getIdToken(force),getLimitedUseAppCheckToken:takeProductionNotificationLimitedUseToken,fetch:globalThis.fetch.bind(globalThis),timeoutMs:30000}).call):null;
 const scheduleNotificationAcknowledgeCall=productionNotificationAcknowledgeCall||stagingNotificationAcknowledgeCall;
 const lessonReportCall=!publishedWorkspace?createFirebaseCallableHttpClient({projectId:firebaseConfig.projectId,functionName:DANBRIDGE_ENVIRONMENT==='production'?'productionSaveLessonReport':'stagingSaveLessonReport',getCurrentUser:()=>auth.currentUser,getIdToken:(user,force)=>user.getIdToken(force),getLimitedUseAppCheckToken:DANBRIDGE_ENVIRONMENT==='production'?takeProductionNotificationLimitedUseToken:takeStagingNotificationLimitedUseToken,fetch:globalThis.fetch.bind(globalThis),timeoutMs:30000}).call:null;
@@ -409,6 +417,7 @@ async function executeTeacherLeaveOperation(payload={}){
 }
 window.__danbridgeSaveTeacherLeave=payload=>executeTeacherLeaveOperation(payload);
 window.__danbridgeCancelTeacherLeave=payload=>executeTeacherLeaveOperation({...payload,action:'cancel'});
+onAuthStateChanged(auth,()=>window.__danbridgeSetBookIdentity?.(null));
 function subscribeTeacherLeaves(){
  unsubscribeTeacherLeaves?.();unsubscribeTeacherLeaves=null;refreshWorkspaceTeacherLeaves=null;teacherLeaveDocuments=[];window.__danbridgeSetTeacherLeaves?.([]);
  if(!teacherLeaveCall||!['owner','teacher'].includes(cloudRole))return;
@@ -1795,8 +1804,8 @@ function applyRoleUI(profile,user){
    window.renderAll?.();
    applyingCloud=false;
 
-   const teacherAllowedTabs=new Set(cloudCanManageSchedule?['calendar','teacherLeave']:['dashboard','calendar','lessons','teacherLeave']);
-   const teacherTabLabels={dashboard:'我的總覽',calendar:cloudCanManageSchedule?'全老師課表':'我的課表',lessons:'課程回報',teacherLeave:cloudCanManageSchedule?'請假管理':'我的請假'};
+   const teacherAllowedTabs=new Set(cloudCanManageSchedule?['calendar','teacherLeave','bookPurchase']:['dashboard','calendar','lessons','teacherLeave','bookPurchase']);
+   const teacherTabLabels={bookPurchase:'書籍代購',dashboard:'我的總覽',calendar:cloudCanManageSchedule?'全老師課表':'我的課表',lessons:'課程回報',teacherLeave:cloudCanManageSchedule?'請假管理':'我的請假'};
    document.querySelectorAll('nav button[data-tab]').forEach(b=>{
      const allowed=teacherAllowedTabs.has(b.dataset.tab);
      if(allowed)b.textContent=teacherTabLabels[b.dataset.tab];
@@ -1838,8 +1847,8 @@ function applyRoleUI(profile,user){
    document.querySelectorAll('#calendarTeacherFilter,#calendarLocationFilter,#calendarStudentFilter,#calendarRoomFilter,#calendarStateFilter').forEach(e=>{for(const el of [e,e.closest('.calendar-field')].filter(Boolean)){el.hidden=false;el.inert=false;el.removeAttribute('aria-hidden');el.style.removeProperty('display');el.classList.remove('teacher-redundant-filter');delete el.dataset.roleIsolated}});
    applyingCloud=true;window.__danbridgeSetDB(emptyDB());window.renderAll?.();applyingCloud=false;
    const branchFinanceVisible=profile.hideFinancials!==true||profile.canViewBranchFinance===true;
-   const allowedTabs=new Set(['dashboard','students','teachers','calendar','lessons','makeups',...(branchFinanceVisible?['settlement','finance']:[])]);
-   const branchTabLabels={dashboard:'總覽',students:'學生／家長',teachers:'老師',calendar:'課表',lessons:'課程紀錄',makeups:'補課中心',settlement:'月底一鍵結算',finance:'公司財務'};
+   const allowedTabs=new Set(['dashboard','students','teachers','calendar','lessons','makeups','bookPurchase',...(branchFinanceVisible?['settlement','finance']:[])]);
+   const branchTabLabels={bookPurchase:'書籍代購',dashboard:'總覽',students:'學生／家長',teachers:'老師',calendar:'課表',lessons:'課程紀錄',makeups:'補課中心',settlement:'月底一鍵結算',finance:'公司財務'};
    document.querySelectorAll('nav button[data-tab]').forEach(b=>{const allowed=allowedTabs.has(b.dataset.tab);b.hidden=!allowed;b.classList.remove('teacher-nav-hidden');if(allowed)b.textContent=branchTabLabels[b.dataset.tab];b.style.setProperty('display',allowed?'':'none',allowed?'':'important');b.setAttribute('aria-hidden',allowed?'false':'true');b.inert=!allowed;if(!allowed)b.tabIndex=-1;else b.removeAttribute('tabindex')});
    const active=document.querySelector('main section.active');if(active&&!allowedTabs.has(active.id))switchTab('dashboard');
    const branchReadOnlyControls='#studentWorkspaceTabs > button,#studentRows button[onclick^="showStudentHistory("],#studentRows button[data-branch-readonly="history"],#finance .v181-finance-nav > button';
@@ -2305,11 +2314,13 @@ function renderScheduleNotification(notification){
  modal.querySelector('[data-ack-error]')?.remove();
  const details=Array.isArray(notification.details)?notification.details:[];
  currentScheduleNotification=notification;
- if(notification.notificationType==='teacher-leave')body.innerHTML=`<p class="schedule-notification-lead"><b>老師請假異動</b><span>${escapeHTML(notification.message||'請假紀錄已更新')}</span></p><div class="schedule-notification-table-wrap"><table class="schedule-notification-table"><thead><tr><th>老師</th><th>日期</th><th>時間</th><th>類別</th><th>時數</th><th>狀態</th></tr></thead><tbody>${details.map(item=>`<tr><td><b>${escapeHTML(item.teacherName||'老師')}</b></td><td>${escapeHTML(item.date||'')}</td><td>${escapeHTML(`${item.start||''}–${item.end||''}`)}</td><td>${escapeHTML(item.leaveTypeLabel||'')}</td><td>${escapeHTML(String(item.hours??''))}</td><td>${item.status==='cancelled'?'已取消':'有效'}</td></tr>`).join('')}</tbody></table></div><div class="schedule-notification-actions"><button type="button" class="btn" data-leave-notification-open>查看請假紀錄</button></div><div class="schedule-notification-time">更新時間：${escapeHTML(formatNotificationTimestamp(notification.createdAt)||'剛剛')}</div>`;
+ if(notification.notificationType==='book-purchase')body.innerHTML=`<p class="schedule-notification-lead"><b>書籍代購更新</b><span>${escapeHTML(notification.message||'書籍需求已更新')}</span></p><div class="schedule-notification-actions"><button class="btn" type="button" data-book-notification-open>查看書籍代購</button></div>`;
+ else if(notification.notificationType==='teacher-leave')body.innerHTML=`<p class="schedule-notification-lead"><b>老師請假異動</b><span>${escapeHTML(notification.message||'請假紀錄已更新')}</span></p><div class="schedule-notification-table-wrap"><table class="schedule-notification-table"><thead><tr><th>老師</th><th>日期</th><th>時間</th><th>類別</th><th>時數</th><th>狀態</th></tr></thead><tbody>${details.map(item=>`<tr><td><b>${escapeHTML(item.teacherName||'老師')}</b></td><td>${escapeHTML(item.date||'')}</td><td>${escapeHTML(`${item.start||''}–${item.end||''}`)}</td><td>${escapeHTML(item.leaveTypeLabel||'')}</td><td>${escapeHTML(String(item.hours??''))}</td><td>${escapeHTML(teacherLeaveNotificationStatusLabel(item.status))}</td></tr>`).join('')}</tbody></table></div><div class="schedule-notification-actions"><button type="button" class="btn" data-leave-notification-open>查看請假紀錄</button></div><div class="schedule-notification-time">更新時間：${escapeHTML(formatNotificationTimestamp(notification.createdAt)||'剛剛')}</div>`;
  else body.innerHTML=`<p class="schedule-notification-lead"><b>Daniel 已更新您的課表</b><span>${escapeHTML(notification.message||`共有 ${details.length} 個變更`)}，已合併整理如下。</span></p><div class="schedule-notification-table-wrap"><table class="schedule-notification-table"><thead><tr><th>異動</th><th>學生／課程</th><th>原課程</th><th>新課程</th><th>內容</th><th>來源</th></tr></thead><tbody>${details.map((item,index)=>`<tr data-type="${escapeHTML(item.type||'modified')}"><td><span class="schedule-notification-type">${item.type==='added'?'新增':item.type==='removed'?'取消':'修改'}</span></td><td><b>${escapeHTML(item.studentName||'課程')}</b></td><td>${escapeHTML(item.beforeTime||'—')}</td><td>${escapeHTML(item.afterTime||'—')}</td><td>${escapeHTML(item.summary||'課表內容已更新')}</td><td><button type="button" class="btn schedule-notification-source" data-notification-detail="${index}">查看課表</button></td></tr>`).join('')}</tbody></table></div><div class="schedule-notification-time">更新時間：${escapeHTML(formatNotificationTimestamp(notification.createdAt)||'剛剛')}</div>`;
- const notificationLead=body.querySelector('.schedule-notification-lead b');if(notificationLead&&notification.notificationType!=='teacher-leave')notificationLead.textContent=`${notification.createdByName||'Owner'} 已更新課表`;
+ const notificationLead=body.querySelector('.schedule-notification-lead b');if(notificationLead&&!['teacher-leave','book-purchase'].includes(notification.notificationType))notificationLead.textContent=`${notification.createdByName||'Owner'} 已更新課表`;
  body.querySelectorAll('[data-notification-detail]').forEach(button=>button.addEventListener('click',()=>openScheduleNotificationSource(Number(button.dataset.notificationDetail))));
  body.querySelector('[data-leave-notification-open]')?.addEventListener('click',()=>{modal.hidden=true;window.switchTab?.('teacherLeave')});
+ body.querySelector('[data-book-notification-open]')?.addEventListener('click',()=>{modal.hidden=true;window.switchTab?.('bookPurchase')});
  modal.dataset.notificationId=notification.id||'';
  modal.dataset.notificationRecipientEmail=cloudEmailKey;
  modal.dataset.notificationUid=cloudUid;
@@ -2390,7 +2401,7 @@ function subscribeScheduleNotifications(){
   isBusy:()=>{const scheduler=productionSchedulerQueue?.diagnostics?.();return Boolean(document.querySelector('#lessonModal.show,.modal.show')||!document.getElementById('scheduleNotificationModal')?.hidden||activeRecordPageController?.diagnostics?.().inFlight||schedulerRequestWorkerActive||scheduler?.inFlight||scheduler?.pending||scheduler?.dirty)},
   render:sameType=>{
    const current=sameType[0],details=sameType.flatMap(n=>Array.isArray(n.details)?n.details:[]);
-   renderScheduleNotification({...current,notificationIds:sameType.map(n=>n.id),details,message:current.notificationType==='teacher-leave'?current.message:(current.recipientRole==='owner'?`公司課表共有 ${details.length} 個變更`:current.recipientRole==='scheduler'?`全老師課表共有 ${details.length} 個變更`:current.recipientRole==='branch_manager'?`您管理的校區課表共有 ${details.length} 個變更`:`您的課表共有 ${details.length} 個變更`)});
+   renderScheduleNotification({...current,notificationIds:sameType.map(n=>n.id),details,message:['teacher-leave','book-purchase'].includes(current.notificationType)?current.message:(current.recipientRole==='owner'?`公司課表共有 ${details.length} 個變更`:current.recipientRole==='scheduler'?`全老師課表共有 ${details.length} 個變更`:current.recipientRole==='branch_manager'?`您管理的校區課表共有 ${details.length} 個變更`:`您的課表共有 ${details.length} 個變更`)});
   }
  });
  const presenter=scheduleNotificationPresenter;
@@ -2399,6 +2410,7 @@ function subscribeScheduleNotifications(){
  unsubscribeScheduleNotifications=onSnapshot(q,{includeMetadataChanges:true},snap=>{
    if(scheduleNotificationPresenter!==presenter)return;
    if(snap.metadata.hasPendingWrites)return;
+   if(!snap.metadata.fromCache&&snap.docChanges().some(change=>change.type!=='removed'&&change.doc.data().notificationType==='book-purchase'&&scheduleNotificationMatchesFilters(change.doc.data(),notificationFilters)))window.dispatchEvent(new Event('danbridge:book-purchase-changed'));
    scheduleNotificationDocuments=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>scheduleNotificationMatchesFilters(x,notificationFilters)&&x.read!==true&&!scheduleNotificationExpired(x)).sort((a,b)=>{const priority=(b.notificationType==='teacher-leave')-(a.notificationType==='teacher-leave');if(priority)return priority;const at=a.createdAt?.toMillis?.()||0,bt=b.createdAt?.toMillis?.()||0;return bt-at});
    scheduleNotificationPresenter.update(scheduleNotificationDocuments);
  },e=>{console.error('Schedule notification listener failed',e);cloudStatus('課表通知讀取失敗：'+(e?.message||e),'error')});
@@ -3880,7 +3892,7 @@ async function acceptBranchMoveSnapshot(raw,revision,ref,identity,isActive){
  const generation=branchMoveGeneration;
  if(!branchMoveInit){
   branchMoveInit=(async()=>{
-   const {createBranchScheduleMoveController}=await import('./branch-schedule-move.js?v=20.26.351');
+   const {createBranchScheduleMoveController}=await import('./branch-schedule-move.js?v=20.26.357');
    const tabKey=`danbridge-branch-move-tab:${cloudEmailKey}`;let tabId=sessionStorage.getItem(tabKey);if(!tabId){tabId=crypto.randomUUID();sessionStorage.setItem(tabKey,tabId)}
    const key=`${DANBRIDGE_ENVIRONMENT}:branch-move:${cloudEmailKey}:${tabId}`;
    const readHead=async()=>{const head=await getDocFromServer(ref);if(!head.exists())throw Error('校區權限已移除');const data=head.data();if(data.active!==true||data.canMoveSchedule!==true||roleAccessSignature(data)!==cloudRoleAccessSignature)throw Error('校區移動權限已變更');return{...data,sourceRecordHash:data.scopedSourceRecordHash,sourceRecordRevision:data.scopedSourceRecordRevision}};
@@ -4171,7 +4183,7 @@ onAuthStateChanged(auth,async user=>{
  if(!user){clearTimeout(cloudBootstrapTimeout);cloudBootstrapTimeout=null;cloudBootstrapProgress=null;document.getElementById('cloudBootstrapProgress')?.remove();delete document.body.dataset.cloudBootstrapState;lastPublishedOwnerDB=null;ownerBaselineReady=false;scheduleNotificationDeliveryJobs.forEach(job=>clearTimeout(job.timer));scheduleNotificationDeliveryJobs.clear();clearTimeout(roleViewRetryTimer);clearTimeout(dailyBackupTimer);clearTimeout(schedulerRequestRetryTimer);clearTimeout(schedulerUploadRetryTimer);roleViewPublishInFlight=false;roleViewPublishQueued=false;roleViewRetryCount=0;cloudRole='';cloudTeacherId='';cloudBranchIds=[];cloudCanManageSchedule=false;schedulerBaselineLessons=[];schedulerBaselineStudents=[];schedulerSaveChain=Promise.resolve();schedulerOptimisticLessons=new Map();schedulerOptimisticStudents=new Map();schedulerUploadRetryCount=0;schedulerStartupRecoveryChecked=false;schedulerRecoveryHold=false;schedulerRequestQueue=[];schedulerRequestQueueIds=new Set();schedulerQuarantinedRequestIds=new Set();schedulerAppliedRequestCount=0;schedulerRequestWorkerActive=false;cloudUid='';cloudEmailKey='';cloudRoleAccessSignature='';document.body.classList.remove('wendy-teacher-role');window.__danbridgeLessonIdMigrationAuthority=false;window.DanbridgeAccess?.setContext({role:'',branchIds:[],teacherId:'',email:'',readOnly:true,canManageSchedule:false});showCloudLogin();cloudStatus('尚未登入');return}
  try{
    beginCloudBootstrap();cloudStatus('1/5 已確認 Google 登入','pending');const profile=await loadSignedInProfile(user);if(auth.currentUser?.uid!==user.uid)return;advanceCloudBootstrap('profile','帳號權限已從雲端讀回');cloudStatus('2/5 權限資料已確認','pending');applyRoleUI(profile,user);advanceCloudBootstrap('role',`${profile.role} 資料範圍已鎖定`);cloudStatus('3/5 角色範圍已確認','pending');showCloudApp();advanceCloudBootstrap('data','正在驗證角色專屬雲端資料');cloudStatus('4/5 正在驗證雲端資料','pending');
-   if(profile.role==='owner'){subscribeOwner();if(!['staging','production'].includes(DANBRIDGE_ENVIRONMENT))subscribeSchedulerRequests();setTimeout(()=>{renderCloudUserManager();renderBranchManagerAccess()},0)}else if(profile.role==='teacher'&&profile.canManageSchedule===true)subscribeSchedulerTeacher();else if(profile.role==='teacher')subscribeTeacher();else if(profile.role==='branch_manager')subscribeBranchManager();else throw new Error('不支援的角色：'+profile.role);subscribeRoleAccessGuard();subscribeLessonReports();subscribeScheduleNotifications();subscribeTeacherLeaves();
+   if(profile.role==='owner'){subscribeOwner();if(!['staging','production'].includes(DANBRIDGE_ENVIRONMENT))subscribeSchedulerRequests();setTimeout(()=>{renderCloudUserManager();renderBranchManagerAccess()},0)}else if(profile.role==='teacher'&&profile.canManageSchedule===true)subscribeSchedulerTeacher();else if(profile.role==='teacher')subscribeTeacher();else if(profile.role==='branch_manager')subscribeBranchManager();else throw new Error('不支援的角色：'+profile.role);subscribeRoleAccessGuard();subscribeLessonReports();subscribeScheduleNotifications();subscribeTeacherLeaves();window.__danbridgeSetBookIdentity?.({uid:user.uid,email:String(user.email||'').toLowerCase(),name:profile.teacherName||profile.displayName||user.displayName||user.email});
    // Login metadata is not an authorization or data-readiness prerequisite.
    // Firestore may keep this write pending offline; never hold the verified
    // role's data subscriptions behind a best-effort timestamp update.

@@ -58,11 +58,12 @@ function impactedLessonsForLeave(record={},db={}){
   return{id:lesson.id,date:lesson.date,start:lesson.start,end:lesson.end,title:lesson.title||'',studentNames:names.length?names:[lesson.title||'未命名課程'],overlapHours:Number((overlap/60).toFixed(2))};
  }).filter(Boolean).sort((a,b)=>a.start.localeCompare(b.start));
 }
+function isOutstandingTodo(record){return record?.status==='pending'||(record?.requiresCompletion===true&&!record.completedAtIso)}
 function leaveDashboardStats({records=[],db={},today=new Date().toISOString().slice(0,10)}={}){
  const pending=records.filter(row=>row.status==='pending'),todayApproved=records.filter(row=>row.date===today&&isApproved(row));
- const impacts=todayApproved.flatMap(row=>impactedLessonsForLeave(row,db));return{pending:pending.length,today:todayApproved.length,affectedLessons:impacts.length,affectedHours:Number(impacts.reduce((sum,row)=>sum+row.overlapHours,0).toFixed(2))};
+ const impacts=todayApproved.flatMap(row=>impactedLessonsForLeave(row,db));return{pending:pending.length,outstanding:records.filter(isOutstandingTodo).length,today:todayApproved.length,affectedLessons:impacts.length,affectedHours:Number(impacts.reduce((sum,row)=>sum+row.overlapHours,0).toFixed(2))};
 }
 
-const api={STATUTORY_LEAVE_RULES,BEREAVEMENT_ALLOWANCE,BEREAVEMENT_LABELS,statutoryAnnualLeaveDays,teacherDailyHours,recordDays,isApproved,quotaDays,leaveBalance,impactedLessonsForLeave,leaveDashboardStats};
+const api={STATUTORY_LEAVE_RULES,BEREAVEMENT_ALLOWANCE,BEREAVEMENT_LABELS,statutoryAnnualLeaveDays,teacherDailyHours,recordDays,isApproved,isOutstandingTodo,quotaDays,leaveBalance,impactedLessonsForLeave,leaveDashboardStats};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 if(typeof window!=='undefined')window.DanbridgeTeacherLeaveEntitlement=Object.freeze(api);

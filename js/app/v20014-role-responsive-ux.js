@@ -163,7 +163,7 @@
     if(current==='owner')restoreRoleResponsiveControls();
     if(current==='teacher'){
       const scheduler=accessContext().canManageSchedule===true;
-      const labels=scheduler?{calendar:'全老師課表',teacherLeave:'請假管理'}:{dashboard:'我的總覽',calendar:'我的課表',lessons:'課程回報',teacherLeave:'我的請假'};
+      const labels=scheduler?{bookPurchase:'書籍代購',calendar:'全老師課表',teacherLeave:'請假管理'}:{bookPurchase:'書籍代購',dashboard:'我的總覽',calendar:'我的課表',lessons:'課程回報',teacherLeave:'我的請假'};
       $$('nav button[data-tab]').forEach(button=>{const allowed=Object.prototype.hasOwnProperty.call(labels,button.dataset.tab);button.hidden=!allowed;button.style.setProperty('display',allowed?'':'none',allowed?'':'important');if(allowed)button.textContent=labels[button.dataset.tab]});
       const hidden=scheduler?'#dashboard .owner-only-action,#dashboard .owner-v33-only,.branch-scope-bar,#calendarAnalysis,#lessons .toolbar button':'.owner-only-action,.owner-v33-only,.branch-scope-bar,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#calendar .day-add,#calendarAnalysis,#lessons .toolbar button,#courseDrawerEditBtn';
       $$(hidden).forEach(hideForRole);
@@ -176,7 +176,7 @@
     if(current==='branch_manager'){
       for(const id of ['calendarTeacherFilter','calendarLocationFilter','calendarStudentFilter','calendarRoomFilter','calendarStateFilter']){const input=$('#'+id);for(const el of [input,input?.closest('.calendar-field')].filter(Boolean)){el.hidden=false;el.inert=false;el.removeAttribute('aria-hidden');el.style.removeProperty('display');el.classList.remove('teacher-redundant-filter')}}
       const context=accessContext(),branchFinanceVisible=context.hideFinancials!==true||context.canViewBranchFinance===true;
-      const allowedTabs=new Set(['dashboard','students','teachers','calendar','lessons','makeups',...(branchFinanceVisible?['settlement','finance']:[])]);
+      const allowedTabs=new Set(['dashboard','students','teachers','calendar','lessons','makeups','bookPurchase',...(branchFinanceVisible?['settlement','finance']:[])]);
       $$('nav button[data-tab]').forEach(button=>{const allowed=allowedTabs.has(button.dataset.tab);button.hidden=!allowed;button.style.setProperty('display',allowed?'':'none',allowed?'':'important')});
       $$('.owner-only-action,.floating-actions,#calendar .calendar-head-add,#calendar .calendar-quick-add,#calendar .weekly-copy-btn,#calendar #selectionModeBtn,#calendar #selectionBar,#calendar .day-add,#courseDrawerEditBtn,#students .grid>.card.col-4,#teachers .grid>.card.col-4,#finance .finance-form-row').forEach(hideForRole);
       branchManagerStats();branchManagerConvenience();

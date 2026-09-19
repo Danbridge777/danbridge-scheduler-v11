@@ -47,6 +47,27 @@ test('read scope: owners/AA see all, teacher sees own only, revoked/branch/forei
  for(let i=0;i<4;i++)assert.equal((await readTeacherLeaves({firestore:db,identity:identity(i)})).length,i===3?1:2);
  for(const patch of [{active:false},{role:'branch_manager'},{companyId:'other'}]){rows.set('companyAccess/'+emails[3],{...profiles[3],...patch});await assert.rejects(readTeacherLeaves({firestore:db,identity:identity(3)}))}
 });
+test('explicit complete is Owner-only, atomic, replay-safe and preserves approved leave/payroll facts',async()=>{
+ for(const action of ['approve','reject','cancel']){
+  const{db,rows}=memory(),request=req('finish_'+action),call=(r,i=0)=>executeTeacherLeave({firestore:db,identity:identity(i),request:r,serverTimestamp:()=>123,nowIso:'2026-09-19T01:00:00Z'});
+  await call(request);const done={action:'complete',leaveId:request.leaveId,operationId:'finish_operation_'+action,expectedRevision:1};
+  await assert.rejects(call(done),/請先/);
+  const decision=(await call({...done,action,operationId:'decision_operation_'+action})).record;
+  assert.equal(decision.requiresCompletion,true);assert.equal(decision.completedAtIso,undefined);
+  done.expectedRevision=2;const before=JSON.stringify([...rows]);
+  for(const i of [2,3])await assert.rejects(call(done,i),/Owner/);
+  assert.equal(JSON.stringify([...rows]),before);
+  const notices=[...rows.keys()].filter(p=>p.includes('/scheduleNotifications/')).length;
+  const complete=(await call(done)).record;
+  for(const key of Object.keys(decision).filter(k=>!['revision','updatedAtIso','updatedByUid','updatedByEmail'].includes(k)))assert.deepEqual(complete[key],decision[key],key);
+  assert.equal(complete.completedAtIso,'2026-09-19T01:00:00Z');assert.equal(complete.revision,3);
+  assert.equal((await call(done)).duplicate,true);
+  assert.equal([...rows.keys()].filter(p=>p.includes('/scheduleNotifications/')).length,notices);
+  await assert.rejects(call({...done,operationId:'finish_again_'+action,expectedRevision:3}),/已完成/);
+  rows.get('companyAccess/'+emails[0]).role='teacher';rows.get('companyAccess/'+emails[0]).teacherId=teacherId;
+  await assert.rejects(call(done),/Owner/);
+ }
+});
 test('native Firestore: all reads precede atomic writes; duplicate creates once; revoked replay denied',{skip:!process.env.FIRESTORE_EMULATOR_HOST,timeout:60000},async()=>{
  assert.match(process.env.FIRESTORE_EMULATOR_HOST,/^(localhost|127\.0\.0\.1):\d+$/);
  const db=new Firestore({projectId:'demo-leave-319'});
@@ -56,6 +77,11 @@ test('native Firestore: all reads precede atomic writes; duplicate creates once;
   const request=req('native_'+Date.now()),call=()=>executeTeacherLeave({firestore:db,identity:identity(3),request,serverTimestamp:()=>FieldValue.serverTimestamp()});
   const results=await Promise.all([call(),call()]);assert.equal(results.filter(r=>!r.duplicate).length,1);
   assert.equal((await db.collection('companies/danbridge/scheduleNotifications').where('notificationType','==','teacher-leave').get()).size,4);
+  const decided=(await executeTeacherLeave({firestore:db,identity:identity(0),request:{action:'approve',leaveId:request.leaveId,operationId:'native_approve_'+Date.now(),expectedRevision:1},serverTimestamp:()=>FieldValue.serverTimestamp()})).record;
+  const doneRequest={action:'complete',leaveId:request.leaveId,operationId:'native_complete_'+Date.now(),expectedRevision:2};
+  const finish=()=>executeTeacherLeave({firestore:db,identity:identity(0),request:doneRequest,serverTimestamp:()=>FieldValue.serverTimestamp()});
+  const completed=(await finish()).record;assert.equal(completed.status,'approved');assert.equal(completed.hours,decided.hours);assert.ok(completed.completedAtIso);assert.equal((await finish()).duplicate,true);
+  assert.equal((await db.collection('companies/danbridge/scheduleNotifications').where('notificationType','==','teacher-leave').get()).size,8);
   await db.doc('companyAccess/'+emails[3]).update({active:false});await assert.rejects(call());
  }finally{await db.terminate()}
 });

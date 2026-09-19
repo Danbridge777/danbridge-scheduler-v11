@@ -218,6 +218,18 @@ exports.stagingV2ConflictBackup=onCall({region:'asia-east1',serviceAccount:SERVI
  return Object.freeze({schema:'danbridge-active-record-v2-conflict-backup-result-v1',environment:'staging',companyId:'danbridge',activationEpoch,backupId,conflictHash,baseHash,targetHash,partCount:parts.length,conflictCount:conflicts.length,writes:result.writes,duplicates:result.duplicates,headRevision:result.headRevision,paths:documents.map(row=>row.ref.path)});
 });
 
+function bookPurchaseHandler(environment){return async request=>{
+ if(!request.auth?.uid||request.auth?.token?.email_verified!==true||!request.app||request.app.alreadyConsumed)throw new HttpsError('unauthenticated','需要有效登入與全新 App Check。');
+ try{
+  const expected=environment==='staging'?PROJECT_ID:'danbridge-d8877';
+  if([process.env.GCLOUD_PROJECT,process.env.GOOGLE_CLOUD_PROJECT].filter(Boolean).some(id=>id!==expected))throw Error('書籍代購環境不符');
+  const firestore=environment==='production'?(await productionRuntime()).firestore:getFirestore(getApps().find(app=>app.name==='staging-book-purchase')||initializeApp({projectId:PROJECT_ID,credential:applicationDefault()},'staging-book-purchase'));
+  return await require('./book-purchase-runtime.cjs').executeBookPurchase({firestore,identity:{uid:request.auth.uid,email:request.auth.token.email},request:request.data,serverTimestamp:()=>FieldValue.serverTimestamp()});
+ }catch(error){if(error instanceof HttpsError)throw error;throw new HttpsError('failed-precondition',String(error?.message||'書籍代購操作未完成').slice(0,200))}
+}}
+exports.stagingBookPurchase=onCall({region:'asia-east1',serviceAccount:SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'256MiB',minInstances:0,maxInstances:5},bookPurchaseHandler('staging'));
+exports.productionBookPurchase=onCall({region:'asia-east1',serviceAccount:PRODUCTION_SERVICE_ACCOUNT,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'256MiB',minInstances:0,maxInstances:10},bookPurchaseHandler('production'));
+
 async function verifiedProductionLeaveActor(request,runtimeValue){
  const uid=String(request.auth?.uid||''),email=String(request.auth?.token?.email||'').trim().toLowerCase();
  if(!uid||!email||request.auth?.token?.email_verified!==true||!request.app)throw new HttpsError('unauthenticated','需要有效登入與 App Check。');

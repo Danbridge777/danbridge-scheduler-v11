@@ -1,5 +1,10 @@
 // Notification delivery and acknowledgement stay unchanged. This controller
 // only prevents an incoming notice from stealing an active editor's focus.
+export function teacherLeaveNotificationStatusLabel(status){
+ const labels={pending:'待審核',approved:'已核准',active:'已核准',rejected:'已駁回',cancelled:'已取消'};
+ return typeof status==='string'&&Object.hasOwn(labels,status)?labels[status]:'狀態未確認';
+}
+
 export function automaticScheduleNotifications(notifications,{uid='',email='',name='',seen=new Set()}={}){
  const normalizedEmail=String(email).trim().toLowerCase(),normalizedName=String(name).trim();
  return notifications.filter(item=>{

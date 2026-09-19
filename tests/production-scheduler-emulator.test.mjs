@@ -19,7 +19,9 @@ test('真實本機 Firestore：AA 原子新增、即時移動、刪除、重送�
   for(const n of [1,2,3])batch.set(firestore.doc(`companyAccess/teacher${n}@example.com`),{companyId:'danbridge',active:true,role:'teacher',teacherId:`teacher-${n}`});
   batch.set(firestore.doc('companyAccess/revoked@example.com'),{companyId:'danbridge',active:false,role:'teacher',teacherId:'teacher-1'});
   for(const op of buildFullRecordShadowPlan(empty(),db,{environment:'production',sourceHash:'seed'}).operations)batch.set(firestore.doc(op.path),op.payload);await batch.commit();
-  await assert.rejects(execute(req([{lessonId:lesson(1).id,before:null,after:lesson(1)}]),{...identity,email:'teacher1@example.com'}),/登入驗證/);
+  await assert.rejects(execute(req([{lessonId:lesson(1).id,before:null,after:lesson(1)}]),{...identity,appVerified:false}),/登入驗證/);
+  await assert.rejects(execute(req([{lessonId:lesson(1).id,before:null,after:lesson(1)}]),{...identity,email:'teacher1@example.com'}),/身分或權限無效/);
+  assert.equal((await read()).db.lessons.length,0);
   const initial=req([{lessonId:lesson(1).id,before:null,after:lesson(1)}]),added=await execute(initial),duplicate=await execute(initial);
   assert.deepEqual(duplicate,added);assert.equal(added.notificationCount,3);assert.equal(added.schedulerDb.lessons.length,1);assert.equal(added.schedulerDb.students[0].parentContact,undefined);
   await assert.rejects(execute({...initial,changes:[{...initial.changes[0],after:{...lesson(1),date:'2026-10-04'}}]}),/回條識別衝突/);

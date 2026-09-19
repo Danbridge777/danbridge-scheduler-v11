@@ -22,7 +22,15 @@
     '家教':'Tutoring','團課':'Group Class','儲存請假':'Save Leave','更新請假':'Update Leave',
     '我的總覽':'My Dashboard','我的課表':'My Schedule','查看我的課表':'View My Schedule','填寫課程回報':'Complete Lesson Report',
     '全老師課表':'All Teachers Schedule','管理全老師課表':'Manage All Teachers Schedule','加入 Apple 行事曆':'Add to Apple Calendar','列印 / PDF':'Print / PDF',
-    '請假管理':'Leave Management','我的請假':'My Leave','請假登記':'Leave Request','老師請假紀錄':'Teacher Leave Records',
+    '請假管理':'Leave Center','我的請假':'My Leave','請假登記':'Leave Request','老師請假紀錄':'Teacher Leave Records',
+    '書籍代購':'Book Requests','書籍代購更新':'Book Request Update','共用需求清單 · 僅能修改自己建立的項目':'Shared requests · Edit only your own items','書名 *':'Book Title *','出版社／版本':'Publisher / Edition','數量 *':'Quantity *','新增需求':'Add Request','取消編輯':'Cancel Editing','重新同步':'Retry Sync','全部需求':'All Requests','我的需求':'My Requests','僅供查看':'View Only','待同步':'Pending Sync','查看書籍代購':'View Book Requests','目前沒有符合的書籍需求':'No matching book requests','儲存修改':'Save Changes',
+    '搜尋書名、ISBN或申請者':'Search title, ISBN or requester','需求範圍':'Request Scope','已同步':'Synced',
+    '冬／夏令營':'Seasonal Camps','老師請假管理':'Teacher Leave','假':'Leave','送出申請':'Submit Request','更新申請':'Update Request','待審':'Pending','今日':'Today',
+    '待審核':'Pending Approval','已核准':'Approved','已駁回':'Rejected','狀態未確認':'Status Unconfirmed','核准':'Approve','駁回':'Reject','完成':'Complete','處理中…':'Processing…',
+    '保留衝突草稿並重新編輯':'Keep Conflict Draft and Re-edit',
+    '請填寫書名及 1–999 本的數量':'Enter a book title and a quantity from 1 to 999',
+    '書籍草稿無法讀取，未自動覆蓋':'Book drafts could not be read; existing data was not overwritten',
+    '衝突草稿已備份；請核對最新資料後重新送出':'Conflict draft backed up; review the latest data before submitting again',
     '查看請假紀錄':'View Leave Records','稍後查看':'View Later','知道了':'Got It',
     '開啟通知中心':'Open Notification Center','最近修改':'Recent Changes','快速新增':'Quick Add',
     '稍後':'Later','立即更新':'Update Now',
@@ -74,6 +82,12 @@
     const lead=value.match(/^\s*/)?.[0]||'',trail=value.match(/\s*$/)?.[0]||'',core=value.trim();if(!core)return value;
     if(dict.has(core))return lead+dict.get(core)+trail;
     let m;
+    if((m=core.match(/^(\d+) 筆未完成請假待辦$/)))return `${lead}${m[1]} outstanding leave tasks${trail}`;
+    if((m=core.match(/^(\d+) 筆待辦未完成（(\d+) 筆待審核）$/)))return `${lead}${m[1]} outstanding · ${m[2]} awaiting approval${trail}`;
+    if((m=core.match(/^待辦已完成；今日 (\d+) 位老師請假、影響 (\d+) 堂$/)))return `${lead}Tasks complete · ${m[1]} teachers on leave today · ${m[2]} lessons affected${trail}`;
+    if((m=core.match(/^(\d+) 項需求 · (\d+) 本$/)))return `${lead}${m[1]} request${m[1]==='1'?'':'s'} · ${m[2]} book${m[2]==='1'?'':'s'}${trail}`;
+    if((m=core.match(/^(\d+) 本$/)))return `${lead}${m[1]} book${m[1]==='1'?'':'s'}${trail}`;
+    if((m=core.match(/^(\d+) 筆待同步$/)))return `${lead}${m[1]} pending sync${trail}`;
     if((m=core.match(/^共\s*(\d+)\s*位學生，點擊展開完整應收名單$/)))return `${lead}${m[1]} students · click to view the full receivables list${trail}`;
     if((m=core.match(/^已選\s*(\d+)\s*堂$/)))return `${lead}${m[1]} lessons selected${trail}`;
     if((m=core.match(/^共\s*(\d+)\s*人｜(.*)$/)))return `${lead}${m[1]} registrations | ${m[2]}${trail}`;
