@@ -14,6 +14,26 @@ test('財務四個分頁先立即切換畫面，再於下一幀更新計算',asy
   }
 });
 
+test('財務分頁選中狀態以金色線條清楚標示且不靠淡色反白',async({page})=>{
+  await page.goto('/index.html',{waitUntil:'domcontentloaded'});await page.waitForTimeout(350);
+  await page.addStyleTag({content:'.v181-finance-nav button{transition:none!important}'});
+  await page.evaluate(()=>{document.body.classList.remove('auth-locked');document.getElementById('authScreen')?.remove();window.DanbridgeAccess.setContext({role:'owner',email:'owner@example.com'});window.currentCloudRole=()=> 'owner';window.renderAll();window.switchTab('finance')});
+  const overview=page.locator('.v181-finance-nav button[data-pane="overview"]');
+  const kpi=page.locator('.v181-finance-nav button[data-pane="kpi"]');
+  await expect(overview).toHaveAttribute('aria-selected','true');
+  const initial=await overview.evaluate(el=>{const s=getComputedStyle(el);return{background:s.backgroundImage,border:s.borderColor,color:s.color,shadow:s.boxShadow}});
+  expect(initial.background).toContain('linear-gradient');
+  expect(initial.border).toBe('rgb(181, 138, 44)');
+  expect(initial.color).toBe('rgb(23, 47, 70)');
+  expect(initial.shadow).toContain('rgb(181, 138, 44)');
+  await kpi.click();
+  await expect(kpi).toHaveAttribute('aria-selected','true');
+  await expect(overview).toHaveAttribute('aria-selected','false');
+  const changed=await kpi.evaluate(el=>{const s=getComputedStyle(el);return{background:s.backgroundImage,border:s.borderColor,color:s.color}});
+  expect(changed).toEqual(expect.objectContaining({border:'rgb(181, 138, 44)',color:'rgb(23, 47, 70)'}));
+  expect(changed.background).toContain('linear-gradient');
+});
+
 test('切換月份會同步更新家庭帳單、老師工時、底薪與請假扣款',async({page})=>{
   await page.goto('/index.html',{waitUntil:'domcontentloaded'});
   await page.waitForTimeout(450);

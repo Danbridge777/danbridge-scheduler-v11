@@ -117,6 +117,16 @@ test('新增、複製、批次修改與刪除都走非阻塞課表提交',async(
   assert.doesNotMatch(batch,/\bsnapshot\(\)/);
 });
 
+test('課表畫面不等待雲端且已完成動作立即排入同步',async()=>{
+  const [scheduler,cloud]=await Promise.all([
+    source('../js/modules/calendar/scheduler-ui.js'),
+    source('../js/core/firebase-auth-and-cloud-sync.module.js')
+  ]);
+  assert.match(scheduler,/scheduleRenderFrame=requestAnimationFrame\(render\)/,'畫面更新交給下一個原生畫面幀');
+  assert.match(scheduler,/schedulePersistenceFrame=setTimeout\(persist,0\)/,'同步排程不阻塞目前輸入，也不等待畫面重畫');
+  assert.match(cloud,/syncTimer=setTimeout\(\(\)=>uploadOwnerState\(\),120\)/,'Owner 雲端送出在 120ms 內啟動，遠低於三秒目標');
+});
+
 test('課表撞課顯示只建立一次日期索引，不對每張卡重掃全部課程',async()=>{
   const [scheduler,features]=await Promise.all([
     source('../js/modules/calendar/scheduler-ui.js'),
