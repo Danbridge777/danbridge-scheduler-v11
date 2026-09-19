@@ -18,9 +18,10 @@ const db=new Firestore({projectId:project,authClient});
 try{
  const profile=(await db.doc('companyAccess/'+email).get()).data();
  assert.equal(profile?.active,true);assert.equal(profile?.companyId,'danbridge');
- assert.ok(['owner','teacher'].includes(profile.role));
- const recipientRole=profile.role==='owner'?'owner':profile.canManageSchedule===true?'scheduler':'teacher';
- const payload={companyId:'danbridge',acceptanceRun:id,recipientEmail:email,recipientRole,branchIds:[],teacherId:recipientRole==='teacher'?profile.teacherId:'',teacherName:'',title:`318 ${actorKey} 通知回寫驗收`,message:'合成測試通知，沒有新增或修改任何課程。',changeCount:1,createdBy:'staging_owner_acceptance_318',createdByName:'318 通知验收',details:[{type:'added',lessonId:id,studentName:'318 合成驗收（非學生資料）',summary:`318 ${actorKey} 通知回寫驗收`,beforeTime:'',afterTime:'2026-09-12 08:00–09:00',before:null,after:{date:'2026-09-12',start:'08:00',end:'09:00',title:'318 合成驗收（非課程）',branchId:'art_museum',teacherIds:recipientRole==='teacher'?[profile.teacherId]:[]}}]};
+ assert.ok(['owner','teacher','branch_manager'].includes(profile.role));
+ const recipientRole=profile.role==='owner'?'owner':profile.role==='branch_manager'?'branch_manager':profile.canManageSchedule===true?'scheduler':'teacher';
+ const branchIds=recipientRole==='branch_manager'?[...profile.branchIds]:[];
+ const payload={companyId:'danbridge',acceptanceRun:id,recipientEmail:email,recipientRole,branchIds,...(recipientRole==='branch_manager'&&profile.hideFinancials===true?{privacyScope:'schedule-only-v1'}:{}),teacherId:recipientRole==='teacher'?profile.teacherId:'',teacherName:'',title:`318 ${actorKey} 通知回寫驗收`,message:'合成測試通知，沒有新增或修改任何課程。',changeCount:1,createdBy:'staging_owner_acceptance_318',createdByName:'318 通知验收',details:[{type:'added',lessonId:id,studentName:'318 合成驗收（非學生資料）',summary:`318 ${actorKey} 通知回寫驗收`,beforeTime:'',afterTime:'2026-09-12 08:00–09:00',before:null,after:{date:'2026-09-12',start:'08:00',end:'09:00',title:'318 合成驗收（非課程）',branchId:'art_museum',teacherIds:recipientRole==='teacher'?[profile.teacherId]:[]}}]};
  if(recipientRole==='teacher')assert.ok(typeof profile.teacherId==='string'&&profile.teacherId);
  const ref=db.doc('companies/danbridge/scheduleNotifications/'+id);
  if(mode==='--seed')await db.runTransaction(async tx=>{
