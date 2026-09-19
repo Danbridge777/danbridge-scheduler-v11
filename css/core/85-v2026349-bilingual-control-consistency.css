@@ -1,4 +1,4 @@
-/* V20.26.363 — bilingual control consistency.
+/* V20.26.364 — bilingual control consistency.
    One sizing system for line controls and action buttons, plus enough native
    month-field width for English month names in Safari/WebKit. */
 /* Compact teacher navigation has a light surface; desktop white labels must
@@ -15,7 +15,7 @@
   }
 }
 
-/* V20.26.363 — selectable lesson archive range stays compact at every width. */
+/* V20.26.364 — selectable lesson archive range stays compact at every width. */
 html body:not(.auth-locked) #lessonArchiveCard :is(#lessonArchiveMonthWrap,#lessonArchiveFromWrap,#lessonArchiveToWrap).hidden{
   display:none!important;
 }
@@ -55,7 +55,7 @@ html[lang="en"]{
   --danbridge-unified-action-font-size:13px;
 }
 
-/* V20.26.363 — one predictable alignment rule for every single-line control.
+/* V20.26.364 — one predictable alignment rule for every single-line control.
    Safari/WebKit renders date parts inside shadow content, so the pseudo
    elements must be centered separately from the host input. */
 html body:not(.auth-locked) :is(main section[id],.modal,.course-drawer,.notification-drawer) :is(
@@ -360,7 +360,7 @@ html body:not(.auth-locked) main #calendar#calendar #calendarDate::-webkit-datet
   text-align:center!important;
 }
 
-/* V20.26.363 — finance toolbar and backup control alignment.
+/* V20.26.364 — finance toolbar and backup control alignment.
    Keep the visible branch selector and every action on one shared baseline;
    the native file picker remains hidden behind the centered Import button. */
 html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar{

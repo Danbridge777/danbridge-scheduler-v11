@@ -1,6 +1,7 @@
 /** V15.21 Step 3 — shared branch business scope for dashboard, settlement and finance. */
 (function(){
   const scopes={dashboard:'all',settlement:'all',finance:'all'};
+  let scopeContextKey='';
   const access=()=>window.DanbridgeAccess;
   const ctx=()=>access()?.getContext?.()||{role:'owner',branchIds:[]};
   const branches=()=>db.branches?.length?db.branches:access()?.DEFAULT_BRANCHES||[];
@@ -17,6 +18,13 @@
   const match=(record,scope)=>scope==='all'||branchId(record)===scope;
   const scopeLabel=scope=>scope==='all'?'全部校區':(branches().find(b=>b.id===scope)?.name||'未歸屬校區');
   const scopedLessons=(scope,month='')=>(db.lessons||[]).filter(l=>!l.isDraft&&(!month||l.date.startsWith(month))&&match(l,allowedScope(scope)));
+  const contextKey=c=>JSON.stringify([c.role||'',c.email||'',c.teacherId||'',...(c.branchIds||[]).slice().sort()]);
+  function resetScopesForContext(c){
+    const key=contextKey(c);if(key===scopeContextKey)return;
+    scopeContextKey=key;
+    const initial=c.role==='branch_manager'?(c.branchIds[0]||'unassigned'):'all';
+    scopes.dashboard=initial;scopes.settlement=initial;scopes.finance=initial;
+  }
   const recordMatchesBranch=(record,scope,lessonIds)=>{
     if(scope==='all')return true;
     const ids=[...(record?.branchIds||[]),...(record?.assignedBranchIds||[])];
@@ -31,17 +39,18 @@
     };
   }
   function optionsHTML(includeAll=true,includeUnassigned=true){
-    const c=ctx(),bs=branches().filter(b=>c.role==='owner'||c.branchIds.includes(b.id));
-    return (includeAll&&c.role==='owner'?'<option value="all">全部校區</option>':'')+
+    const c=ctx(),bs=branches().filter(b=>c.role==='owner'||(c.role==='branch_manager'&&c.branchIds.includes(b.id)));
+    return (includeAll&&['owner','teacher'].includes(c.role)?'<option value="all">全部校區</option>':'')+
       bs.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')+
-      (includeUnassigned&&c.role==='owner'?'<option value="unassigned">未歸屬</option>':'');
+      (includeUnassigned&&(c.role==='owner'||(c.role==='branch_manager'&&!bs.length))?'<option value="unassigned">未歸屬</option>':'');
   }
   function syncSelectors(){
+    resetScopesForContext(ctx());
     for(const page of ['dashboard','settlement','finance']){
       const el=$(page+'BranchScope');if(!el)continue;
       const c=ctx();el.innerHTML=optionsHTML(true);scopes[page]=allowedScope(scopes[page]);
       if(![...el.options].some(o=>o.value===scopes[page]))scopes[page]=c.role==='owner'?'all':(c.branchIds[0]||'unassigned');
-      el.value=scopes[page];el.disabled=c.role==='branch_manager';
+      el.value=scopes[page];el.disabled=c.role!=='owner';
     }
     for(const id of ['fixedExpenseBranch','oneTimeExpenseBranch']){
       const el=$(id);if(!el)continue;const old=el.value;el.innerHTML=optionsHTML(false);
@@ -123,6 +132,7 @@
     if($('todayChanges'))$('todayChanges').innerHTML=changes.length?`<table class="change-table"><thead><tr><th>時間</th><th>類型</th><th>學生／班級</th><th>原日期</th><th>原時間</th><th>新日期</th><th>新時間</th></tr></thead><tbody>${changes.slice(0,100).map(c=>`<tr><td>${new Date(c.at).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}</td><td><b>${esc(c.type)}</b></td><td class="student-cell">${esc(student(c.studentId).name)}</td><td class="muted-cell">${esc(c.before?.date||'—')}</td><td>${esc(c.before?.start||'—')}</td><td class="muted-cell">${esc(c.after?.date||'—')}</td><td>${esc(c.after?.start||'—')}</td></tr>`).join('')}</tbody></table>`:'<div class="small" style="padding:12px">今天尚無課表異動。</div>';
     $('todayLessons').innerHTML=today.sort((a,b)=>a.start.localeCompare(b.start)).map(l=>`<div class="lesson ${hasTeacherOverlap(l)?'teacher-overlap':''}" style="--teacher:${teacher(l.teacherId).color||'#2563eb'};--location-bg:${locationBg(l.location)}" onclick="editLesson('${l.id}')"><b>${l.start}–${l.end}｜${esc(student(l.studentId).name)}</b><span class="meta">${esc(lessonTeacherNames(l))}｜${esc(l.title)}｜${esc(locationLabel(l))}｜${esc(l.room||'未指定教室')}</span></div>`).join('')||'<span class="small">今天沒有課程。</span>';
     if($('dashboardBranchScopeNote'))$('dashboardBranchScopeNote').textContent=`目前顯示：${scopeLabel(scope)}`;
+    if($('v32TodaySummary'))$('v32TodaySummary').textContent=today.length?`${today.length} 堂・${today.reduce((a,l)=>a+hours(l.start,l.end),0).toFixed(1)} 小時`:'今天沒有安排課程';
     if($('v33TodayLessons'))$('v33TodayLessons').textContent=today.length;if($('v33TodayHours'))$('v33TodayHours').textContent=`${today.reduce((a,l)=>a+hours(l.start,l.end),0).toFixed(1)} 小時`;
     if($('v33TodayRevenue'))$('v33TodayRevenue').textContent=money(today.reduce((a,l)=>a+timetableRevenueCharge(l),0));if($('v33TodayTeachers'))$('v33TodayTeachers').textContent=todayTeacherIds.size;
     const currentTime=`${String(new Date().getHours()).padStart(2,'0')}:${String(new Date().getMinutes()).padStart(2,'0')}`;
