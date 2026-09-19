@@ -27,3 +27,20 @@ test('real language button still translates new labels and restores dynamic Chin
  await page.locator('#danbridgeLanguageToggle').click();await expect(page.locator('html')).toHaveAttribute('lang','zh-Hant');await expect(page.locator('#language-fixture b')).toHaveText('課程紀錄');await expect(page.locator('#language-fixture span')).toHaveText('更新後的學生');
  await expect(page.locator('#language-fixture input')).toHaveValue('學生本人輸入');await expect(page.locator('#language-fixture input')).toHaveAttribute('title','老師');await expect(page.locator('#language-fixture input')).toHaveAttribute('aria-label','家長姓名');
 });
+test('財務控制項中英文維持同一水平線，備份原生檔案欄不外露',async({page})=>{
+ await open(page);await page.evaluate(()=>window.switchTab('finance'));
+ const toolbar=page.locator('#finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar');
+ await expect(toolbar).toBeVisible();
+ for(const language of ['zh','en']){
+  await page.evaluate(language=>window.DanbridgeLanguage.setLanguage(language),language);
+  const layout=await toolbar.locator(':scope > div:has(#financeBranchScope),:scope > button').evaluateAll(elements=>{const boxes=elements.map(element=>{const target=element.matches('div')?element.querySelector('select'):element,box=target.getBoundingClientRect();return{top:box.top,bottom:box.bottom,left:box.left,right:box.right,width:box.width,height:box.height}});return{boxes,viewport:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth}});
+  const {boxes}=layout;
+  expect(boxes.length).toBeGreaterThanOrEqual(4);
+  expect(new Set(boxes.map(box=>Math.round(box.height))).size).toBe(1);
+  expect(layout.scroll).toBeLessThanOrEqual(layout.viewport+1);
+  if(layout.viewport>700)expect(Math.max(...boxes.map(box=>box.bottom))-Math.min(...boxes.map(box=>box.bottom))).toBeLessThanOrEqual(1);
+  else expect(new Set(boxes.map(box=>Math.round(box.width))).size).toBe(1);
+ }
+ await page.evaluate(()=>window.switchTab('data'));
+ await expect(page.locator('#importFile')).toBeHidden();
+});

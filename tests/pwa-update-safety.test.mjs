@@ -31,11 +31,13 @@ function workerRuntime({fetcher=async()=>new Response('current'),cached,put=asyn
  return{writes,send(request){let response;const lifetime=[];listeners.fetch({request,respondWith:p=>response=Promise.resolve(p),waitUntil:p=>lifetime.push(p)});return{response,lifetime}},listeners};
 }
 const workerRequest=(path,overrides={})=>({url:'https://app.example'+path,method:'GET',mode:'cors',destination:'script',...overrides});
-test('worker URL is stable, updates ignore HTTP cache, and accepted updates retain draft guards',()=>{
+test('worker URL is stable, updates ignore HTTP cache, and automatic updates retain draft guards',()=>{
  const pwa=readFileSync(new URL('../js/core/pwa-installation.js',import.meta.url),'utf8');
  assert.match(pwa,/register\('\.\/sw\.js',\{scope:'\.\/',updateViaCache:'none'\}\)/);
  assert.doesNotMatch(pwa,/register\(['"][^'"]*sw\.js\?/);
- assert.match(pwa,/if\(!allowUpdateNow\(\)\)return/);assert.match(pwa,/navigator\.serviceWorker\.controller!==acceptedWorker/);
+ assert.match(pwa,/if\(!allowUpdateNow\(\)\)\{scheduleSafetyRecheck\(\);return;\}/);
+ assert.match(pwa,/scheduleSafetyRecheck\(50\)/);
+ assert.match(pwa,/navigator\.serviceWorker\.controller!==acceptedWorker/);
 });
 for(const [path,overrides] of [['/',{mode:'navigate',destination:'document'}],['/app.js',{}],['/app.css',{destination:'style'}],['/icon.png',{destination:'image'}]])test('worker tracks cache writes without delaying network response '+path,async()=>{
  let release,finished=false;const w=workerRuntime({put:()=>new Promise(resolve=>{release=()=>{finished=true;resolve()}})}),e=w.send(workerRequest(path,overrides));

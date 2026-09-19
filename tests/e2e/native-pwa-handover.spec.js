@@ -26,15 +26,14 @@ test('native worker handover updates the accepted tab and preserves another tab�
   await second.locator('#studentName').fill('不可遺失的未存表單');const secondUrl=second.url();
   revision=2;
   await first.evaluate(async()=>{const registration=await navigator.serviceWorker.getRegistration();await registration.update()});
-  await first.locator('.pwa-update-now').click();await first.waitForURL(/__danbridge_refresh=/);
+  await first.waitForURL(/__danbridge_refresh=/);
   const activeVersion=await first.evaluate(()=>new Promise(resolve=>{
    const channel=new MessageChannel();channel.port1.onmessage=e=>{channel.port1.close();resolve(e.data)};
    navigator.serviceWorker.controller.postMessage({type:'VERSION'},[channel.port2]);
   }));
   expect(activeVersion).toBe(2);expect(second.url()).toBe(secondUrl);
   await expect(second.locator('#studentName')).toHaveValue('不可遺失的未存表單');
-  await second.locator('.pwa-update-now').click();
-  expect(second.url()).toBe(secondUrl);await expect(second.locator('#pwaUpdateBanner')).toContainText('請先儲存');
+  expect(second.url()).toBe(secondUrl);await expect(second.locator('#pwaUpdateBanner')).toContainText('正在等候編輯');
   await expect(second.locator('#studentName')).toHaveValue('不可遺失的未存表單');
  }finally{
   await context.close();await new Promise(resolve=>server.close(resolve));

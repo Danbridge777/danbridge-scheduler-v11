@@ -1,4 +1,4 @@
-/* V20.26.362 — bilingual control consistency.
+/* V20.26.363 — bilingual control consistency.
    One sizing system for line controls and action buttons, plus enough native
    month-field width for English month names in Safari/WebKit. */
 /* Compact teacher navigation has a light surface; desktop white labels must
@@ -15,7 +15,7 @@
   }
 }
 
-/* V20.26.362 — selectable lesson archive range stays compact at every width. */
+/* V20.26.363 — selectable lesson archive range stays compact at every width. */
 html body:not(.auth-locked) #lessonArchiveCard :is(#lessonArchiveMonthWrap,#lessonArchiveFromWrap,#lessonArchiveToWrap).hidden{
   display:none!important;
 }
@@ -47,7 +47,7 @@ html body:not(.auth-locked) #lessonArchiveCard .row-actions .btn{
 }
 :root{
   --danbridge-control-height:48px;
-  --danbridge-unified-control-font-size:15px;
+  --danbridge-unified-control-font-size:14px;
   --danbridge-unified-action-font-size:14px;
 }
 html[lang="en"]{
@@ -55,7 +55,7 @@ html[lang="en"]{
   --danbridge-unified-action-font-size:13px;
 }
 
-/* V20.26.362 — one predictable alignment rule for every single-line control.
+/* V20.26.363 — one predictable alignment rule for every single-line control.
    Safari/WebKit renders date parts inside shadow content, so the pseudo
    elements must be centered separately from the host input. */
 html body:not(.auth-locked) :is(main section[id],.modal,.course-drawer,.notification-drawer) :is(
@@ -309,7 +309,7 @@ html body:not(.auth-locked) #lessonModal :is(input:not([type=checkbox]):not([typ
 
 @media(max-width:700px){
   :root{
-    --danbridge-unified-control-font-size:16px;
+    --danbridge-unified-control-font-size:14px;
     --danbridge-unified-action-font-size:14px;
   }
   html body:not(.auth-locked) main section[id] input[type=month]{
@@ -328,7 +328,7 @@ html body:not(.auth-locked) #lessonModal :is(input:not([type=checkbox]):not([typ
     min-width:0!important;
   }
   html[lang="en"]{
-    --danbridge-unified-control-font-size:16px;
+    --danbridge-unified-control-font-size:14px;
     --danbridge-unified-action-font-size:13px;
   }
   html[lang="en"] body:not(.auth-locked) #finance .v181-finance-nav button{
@@ -358,4 +358,43 @@ html body:not(.auth-locked) main #calendar#calendar #calendarDate::-webkit-datet
   min-width:0!important;
   padding:0!important;
   text-align:center!important;
+}
+
+/* V20.26.363 — finance toolbar and backup control alignment.
+   Keep the visible branch selector and every action on one shared baseline;
+   the native file picker remains hidden behind the centered Import button. */
+html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar{
+  display:flex!important;
+  align-items:flex-end!important;
+  justify-content:flex-start!important;
+  gap:12px!important;
+}
+html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar>div:has(#financeBranchScope){
+  display:grid!important;
+  grid-template-rows:auto var(--danbridge-control-height)!important;
+  align-self:flex-end!important;
+  gap:8px!important;
+  min-width:190px!important;
+  margin:0!important;
+}
+html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar :is(#financeBranchScope,.btn){
+  height:var(--danbridge-control-height)!important;
+  min-height:var(--danbridge-control-height)!important;
+  max-height:var(--danbridge-control-height)!important;
+  margin:0!important;
+}
+html body:not(.auth-locked) #data #importFile[hidden]{
+  display:none!important;
+}
+
+@media(max-width:700px){
+  html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar>div:has(#financeBranchScope),
+  html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar :is(#financeBranchScope,.btn){
+    width:100%!important;
+    min-width:0!important;
+  }
 }

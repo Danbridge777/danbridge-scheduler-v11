@@ -30,7 +30,7 @@ test('家教與團課精簡版型：入口、草稿、搜尋、統一尺寸及�
    fieldsOutside:controls.filter(el=>{const r=el.getBoundingClientRect(),c=el.closest('.card').getBoundingClientRect();return r.left<c.left-1||r.right>c.right+1}).map(el=>el.id)};
  });
  expect(await page.locator('#studentWorkspacePanel').evaluate(el=>el.getBoundingClientRect().height)).toBeGreaterThan(300);
- expect(geometry.controls.length).toBeGreaterThan(4);for(const control of geometry.controls){expect(control.h,control.id).toBe(48);expect(control.font,control.id).toBe('14px');expect(control.align,control.id).toBe('left');expect(control.lastAlign,control.id).toBe('left')}
+ expect(geometry.controls.length).toBeGreaterThan(4);for(const control of geometry.controls){expect(control.h,control.id).toBe(48);expect(control.font,control.id).toBe('14px');expect(control.align,control.id).toBe('center');expect(control.lastAlign,control.id).toBe('center')}
  expect(geometry.overflow).toBe(false);expect(geometry.fieldsOutside).toEqual([]);
  expect(await page.locator('#studentStatus').evaluate(el=>getComputedStyle(el).backgroundImage)).not.toBe('none');
  const actions=await page.locator('#students .crm-actions .btn').evaluateAll(els=>els.filter(el=>el.getClientRects().length).map(el=>{const parent=el.parentElement,style=getComputedStyle(parent);return{h:el.getBoundingClientRect().height,width:el.getBoundingClientRect().width,parentWidth:parent.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight),font:getComputedStyle(el).fontSize,overflow:el.scrollWidth>el.clientWidth+1}}));

@@ -4,7 +4,11 @@
   let refreshing=false;
   let reloadForAcceptedUpdate=false;
   let acceptedWorker=null;
+  let pendingWorker=null;
+  let safetyRetryTimer=0;
   let updateAttempt=0;
+  let hasControlledPage=Boolean(navigator.serviceWorker?.controller);
+  const UPDATE_RECHECK_MS=1000;
   const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
   const isStandalone=window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
 
@@ -41,19 +45,36 @@
     banner.hidden=true;
     banner.setAttribute('role','status');
     banner.setAttribute('aria-live','polite');
-    banner.innerHTML='<div><strong>Danbridge 有新版本</strong><span>更新後會自動重新開啟，不會影響已儲存資料。</span></div><div class="pwa-update-actions"><button type="button" class="btn pwa-update-later">稍後</button><button type="button" class="btn primary pwa-update-now">立即更新</button></div>';
+    banner.innerHTML='<div><strong>Danbridge 正在準備更新</strong><span>同步完成後會自動更新，不需要重複按按鈕。</span></div><div class="pwa-update-actions"><button type="button" class="btn pwa-update-later">暫時隱藏</button><button type="button" class="btn primary pwa-update-now">立即檢查</button></div>';
     banner.querySelector('.pwa-update-later').addEventListener('click',()=>{banner.hidden=true});
     document.body.appendChild(banner);
     return banner;
+  }
+
+  function clearSafetyRecheck(){
+    if(!safetyRetryTimer)return;
+    clearTimeout(safetyRetryTimer);
+    safetyRetryTimer=0;
+  }
+
+  function scheduleSafetyRecheck(delay=UPDATE_RECHECK_MS){
+    if(safetyRetryTimer||refreshing||(!pendingWorker&&!reloadForAcceptedUpdate))return;
+    safetyRetryTimer=setTimeout(()=>{
+      safetyRetryTimer=0;
+      if(reloadForAcceptedUpdate)reloadAcceptedUpdate();
+      else if(pendingWorker)acceptUpdate(pendingWorker);
+    },delay);
   }
 
   function reloadAcceptedUpdate(){
     if(!reloadForAcceptedUpdate||refreshing)return;
     // Activation and taking control are separate events. Never navigate on a
     // timer or while the old worker still owns this page.
-    if(acceptedWorker?.state!=='activated'||navigator.serviceWorker.controller!==acceptedWorker)return;
-    if(!allowUpdateNow()){reloadForAcceptedUpdate=false;return;}
+    if(acceptedWorker?.state!=='activated'||navigator.serviceWorker.controller!==acceptedWorker){scheduleSafetyRecheck();return;}
+    if(!allowUpdateNow()){scheduleSafetyRecheck();return;}
+    clearSafetyRecheck();
     refreshing=true;
+    updateBanner().hidden=true;
     const freshUrl=new URL(window.location.href);
     freshUrl.searchParams.set('__danbridge_refresh',Date.now().toString(36));
     window.location.replace(freshUrl.href);
@@ -67,38 +88,55 @@
     try{synced=typeof window.__danbridgeCanReloadForUpdate==='function'?window.__danbridgeCanReloadForUpdate()===true:document.body.classList.contains('auth-locked')}catch{}
     if(!editorOpen&&!crmOpen&&synced)return true;
     const banner=updateBanner(),message=banner.querySelector('span'),button=banner.querySelector('.pwa-update-now');
-    banner.hidden=false;message.textContent=editorOpen||crmOpen?'請先儲存或關閉編輯中的表單，再按立即更新。':'尚有同步或本機保存待完成；完成後請再按立即更新。';
-    button.disabled=false;button.textContent='立即更新';return false;
+    banner.hidden=false;message.textContent=editorOpen||crmOpen?'正在等候編輯完成；儲存或關閉表單後會自動更新。':'正在等候同步與本機保存完成；完成後會自動更新。';
+    button.disabled=false;button.textContent='立即檢查';return false;
+  }
+
+  function acceptUpdate(worker){
+    if(!worker||refreshing||reloadForAcceptedUpdate)return;
+    pendingWorker=worker;
+    const banner=updateBanner();
+    banner.hidden=false;
+    const updateNow=banner.querySelector('.pwa-update-now');
+    if(!allowUpdateNow()){scheduleSafetyRecheck();return;}
+    clearSafetyRecheck();
+    updateNow.disabled=true;
+    updateNow.textContent='自動更新中…';
+    reloadForAcceptedUpdate=true;
+    acceptedWorker=worker;
+    pendingWorker=null;
+    const attempt=++updateAttempt;
+    const retry=()=>{
+      if(attempt!==updateAttempt||refreshing||!reloadForAcceptedUpdate)return;
+      if(worker.state==='activated'){scheduleSafetyRecheck();return;}
+      reloadForAcceptedUpdate=false;acceptedWorker=null;
+      pendingWorker=worker.state==='redundant'?null:worker;
+      banner.hidden=false;
+      banner.querySelector('span').textContent=pendingWorker?'新版接管較久，系統會自動重試；目前畫面與資料已保留。':'這份新版已失效，系統會等待下一個可用版本；目前資料已保留。';
+      updateNow.disabled=!pendingWorker;updateNow.textContent=pendingWorker?'立即重試':'等待新版';
+      if(pendingWorker)scheduleSafetyRecheck(3000);
+    };
+    worker.addEventListener('statechange',()=>{
+      if(attempt!==updateAttempt)return;
+      if(worker.state==='activated')reloadAcceptedUpdate();
+      else if(worker.state==='redundant')retry();
+    });
+    if(worker.state==='activated')reloadAcceptedUpdate();
+    else try{worker.postMessage({type:'SKIP_WAITING'})}catch(error){console.warn('Service Worker 更新訊息失敗：',error);retry()}
+    setTimeout(retry,20000);
   }
 
   function offerUpdate(worker){
     if(!worker)return;
+    pendingWorker=worker;
     const banner=updateBanner();
     banner.hidden=false;
+    banner.querySelector('span').textContent='同步完成後會自動更新，不需要重複按按鈕。';
     const updateNow=banner.querySelector('.pwa-update-now');
-    updateNow.onclick=()=>{
-      if(!allowUpdateNow())return;
-      updateNow.disabled=true;
-      updateNow.textContent='更新中…';
-      reloadForAcceptedUpdate=true;
-      acceptedWorker=worker;
-      const attempt=++updateAttempt;
-      const retry=()=>{
-        if(attempt!==updateAttempt||refreshing||!reloadForAcceptedUpdate)return;
-        reloadForAcceptedUpdate=false;acceptedWorker=null;
-        banner.hidden=false;
-        banner.querySelector('span').textContent='新版尚未完成接管；已保留目前畫面與資料，請稍後重試更新。';
-        updateNow.disabled=false;updateNow.textContent='立即更新';
-      };
-      worker.addEventListener('statechange',()=>{
-        if(attempt!==updateAttempt)return;
-        if(worker.state==='activated')reloadAcceptedUpdate();
-        else if(worker.state==='redundant')retry();
-      });
-      if(worker.state==='activated')reloadAcceptedUpdate();
-      else try{worker.postMessage({type:'SKIP_WAITING'})}catch(error){console.warn('Service Worker 更新訊息失敗：',error);retry()}
-      setTimeout(retry,20000);
-    };
+    updateNow.disabled=false;
+    updateNow.textContent='立即檢查';
+    updateNow.onclick=()=>acceptUpdate(worker);
+    scheduleSafetyRecheck(50);
   }
 
   async function handleInstallClick(btn){
@@ -150,6 +188,13 @@
     if(btn&&isIOS&&!isStandalone){btn.style.display='';btn.textContent='加入主畫面';}
     if('serviceWorker' in navigator){
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
+        const controller=navigator.serviceWorker.controller;
+        const wasControlled=hasControlledPage;
+        hasControlledPage=Boolean(controller);
+        if(!reloadForAcceptedUpdate&&wasControlled&&controller){
+          acceptedWorker=controller;
+          reloadForAcceptedUpdate=true;
+        }
         reloadAcceptedUpdate();
       });
       // Keep the registration URL stable across releases and tabs. The worker
@@ -168,4 +213,9 @@
       }).catch(err=>console.warn('Service Worker 註冊失敗：',err));
     }
   });
+
+  ['input','change','close'].forEach(type=>document.addEventListener(type,()=>scheduleSafetyRecheck(),true));
+  window.addEventListener('focus',()=>scheduleSafetyRecheck(100));
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')scheduleSafetyRecheck(100)});
+  window.addEventListener('danbridge:update-safety-change',()=>scheduleSafetyRecheck(100));
 })();
