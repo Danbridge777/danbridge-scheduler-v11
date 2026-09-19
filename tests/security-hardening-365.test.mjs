@@ -61,5 +61,11 @@ test('production and staging Hosting ship anti-sniffing, framing, referrer, perm
     assert.match(map.get('Permissions-Policy')||'',/camera=\(\)/);
     assert.match(map.get('Content-Security-Policy')||'',/frame-ancestors 'none'/);
     assert.match(map.get('Content-Security-Policy')||'',/object-src 'none'/);
+    const directives=new Map(map.get('Content-Security-Policy').split(';').map(value=>{const [name,...values]=value.trim().split(/\s+/);return[name,values]}));
+    for(const directive of ['script-src','frame-src','connect-src'])assert.ok(directives.get(directive).includes('https://www.google.com/recaptcha/'),directive+' must allow App Check');
+    assert.ok(directives.get('frame-src').includes('https://recaptcha.google.com/recaptcha/'));
+    assert.ok(!directives.get('script-src').includes('*'));
+    const entitlement=config.hosting.headers.find(row=>row.source==='/js/core/teacher-leave-entitlement.cjs');
+    assert.match(entitlement?.headers.find(row=>row.key==='Content-Type')?.value||'',/^application\/javascript/,'shared leave calculation must execute with nosniff enabled');
   }
 });

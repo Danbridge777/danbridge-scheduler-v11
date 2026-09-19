@@ -48,6 +48,11 @@ async function executeTeacherLeave({firestore,identity,request,serverTimestamp,p
    if(row.role==='owner'||scheduler||ownTeacher)recipients.set(row.email,{email:row.email,role:row.role==='owner'?'owner':scheduler?'scheduler':'teacher',teacherId:row.role==='owner'?'':String(row.teacherId||'')});
   }
   tx.set(leaveRef,{...record,updatedAt:serverTimestamp(),updatedByUid:uid,updatedByEmail:email},{merge:false});
+  // Branch managers cannot subscribe to private leave records. A content-free
+  // revision invalidates only their scoped payroll result after a pay change.
+  if(normalized.action!=='complete'&&(record.status==='approved'||current?.status==='approved'||record.status==='active'||current?.status==='active')){
+   for(const member of active.filter(row=>row.role==='branch_manager'&&row.canViewBranchFinance===true))tx.set(firestore.doc(`companyAccess/${member.email}`),{financePayrollRevision:normalized.operationId},{merge:true});
+  }
   tx.set(receiptRef,{schema:'danbridge-teacher-leave-operation-receipt-v1',environment,companyId:'danbridge',operationId:normalized.operationId,leaveId:normalized.leaveId,action:normalized.action,requestFingerprint:fingerprint,revision:record.revision,committedAt:serverTimestamp(),committedByUid:uid,committedByEmail:email},{merge:false});
   tx.set(firestore.doc(`companyAudit/teacher-leave-${normalized.operationId}`),{schema:'danbridge-company-audit-v2',environment,companyId:'danbridge',category:'teacher-leave',action:`teacher-leave-${normalized.action}`,actorUid:uid,actorEmail:email,targetType:'teacherLeave',targetId:normalized.leaveId,teacherId:record.teacherId,leaveType:record.leaveType,date:record.date,durationMinutes:record.durationMinutes,status:record.status,revision:record.revision,createdAt:serverTimestamp()},{merge:false});
   for(const recipient of normalized.action==='complete'?[]:recipients.values()){

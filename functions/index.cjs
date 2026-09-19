@@ -34,6 +34,17 @@ function lessonReportEndpoint(projectId,serviceAccount){
 }
 exports.stagingSaveLessonReport=lessonReportEndpoint(PROJECT_ID,SERVICE_ACCOUNT);
 exports.productionSaveLessonReport=lessonReportEndpoint(PRODUCTION_PROJECT_ID,PRODUCTION_SERVICE_ACCOUNT);
+function scopedPayrollEndpoint(projectId,serviceAccount,environment){
+ return onCall({region:'asia-east1',serviceAccount,enforceAppCheck:true,consumeAppCheckToken:true,timeoutSeconds:60,memory:'512MiB',minInstances:0,maxInstances:5},async request=>{
+  if(!(process.env.GCLOUD_PROJECT||process.env.GOOGLE_CLOUD_PROJECT)||[process.env.GCLOUD_PROJECT,process.env.GOOGLE_CLOUD_PROJECT].filter(Boolean).some(value=>value!==projectId))throw new HttpsError('failed-precondition','財務環境不符');
+  if(!request.auth?.uid||request.auth.token?.email_verified!==true||!request.app||request.app.alreadyConsumed)throw new HttpsError('unauthenticated','需要有效登入與全新 App Check');
+  const app=getApps().find(row=>row.options?.projectId===projectId)??initializeApp({projectId,credential:applicationDefault()},'scoped-payroll-'+projectId);
+  try{return await require('./scoped-payroll-runtime.cjs').readScopedPayroll({firestore:getFirestore(app),environment,identity:{uid:request.auth.uid,email:request.auth.token.email,emailVerified:true,appVerified:true},input:request.data})}
+  catch(error){const code=['permission-denied','unauthenticated','invalid-argument','failed-precondition'].includes(error.code)?error.code:'internal';throw new HttpsError(code,code==='internal'?'薪資核對未完成，請稍後重試；尚未顯示推算金額。':error.message)}
+ });
+}
+exports.stagingReadScopedPayroll=scopedPayrollEndpoint(PROJECT_ID,SERVICE_ACCOUNT,'staging');
+exports.productionReadScopedPayroll=scopedPayrollEndpoint(PRODUCTION_PROJECT_ID,PRODUCTION_SERVICE_ACCOUNT,'production');
 let runtimePromise=null;
 let stagingSchedulerRuntimePromise=null;
 let productionRuntimePromise=null;

@@ -299,24 +299,40 @@ function teacherPayrollLeaveSource(){
   const live=typeof window!=='undefined'&&typeof window.__danbridgeGetTeacherLeaves==='function'?window.__danbridgeGetTeacherLeaves():null;
   return Array.isArray(live)?live:(Array.isArray(db.teacherLeaveRecords)?db.teacherLeaveRecords:[]);
 }
-function teacherPayrollLeaveHours(t,m,source=teacherPayrollLeaveSource()){
+function teacherPayrollLeaveDetail(t,m,source=teacherPayrollLeaveSource()){
   const workDays=new Set((t.workDays||[]).map(Number)),byDate=new Map();
   for(const row of source||[]){
     const date=String(row?.date||''),start=String(row?.start||''),end=String(row?.end||'');
-    if(String(row?.teacherId)!==String(t.id)||!['approved','active'].includes(String(row?.status||''))||!date.startsWith(`${m}-`)||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end))continue;
+    if(String(row?.teacherId)!==String(t.id)||!['approved','active'].includes(String(row?.status||''))||!date.startsWith(`${m.slice(0,4)}-`)||date.slice(0,7)>m||!/^\d{2}:\d{2}$/.test(start)||!/^\d{2}:\d{2}$/.test(end))continue;
     const day=new Date(`${date}T12:00:00`).getDay();if(!workDays.has(day))continue;
     const minutes=value=>Number(value.slice(0,2))*60+Number(value.slice(3)),from=minutes(start),to=minutes(end);
     if(!Number.isFinite(from)||!Number.isFinite(to)||to<=from)continue;
-    const intervals=byDate.get(date)||[];intervals.push([from,to]);byDate.set(date,intervals);
+    const intervals=byDate.get(date)||[];intervals.push([from,to,row.leaveType||'personal']);byDate.set(date,intervals);
   }
-  let totalMinutes=0;
-  for(const intervals of byDate.values()){
-    intervals.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);let current=null;
-    for(const interval of intervals){if(!current){current=[...interval];continue}if(interval[0]<=current[1])current[1]=Math.max(current[1],interval[1]);else{totalMinutes+=current[1]-current[0];current=[...interval]}}
-    if(current)totalMinutes+=current[1]-current[0];
+  let totalMinutes=0,deductibleMinutes=0,sickMinutes=0,menstrualMinutes=0;const review=new Set();
+  const dailyMinutes=(Number(t.standardDailyHours)||teacherDailyExpectedHours(t)||8)*60,fullPay=new Set(['annual','marriage','bereavement','official','occupational']);
+  for(const [date,intervals] of [...byDate].sort((a,b)=>a[0].localeCompare(b[0]))){
+    const points=[...new Set(intervals.flatMap(row=>row.slice(0,2)))].sort((a,b)=>a-b);
+    for(let i=0;i<points.length-1;i++){
+      const from=points[i],to=points[i+1],types=[...new Set(intervals.filter(row=>row[0]<=from&&row[1]>=to).map(row=>row[2]))];if(!types.length)continue;
+      const duration=to-from,isMonth=date.startsWith(`${m}-`);let deduction=0;
+      if(types.length>1){if(isMonth)review.add('重疊請假假別不同，請核對');}
+      // Prefer the paid category on conflicting records; flag, never double deduct.
+      if(types.some(type=>fullPay.has(type)))deduction=0;
+      else if(types.includes('menstrual')){
+        const exempt=Math.min(duration,Math.max(0,3*dailyMinutes-menstrualMinutes)),shared=duration-exempt;
+        const half=Math.min(shared,Math.max(0,30*dailyMinutes-sickMinutes));
+        deduction=(exempt+half)*0.5+(shared-half);menstrualMinutes+=duration;sickMinutes+=shared;
+      }else if(types.some(type=>['sick','hospitalSick'].includes(type))){
+        const half=Math.min(duration,Math.max(0,30*dailyMinutes-sickMinutes));deduction=half*0.5+(duration-half);sickMinutes+=duration;
+      }else if(types.every(type=>['personal','familyCare'].includes(type)))deduction=duration;
+      else{if(isMonth)review.add('未識別假別，請核對給薪');}
+      if(isMonth){totalMinutes+=duration;deductibleMinutes+=deduction;}
+    }
   }
-  return totalMinutes/60;
+  return{hours:totalMinutes/60,deductibleHours:deductibleMinutes/60,reviewReasons:[...review]};
 }
+function teacherPayrollLeaveHours(t,m,source=teacherPayrollLeaveSource()){return teacherPayrollLeaveDetail(t,m,source).hours}
 
 function teacherPaidLessons(t,m){const rows=window.DanbridgeLessonIndex?.byTeacher?.(db.lessons,t.id)||db.lessons;return rows.filter(l=>l.date.startsWith(m)&&lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherHours(l))}
 
@@ -346,7 +362,7 @@ function teacherPayrollMode(t){
   if(t?.payrollMode==='fixed'||t?.payrollMode==='hourly')return t.payrollMode;
   return teacherBaseSalary(t)!==null?'fixed':'hourly';
 }
-const TEACHER_PAYROLL_FORMULA_VERSION='teacher-payroll-v2-workday-leave';
+const TEACHER_PAYROLL_FORMULA_VERSION='teacher-payroll-v4-leave-category';
 function calculateTeacherPayroll(t,m,paid){
   t=teacherPricingAt(t,m+'-01');
   const rows=paid||teacherPaidLessons(t,m);
@@ -365,25 +381,59 @@ function calculateTeacherPayroll(t,m,paid){
     return{teacher:t,month:m,formulaVersion:usesStudentRate?'teacher-payroll-v3-student-rate':TEACHER_PAYROLL_FORMULA_VERSION,mode,rows,actualHours,paidHours,expectedHours:0,diff:actualHours,monthlyWorkDays,dailyExpectedHours,leaveHours:0,leaveHourlyRate:0,leaveDeduction:0,baseSalary:null,overtimeHours:0,shortHours:0,overtimeRate:null,deductionRate:null,hourlyRate,usesStudentRate,rateBreakdown,addition:amount,shortageDeduction:0,deduction:0,amount,configured:hourlyRate>0||(payRows.length>0&&payRows.every(l=>lessonPartTimeTeacherRate(l,t)!==null))};
   }
   const baseSalary=teacherBaseSalary(t),overtimeRate=teacherOvertimeRate(t),deductionRate=teacherDeductionRate(t);
-  const leaveHours=Math.min(expectedHours,teacherPayrollLeaveHours(t,m)),leaveHourlyRate=expectedHours>0&&baseSalary!==null?baseSalary/expectedHours:0;
+  const leaveDetail=teacherPayrollLeaveDetail(t,m),leaveHours=Math.min(expectedHours,leaveDetail.hours),leaveDeductibleHours=Math.min(leaveHours,leaveDetail.deductibleHours),leaveHourlyRate=expectedHours>0&&baseSalary!==null?baseSalary/expectedHours:0;
   /* Active leave is credited against missing timetable hours so one absence cannot be
    * deducted once as a shortage and again as leave. Leave itself is prorated from
    * base salary by this month's exact workday count and daily expected hours. */
   const overtimeHours=Math.max(0,diff),shortHours=Math.max(0,expectedHours-actualHours-leaveHours);
-  const addition=overtimeHours*(overtimeRate??0),shortageDeduction=shortHours*(deductionRate??0),leaveDeduction=leaveHours*leaveHourlyRate,deduction=shortageDeduction+leaveDeduction;
+  const addition=overtimeHours*(overtimeRate??0),shortageDeduction=shortHours*(deductionRate??0),leaveDeduction=leaveDeductibleHours*leaveHourlyRate,deduction=shortageDeduction+leaveDeduction;
   const configured=baseSalary!==null&&overtimeRate!==null&&deductionRate!==null;
   const amount=configured?Math.max(0,baseSalary+addition-deduction):0;
-  return{teacher:t,month:m,formulaVersion:TEACHER_PAYROLL_FORMULA_VERSION,mode,rows,actualHours,paidHours,expectedHours,diff,monthlyWorkDays,dailyExpectedHours,leaveHours,leaveHourlyRate,leaveDeduction,baseSalary,overtimeHours,shortHours,overtimeRate,deductionRate,hourlyRate:null,addition,shortageDeduction,deduction,amount,configured};
+  return{teacher:t,month:m,formulaVersion:TEACHER_PAYROLL_FORMULA_VERSION,mode,rows,actualHours,paidHours,expectedHours,diff,monthlyWorkDays,dailyExpectedHours,leaveHours,leaveDeductibleHours,leaveReviewReasons:leaveDetail.reviewReasons,leaveHourlyRate,leaveDeduction,baseSalary,overtimeHours,shortHours,overtimeRate,deductionRate,hourlyRate:null,addition,shortageDeduction,deduction,amount,configured};
 }
 function teacherPayrollFormulaText(result){
+  if(result.authoritativeScope)return '由完整月課表與核准請假核對，僅顯示本校區歸屬堂數分攤金額';
+  if(result.allocation){const a=result.allocation;return `${teacherPayrollFormulaText(result.fullPayroll)}；${a.totalCount?`歸屬堂數分攤 ${a.count}/${a.totalCount}：${money(a.fullAmount)} × ${a.count}/${a.totalCount} = ${money(result.amount)}`:`無可分攤課程，薪資列未歸屬：${money(result.amount)}`}`}
   if(result.mode==='hourly'&&result.usesStudentRate)return '依學生／整班鐘點費：'+result.rateBreakdown.map(r=>`${fmtHours(r.h)} hr × ${money(r.rate)} = ${money(r.amount)}`).join('；');
   if(result.mode==='hourly')return result.paidHours===result.actualHours?`純時薪：${fmtHours(result.paidHours)} hr × ${money(result.hourlyRate||0)}`:`純時薪：計薪 ${fmtHours(result.paidHours)} hr × ${money(result.hourlyRate||0)}（課表 ${fmtHours(result.actualHours)} hr）`;
   if(!result.configured)return '薪資設定未完成：請填固定底薪、超時時薪與不足扣款時薪';
   const parts=[`底薪 ${money(result.baseSalary)}`,`本月 ${result.monthlyWorkDays} 個工作日／最低 ${fmtHours(result.expectedHours)} hr`];
   if(result.overtimeHours>0)parts.push(`＋超時 ${fmtHours(result.overtimeHours)} hr × ${money(result.overtimeRate)}`);
   if(result.shortHours>0)parts.push(`－不足 ${fmtHours(result.shortHours)} hr × ${money(result.deductionRate)}`);
-  if(result.leaveHours>0)parts.push(`－請假 ${fmtHours(result.leaveHours)} hr × ${money(result.leaveHourlyRate)}（底薪 ÷ 本月最低時數）`);
+  if(result.leaveHours>0)parts.push(result.leaveDeductibleHours===result.leaveHours?`－請假 ${fmtHours(result.leaveHours)} hr × ${money(result.leaveHourlyRate)}（底薪 ÷ 本月最低時數）`:`請假 ${fmtHours(result.leaveHours)} hr；按假別折算扣薪 ${fmtHours(result.leaveDeductibleHours)} hr × ${money(result.leaveHourlyRate)}`);
+  if(result.leaveReviewReasons?.length)parts.push('需核對：'+result.leaveReviewReasons.join('、'));
   return parts.join('；');
+}
+
+/* Compute salary once for the whole month. Fixed salary costs are apportioned
+ * by unique payable lesson count and revenue ownership, never attendance room,
+ * hours or group headcount. Largest-remainder cents keep every scope additive. */
+function teacherPayrollByBillingBranch(t,m,scope='all'){
+  if(window.DanbridgeScopedPayroll?.required())return window.DanbridgeScopedPayroll.get(t,m,scope);
+  const seen=new Set(),rows=teacherPaidLessons(t,m).filter(row=>{
+    if(!row.id)return true;if(seen.has(row.id))return false;seen.add(row.id);return true;
+  }),full=calculateTeacherPayroll(t,m,rows),paid=teacherPayableHourLessons(full.teacher,rows),buckets=new Map();
+  for(const row of paid){const id=timetableBillingBranchId(row),bucket=buckets.get(id)||{branchId:id,rows:[],count:0,h:0};bucket.rows.push(row);bucket.count++;bucket.h+=hours(row.start,row.end);buckets.set(id,bucket)}
+  if(!buckets.size)buckets.set('unassigned',{branchId:'unassigned',rows:[],count:0,h:0});
+  const branches=[...buckets.values()].sort((a,b)=>a.branchId.localeCompare(b.branchId)),totalCount=paid.length;
+  const split=value=>{
+    const cents=Math.round((Number(value)||0)*100),denominator=totalCount||1;
+    const weights=branches.map(b=>totalCount?b.count:1),parts=weights.map(w=>Math.floor(cents*w/denominator));
+    let remainder=cents-parts.reduce((a,b)=>a+b,0);
+    const order=weights.map((w,i)=>({i,fraction:cents*w/denominator-parts[i]})).sort((a,b)=>b.fraction-a.fraction||a.i-b.i);
+    for(let i=0;i<remainder;i++)parts[order[i%order.length].i]++;
+    return parts.map(value=>value/100);
+  };
+  const amounts=full.mode==='fixed'?split(full.amount):branches.map(b=>b.rows.reduce((sum,l)=>sum+lessonTeacherPay(l,t.id),0));
+  branches.forEach((b,i)=>b.amount=amounts[i]);
+  if(scope==='all')return{payroll:full,rows:paid,branches};
+  const index=branches.findIndex(b=>b.branchId===scope),bucket=branches[index]||{rows:[],count:0,h:0,amount:0};
+  if(full.mode==='hourly')return{payroll:calculateTeacherPayroll(t,m,bucket.rows),rows:bucket.rows,branches:index<0?[]:[bucket]};
+  const ratio=totalCount?bucket.count/totalCount:(scope==='unassigned'?1:0),payroll={...full,rows:bucket.rows,amount:bucket.amount,actualHours:bucket.h,paidHours:bucket.rows.filter(lessonCountsForTeacherPay).reduce((sum,l)=>sum+hours(l.start,l.end),0),fullPayroll:full,allocation:{scope,count:bucket.count,totalCount,ratio,fullAmount:full.amount}};
+  for(const key of ['baseSalary','addition','shortageDeduction','leaveDeduction','deduction'])payroll[key]=full[key]===null?null:(index<0?0:split(full[key])[index]);
+  for(const key of ['expectedHours','overtimeHours','shortHours','leaveHours'])payroll[key]=full[key]*ratio;
+  payroll.diff=payroll.actualHours-payroll.expectedHours;
+  return{payroll,rows:bucket.rows,branches:index<0?[]:[bucket]};
 }
 
 function teacherWeekBreakdown(t,m){t=teacherPricingAt(t,m+'-01');const r=monthDateRange(m),daily=(+t.minWeeklyHours||0)/Math.max(1,(t.workDays||[]).length),paid=teacherPayableHourLessons(t,teacherPaidLessons(t,m)),rows=[];let cursor=new Date(r.start);cursor.setDate(cursor.getDate()-((cursor.getDay()+6)%7));while(cursor<=r.end){const ws=new Date(cursor),we=new Date(cursor);we.setDate(we.getDate()+6);const from=ws<r.start?r.start:ws,to=we>r.end?r.end:we,workCount=countTeacherWorkDaysInRange(t,from,to),expected=daily*workCount;const actual=paid.filter(l=>{const d=new Date(l.date+'T00:00:00');return d>=from&&d<=to}).reduce((a,l)=>a+hours(l.start,l.end),0);rows.push({from:localDate(from),to:localDate(to),expected,actual,diff:actual-expected});cursor.setDate(cursor.getDate()+7)}return rows}

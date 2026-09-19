@@ -52,7 +52,7 @@ function createLessonId(){return 'lsn_'+newUuid()}
 function createSeriesId(){return 'ser_'+newUuid()}
 function isCanonicalLessonId(value){return /^lsn_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value||''))}
 
-function money(n){return 'NT$'+Math.round(n||0).toLocaleString('zh-TW')}
+function money(n){return 'NT$'+Number(n||0).toLocaleString('zh-TW',{maximumFractionDigits:2})}
 
 function hours(a,b){if(!a||!b)return 0;const[ah,am]=a.split(':').map(Number),[bh,bm]=b.split(':').map(Number);return Math.max(0,(bh*60+bm-ah*60-am)/60)}
 

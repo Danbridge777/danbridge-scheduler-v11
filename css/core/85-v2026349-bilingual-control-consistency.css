@@ -1,4 +1,4 @@
-/* V20.26.365 — bilingual control consistency.
+/* V20.26.367 — bilingual control consistency.
    One sizing system for line controls and action buttons, plus enough native
    month-field width for English month names in Safari/WebKit. */
 /* Compact teacher navigation has a light surface; desktop white labels must
@@ -15,7 +15,7 @@
   }
 }
 
-/* V20.26.365 — selectable lesson archive range stays compact at every width. */
+/* V20.26.367 — selectable lesson archive range stays compact at every width. */
 html body:not(.auth-locked) #lessonArchiveCard :is(#lessonArchiveMonthWrap,#lessonArchiveFromWrap,#lessonArchiveToWrap).hidden{
   display:none!important;
 }
@@ -55,7 +55,7 @@ html[lang="en"]{
   --danbridge-unified-action-font-size:14px;
 }
 
-/* V20.26.365 — one predictable alignment rule for every single-line control.
+/* V20.26.367 — one predictable alignment rule for every single-line control.
    Safari/WebKit renders date parts inside shadow content, so the pseudo
    elements must be centered separately from the host input. */
 html body:not(.auth-locked) :is(main section[id],.modal,.course-drawer,.notification-drawer) :is(
@@ -97,31 +97,42 @@ html body:not(.auth-locked) :is(main section[id],.modal,.course-drawer,.notifica
   min-width:0!important;
 }
 
-/* The finance overview is an information hierarchy, not a form grid. Align
-   its headings, explanatory copy, filters and metric content to one left rail;
+/* All finance panes share the same left-aligned information hierarchy.
+   Align headings, explanatory copy, filters and metric content to one left rail;
    control values and action labels above remain centered. */
-html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"] :is(
+html body:not(.auth-locked) #finance .v181-finance-pane :is(
   .v181-card-title,.v181-card-title h2,.v181-card-title p,
   .v187-finance-month-bar label,.v187-finance-month-bar label span,
-  .v187-finance-month-bar small,.toolbar,.finance-summary,.finance-metric,
+  .v187-finance-month-bar small,.toolbar,.toolbar label,.finance-summary,.finance-metric,
   .finance-metric span,.finance-metric b
 ){
   text-align:left!important;
 }
-html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"] .v181-card-title,
-html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"] .v187-finance-month-bar,
-html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar{
+html body:not(.auth-locked) #finance .v181-finance-pane .v181-card-title,
+html body:not(.auth-locked) #finance .v181-finance-pane .v187-finance-month-bar,
+html body:not(.auth-locked) #finance .v181-finance-pane>.v181-module-card>.toolbar{
   justify-content:start!important;
 }
-html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"] .v187-finance-month-bar{
+html body:not(.auth-locked) #finance .v181-finance-pane .v187-finance-month-bar{
   grid-template-columns:minmax(260px,320px) minmax(0,1fr)!important;
+  max-width:100%!important;
+  margin-inline:0!important;
+}
+html body:not(.auth-locked) #finance .v181-finance-pane .v187-expense-scope-bar{
+  grid-template-columns:minmax(190px,260px) minmax(190px,260px) minmax(0,1fr)!important;
+}
+html body:not(.auth-locked) #finance :is(.v181-finance-hero,.v181-finance-hero h1,.v181-finance-hero p,.v181-eyebrow){
+  text-align:left!important;
+}
+html body:not(.auth-locked) #finance .v187-expense-total{
+  margin-inline:0!important;
 }
 html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"] .finance-metric{
   align-items:flex-start!important;
   padding-inline:18px!important;
 }
 @media(max-width:800px){
-  html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"] .v187-finance-month-bar{grid-template-columns:1fr!important}
+  html body:not(.auth-locked) #finance .v181-finance-pane .v187-finance-month-bar{grid-template-columns:1fr!important}
 }
 
 /* English labels are materially longer. Keep their text inside the same
@@ -360,16 +371,17 @@ html body:not(.auth-locked) main #calendar#calendar #calendarDate::-webkit-datet
   text-align:center!important;
 }
 
-/* V20.26.365 — finance toolbar and backup control alignment.
+/* V20.26.367 — finance toolbar and backup control alignment.
    Keep the visible branch selector and every action on one shared baseline;
    the native file picker remains hidden behind the centered Import button. */
-html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar{
+html body:not(.auth-locked) #finance .v181-finance-pane>.v181-module-card>.toolbar{
   display:flex!important;
+  flex-wrap:wrap!important;
   align-items:flex-end!important;
   justify-content:flex-start!important;
   gap:12px!important;
 }
-html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar>div:has(#financeBranchScope){
+html body:not(.auth-locked) #finance .v181-finance-pane>.v181-module-card>.toolbar>div:has(:is(#financeBranchScope,#settlementBranchScope)){
   display:grid!important;
   grid-template-rows:auto var(--danbridge-control-height)!important;
   align-self:flex-end!important;
@@ -377,7 +389,7 @@ html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v
   min-width:190px!important;
   margin:0!important;
 }
-html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar :is(#financeBranchScope,.btn){
+html body:not(.auth-locked) #finance .v181-finance-pane>.v181-module-card>.toolbar :is(#financeBranchScope,#settlementBranchScope,.btn){
   height:var(--danbridge-control-height)!important;
   min-height:var(--danbridge-control-height)!important;
   max-height:var(--danbridge-control-height)!important;
@@ -388,12 +400,12 @@ html body:not(.auth-locked) #data #importFile[hidden]{
 }
 
 @media(max-width:700px){
-  html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar{
+  html body:not(.auth-locked) #finance .v181-finance-pane>.v181-module-card>.toolbar{
     display:grid!important;
     grid-template-columns:minmax(0,1fr)!important;
   }
-  html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar>div:has(#financeBranchScope),
-  html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar :is(#financeBranchScope,.btn){
+  html body:not(.auth-locked) #finance .v181-finance-pane>.v181-module-card>.toolbar>div:has(:is(#financeBranchScope,#settlementBranchScope)),
+  html body:not(.auth-locked) #finance .v181-finance-pane>.v181-module-card>.toolbar :is(#financeBranchScope,#settlementBranchScope,.btn){
     width:100%!important;
     min-width:0!important;
   }

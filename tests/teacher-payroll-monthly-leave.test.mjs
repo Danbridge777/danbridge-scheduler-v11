@@ -87,7 +87,7 @@ test('active teacher leave is prorated from base salary and overlapping records 
   assert.equal(result.leaveHourlyRate,250);
   assert.equal(result.leaveDeduction,1250);
   assert.equal(result.amount,42750);
-  assert.equal(result.formulaVersion,'teacher-payroll-v2-workday-leave');
+  assert.equal(result.formulaVersion,'teacher-payroll-v4-leave-category');
   assert.match(runtime({teacher:fixed,lessons:weekdayLessons('2026-09'),leaves}).teacherPayrollFormulaText(result),/請假 5 hr × NT\$250/);
 });
 
@@ -110,4 +110,71 @@ test('hourly teachers remain based only on explicitly payable lesson hours',()=>
   assert.equal(result.paidHours,2);
   assert.equal(result.leaveHours,0);
   assert.equal(result.amount,1200);
+});
+
+test('fixed payroll allocates once by ownership lesson count, not hours, attendance or children',()=>{
+ const teacher={...fixed,minWeeklyHours:0,baseSalary:1000.01},lessons=[
+  {...lesson('a','2026-09-01','09:00','10:00'),billingBranchId:'art_museum',branchId:'hexi'},
+  {...lesson('b','2026-09-02','09:00','13:00'),billingBranchId:'hexi',branchId:'art_museum',groupStudentIds:['a','b','c']},
+  {...lesson('c','2026-09-03','09:00','11:00')}
+ ];
+ const app=runtime({teacher,lessons});
+ const all=app.teacherPayrollByBillingBranch(teacher,'2026-09');
+ assert.equal(all.payroll.amount,4500.01,'base plus full-month overtime computed only once');
+ assert.equal(all.branches.reduce((s,b)=>s+b.count,0),3,'one group is one class');
+ const parts=['art_museum','hexi','unassigned'].map(id=>app.teacherPayrollByBillingBranch(teacher,'2026-09',id).payroll);
+ assert.deepEqual(parts.map(p=>p.amount),[1500.01,1500,1500]);
+ assert.equal(Math.round(parts.reduce((s,p)=>s+p.amount,0)*100),450001);
+ assert.deepEqual(parts.map(p=>p.actualHours),[1,4,2]);
+ assert.equal(parts[0].allocation.ratio,1/3);
+ assert.match(app.teacherPayrollFormulaText(parts[0]),/歸屬堂數分攤 1\/3/);
+ assert.equal(app.teacherPayrollByBillingBranch(teacher,'2026-09','missing').payroll.amount,0);
+ lessons.push({...lessons[0]});
+ assert.equal(app.teacherPayrollByBillingBranch(teacher,'2026-09').payroll.amount,4500.01,'duplicate same id cannot add salary or count');
+});
+
+test('fixed monthly shortage is not recomputed independently in every campus',()=>{
+ const lessons=weekdayLessons('2026-09').map((row,i)=>({...row,billingBranchId:i<11?'hexi':'art_museum'}));
+ const app=runtime({teacher:fixed,lessons});
+ for(const branch of ['hexi','art_museum']){
+  const p=app.teacherPayrollByBillingBranch(fixed,'2026-09',branch).payroll;
+  assert.equal(p.amount,22000);assert.equal(p.shortageDeduction,0);assert.equal(p.actualHours,88);
+ }
+ assert.equal(app.teacherPayrollByBillingBranch(fixed,'2026-09','unassigned').payroll.amount,0);
+});
+
+test('zero-lesson fixed salary is unassigned and hourly costs keep individual lesson rates',()=>{
+ const teacher={...fixed,minWeeklyHours:0},app=runtime({teacher});
+ assert.equal(app.teacherPayrollByBillingBranch(teacher,'2026-09','unassigned').payroll.amount,44000);
+ assert.equal(app.teacherPayrollByBillingBranch(teacher,'2026-09','hexi').payroll.amount,0);
+ assert.doesNotMatch(app.teacherPayrollFormulaText(app.teacherPayrollByBillingBranch(teacher,'2026-09','unassigned').payroll),/0\/0/);
+ const hourly={...teacher,payrollMode:'hourly',rate:500},lessons=[{...lesson('a','2026-09-01','09:00','10:00'),billingBranchId:'hexi'},{...lesson('b','2026-09-02','09:00','11:00'),billingBranchId:'art_museum'}],other=runtime({teacher:hourly,lessons});
+ assert.equal(other.teacherPayrollByBillingBranch(hourly,'2026-09','hexi').payroll.amount,500);
+ assert.equal(other.teacherPayrollByBillingBranch(hourly,'2026-09','art_museum').payroll.amount,1000);
+});
+
+test('paid, half-paid and unpaid leave credit absence once with the correct deduction ratio',()=>{
+ const lessons=weekdayLessons('2026-09').filter(row=>row.date!=='2026-09-07');
+ for(const [leaveType,amount,deduction] of [['annual',44000,0],['marriage',44000,0],['bereavement',44000,0],['official',44000,0],['occupational',44000,0],['sick',43000,1000],['hospitalSick',43000,1000],['menstrual',43000,1000],['personal',42000,2000],['familyCare',42000,2000]]){
+  const leaves=[{id:'leave',teacherId:fixed.id,date:'2026-09-07',start:'09:00',end:'17:00',status:'approved',leaveType}];
+  const result=runtime({teacher:fixed,lessons,leaves}).calculateTeacherPayroll(fixed,'2026-09');
+  assert.equal(result.amount,amount,leaveType);assert.equal(result.leaveDeduction,deduction,leaveType);assert.equal(result.shortageDeduction,0,leaveType);
+ }
+});
+
+test('sick half-pay uses the year-to-date shared hospital allowance; previous months do not deduct twice',()=>{
+ const leaves=[...weekdayLessons('2026-07'),...weekdayLessons('2026-08')].slice(0,30).map(row=>({...row,teacherId:fixed.id,leaveType:'hospitalSick',status:'approved'}));
+ leaves.push({id:'sept',teacherId:fixed.id,leaveType:'sick',status:'approved',date:'2026-09-07',start:'09:00',end:'17:00'});
+ const p=runtime({teacher:fixed,lessons:weekdayLessons('2026-09').filter(row=>row.date!=='2026-09-07'),leaves}).calculateTeacherPayroll(fixed,'2026-09');
+ assert.equal(p.leaveHours,8);assert.equal(p.leaveDeductibleHours,8);assert.equal(p.amount,42000);
+ leaves[0].status='cancelled';
+ const restored=runtime({teacher:fixed,lessons:[],leaves}).teacherPayrollLeaveDetail(fixed,'2026-09');
+ assert.equal(restored.deductibleHours,4);
+});
+
+test('conflicting leave types cannot silently double deduct, and incomplete types require review',()=>{
+ const first={id:'a',teacherId:fixed.id,date:'2026-09-07',start:'09:00',end:'17:00',status:'approved',leaveType:'annual'};
+ const app=runtime({teacher:fixed,leaves:[first,{...first,id:'b',leaveType:'personal'}]});
+ const d=app.teacherPayrollLeaveDetail(fixed,'2026-09');assert.equal(d.hours,8);assert.equal(d.deductibleHours,0);assert.equal(d.reviewReasons.length,1);
+ app.db.teacherLeaveRecords=[{...first,leaveType:'unknown'}];assert.equal(app.teacherPayrollLeaveDetail(fixed,'2026-09').reviewReasons.length,1);
 });

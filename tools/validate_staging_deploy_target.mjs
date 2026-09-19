@@ -56,16 +56,42 @@ const STAGING_REWRITES = [{
   source: '/api/staging-v2/authority-save',
   function: { functionId: 'stagingV2AuthoritySave', region: 'asia-east1' }
 }];
-const SECURITY_HEADERS = [{
-  source: '**',
-  headers: [
-    { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.cloudfunctions.net; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; frame-ancestors 'none'; upgrade-insecure-requests" },
-    { key: 'X-Content-Type-Options', value: 'nosniff' },
-    { key: 'Referrer-Policy', value: 'no-referrer' },
-    { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
-    { key: 'X-Frame-Options', value: 'DENY' }
-  ]
-}];
+const SECURITY_HEADERS = [
+  {
+    "source": "**",
+    "headers": [
+      {
+        "key": "Content-Security-Policy",
+        "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://www.google.com/recaptcha/; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.cloudfunctions.net https://www.google.com/recaptcha/; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; frame-ancestors 'none'; upgrade-insecure-requests"
+      },
+      {
+        "key": "X-Content-Type-Options",
+        "value": "nosniff"
+      },
+      {
+        "key": "Referrer-Policy",
+        "value": "no-referrer"
+      },
+      {
+        "key": "Permissions-Policy",
+        "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+      },
+      {
+        "key": "X-Frame-Options",
+        "value": "DENY"
+      }
+    ]
+  },
+  {
+    "source": "/js/core/teacher-leave-entitlement.cjs",
+    "headers": [
+      {
+        "key": "Content-Type",
+        "value": "application/javascript; charset=utf-8"
+      }
+    ]
+  }
+];
 const DOC_SCAN_EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.firebase', '.npm-cache', 'playwright-report', 'test-results']);
 const PUBLIC_ROOT_FILES = new Set(['404.html','icon-1024.png','icon-192.png','icon-512.png','icon-maskable-192.png','icon-maskable-512.png','index.html','manifest.webmanifest','sw.js']);
 const PUBLIC_ROOT_DIRS = new Set(['assets','css','js']);

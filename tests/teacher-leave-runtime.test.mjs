@@ -13,11 +13,19 @@ function memory(){
  const doc=path=>({path});
  const collection=(path,filters=[])=>({path,filters,where:(key,op,value)=>{assert.equal(op,'==');return collection(path,[...filters,[key,value]])}});
  const snap=(path,value)=>({id:path.split('/').at(-1),exists:value!==undefined,data:()=>structuredClone(value)});
- const db={doc,collection,runTransaction:async fn=>{const writes=[];const result=await fn({get:async ref=>{assert.equal(writes.length,0,'reads must precede all writes');if(ref.filters)return{docs:[...rows].filter(([path,row])=>path.startsWith(ref.path+'/')&&!path.slice(ref.path.length+1).includes('/')&&ref.filters.every(([k,v])=>row[k]===v)).map(([path,row])=>snap(path,row))};return snap(ref.path,rows.get(ref.path))},set:(ref,value)=>writes.push([ref.path,value])});for(const [path,value]of writes)rows.set(path,structuredClone(value));return result}};
+ const db={doc,collection,runTransaction:async fn=>{const writes=[];const result=await fn({get:async ref=>{assert.equal(writes.length,0,'reads must precede all writes');if(ref.filters)return{docs:[...rows].filter(([path,row])=>path.startsWith(ref.path+'/')&&!path.slice(ref.path.length+1).includes('/')&&ref.filters.every(([k,v])=>row[k]===v)).map(([path,row])=>snap(path,row))};return snap(ref.path,rows.get(ref.path))},set:(ref,value,options)=>writes.push([ref.path,value,options])});for(const [path,value,options]of writes)rows.set(path,structuredClone(options?.merge?{...rows.get(path),...value}:value));return result}};
  for(const row of profiles)rows.set('companyAccess/'+row.email,structuredClone(row));
  for(const id of [teacherId,otherTeacherId])rows.set('productionFullRecordShadows/danbridge/collections/teachers/records/'+id,{recordId:id,deleted:false,record:{id,name:id}});
  return{db,rows};
 }
+test('approved leave refreshes branch payroll without exposing private leave or changing permissions',async()=>{
+ const {db,rows}=memory(),email='branch@example.test',profile={email,active:true,companyId:'danbridge',role:'branch_manager',canViewBranchFinance:true,branchIds:['art_museum'],readOnly:true};rows.set('companyAccess/'+email,profile);
+ const request=req('branch_signal'),call=r=>executeTeacherLeave({firestore:db,identity:identity(0),request:r,serverTimestamp:()=>123});
+ const created=(await call(request)).record;
+ await call({action:'approve',operationId:'operation_branch_approve',leaveId:request.leaveId,expectedRevision:created.revision});
+ assert.deepEqual(rows.get('companyAccess/'+email),{...profile,financePayrollRevision:'operation_branch_approve'});
+ assert.ok(![...rows].filter(([p])=>p.includes('/scheduleNotifications/')).some(([,r])=>r.recipientEmail===email),'no private leave message sent to branch');
+});
 for(let i=0;i<4;i++)test('leave transaction: '+profiles[i].displayName+' create/update/cancel and four distinct recipients',async()=>{
  const{db,rows}=memory(),request=req('actor'+i),call=r=>executeTeacherLeave({firestore:db,identity:identity(i),request:r,serverTimestamp:()=>123});
  const created=(await call(request)).record;assert.equal(created.hours,1.5);assert.equal(created.status,'pending');
