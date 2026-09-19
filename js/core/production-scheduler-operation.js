@@ -1,5 +1,5 @@
-import {projectProductionSchedulerDb,projectProductionBranchAccessDb} from './production-role-view-projection.js?v=20.26.361';
-import {isSchedulerAccess} from './access-presets.js?v=20.26.361';
+import {projectProductionSchedulerDb,projectProductionBranchAccessDb} from './production-role-view-projection.js?v=20.26.362';
+import {isSchedulerAccess} from './access-presets.js?v=20.26.362';
 
 export const SCHEDULER_OPERATION_SCHEMA='danbridge-production-scheduler-operation-v1';
 export const SCHEDULER_OPERATION_RESPONSE_SCHEMA='danbridge-production-scheduler-operation-response-v1';

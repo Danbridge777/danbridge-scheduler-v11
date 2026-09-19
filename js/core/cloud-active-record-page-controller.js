@@ -1,11 +1,25 @@
 import {FULL_RECORD_COLLECTIONS,rebuildFullRecordShadowDb} from './cloud-full-record-shadow.js';
 import {recordDataHash} from './cloud-record-data-hash.js';
-import {mergeConcurrentRecordDb,RECORD_HISTORY_MERGE_SCHEMA} from './cloud-record-three-way-merge.js?v=20.26.361';
-import {runActiveRecordSync} from './cloud-active-record-runtime.js?v=20.26.361';
-import {recoverPendingOwnerIntent} from './cloud-pending-owner-recovery.js?v=20.26.361';
+import {mergeConcurrentRecordDb,RECORD_HISTORY_MERGE_SCHEMA} from './cloud-record-three-way-merge.js?v=20.26.362';
+import {runActiveRecordSync} from './cloud-active-record-runtime.js?v=20.26.362';
+import {recoverPendingOwnerIntent} from './cloud-pending-owner-recovery.js?v=20.26.362';
 
 const clone=value=>typeof structuredClone==='function'?structuredClone(value):JSON.parse(JSON.stringify(value));
 const token=value=>typeof value==='string'&&value.trim()===value&&value.length>0&&value.length<=128&&!value.includes('/');
+
+// `changes` is an immutable audit log. A browser that was opened before the
+// latest cloud snapshot can still hold a shorter, otherwise valid copy of that
+// log while the user edits a lesson.  Treat an exact local subset as stale
+// cache and restore the verified authority history before planning the write.
+// Anything unknown or modified remains untouched so the existing fail-closed
+// planner will still reject forged/deleted history.
+export function restoreVerifiedChangesHistory(authorityDb,localDb){
+ const authority=authorityDb?.changes,local=localDb?.changes;
+ if(!Array.isArray(authority)||!Array.isArray(local)||local.length>=authority.length)return{db:localDb,restored:false};
+ const remaining=authority.map(row=>JSON.stringify(row));
+ for(const row of local){const value=JSON.stringify(row),index=remaining.indexOf(value);if(index<0)return{db:localDb,restored:false};remaining.splice(index,1)}
+ const db={...localDb,changes:clone(authority)};return{db,restored:true};
+}
 
 export function createActiveRecordPageController({
  environment='staging',publishedOwnerBatch=false,role,deviceId,journal,draftStore=null,readDocuments,send,sendBatch=null,persistConflicts,getLocalDb,applyCloudDb,ensureCloudBackup=async()=>true,publishRoleViews=async()=>{},onStatus=()=>{},
@@ -104,7 +118,7 @@ export function createActiveRecordPageController({
  async function resume(){if(stopped)return{state:'stopped'};if(environment==='staging'&&typeof journal.retryIdentityBlockedOnce==='function')await journal.retryIdentityBlockedOnce();if(environment==='production'&&typeof journal.retryProductionTrustedBatchFormatOnce==='function')await journal.retryProductionTrustedBatchFormatOnce();const counts=await journal.counts(),outstanding=counts.pending+counts.sending+counts.failed+counts.quarantined;if(outstanding||dirty||retryPending){queued=counts.quarantined===0;dirty=true;if(writeAllowed&&queued)schedule(0)}status({state:counts.quarantined?'blocked':queued?'queued':writeAllowed?'ready':'paused',counts});return{state:lastState,counts}}
  async function flush(){
   if(stopped)return{state:'stopped'};if(inFlight)return{state:'busy'};if(!queued){const counts=await journal.counts();if(!(counts.pending+counts.sending+counts.failed)&&!retryPending)return{state:lastState,counts};queued=true;dirty=true}if(!activationEpoch||!baselineDb||!latestCloudDb){status({state:'waiting-for-stream'});return{state:lastState}}if(!writeAllowed){status({state:'paused'});return{state:'paused'}}
-  inFlight=true;queued=false;retryPending=false;const startedVersion=mutationVersion,startedSnapshotVersion=acceptedSnapshotVersion,scope=pendingCollections?[...pendingCollections]:null;pendingCollections=null;const base=scope?baselineDb:clone(baselineDb),currentLocal=getLocalDb();
+  inFlight=true;queued=false;retryPending=false;const startedVersion=mutationVersion,startedSnapshotVersion=acceptedSnapshotVersion,scope=pendingCollections?[...pendingCollections]:null;pendingCollections=null;const base=scope?baselineDb:clone(baselineDb),historyRecovery=restoreVerifiedChangesHistory(base,getLocalDb()),currentLocal=historyRecovery.db;
   // Calendar commands prepend a bounded number of immutable change rows. Once the
   // existing tail is byte-for-byte equal to the already verified baseline,
   // retain those authority references and plan only the new prefix. This keeps
@@ -121,6 +135,10 @@ export function createActiveRecordPageController({
    return[collection,clone(currentLocal?.[collection]||[])];
   })):clone(currentLocal);status({state:'backing-up'});
   try{
+   // Update the in-memory model as well as the outgoing plan. Without this,
+   // a scoped optimistic save could succeed but leave the stale shorter audit
+   // list in the page and trigger the same false deletion warning next time.
+   if(historyRecovery.restored)await apply(currentLocal);
    // Do not send until the exact pre-plan intent has reached IndexedDB.
    const durability=persistDraft();inFlightLocal=local;await durability;
    // `base` is already detached by the clone above; avoid copying the full database twice.

@@ -1,4 +1,4 @@
-/* V20.26.361 — bilingual control consistency.
+/* V20.26.362 — bilingual control consistency.
    One sizing system for line controls and action buttons, plus enough native
    month-field width for English month names in Safari/WebKit. */
 /* Compact teacher navigation has a light surface; desktop white labels must
@@ -15,7 +15,7 @@
   }
 }
 
-/* V20.26.361 — selectable lesson archive range stays compact at every width. */
+/* V20.26.362 — selectable lesson archive range stays compact at every width. */
 html body:not(.auth-locked) #lessonArchiveCard :is(#lessonArchiveMonthWrap,#lessonArchiveFromWrap,#lessonArchiveToWrap).hidden{
   display:none!important;
 }
@@ -53,6 +53,75 @@ html body:not(.auth-locked) #lessonArchiveCard .row-actions .btn{
 html[lang="en"]{
   --danbridge-unified-control-font-size:14px;
   --danbridge-unified-action-font-size:13px;
+}
+
+/* V20.26.362 — one predictable alignment rule for every single-line control.
+   Safari/WebKit renders date parts inside shadow content, so the pseudo
+   elements must be centered separately from the host input. */
+html body:not(.auth-locked) :is(main section[id],.modal,.course-drawer,.notification-drawer) :is(
+  input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=color]),
+  select,button,.btn
+){
+  text-align:center!important;
+  text-align-last:center!important;
+}
+html body:not(.auth-locked) main :is(
+  #dashboard,#students,#teachers,#teacherLeave,#bookPurchase,#calendar,#lessons,
+  #makeups,#camps,#winterCamps,#settlement,#finance,#data,#security
+) :is(
+  input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=color]),
+  select,button,.btn
+){
+  text-align:center!important;
+  text-align-last:center!important;
+}
+html body:not(.auth-locked) :is(main section[id],.modal,.course-drawer,.notification-drawer) :is(
+  input[type="date"],input[type="month"],input[type="time"],input[type="datetime-local"]
+)::-webkit-date-and-time-value{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  min-width:0!important;
+  margin:0!important;
+  padding:0!important;
+  text-align:center!important;
+}
+html body:not(.auth-locked) :is(main section[id],.modal,.course-drawer,.notification-drawer) :is(
+  input[type="date"],input[type="month"],input[type="time"],input[type="datetime-local"]
+)::-webkit-datetime-edit{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  min-width:0!important;
+}
+
+/* The finance overview is an information hierarchy, not a form grid. Align
+   its headings, explanatory copy, filters and metric content to one left rail;
+   control values and action labels above remain centered. */
+html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"] :is(
+  .v181-card-title,.v181-card-title h2,.v181-card-title p,
+  .v187-finance-month-bar label,.v187-finance-month-bar label span,
+  .v187-finance-month-bar small,.toolbar,.finance-summary,.finance-metric,
+  .finance-metric span,.finance-metric b
+){
+  text-align:left!important;
+}
+html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"] .v181-card-title,
+html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"] .v187-finance-month-bar,
+html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar{
+  justify-content:start!important;
+}
+html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"] .v187-finance-month-bar{
+  grid-template-columns:minmax(260px,320px) minmax(0,1fr)!important;
+}
+html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"] .finance-metric{
+  align-items:flex-start!important;
+  padding-inline:18px!important;
+}
+@media(max-width:800px){
+  html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"] .v187-finance-month-bar{grid-template-columns:1fr!important}
 }
 
 /* English labels are materially longer. Keep their text inside the same
@@ -267,4 +336,26 @@ html body:not(.auth-locked) #lessonModal :is(input:not([type=checkbox]):not([typ
     min-height:64px!important;
     max-height:64px!important;
   }
+}
+
+/* Final specificity guard: legacy workspace selectors intentionally used
+   ID-level left alignment. The current shared-control contract wins here. */
+html body:not(.auth-locked) main #students#students :is(
+  input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=color]),select
+),
+html body:not(.auth-locked) main #calendar#calendar :is(#calendarDate,#calendarSearch),
+html body:not(.auth-locked) main #data#data #importFile{
+  text-align:center!important;
+  text-align-last:center!important;
+}
+html body:not(.auth-locked) main #calendar#calendar #calendarDate::-webkit-date-and-time-value,
+html body:not(.auth-locked) main #calendar#calendar #calendarDate::-webkit-datetime-edit,
+html body:not(.auth-locked) main #calendar#calendar #calendarDate::-webkit-datetime-edit-fields-wrapper{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  min-width:0!important;
+  padding:0!important;
+  text-align:center!important;
 }

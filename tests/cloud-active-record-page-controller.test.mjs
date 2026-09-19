@@ -4,7 +4,7 @@ import {FULL_RECORD_COLLECTIONS,buildFullRecordShadowPlan,rebuildFullRecordShado
 import {recordDataHash} from '../js/core/cloud-record-data-hash.js';
 import {applyActiveRecordOperation} from '../js/core/cloud-active-record-sync.js';
 import {createOperationJournal} from '../js/core/cloud-operation-journal.js';
-import {createActiveRecordPageController} from '../js/core/cloud-active-record-page-controller.js';
+import {createActiveRecordPageController,restoreVerifiedChangesHistory} from '../js/core/cloud-active-record-page-controller.js';
 
 const epoch='epoch-12345678';
 const empty=()=>Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]));
@@ -12,6 +12,21 @@ const baseDb=()=>{const db=empty();db.lessons=[{id:'lesson-1',room:'A'},{id:'les
 const memoryJournal=(source={rows:null,time:1000})=>createOperationJournal({storage:{load:async()=>structuredClone(source.rows),save:async rows=>{source.rows=structuredClone(rows)}},now:()=>source.time});
 function cloudSource(environment='staging',initialDb=baseDb()){const documents=Object.fromEntries(FULL_RECORD_COLLECTIONS.map(key=>[key,[]]));for(const operation of buildFullRecordShadowPlan(documents,initialDb,{sourceHash:'seed',environment}).operations){const match=operation.path.match(/collections\/([^/]+)\/records\/(.+)$/);documents[match[1]].push({id:match[2],data:structuredClone(operation.payload)})}return{documents,read:async()=>structuredClone(documents),send:async operation=>{const rows=documents[operation.collection],index=rows.findIndex(row=>row.id===operation.recordId),current=index<0?null:rows[index].data,result=applyActiveRecordOperation(current,operation);if(result.write){const next={id:operation.recordId,data:structuredClone(result.payload)};if(index<0)rows.push(next);else rows[index]=next}return result},db:()=>rebuildFullRecordShadowDb(documents,{environment}).db}}
 const snapshot=source=>({db:source.db(),hash:recordDataHash(source.db()),activationEpoch:epoch,writeAllowed:true});
+
+test('舊分頁缺少已驗證 changes 時只補回權威歷史並保留本次業務修改',()=>{
+ const authority=baseDb();authority.changes=[{id:'new',type:'move'},{id:'old',type:'create'}];
+ const local=structuredClone(authority);local.lessons[0].room='B';local.changes=[structuredClone(authority.changes[1])];
+ const recovered=restoreVerifiedChangesHistory(authority,local);
+ assert.equal(recovered.restored,true);assert.equal(recovered.db.lessons[0].room,'B');assert.deepEqual(recovered.db.changes,authority.changes);
+ assert.deepEqual(local.changes,[authority.changes[1]]);
+});
+
+test('短版 changes 含未知或遭改寫紀錄時不自動修補，仍交由安全規則封鎖',()=>{
+ const authority=baseDb();authority.changes=[{id:'new',type:'move'},{id:'old',type:'create'}];
+ const forged=structuredClone(authority);forged.changes=[{id:'old',type:'forged'}];
+ const recovered=restoreVerifiedChangesHistory(authority,forged);
+ assert.equal(recovered.restored,false);assert.equal(recovered.db,forged);
+});
 
 for(const count of [8,20])test(`${count} lessons: delayed receipt preserves every undo/redo audit in newest-first order`,async()=>{
  const initial=baseDb();initial.lessons=Array.from({length:count},(_,i)=>({id:`lesson-${i}`,room:'A'}));initial.changes=[{id:'historic',type:'original'}];
@@ -79,6 +94,16 @@ test('重新整理時 40 堂隔離操作仍從日誌恢復，即使快取補上�
  await again.controller.acceptCloudSnapshot(snapshot(source));assert.equal(again.ui.lessons.length,40);assert.equal(again.controller.diagnostics().dirty,false);
 });
 function makeController({source=cloudSource(),journal=memoryJournal(),local=baseDb(),deviceId='device-123',publish=[],backups=[],statuses=[],send,sendBatch,applyHook,publishHook,ensureBackup=async()=>true,strictConvergence=false,environment='staging',trustCommittedPlan=false,maxOperations=1000}={}){let ui=structuredClone(local),controller;const api=createActiveRecordPageController({environment,role:'owner',deviceId,journal,readDocuments:source.read,send:send||source.send,sendBatch,persistConflicts:async(conflicts,context)=>{backups.push({conflicts:structuredClone(conflicts),context});return{backupId:`backup-${backups.length}`}},getLocalDb:()=>structuredClone(ui),applyCloudDb:async db=>{ui=structuredClone(db);await applyHook?.(ui,controller)},ensureCloudBackup:ensureBackup,publishRoleViews:async db=>{publish.push(structuredClone(db));await publishHook?.(db,controller)},onStatus:status=>statuses.push(structuredClone(status)),setTimer:()=>1,clearTimer:()=>{},saveDelay:0,strictConvergence,trustCommittedPlan,maxOperations});controller=api;return{controller,source,journal,statuses,get ui(){return structuredClone(ui)},setUi(value){ui=structuredClone(value)}}}
+
+test('舊分頁少了 changes 時可照常保存課表修改，畫面與雲端都補回完整永久日誌',async()=>{
+ const initial=baseDb();initial.changes=[{id:'new',type:'move'},{id:'old',type:'create'}];
+ const source=cloudSource('production',initial),app=makeController({source,local:initial,environment:'production',trustCommittedPlan:true});
+ await app.controller.acceptCloudSnapshot({...snapshot(source),documents:structuredClone(source.documents)});
+ const stale=app.ui;stale.lessons[0].room='Recovered';stale.changes=[structuredClone(initial.changes[1])];app.setUi(stale);
+ app.controller.queueLocalSave({changedCollections:['lessons','changes']});
+ const result=await app.controller.flush();assert.equal(result.state,'complete');
+ assert.equal(source.db().lessons[0].room,'Recovered');assert.deepEqual(source.db().changes,initial.changes);assert.deepEqual(app.ui.changes,initial.changes);
+});
 
 test('production 八堂課同批移動會以單一可信批次送出並立即全部確認',async()=>{
  const initial=empty();initial.lessons=Array.from({length:8},(_,index)=>({id:`lesson-${index+1}`,room:'A'}));

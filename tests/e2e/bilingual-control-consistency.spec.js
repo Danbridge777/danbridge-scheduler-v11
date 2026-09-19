@@ -46,6 +46,9 @@ async function auditCurrentSection(page,language,section){
    if(element.matches('input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=color]),select')){
     if(Math.abs(rect.height-48)>tolerance)issues.push(`control-height:${name}:${rect.height}`);
     if(Math.abs(parseFloat(style.fontSize)-expectedControlFont)>.2)issues.push(`control-font:${name}:${style.fontSize}`);
+    // Native file pickers own the filename/button layout in Chromium and
+    // WebKit; all application-rendered single-line values must be centered.
+    if(element.type!=='file'&&style.textAlign!=='center')issues.push(`control-not-centered:${name}:${style.textAlign}`);
    }
    if(element.matches('input[type=month]')){
     if(viewportWidth>700&&rect.width<190-tolerance)issues.push(`month-too-narrow:${name}:${rect.width}`);
@@ -86,6 +89,19 @@ test('English month controls keep a readable native date width on desktop and Sa
  expect(results.length).toBeGreaterThan(0);
  const expectedFont=await page.evaluate(()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--danbridge-unified-control-font-size')));
  expect(results.filter(item=>item.width<188||Math.abs(item.height-48)>1.5||Math.abs(parseFloat(item.fontSize)-expectedFont)>.2),JSON.stringify(results,null,2)).toEqual([]);
+});
+
+test('Safari date controls center their rendered value and finance overview follows one left rail',async({page})=>{
+ await unlockOwnerWorkspace(page);
+ await page.evaluate(()=>{window.switchTab('teachers');document.getElementById('teacherEmploymentStartDate').value='2026-09-19'});
+ const date=await page.locator('#teacherEmploymentStartDate').evaluate(element=>{const style=getComputedStyle(element),rect=element.getBoundingClientRect();return{textAlign:style.textAlign,textAlignLast:style.textAlignLast,width:rect.width,height:rect.height,value:element.value}});
+ expect(date).toEqual(expect.objectContaining({textAlign:'center',textAlignLast:'center',height:48,value:'2026-09-19'}));expect(date.width).toBeGreaterThan(120);
+ await page.evaluate(()=>window.switchTab('finance'));await page.waitForTimeout(100);
+ const finance=await page.evaluate(()=>{
+  const selectors=['.v181-card-title','.v181-card-title h2','.v181-card-title p','.v187-finance-month-bar label span','.v187-finance-month-bar small','.finance-metric','.finance-metric span','.finance-metric b'];
+  return selectors.flatMap(selector=>[...document.querySelectorAll(`.v181-finance-pane[data-pane="overview"] ${selector}`)].filter(element=>getComputedStyle(element).display!=='none').map(element=>({selector,align:getComputedStyle(element).textAlign})));
+ });
+ expect(finance.length).toBeGreaterThan(8);expect(finance.filter(item=>item.align!=='left'),JSON.stringify(finance,null,2)).toEqual([]);
 });
 
 for(const language of ['zh','en']){
