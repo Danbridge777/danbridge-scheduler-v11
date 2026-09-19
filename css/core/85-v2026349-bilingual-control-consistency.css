@@ -1,4 +1,4 @@
-/* V20.26.364 — bilingual control consistency.
+/* V20.26.365 — bilingual control consistency.
    One sizing system for line controls and action buttons, plus enough native
    month-field width for English month names in Safari/WebKit. */
 /* Compact teacher navigation has a light surface; desktop white labels must
@@ -15,7 +15,7 @@
   }
 }
 
-/* V20.26.364 — selectable lesson archive range stays compact at every width. */
+/* V20.26.365 — selectable lesson archive range stays compact at every width. */
 html body:not(.auth-locked) #lessonArchiveCard :is(#lessonArchiveMonthWrap,#lessonArchiveFromWrap,#lessonArchiveToWrap).hidden{
   display:none!important;
 }
@@ -47,15 +47,15 @@ html body:not(.auth-locked) #lessonArchiveCard .row-actions .btn{
 }
 :root{
   --danbridge-control-height:48px;
-  --danbridge-unified-control-font-size:14px;
+  --danbridge-unified-control-font-size:15px;
   --danbridge-unified-action-font-size:14px;
 }
 html[lang="en"]{
-  --danbridge-unified-control-font-size:14px;
-  --danbridge-unified-action-font-size:13px;
+  --danbridge-unified-control-font-size:15px;
+  --danbridge-unified-action-font-size:14px;
 }
 
-/* V20.26.364 — one predictable alignment rule for every single-line control.
+/* V20.26.365 — one predictable alignment rule for every single-line control.
    Safari/WebKit renders date parts inside shadow content, so the pseudo
    elements must be centered separately from the host input. */
 html body:not(.auth-locked) :is(main section[id],.modal,.course-drawer,.notification-drawer) :is(
@@ -309,7 +309,7 @@ html body:not(.auth-locked) #lessonModal :is(input:not([type=checkbox]):not([typ
 
 @media(max-width:700px){
   :root{
-    --danbridge-unified-control-font-size:14px;
+    --danbridge-unified-control-font-size:16px;
     --danbridge-unified-action-font-size:14px;
   }
   html body:not(.auth-locked) main section[id] input[type=month]{
@@ -328,8 +328,8 @@ html body:not(.auth-locked) #lessonModal :is(input:not([type=checkbox]):not([typ
     min-width:0!important;
   }
   html[lang="en"]{
-    --danbridge-unified-control-font-size:14px;
-    --danbridge-unified-action-font-size:13px;
+    --danbridge-unified-control-font-size:16px;
+    --danbridge-unified-action-font-size:14px;
   }
   html[lang="en"] body:not(.auth-locked) #finance .v181-finance-nav button{
     height:64px!important;
@@ -360,7 +360,7 @@ html body:not(.auth-locked) main #calendar#calendar #calendarDate::-webkit-datet
   text-align:center!important;
 }
 
-/* V20.26.364 — finance toolbar and backup control alignment.
+/* V20.26.365 — finance toolbar and backup control alignment.
    Keep the visible branch selector and every action on one shared baseline;
    the native file picker remains hidden behind the centered Import button. */
 html body:not(.auth-locked) #finance .v181-finance-pane[data-pane="overview"]>.v181-module-card>.toolbar{

@@ -39,7 +39,7 @@ test('failed background writes retain draft, same operation retries, cross-user 
  await page.evaluate(()=>{window.__failBooks=false;window.__danbridgeSetBookIdentity({uid:'own_user',email:'one@example.com'});window.switchTab('bookPurchase')});await expect(page.locator('#bookPurchaseStatus')).toHaveText('已同步');
  expect(await page.evaluate(()=>window.__bookCalls.at(-1).operationId)).toBe(op);
  const fieldFont=await page.evaluate(()=>document.documentElement.clientWidth<=700?'16px':'15px');
- for(const id of ['bookTitle','bookPublisher','bookIsbn','bookQuantity','bookPurchaseSave']){const css=await page.locator('#'+id).evaluate(el=>({align:getComputedStyle(el).textAlign,font:getComputedStyle(el).fontSize,height:el.getBoundingClientRect().height}));expect(css.align).toBe('center');expect(css.font).toBe(id==='bookPurchaseSave'?'14px':fieldFont);expect(css.height).toBe(48)}
+ for(const id of ['bookTitle','bookPublisher','bookIsbn','bookQuantity','bookPurchaseSave']){const css=await page.locator('#'+id).evaluate(el=>({align:getComputedStyle(el).textAlign,font:getComputedStyle(el).fontSize,height:el.getBoundingClientRect().height,cssHeight:getComputedStyle(el).height}));expect(css.align).toBe('center');expect(css.font).toBe(id==='bookPurchaseSave'?'14px':fieldFont);expect(css.cssHeight).toBe('48px');expect(Math.abs(css.height-48)).toBeLessThan(.01)}
  const overflow=await page.locator('#bookPurchase').evaluate(el=>el.scrollWidth>el.clientWidth+2);expect(overflow).toBe(false);
 });
 

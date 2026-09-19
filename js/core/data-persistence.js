@@ -106,6 +106,7 @@ function loadDB(){try{const raw=localStorage.getItem(LS_KEY);const x=JSON.parse(
 function normalizeLessonStates(){db.lessons=(db.lessons||[]).map(l=>{const state=l.lessonState||(l.isDraft?'draft':'active');return{...l,lessonState:state,isDraft:state==='draft',draftOriginal:null}})}
 let scheduleLocalSaveTimer=null,scheduleLocalSaveIdle=null;
 let largeLocalSnapshotConnection=null,localSnapshotSequence=0,largeSnapshotChain=Promise.resolve();
+const LARGE_LOCAL_SNAPSHOT_LESSON_THRESHOLD=10_000;
 function openLargeLocalSnapshots(){
  if(largeLocalSnapshotConnection)return largeLocalSnapshotConnection;
  largeLocalSnapshotConnection=new Promise((resolve,reject)=>{
@@ -118,14 +119,17 @@ function openLargeLocalSnapshots(){
  }).catch(error=>{largeLocalSnapshotConnection=null;throw error});
  return largeLocalSnapshotConnection;
 }
-function persistLargeLocalSnapshot(serialized,sequence){
+function persistLargeLocalSnapshot(snapshot,sequence){
  // Serialize transactions, so an older asynchronous fallback cannot replace
  // a newer snapshot. This store is a recovery copy, never cloud authority.
  largeSnapshotChain=largeSnapshotChain.catch(()=>{}).then(async()=>{
   const connection=await openLargeLocalSnapshots();
   await new Promise((resolve,reject)=>{
    const transaction=connection.transaction('snapshots','readwrite');
-   transaction.objectStore('snapshots').put({schema:'danbridge-local-snapshot-v1',serialized,savedAt:new Date().toISOString()},LS_KEY);
+   const record=typeof snapshot==='string'
+    ?{schema:'danbridge-local-snapshot-v1',serialized:snapshot,savedAt:new Date().toISOString()}
+    :{schema:'danbridge-local-snapshot-v2',data:snapshot,savedAt:new Date().toISOString()};
+   transaction.objectStore('snapshots').put(record,LS_KEY);
    transaction.oncomplete=resolve;transaction.onabort=()=>reject(transaction.error||new Error('本機備份交易未完成'));transaction.onerror=()=>reject(transaction.error||new Error('本機備份寫入失敗'));
   });
   if(sequence===localSnapshotSequence)window.__danbridgeLocalSnapshotState={state:'saved',storage:'indexeddb'};
@@ -134,12 +138,17 @@ function persistLargeLocalSnapshot(serialized,sequence){
 }
 window.__danbridgeReadLargeLocalSnapshot=async()=>{
  const connection=await openLargeLocalSnapshots();
- return new Promise((resolve,reject)=>{const transaction=connection.transaction('snapshots','readonly'),request=transaction.objectStore('snapshots').get(LS_KEY);let value;request.onsuccess=()=>{value=request.result};transaction.oncomplete=()=>resolve(value?.schema==='danbridge-local-snapshot-v1'?value:null);transaction.onabort=()=>reject(transaction.error);transaction.onerror=()=>reject(transaction.error)});
+ return new Promise((resolve,reject)=>{const transaction=connection.transaction('snapshots','readonly'),request=transaction.objectStore('snapshots').get(LS_KEY);let value;request.onsuccess=()=>{value=request.result};transaction.oncomplete=()=>resolve(['danbridge-local-snapshot-v1','danbridge-local-snapshot-v2'].includes(value?.schema)?value:null);transaction.onabort=()=>reject(transaction.error);transaction.onerror=()=>reject(transaction.error)});
 };
 function flushScheduleLocalSnapshot(){
  if(scheduleLocalSaveTimer!==null){clearTimeout(scheduleLocalSaveTimer);scheduleLocalSaveTimer=null}
  if(scheduleLocalSaveIdle!==null&&typeof cancelIdleCallback==='function'){cancelIdleCallback(scheduleLocalSaveIdle);scheduleLocalSaveIdle=null}
  const sequence=++localSnapshotSequence;let serialized;
+ if((db.lessons?.length||0)>=LARGE_LOCAL_SNAPSHOT_LESSON_THRESHOLD){
+  window.__danbridgeLocalSnapshotState={state:'saving',storage:'indexeddb'};
+  persistLargeLocalSnapshot(db,sequence).catch(failure=>{if(sequence!==localSnapshotSequence)return;window.__danbridgeLocalSnapshotState={state:'failed',storage:'indexeddb',error:String(failure?.message||failure)};console.error('Large local recovery snapshot failed:',failure);window.toast?.('大型本機備份尚未完成；請保持頁面開啟並確認雲端同步。')});
+  return
+ }
  try{serialized=JSON.stringify(db);localStorage.setItem(LS_KEY,serialized);window.__danbridgeLocalSnapshotState={state:'saved',storage:'localstorage'};updateLastBackupInfo()}
  catch(error){
   if(serialized&&(error?.name==='QuotaExceededError'||error?.name==='NS_ERROR_DOM_QUOTA_REACHED')){
@@ -220,6 +229,22 @@ function prepareBackupRestore(current,incoming){
  target.changes=[...missing,...existing];
  return{db:target,history:{existing:existing.length,imported:missing.length,total:target.changes.length}};
 }
+function assertSafeImportedValue(value,path='backup',key=''){
+ const identifierKey=key==='id'||/Id$/.test(key),identifierList=/Ids$/.test(key);
+ if(typeof value==='string'){
+  if(value.length>1_000_000||/[\u0000\u2028\u2029]/.test(value))throw new Error('備份包含不安全文字：'+path);
+  if((identifierKey||identifierList)&&/[&<>"'\\\r\n]/.test(value))throw new Error('備份識別碼含不安全字元：'+path);
+  return
+ }
+ if(value===null||typeof value==='number'||typeof value==='boolean')return;
+ if(Array.isArray(value)){for(let index=0;index<value.length;index++)assertSafeImportedValue(value[index],`${path}[${index}]`,key);return}
+ const prototype=value&&typeof value==='object'?Object.getPrototypeOf(value):null;
+ if(!value||typeof value!=='object'||prototype!==null&&Object.getPrototypeOf(prototype)!==null)throw new Error('備份包含不安全資料結構：'+path);
+ for(const childKey of Object.keys(value)){
+  if(['__proto__','prototype','constructor'].includes(childKey))throw new Error('備份包含禁止欄位：'+path+'.'+childKey);
+  assertSafeImportedValue(value[childKey],`${path}.${childKey}`,childKey)
+ }
+}
 function normalizeImported(x){
  if(!x||!Array.isArray(x.students)||!Array.isArray(x.teachers)||!Array.isArray(x.lessons))throw new Error('備份格式不符');
  verifyBackupEnvelope(x);
@@ -228,6 +253,7 @@ function normalizeImported(x){
   if(x[key]!==undefined&&!Array.isArray(x[key]))throw new Error('備份集合格式不符：'+key);
   const rows=x[key]||[];
   if(rows.some(row=>!row||typeof row!=='object'||Array.isArray(row)))throw new Error('備份紀錄格式不符：'+key);
+  rows.forEach((row,index)=>assertSafeImportedValue(row,`${key}[${index}]`));
   restored[key]=JSON.parse(JSON.stringify(rows));
  }
  // Restore is lossless, not an implicit data migration. In particular, never

@@ -56,7 +56,21 @@ const STAGING_REWRITES = [{
   source: '/api/staging-v2/authority-save',
   function: { functionId: 'stagingV2AuthoritySave', region: 'asia-east1' }
 }];
+const SECURITY_HEADERS = [{
+  source: '**',
+  headers: [
+    { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com; font-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.cloudfunctions.net; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; frame-ancestors 'none'; upgrade-insecure-requests" },
+    { key: 'X-Content-Type-Options', value: 'nosniff' },
+    { key: 'Referrer-Policy', value: 'no-referrer' },
+    { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+    { key: 'X-Frame-Options', value: 'DENY' }
+  ]
+}];
 const DOC_SCAN_EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.firebase', '.npm-cache', 'playwright-report', 'test-results']);
+const PUBLIC_ROOT_FILES = new Set(['404.html','icon-1024.png','icon-192.png','icon-512.png','icon-maskable-192.png','icon-maskable-512.png','index.html','manifest.webmanifest','sw.js']);
+const PUBLIC_ROOT_DIRS = new Set(['assets','css','js']);
+const PRIVATE_ROOT_NAMES = new Set(['CHANGELOG.md','README.md','docs','firebase','firebase.backup.json','firebase.json','firebase.production.json','functions','node_modules','package-lock.json','package.json','playwright-report','playwright.config.js','staging-transport-acceptance.html','test-results','tests','tools']);
+const PUBLIC_EXTENSIONS = new Set(['.js','.cjs','.css','.png','.jpg','.jpeg','.webp','.svg','.gif','.woff','.woff2','.json']);
 
 function fail(message) {
   throw new Error(`TARGET_CONFIG_INVALID: ${message}`);
@@ -98,15 +112,17 @@ export function validateConfigValues({ firebaserc, firebaseConfig, productionCon
   exactKeys(firebaseConfig.functions, ['ignore', 'runtime', 'source'], 'firebase.functions');
   if (firebaseConfig.functions.source !== '.' || firebaseConfig.functions.runtime !== 'nodejs22') fail('functions target mismatch');
   exactArray(firebaseConfig.functions.ignore, FUNCTION_IGNORE, 'firebase.functions.ignore');
-  exactKeys(firebaseConfig.hosting, ['ignore', 'public', 'rewrites'], 'firebase.hosting');
+  exactKeys(firebaseConfig.hosting, ['headers', 'ignore', 'public', 'rewrites'], 'firebase.hosting');
   if (firebaseConfig.hosting.public !== '.') fail('hosting public must be repo root');
   exactArray(firebaseConfig.hosting.ignore, HOSTING_IGNORE, 'firebase.hosting.ignore');
+  exactArray(firebaseConfig.hosting.headers, SECURITY_HEADERS, 'firebase.hosting.headers');
   exactArray(firebaseConfig.hosting.rewrites, STAGING_REWRITES, 'firebase.hosting.rewrites');
 
   exactKeys(productionConfig, ['hosting'], 'firebase.production.json');
-  exactKeys(productionConfig.hosting, ['ignore', 'public'], 'production.hosting');
+  exactKeys(productionConfig.hosting, ['headers', 'ignore', 'public'], 'production.hosting');
   if (productionConfig.hosting.public !== '.') fail('production hosting public must be repo root');
   exactArray(productionConfig.hosting.ignore, ['staging-transport-acceptance.html', ...HOSTING_IGNORE], 'production.hosting.ignore');
+  exactArray(productionConfig.hosting.headers, SECURITY_HEADERS, 'production.hosting.headers');
 
   if (!isPlainObject(packageConfig) || !isPlainObject(packageConfig.scripts)) fail('package scripts missing');
   if (packageConfig.scripts['predeploy:staging'] !== PREFLIGHT_SCRIPT) fail('predeploy:staging mismatch');
@@ -146,6 +162,27 @@ function validateRepositoryMarkdown(directory = ROOT, relativeDirectory = '') {
   }
 }
 
+function extension(name){const index=name.lastIndexOf('.');return index<0?'':name.slice(index).toLowerCase()}
+function validatePublicTree(directory,relativeDirectory){
+ for(const entry of readdirSync(directory,{withFileTypes:true})){
+  const relativePath=`${relativeDirectory}/${entry.name}`,absolutePath=join(directory,entry.name),stat=lstatSync(absolutePath);
+  if(stat.isSymbolicLink())fail(`${relativePath} public symlink forbidden`);
+  if(entry.isDirectory()){validatePublicTree(absolutePath,relativePath);continue}
+  if(!entry.isFile()||!PUBLIC_EXTENSIONS.has(extension(entry.name)))fail(`${relativePath} is not an allowlisted public asset`)
+ }
+}
+function validateHostingPublicSurface(){
+ for(const entry of readdirSync(ROOT,{withFileTypes:true})){
+  if(entry.name.startsWith('.'))continue;
+  const absolutePath=join(ROOT,entry.name),stat=lstatSync(absolutePath);
+  if(stat.isSymbolicLink())fail(`${entry.name} root symlink forbidden`);
+  if(PUBLIC_ROOT_FILES.has(entry.name)){if(!entry.isFile())fail(`${entry.name} public root target must be a file`);continue}
+  if(PUBLIC_ROOT_DIRS.has(entry.name)){if(!entry.isDirectory())fail(`${entry.name} public root target must be a directory`);validatePublicTree(absolutePath,entry.name);continue}
+  if(PRIVATE_ROOT_NAMES.has(entry.name)||/^firebase-debug.*\.log$/.test(entry.name)||/^firestore-debug.*\.log$/.test(entry.name))continue;
+  fail(`${entry.name} is an unknown root item and could be published`)
+ }
+}
+
 function readExactJson(relativePath) {
   const path = join(ROOT, relativePath);
   let stat;
@@ -172,6 +209,7 @@ export function validateRepository() {
     productionConfig: readExactJson('firebase.production.json'),
     packageConfig: readExactJson('package.json')
   });
+  validateHostingPublicSurface();
   validateRepositoryMarkdown();
   return true;
 }

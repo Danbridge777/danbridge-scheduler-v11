@@ -71,6 +71,7 @@ test('Firebase Rules, emulator and Hosting schema reject routing and inventory d
     c => { c.firebaseConfig.hosting.ignore = c.firebaseConfig.hosting.ignore.filter(x => x !== 'firebase-debug*.log'); },
     c => { c.firebaseConfig.hosting.ignore = c.firebaseConfig.hosting.ignore.filter(x => x !== 'firestore-debug*.log'); },
     c => { c.firebaseConfig.hosting.ignore = c.firebaseConfig.hosting.ignore.filter(x => x !== '.firebase/**'); },
+    c => { c.firebaseConfig.hosting.headers[0].headers[1].value = 'unsafe'; },
     c => { c.firebaseConfig.emulators.firestore.port = 8081; },
     c => { c.firebaseConfig.storage = {}; }
   ]) rejected(mutate);
@@ -84,6 +85,7 @@ test('production Hosting is isolated from staging-only rules, functions and rewr
     c => { c.productionConfig.hosting.public = 'public'; },
     c => { c.productionConfig.hosting.ignore = c.productionConfig.hosting.ignore.filter(x => x !== 'firebase.production.json'); },
     c => { c.productionConfig.hosting.ignore = c.productionConfig.hosting.ignore.filter(x => x !== 'firebase.backup.json'); },
+    c => { c.productionConfig.hosting.headers[0].headers = []; },
     c => { c.firebaseConfig.hosting.ignore = c.firebaseConfig.hosting.ignore.filter(x => x !== 'firebase.backup.json'); }
   ]) rejected(mutate);
 });

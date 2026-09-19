@@ -180,6 +180,18 @@ test('localStorage quota falls back to durable IndexedDB without deleting old ba
  await page.evaluate(()=>{db.students[0].name='newer';flushScheduleLocalSnapshot();db.students[0].name='newest';flushScheduleLocalSnapshot()});
  await expect.poll(()=>page.evaluate(async()=>JSON.parse((await window.__danbridgeReadLargeLocalSnapshot()).serialized).students[0].name)).toBe('newest');
 });
+test('large schedule snapshots use structured IndexedDB storage before localStorage quota is reached',async({page})=>{
+ await page.evaluate(()=>{
+  db.lessons=Array.from({length:10000},(_,index)=>({...db.lessons[0],id:`large-${index}`,date:`2026-09-${String(index%28+1).padStart(2,'0')}`}));
+  localStorage.removeItem(LS_KEY);
+  flushScheduleLocalSnapshot();
+ });
+ await expect.poll(()=>page.evaluate(()=>window.__danbridgeLocalSnapshotState?.state),{timeout:15000}).toBe('saved');
+ expect(await page.evaluate(()=>window.__danbridgeLocalSnapshotState?.storage)).toBe('indexeddb');
+ expect(await page.evaluate(()=>localStorage.getItem(LS_KEY))).toBeNull();
+ const summary=await page.evaluate(async()=>{const record=await window.__danbridgeReadLargeLocalSnapshot();return{schema:record?.schema,lessons:record?.data?.lessons?.length,first:record?.data?.lessons?.[0]?.id,last:record?.data?.lessons?.at(-1)?.id}});
+ expect(summary).toEqual({schema:'danbridge-local-snapshot-v2',lessons:10000,first:'large-0',last:'large-9999'});
+});
 test('single lesson deletion has a nonblocking confirmation and retains the existing cloud operation',async({page})=>{
  const nativeDialogs=[];page.on('dialog',async d=>{nativeDialogs.push(d.message());await d.dismiss()});
  await page.evaluate(()=>{window.__deleteActions=[];commitScheduleMutation=action=>window.__deleteActions.push(action);openLessonModal('2026-09-08','10:00','l')});

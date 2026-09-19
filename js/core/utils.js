@@ -58,6 +58,13 @@ function hours(a,b){if(!a||!b)return 0;const[ah,am]=a.split(':').map(Number),[bh
 
 function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
+// 老師顏色會進入 inline style；只接受 color input 可產生的完整十六進位色碼。
+// 匯入舊備份或損壞資料時一律回到安全預設值，避免 CSS／屬性注入。
+function safeCssColor(value,fallback='#2563eb'){
+  const color=String(value||'').trim();
+  return /^#[0-9a-f]{6}$/i.test(color)?color:fallback;
+}
+
 function mapUrl(addr){return addr?'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(addr):''}
 
 function shiftTime(t,mins){const [h,m]=t.split(':').map(Number);let n=h*60+m+mins;if(n<0||n>=1440)return null;return `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`}

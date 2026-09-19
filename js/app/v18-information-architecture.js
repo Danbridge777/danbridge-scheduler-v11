@@ -208,7 +208,11 @@
     const selected=cards[names.indexOf(selectedTeacher)]||cards[0];
     workspace.innerHTML='<aside><label class="v181-search"><span>搜尋老師</span><input id="v181TeacherSearch" type="search" placeholder="輸入老師姓名"></label><div class="v181-teacher-list"></div></aside><section class="v181-teacher-detail"></section>';
     const list=$('.v181-teacher-list',workspace),detail=$('.v181-teacher-detail',workspace);
-    names.forEach(name=>{const b=document.createElement('button');b.type='button';b.className=name===selectedTeacher?'active':'';b.dataset.name=name;b.innerHTML=`<span>${name.slice(0,1)}</span><b>${name}</b>`;list.append(b)});
+    names.forEach(name=>{
+      const b=document.createElement('button'),initial=document.createElement('span'),label=document.createElement('b');
+      b.type='button';b.className=name===selectedTeacher?'active':'';b.dataset.name=name;
+      initial.textContent=name.slice(0,1);label.textContent=name;b.append(initial,label);list.append(b)
+    });
     detail.append(selected.cloneNode(true));
     list.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;selectedTeacher=b.dataset.name;rebuildTeacherWorkspace()});
     $('#v181TeacherSearch',workspace).addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();$$('button',list).forEach(b=>b.hidden=!!q&&!b.dataset.name.toLowerCase().includes(q))});
