@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {FULL_RECORD_COLLECTIONS} from '../js/core/cloud-full-record-shadow.js';
 import {buildRoleViewChunks} from '../js/core/role-view-chunks.js';
+import {projectProductionSchedulerDb} from '../js/core/production-role-view-projection.js';
 
 const LESSON_COUNT=300_000;
 const FIRESTORE_DOCUMENT_SAFETY_BYTES=200*1024;
@@ -27,7 +28,10 @@ db.lessons=Array.from({length:LESSON_COUNT},(_,index)=>({
 }));
 
 const started=performance.now();
-const built=buildRoleViewChunks(db,{
+// Production/staging scheduler views publish the least-privilege projection,
+// not the Owner database. Verify the exact client payload that AA receives.
+const schedulerDb=projectProductionSchedulerDb(db);
+const built=buildRoleViewChunks(schedulerDb,{
  identity:{kind:'scheduler',email:'capacity@example.test',teacherId:'scheduler-capacity',branchIds:[]},
  sourceRevision:1,
  sourceHash:`record-v1:${'1'.repeat(64)}`,

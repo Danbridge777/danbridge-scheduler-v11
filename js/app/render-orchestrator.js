@@ -15,7 +15,7 @@ function renderVisibleWorkspace(){
   else if(id==='teacherGroups')renderTeacherGroups();
   else if(id==='winterCamp')renderWinterCampClasses();
   else if(id==='winterTeacherGroups')renderWinterTeacherGroups();
-  else if(id==='backup'){renderBackupHistory();updateLastBackupInfo();}
+  else if(id==='backup'){renderBackupHistory();updateLastBackupInfo();renderLessonCapacityStatus?.();}
   else if(id==='security')renderDataIntegrity?.();
   window.DanbridgeNotifications?.render?.();
 }
@@ -23,5 +23,5 @@ function renderAll(){
   /* 課表只依賴自己的必要預設值，必須在結算與其他頁面初始化前完成。 */
   renderCalendar();
   setDefaults();
-  renderSelects();renderStudents();renderTeachers();renderTeacherLeaves?.();renderDashboard();renderLessons();renderSettlement();renderFinance();renderMakeups();renderSummerCampClasses();renderTeacherGroups();renderCampSelectors();initSummerRegistrationUI();renderWinterCampClasses();renderWinterTeacherGroups();renderWinterCampSelectors();renderBackupHistory();updateLastBackupInfo();renderDataIntegrity?.();window.DanbridgeNotifications?.render?.();
+  renderSelects();renderStudents();renderTeachers();renderTeacherLeaves?.();renderDashboard();renderLessons();renderSettlement();renderFinance();renderMakeups();renderSummerCampClasses();renderTeacherGroups();renderCampSelectors();initSummerRegistrationUI();renderWinterCampClasses();renderWinterTeacherGroups();renderWinterCampSelectors();renderBackupHistory();updateLastBackupInfo();renderLessonCapacityStatus?.();renderDataIntegrity?.();window.DanbridgeNotifications?.render?.();
 }

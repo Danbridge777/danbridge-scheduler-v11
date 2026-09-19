@@ -71,7 +71,11 @@ export function projectProductionTeacherDb(source,teacherId,{now=Date.now()}={})
  return{...emptyDb(),students,teachers,lessons:safeLessons,makeups};
 }
 
-const schedulerSafeLesson=(lesson={})=>Object.fromEntries(['id','date','start','end','studentId','groupStudentIds','billingBranchId','teacherId','teacherIds','title','campId','room','location','branchId','deliveryMode','address','onlinePlatform','meetingUrl','status','note','seriesId','lessonState','isDraft'].filter(key=>lesson[key]!==undefined).map(key=>[key,clone(lesson[key])]));
+// Drafts are excluded before projection, so repeating the default
+// lessonState/isDraft flags on every published lesson only inflates a
+// scheduler's initial download. Missing flags retain the exact active lesson
+// semantics in the client and are restored by normal save normalization.
+const schedulerSafeLesson=(lesson={})=>Object.fromEntries(['id','date','start','end','studentId','groupStudentIds','billingBranchId','teacherId','teacherIds','title','campId','room','location','branchId','deliveryMode','address','onlinePlatform','meetingUrl','status','note','seriesId'].filter(key=>lesson[key]!==undefined).map(key=>[key,clone(lesson[key])]));
 const schedulerSafeStudent=(student={})=>Object.fromEntries(['id','name','status','school','grade','level','preferredTeacherId','courseType','branchIds','isGroupRoster','groupMemberIds','billingBranchId','attendanceBranchId'].filter(key=>student[key]!==undefined).map(key=>[key,clone(student[key])]));
 const schedulerCanonicalRows=rows=>rows.sort((left,right)=>String(left?.id||'').localeCompare(String(right?.id||'')));
 

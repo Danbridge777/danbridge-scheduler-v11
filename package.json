@@ -34,7 +34,7 @@
     "test:production-rules-patch": "node --test tests/production-backup-rules-patch.test.mjs",
     "test:v2-h1": "node --test tests/firebase-active-record-authority-save-v2-adapter.test.mjs tests/firebase-staging-v2-cloud-runtime-boundary.test.mjs tests/cloud-active-record-authority-save-chain-v2.test.mjs tests/staging-v2-authority-save-http-gateway.test.mjs tests/staging-v2-authority-save-cloud-runtime.test.mjs tests/staging-v2-function-entry.test.mjs tests/staging-v2-authority-save-browser-client.test.mjs tests/staging-v2-active-record-browser-bridge.test.mjs",
     "test:v2-capacity": "node tools/run_v2_capacity_tests.mjs",
-    "test:lesson-capacity-boundary": "node --max-old-space-size=4096 tools/verify_maximum_lesson_capacity.mjs",
+    "test:lesson-capacity-boundary": "node --max-old-space-size=4096 tools/verify_maximum_lesson_capacity.mjs && node --test tests/lesson-temporal-index-capacity.test.mjs tests/lesson-export-range.test.mjs tests/simple-xlsx-export.test.mjs",
     "test:journal": "node --test tests/cloud-journal-snapshot.test.mjs tests/cloud-operation-journal.test.mjs tests/cloud-operation-worker.test.mjs tests/cloud-live-record-operation.test.mjs tests/firebase-live-record-operation-adapter.test.mjs",
     "test:e2e": "playwright test",
     "pretest:rules": "node tools/build_firestore_rules_deploy.mjs --phase=pause",

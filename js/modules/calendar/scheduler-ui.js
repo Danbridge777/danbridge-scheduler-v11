@@ -105,7 +105,7 @@ function appendTeacherDayGaps(lessons,teacherName,date,rows,dayStart='09:00',day
   if(rangeEnd-cursor>=30)rows.push({teacher:teacherName,teacherId,date,start:teacherGapTime(cursor),end:teacherGapTime(rangeEnd),gap:rangeEnd-cursor});
 }
 function teacherGapAnalysisLessons(range,teacherId=currentCalendarTeacherId()){
-  return(db.lessons||[]).filter(l=>l.date>=range.start&&l.date<=range.end&&!['取消','停課'].includes(l.status)&&(!teacherId||lessonTeacherIds(l).includes(teacherId)));
+  return(window.DanbridgeLessonIndex?.between?.(db.lessons,range.start,range.end)||db.lessons||[]).filter(l=>l.date>=range.start&&l.date<=range.end&&!['取消','停課'].includes(l.status)&&(!teacherId||lessonTeacherIds(l).includes(teacherId)));
 }
 function teacherGapAnalysisTeachers(lessons,teacherId=currentCalendarTeacherId()){
   if(teacherId)return(db.teachers||[]).filter(t=>t.id===teacherId);
@@ -117,7 +117,7 @@ function renderCalendarAnalysis(){
   if(currentRole==='teacher'){box.replaceChildren();box.hidden=true;return}
   box.hidden=false;
   const r=visibleCalendarRange(),gapRange=teacherGapWeekRange(),f=calendarFilterState();
-  const ls=db.lessons.filter(l=>l.date>=r.start&&l.date<=r.end&&lessonMatchesCalendar(l,f)&&!['取消','停課'].includes(l.status));
+  const ls=(window.DanbridgeLessonIndex?.between?.(db.lessons,r.start,r.end)||db.lessons).filter(l=>l.date>=r.start&&l.date<=r.end&&lessonMatchesCalendar(l,f)&&!['取消','停課'].includes(l.status));
   const gapLessons=teacherGapAnalysisLessons(gapRange),gapTeachers=teacherGapAnalysisTeachers(gapLessons);
   const rooms=[...new Set(ls.map(l=>l.room).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'zh-Hant'));
   const available=Math.max(1,r.days*14*60);
@@ -152,8 +152,8 @@ function rebuildCalendarTeacherConflictCache(){
       first.setDate(first.getDate()-offset);const end=new Date(first);end.setDate(first.getDate()+total-1);range={start:localDate(first),end:localDate(end)};
     }
   }
-  const cache=new Map(),byDate=new Map();
-  for(const lesson of db.lessons||[]){if(range&&(lesson.date<range.start||lesson.date>range.end))continue;if(!lessonBlocksScheduling(lesson))continue;const rows=byDate.get(lesson.date)||[];rows.push(lesson);byDate.set(lesson.date,rows)}
+  const cache=new Map(),byDate=new Map(),source=range?(window.DanbridgeLessonIndex?.between?.(db.lessons,range.start,range.end)||db.lessons):(db.lessons||[]);
+  for(const lesson of source){if(range&&(lesson.date<range.start||lesson.date>range.end))continue;if(!lessonBlocksScheduling(lesson))continue;const rows=byDate.get(lesson.date)||[];rows.push(lesson);byDate.set(lesson.date,rows)}
   for(const rows of byDate.values()){
     rows.sort((a,b)=>a.start.localeCompare(b.start)||a.end.localeCompare(b.end));
     for(let left=0;left<rows.length;left++){
@@ -300,6 +300,7 @@ function copySelectedLessons(){
   if(monthKeys.length!==1)return alert('請只選取同一個月份的課程後再複製到下個月。');
   const fromMonth=monthKeys[0];
   const [y,m]=fromMonth.split('-').map(Number),toMonth=`${m===12?y+1:y}-${String(m===12?1:m+1).padStart(2,'0')}`;
+  if(typeof lessonCapacityCanAdd==='function'&&!lessonCapacityCanAdd(source.length,'複製選取課程'))return;
   if(!confirm(`確定將已選取的 ${source.length} 堂課複製到 ${toMonth}？\n原課程會保留。`))return;
   const history=beginScheduleHistory();
   const keys=new Set(db.lessons.map(keyOf));let added=0,skipped=0;
@@ -455,6 +456,7 @@ function contextPasteLessons(){
   if(!calendarOwnerCanEdit())return alert('目前帳號沒有修改課表的權限。');
   const rows=getLessonClipboard();
   if(!rows.length){hideCalendarContextMenu();return alert('目前沒有已複製的課程。')}
+  if(typeof lessonCapacityCanAdd==='function'&&!lessonCapacityCanAdd(rows.length,'貼上課程')){hideCalendarContextMenu();return}
   if(!contextPasteTarget?.date){hideCalendarContextMenu();return alert('請先把滑鼠移到要貼上的日期格或時間格，再按 Ctrl+V。')}
   // 以最早選取課程作為錨點：點哪一天，第一筆就貼到哪一天；
   // 其餘課程保留與第一筆之間的實際天數差，避免整批多偏一天。

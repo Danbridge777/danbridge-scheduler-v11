@@ -121,7 +121,11 @@ function studentMonthlyFeeBranch(studentId,m){
 }
 function studentChargeableTutoringLessons(studentId,m,scope='all',sourceLessons=null){
   const branchOf=timetableBillingBranchId;
-  return (sourceLessons||db.lessons||[]).filter(l=>lessonCountsForStudentCharge(l)&&lessonIncludesStudent(l,studentId)&&l.date?.startsWith(m)&&!effectiveCampId(l)&&(scope==='all'||branchOf(l)===scope));
+  // Month-first is both bounded and exact for legacy group lessons. Some old
+  // group rows derive membership from the current roster instead of storing
+  // groupStudentIds on every lesson, so a student-only index may omit them.
+  const source=sourceLessons||(window.DanbridgeLessonIndex?.byMonth?.(db.lessons,m)||db.lessons||[]);
+  return source.filter(l=>lessonCountsForStudentCharge(l)&&lessonIncludesStudent(l,studentId)&&l.date?.startsWith(m)&&!effectiveCampId(l)&&(scope==='all'||branchOf(l)===scope));
 }
 function studentMonthlyBillingData(studentId,m,scope='all',campSeason='all'){
   const s=studentPricingAt(studentId,m+'-01'),tutoringLessons=studentChargeableTutoringLessons(studentId,m,scope);
@@ -281,7 +285,7 @@ function lessonPay(l){return lessonTeacherIds(l).reduce((sum,id)=>sum+lessonTeac
 function fixedExpenseApplies(x,m){const start=x.startMonth||'2026-07',end=x.endMonth||'';return m>=start&&(!end||m<=end)}
 function teacherIncludedForMonth(t,m){const archivedMonth=String(t?.archivedAt||'').slice(0,7);return!archivedMonth||String(m||'')<=archivedMonth}
 
-function financeData(m){const lessons=db.lessons.filter(l=>l.date.startsWith(m)),lessonRevenue=studentTuitionRevenue(m),campRevenue=summerCampRegistrationRevenue(m),revenue=lessonRevenue+campRevenue;const fixed=(db.fixedExpenses||[]).filter(x=>fixedExpenseApplies(x,m));const one=(db.oneTimeExpenses||[]).filter(x=>x.month===m);const fixedTotal=fixed.reduce((a,x)=>a+(+x.amount||0),0);const oneTimeTotal=one.reduce((a,x)=>a+(+x.amount||0),0);const payrollRows=db.teachers.filter(t=>teacherIncludedForMonth(t,m)).map(t=>{const paid=teacherPaidLessons(t,m),payroll=calculateTeacherPayroll(t,m,paid);return{teacher:t,h:payroll.actualHours,amount:payroll.amount,payroll}}).filter(x=>x.h||x.amount);const payroll=payrollRows.reduce((a,x)=>a+x.amount,0);const totalExpenses=fixedTotal+oneTimeTotal+payroll;return{m,revenue,lessonRevenue,campRevenue,fixed,one,fixedTotal,oneTimeTotal,payrollRows,payroll,totalExpenses,profit:revenue-totalExpenses}}
+function financeData(m){const lessons=window.DanbridgeLessonIndex?.byMonth?.(db.lessons,m)||db.lessons.filter(l=>l.date.startsWith(m)),lessonRevenue=studentTuitionRevenue(m),campRevenue=summerCampRegistrationRevenue(m),revenue=lessonRevenue+campRevenue;const fixed=(db.fixedExpenses||[]).filter(x=>fixedExpenseApplies(x,m));const one=(db.oneTimeExpenses||[]).filter(x=>x.month===m);const fixedTotal=fixed.reduce((a,x)=>a+(+x.amount||0),0);const oneTimeTotal=one.reduce((a,x)=>a+(+x.amount||0),0);const payrollRows=db.teachers.filter(t=>teacherIncludedForMonth(t,m)).map(t=>{const paid=teacherPaidLessons(t,m),payroll=calculateTeacherPayroll(t,m,paid);return{teacher:t,h:payroll.actualHours,amount:payroll.amount,payroll}}).filter(x=>x.h||x.amount);const payroll=payrollRows.reduce((a,x)=>a+x.amount,0);const totalExpenses=fixedTotal+oneTimeTotal+payroll;return{m,revenue,lessonRevenue,campRevenue,fixed,one,fixedTotal,oneTimeTotal,payrollRows,payroll,totalExpenses,profit:revenue-totalExpenses}}
 
 function monthDateRange(m){const[y,mo]=m.split('-').map(Number);return{start:new Date(y,mo-1,1),end:new Date(y,mo,0)}}
 
@@ -314,7 +318,7 @@ function teacherPayrollLeaveHours(t,m,source=teacherPayrollLeaveSource()){
   return totalMinutes/60;
 }
 
-function teacherPaidLessons(t,m){return db.lessons.filter(l=>l.date.startsWith(m)&&lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherHours(l))}
+function teacherPaidLessons(t,m){const rows=window.DanbridgeLessonIndex?.byTeacher?.(db.lessons,t.id)||db.lessons;return rows.filter(l=>l.date.startsWith(m)&&lessonTeacherIds(l).includes(t.id)&&lessonCountsForTeacherHours(l))}
 
 function teacherPayableHourLessons(t,rows){
   const source=rows||teacherPaidLessons(t,'');
@@ -388,7 +392,7 @@ function diffClass(n){return n<-.001?'hours-short':n>.001?'hours-over':'hours-ev
 
 function diffText(n){return Math.abs(n)<.001?'剛好':n>0?`多 ${fmtHours(n)} hr`:`少 ${fmtHours(Math.abs(n))} hr`}
 
-function settleData(){const m=$('settleMonth').value||monthNow(),ls=db.lessons.filter(l=>!l.isDraft&&l.date.startsWith(m));const sr=db.students.map(s=>{const x=ls.filter(l=>lessonIncludesStudent(l,s.id)),billing=studentMonthlyBillingData(s.id,m),chargedLessons=billing.tutoringLessons,abs=x.filter(l=>['學生請假','老師請假','取消','停課'].includes(l.status)),lessonAmount=billing.tutoringAmount,campAmount=billing.campAmount;return{s:billing.student,billingCategory:billing.billingCategory,lessonIds:x.map(l=>l.id),total:x.length,charged:studentUsesMonthlyFee(s,m+'-01')?0:chargedLessons.length,h:chargedLessons.reduce((a,l)=>a+hours(l.start,l.end),0),abs:abs.length,rate:x.length?abs.length/x.length*100:0,lessonAmount,campAmount,amount:lessonAmount+campAmount}}).filter(x=>x.total||x.lessonAmount||x.campAmount||(studentUsesMonthlyFee(x.s)&&studentIsPresentForBilling(x.s)));const tr=db.teachers.filter(t=>teacherIncludedForMonth(t,m)).map(t=>{const paid=teacherPaidLessons(t,m),payroll=calculateTeacherPayroll(t,m,paid),weeks=teacherWeekBreakdown(payroll.teacher,m);return{t:payroll.teacher,count:paid.length,h:payroll.actualHours,expected:payroll.expectedHours,diff:payroll.diff,weeks,amount:payroll.amount,revenue:teacherCompanyRevenue(t,m,ls),payroll}});return{sr,tr}}
+function settleData(){const m=$('settleMonth').value||monthNow(),ls=(window.DanbridgeLessonIndex?.byMonth?.(db.lessons,m)||db.lessons.filter(l=>l.date.startsWith(m))).filter(l=>!l.isDraft);const sr=db.students.map(s=>{const x=ls.filter(l=>lessonIncludesStudent(l,s.id)),billing=studentMonthlyBillingData(s.id,m),chargedLessons=billing.tutoringLessons,abs=x.filter(l=>['學生請假','老師請假','取消','停課'].includes(l.status)),lessonAmount=billing.tutoringAmount,campAmount=billing.campAmount;return{s:billing.student,billingCategory:billing.billingCategory,lessonIds:x.map(l=>l.id),total:x.length,charged:studentUsesMonthlyFee(s,m+'-01')?0:chargedLessons.length,h:chargedLessons.reduce((a,l)=>a+hours(l.start,l.end),0),abs:abs.length,rate:x.length?abs.length/x.length*100:0,lessonAmount,campAmount,amount:lessonAmount+campAmount}}).filter(x=>x.total||x.lessonAmount||x.campAmount||(studentUsesMonthlyFee(x.s)&&studentIsPresentForBilling(x.s)));const tr=db.teachers.filter(t=>teacherIncludedForMonth(t,m)).map(t=>{const paid=teacherPaidLessons(t,m),payroll=calculateTeacherPayroll(t,m,paid),weeks=teacherWeekBreakdown(payroll.teacher,m);return{t:payroll.teacher,count:paid.length,h:payroll.actualHours,expected:payroll.expectedHours,diff:payroll.diff,weeks,amount:payroll.amount,revenue:teacherCompanyRevenue(t,m,ls),payroll}});return{m,lessons:ls,sr,tr}}
 
 function settlementSummaryTotals(studentRows){const rows=studentRows||[],studentAttendances=rows.reduce((n,x)=>n+(+x.total||0),0),hasIds=rows.every(x=>Array.isArray(x.lessonIds)),totalLessons=hasIds?new Set(rows.flatMap(x=>x.lessonIds).filter(Boolean)).size:studentAttendances,leaveCount=rows.reduce((n,x)=>n+(+x.abs||0),0);return{totalLessons,studentAttendances,lessonCountBasis:hasIds?'unique-lesson-id':'legacy-student-attendances',leaveCount,leaveRate:studentAttendances?Math.min(100,leaveCount/studentAttendances*100):0}}
 
@@ -426,7 +430,7 @@ function appendSettlementAdjustment(record,data,at=new Date().toISOString()){
 }
 
 function monthlySettlementSnapshot(m){
-  const ls=db.lessons.filter(l=>l.date.startsWith(m));
+  const ls=window.DanbridgeLessonIndex?.byMonth?.(db.lessons,m)||db.lessons.filter(l=>l.date.startsWith(m));
   const actualLessons=ls.filter(lessonCountsAsTaught);
   const totalLessons=actualLessons.length;
   const totalHours=actualLessons.reduce((a,l)=>a+hours(l.start,l.end),0);

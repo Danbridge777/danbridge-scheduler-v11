@@ -1,4 +1,4 @@
-/* V20.26.359 — bilingual control consistency.
+/* V20.26.361 — bilingual control consistency.
    One sizing system for line controls and action buttons, plus enough native
    month-field width for English month names in Safari/WebKit. */
 /* Compact teacher navigation has a light surface; desktop white labels must
@@ -13,6 +13,37 @@
   html body.teacher-cloud-role:not(.auth-locked):not(.wendy-teacher-role):not([data-cloud-display-name="Wendy"])>nav>button[data-tab].active{
     color:#123d60!important;background:#eaf2f8!important;border-color:#cdddea!important;
   }
+}
+
+/* V20.26.361 — selectable lesson archive range stays compact at every width. */
+html body:not(.auth-locked) #lessonArchiveCard :is(#lessonArchiveMonthWrap,#lessonArchiveFromWrap,#lessonArchiveToWrap).hidden{
+  display:none!important;
+}
+html body:not(.auth-locked) #lessonArchiveCard .lesson-archive-range-grid{
+  margin-top:14px;
+  align-items:end;
+}
+html body:not(.auth-locked) #lessonArchiveCard .lesson-archive-range-grid>div{
+  min-width:0;
+}
+html body:not(.auth-locked) #lessonArchiveCard :is(select,input){
+  width:100%!important;
+  min-width:0!important;
+}
+html body:not(.auth-locked) #lessonArchiveCard .row-actions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  margin-top:12px;
+}
+html body:not(.auth-locked) #lessonArchiveCard .row-actions .btn{
+  width:100%;
+  min-width:0;
+  white-space:normal;
+}
+@media(max-width:700px){
+  html body:not(.auth-locked) #lessonArchiveCard .lesson-archive-range-grid>div{grid-column:1/-1!important}
+  html body:not(.auth-locked) #lessonArchiveCard .row-actions{grid-template-columns:1fr}
 }
 :root{
   --danbridge-control-height:48px;
